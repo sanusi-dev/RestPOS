@@ -321,7 +321,12 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "RestPOS",
-    "DESCRIPTION": "RestPOS is a light weight and easy to use web-based application designed for streamlined order management. It serves as an efficient tool for both cashiers and captains, facilitating order processing at the cash counter and tables.It supports various order types, including dine-in, delivery, takeout and Aggregator.",  # noqa: E501
+    "DESCRIPTION": (
+        "RestPOS is a light weight and easy to use web-based application designed "
+        "for streamlined order management. It serves as an efficient tool for both "
+        "cashiers and captains, facilitating order management and processing with "
+        "ease and efficiency."
+    ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SWAGGER_UI_SETTINGS": {
@@ -368,7 +373,10 @@ PROJECT_METADATA = {
     "NAME": gettext_lazy("RestPOS"),
     "URL": "http://localhost:8000",
     "DESCRIPTION": gettext_lazy(
-        "RestPOS is a light weight and easy to use web-based application designed for streamlined order management. It serves as an efficient tool for both cashiers and captains, facilitating order processing at the cash counter and tables.It supports various order types, including dine-in, delivery, takeout and Aggregator."
+        "RestPOS is a light weight and easy to use web-based application designed "
+        "for streamlined order management. It serves as an efficient tool for both "
+        "cashiers and captains, facilitating order management and processing with "
+        "ease and efficiency."
     ),  # noqa: E501
     "IMAGE": "https://upload.wikimedia.org/wikipedia/commons/2/20/PEO-pegasus_black.svg",
     "KEYWORDS": "SaaS, django",
