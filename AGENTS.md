@@ -10,9 +10,8 @@
   browser-only interactions.
 - JavaScript files are kept in the `/assets/` folder and built by vite.
   JavaScript code is typically loaded via the static files framework inside Django templates using `django-vite`.
-- APIs use Django Rest Framework, and JavaScript code that interacts with APIs uses an
-  auto-generated OpenAPI-schema-baesd client.
-- The front end uses Tailwind (Version 4) and DaisyUI.
+- The frontend communicates with the backend via HTMX requests to Django views — no separate API layer in Phase 1.
+- The front end uses Tailwind (Version 4), Alpine.js for client-side interactivity, and SweetAlerts for toasts and pop-up dialogs.
 - The main database is Postgres.
 - Celery is used for background jobs and scheduled tasks.
 - Redis is used as the default cache, and the message broker for Celery (if enabled).
@@ -127,6 +126,21 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 - Don't ever add mock data to functions. Only add mocks to tests or utilities that are only used by tests.
 - Always think about what other areas of code might be affected by any changes made.
 - Never overwrite my .env file without first asking and confirming.
+- Keep responses concise and to the point, unless the user asks otherwise.
+
+## PLANNING MODE
+
+- Always ask clarifying questions.
+- Never assume design, tech stack, or features.
+- Use deep-dive sub-agents to assist with research.
+- Use deep-dive sub-agents to review the different aspects of your plan before presenting it to the user.
+
+## CHANGE / EDIT MODE
+
+- Never implement features yourself if possible — use sub-agents.
+- Identify changes from the plan.
+- Sub-agents to implement features that can be implemented in parallel, using sub-agents efficiently.
+- Use the best model for the task.
 
 ## Python Code Guidelines
 
@@ -151,7 +165,7 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 - Use Django signals sparingly and document them well.
 - Always use the Django ORM if possible. Use best practices like lazily evaluating querysets
   and selecting or prefetching related objects when necessary.
-- Use function-based views by default, unless using a framework that relies on class-based views (e.g. Django Rest Framework).
+- Use function-based views by default.
 - Always validate user input server-side.
 - Handle errors explicitly, avoid silent failures.
 
@@ -171,8 +185,7 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 - Prefer using alpine.js for page-level JavaScript, and avoid inline `<script>` tags where possible.
 - Break re-usable template components into separate templates with `{% include %}` statements.
   These normally go into a `components` folder.
-- Use DaisyUI styling markup for available components. When not available, fall back to standard TailwindCSS classes.
-- Stick with the DaisyUI color palette whenever possible.
+- Use TailwindCSS utility classes for all styling. Do not use DaisyUI.
 
 ## JavaScript Code Guidelines
 
@@ -197,3 +210,288 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 ### Build System
 
 - Code is bundled using vite and served with `django-vite`.
+
+---
+
+## RestPOS Project Overview
+
+**RestPOS** is a custom restaurant POS and management system built for a Nigerian restaurant. It is a Django + HTMX web application.
+
+**Client context:**
+- Three thermal printers: cashier receipt, kitchen ticket, bar ticket
+- Bar is a separate business entity sharing the same cashier — sales must be tracked separately per department (food vs drinks)
+
+**Build philosophy:**
+- Carbon copy of how ERPNext and URY implement each feature, ported to Django
+- Do not invent architecture — always look at the reference codebase first
+- Deviations from the reference must be explicitly justified in a code comment
+
+---
+
+## Workspace Structure
+
+```
+RestPOS/                              ← project root (this folder)
+├── AGENTS.md                         ← this file (project + codebase rules)
+├── PLAN.md                           ← feature implementation plan
+├── FEATURES.md                       ← feature spec extracted from URY/ERPNext
+├── references/                       ← READ ONLY — never modify anything here
+│   ├── erpnext-develop/              ← ERPNext source (main branch)
+│   └── ury-develop/                  ← URY source (main branch)
+├── .venv/                            ← virtual environment
+├── pyproject.toml                    ← dependencies (managed with uv)
+├── manage.py
+└── restpos/                          ← Django project folder
+```
+
+**CRITICAL — Reference codebase rules:**
+- `references/erpnext-develop/` and `references/ury-develop/` are READ ONLY
+- Never write, edit, create, or delete any file inside `references/`
+- Never import from `references/` into the Django project
+- Use reference files ONLY to read, study, and port logic into Django
+- Always check the reference codebase before implementing any feature
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend framework | Django (latest stable) |
+| Frontend | Django templates + HTMX + Tailwind CSS + Alpine.js + SweetAlerts |
+| Database | PostgreSQL |
+| Package manager | uv (pyproject.toml) |
+| Python version | 3.14 |
+| Task queue | Celery + Redis (for periodic background tasks) |
+| Thermal printing | Local Python print agent (ESC/POS over LAN) |
+| MCP tools available | Playwright, Brave Search |
+
+**What is explicitly NOT used in Phase 1:**
+- Django REST Framework — no JSON API layer in phase 1
+- Vue, React, or any JS framework — HTMX only
+- Socket.io — not needed, kitchen uses printer tickets not a display screen
+- QZ Tray — replaced by a local Python print agent
+- DaisyUI — pure Tailwind CSS only
+
+**Phase 2 stack (future — do not build now):**
+The cloud-hosted, offline-capable version will use Django + Django REST
+Framework as the API backend and Vue 3 as the frontend. Do not introduce DRF
+or Vue into Phase 1 under any circumstances.
+
+---
+
+## Architecture Decisions
+
+### Two-phase build
+
+**Phase 1 (current):** Local network only. Django runs on the cashier desktop.
+All operations (ordering, printing, inventory, reports) work entirely on the
+local network. No internet required for anything. Owner accesses back office
+from any device on the same WiFi network inside the restaurant.
+
+**Phase 2 (future):** Cloud-based with offline-mode functionality
+
+Do not build Phase 2 architecture into Phase 1.
+
+### Printing architecture
+
+Three Xprinter thermal printers (LAN model), each assigned a static IP on
+the local network:
+- Cashier printer — customer receipt
+- Kitchen printer — food order ticket (replaces URY's KOT display)
+- Bar printer — drinks order ticket
+
+A lightweight Python print agent runs as a background service on the cashier
+desktop. After an order is saved, Django sends a print job payload to the
+agent via HTTP on localhost. The agent formats ESC/POS commands and sends them
+to the correct printer IP.
+
+The cashier receipt printer connects via USB to the desktop. The kitchen and
+bar printers connect via LAN (ethernet) with static IP addresses on the local
+network. Each LAN printer is identified by its static IP — not by hostname or
+DHCP-assigned address.
+
+### Customer card / group ordering
+
+Group ordering is a first-class feature, not an afterthought. The model is
+inspired by Poster POS's guest count approach but more polished by default.
+
+**How it works:**
+
+When placing an order, the cashier is prompted whether the order is for a
+single customer or a group. If a group, the cashier specifies the number of
+customers. The order screen renders one **customer card** per customer (e.g.
+Customer 1, Customer 2, Customer 3). The cashier clicks a card to make it
+active, then adds items — every item added goes to the active card. Switching
+cards switches whose items are being built.
+
+**Data model:**
+
+- `Order` has a `guest_count` integer field (default 1)
+- `OrderItem` has a `customer_index` integer field (1-based, default 1) —
+  this replaces the earlier "seat tag" concept entirely
+- When `guest_count` is 1, `customer_index` is always 1 and the customer card
+  UI is hidden — single customer flow is identical to a standard POS
+
+**Receipt behaviour:**
+
+A single receipt prints for the whole order regardless of group size. The
+receipt body groups items by customer card with a subtotal per customer, then
+shows the overall total at the bottom. Example:
+
+```
+ORDER #0042
+-----------------------------
+Customer 1
+  Jollof Rice       x1   1,500
+  Chicken           x2   2,000
+  Subtotal               3,500
+
+Customer 2
+  Fried Rice        x1   1,500
+  Coke              x1     500
+  Subtotal               2,000
+-----------------------------
+TOTAL                    5,500
+```
+
+**Kitchen and bar ticket behaviour:**
+
+Kitchen and bar tickets also group by customer index so the kitchen knows
+which items belong together on the same tray. Items with the same
+`customer_index` are plated together.
+
+**Implementation notes:**
+
+- The customer card UI is an HTMX-driven panel on the POS screen — clicking
+  a card sends an HTMX request that sets the active card in the session, all
+  subsequent item additions carry that card's index
+- Do not use the word "seat" anywhere in the UI — use "Customer 1",
+  "Customer 2" etc.
+- Customer cards are ephemeral to the order — they are not saved as separate
+  records, only `customer_index` on each `OrderItem` is persisted
+
+### Departmental split
+
+Every menu item belongs to a department: `FOOD` or `DRINKS`. A single order
+can contain both. On checkout, the order total is split by department and
+recorded separately. Daily reports show food revenue and drinks revenue
+independently. This supports the client's bar accounting separation.
+
+### Document submit/cancel pattern
+
+ERPNext uses an immutable submit/cancel workflow on financial documents.
+Replicate this in Django:
+- Orders, payments, and stock ledger entries have a `status` field
+- Once submitted, records are never updated — only cancelled (which creates
+  a reversal entry)
+- This gives an immutable audit trail — critical for financial integrity
+- Implement as: `status = models.CharField(choices=[DRAFT, SUBMITTED, CANCELLED])`
+
+---
+
+## Reference Codebase Navigation
+
+When implementing any feature, always read the reference in this order:
+
+**Step 1 — Find the ERPNext doctype:**
+```
+references/erpnext-develop/erpnext/accounts/doctype/    ← financial documents
+references/erpnext-develop/erpnext/stock/doctype/       ← inventory
+references/erpnext-develop/erpnext/selling/doctype/     ← sales documents
+```
+Read the `.json` file for the doctype — the `fields` array is the data model.
+Read the `.py` file for business logic (validate, before_insert, on_submit etc.)
+
+**Step 2 — Find the URY adaptation:**
+```
+references/ury-develop/ury/ury/doctype/                 ← URY custom doctypes
+references/ury-develop/ury/ury/ury_pos/api.py           ← POS API (722 lines) — read this fully
+references/ury-develop/ury/ury/hooks/                   ← document event handlers
+references/ury-develop/pos/src/                         ← React POS frontend (for UI logic reference)
+references/ury-develop/URYMosaic/src/                   ← Vue kitchen display (reference only)
+```
+
+**Step 3 — Port to Django:**
+Translate the ERPNext doctype fields to a Django model. Apply URY's
+restaurant-specific logic as model methods or Django signals. Document any
+deviations.
+
+---
+
+## Key Reference Files (read these first before any implementation)
+
+These are the most important files in the reference codebases:
+
+| File | Why it matters |
+|---|---|
+| `references/ury-develop/ury/ury/ury_pos/api.py` | Complete POS API — every endpoint your frontend needs |
+| `references/erpnext-develop/erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json` | Core inventory model |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice/pos_invoice.json` | Order/invoice model |
+| `references/erpnext-develop/erpnext/accounts/doctype/payment_entry/payment_entry.json` | Payment model |
+| `references/ury-develop/ury/ury/doctype/ury_order/ury_order.json` | URY order model |
+| `references/ury-develop/ury/ury/doctype/ury_kot/ury_kot.json` | Kitchen ticket model |
+| `references/ury-develop/ury/ury/doctype/ury_printer_settings/ury_printer_settings.json` | Printer config model |
+| `references/ury-develop/ury/ury/hooks/ury_pos_invoice.py` | Order event logic |
+
+---
+
+## Django App Structure
+
+```
+RestPOS/
+└── restpos/
+    ├── apps/
+    │   ├── menu/           ← menu items, categories, courses, pricing
+    │   ├── orders/         ← orders, order items, customer cards, KOT dispatch
+    │   ├── payments/       ← payment entries, payment modes, shift closing
+    │   ├── inventory/      ← stock ledger, ingredients, stock movements
+    │   ├── printing/       ← print agent client, ticket formatting, printer config
+    │   ├── reports/        ← daily P&L, sales reports, department split
+    │   ├── staff/          ← users, roles, shifts, cashier sessions
+    │   └── settings/       ← restaurant config, branch, room, table setup
+    └── templates/
+        ├── pos/            ← cashier-facing POS screen templates
+        └── backoffice/     ← manager/owner back office templates
+```
+
+Each app maps directly to a URY module. When creating a new app, check if
+there is a corresponding URY doctype folder first.
+
+---
+
+## PLAN.md and FEATURES.md Protocol
+
+`FEATURES.md` — the extracted feature spec from URY and ERPNext, categorized by backend and frontend(specifically referring to the ui/ux).
+`PLAN.md` — the implementation plan for each feature.
+
+Before implementing any feature:
+1. Check `FEATURES.md` — confirm the feature is documented
+2. Check `PLAN.md` — read the implementation plan for that feature
+3. Read the reference files listed in the plan
+4. Implement exactly as the plan describes
+5. If the plan is missing or incomplete, stop and flag it — do not guess
+
+When writing to `PLAN.md` for a new feature, always include:
+- ERPNext reference file(s) consulted
+- URY reference file(s) consulted
+- Django model fields (translated from doctype JSON)
+- Business logic rules (translated from doctype Python)
+- HTMX frontend behaviour
+- Deviations from reference and why
+
+---
+
+## What Agents Must Never Do
+
+- Modify anything inside `references/`
+- Use `pip install` instead of `uv add`
+- Import from `references/` into the Django project
+- Use Django REST Framework, Vue, React, or Socket.io
+- Use DaisyUI — pure Tailwind CSS only
+- Use `FloatField` for money
+- Use `CASCADE` delete on orders, payments, or stock ledger entries
+- Invent a data model without first checking the ERPNext reference doctype
+- Implement a POS API endpoint without first reading `ury_pos/api.py`
+- Write more than one feature at a time — always complete and confirm
+  one feature before moving to the next, except if necessary

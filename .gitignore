@@ -30,3 +30,5 @@ static/assets/
 static/css/
 static/js/
 static/.vite/
+references/
+.mypy_cache/
