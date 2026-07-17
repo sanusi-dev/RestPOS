@@ -1,0 +1,43 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Product Bundles</h1>
+      <a href="{% url 'inventory:product_bundle_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Bundle
+      </a>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Parent Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Active</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for bundle in bundles %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'inventory:product_bundle_detail' bundle.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ bundle.parent_item.item_name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm">
+                {% if bundle.is_active %}<span class="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Yes</span>{% else %}<span class="text-gray-400">No</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'inventory:product_bundle_update' bundle.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="px-6 py-12 text-center text-sm text-gray-500">No product bundles yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

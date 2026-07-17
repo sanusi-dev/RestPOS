@@ -1,0 +1,53 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Restaurant Configuration</h1>
+      {% if restaurant %}
+        <a href="{% url 'settings:restaurant_update' %}"
+           class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          Edit
+        </a>
+      {% endif %}
+    </div>
+
+    {% if restaurant %}
+      <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+        <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Company</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.company }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Branch</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.branch.name }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Invoice Series Prefix</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.invoice_series_prefix }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Aggregator Series Prefix</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.aggregator_series_prefix|default:"-" }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Default Room</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.default_room.name }}</dd>
+          </div>
+          <div class="sm:col-span-2">
+            <dt class="text-sm font-medium text-gray-500">Address</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ restaurant.address|default:"-"|linebreaksbr }}</dd>
+          </div>
+        </dl>
+      </div>
+    {% else %}
+      <div class="rounded-lg border border-gray-200 shadow-sm p-12 text-center">
+        <p class="text-sm text-gray-500">No restaurant configuration has been created yet.</p>
+        <a href="{% url 'settings:restaurant_update' %}"
+           class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          Create Restaurant Config
+        </a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">{{ item.item_name }}</h1>
+      <a href="{% url 'inventory:item_update' item.pk %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Edit</a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Item Code</dt>
+          <dd class="mt-1 text-sm font-mono text-gray-900">{{ item.item_code }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Item Group</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.item_group.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Department</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.get_department_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Stock UOM</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.stock_uom.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Default Warehouse</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.default_warehouse|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Valuation Method</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.get_valuation_method_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Is Stock Item</dt>
+          <dd class="mt-1 text-sm text-gray-900">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Batch Tracking</dt>
+          <dd class="mt-1 text-sm text-gray-900">{% if item.has_batch_no %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Expiry Tracking</dt>
+          <dd class="mt-1 text-sm text-gray-900">{% if item.has_expiry_date %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Safety Stock</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.safety_stock }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Standard Rate</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item.standard_rate|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Disabled</dt>
+          <dd class="mt-1 text-sm text-gray-900">{% if item.disabled %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        {% if item.description %}
+          <div class="sm:col-span-3">
+            <dt class="text-sm font-medium text-gray-500">Description</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ item.description }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+
+    {% if barcodes %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Barcodes</h2></div>
+        <ul class="divide-y divide-gray-200">
+          {% for bc in barcodes %}
+            <li class="px-6 py-3 text-sm font-mono text-gray-900">{{ bc.barcode }}{% if bc.barcode_type %} <span class="text-gray-400">({{ bc.barcode_type }})</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if uom_conversions %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">UOM Conversions</h2></div>
+        <ul class="divide-y divide-gray-200">
+          {% for conv in uom_conversions %}
+            <li class="px-6 py-3 text-sm text-gray-900">{{ conv }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if reorder_levels %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Reorder Levels</h2></div>
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reorder Level</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reorder Qty</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            {% for rl in reorder_levels %}
+              <tr><td class="px-6 py-4 text-sm text-gray-900">{{ rl.warehouse.name }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ rl.reorder_level }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ rl.reorder_qty }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    {% if bins %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Stock by Warehouse</h2></div>
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actual Qty</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Valuation Rate</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock Value</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            {% for bin in bins %}
+              <tr><td class="px-6 py-4 text-sm text-gray-900">{{ bin.warehouse.name }}</td><td class="px-6 py-4 text-sm text-gray-900">{{ bin.actual_qty }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ bin.stock_value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

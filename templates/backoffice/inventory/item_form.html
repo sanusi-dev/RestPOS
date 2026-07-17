@@ -1,0 +1,96 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <h1 class="text-2xl font-bold text-gray-900">{% if is_create %}New Item{% else %}Edit Item{% endif %}</h1>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">Item Details</h2>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {% for field in form %}
+            <div class="{% if field.field.widget.input_type == 'checkbox' %}flex items-center space-x-2{% endif %}">
+              <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+              <div class="mt-1">{{ field }}</div>
+              {% if field.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ field.errors }}</p>
+              {% elif field.help_text %}
+                <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">Barcodes</h2>
+        {{ barcode_formset.management_form }}
+        <div class="space-y-3">
+          {% for form in barcode_formset %}
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {% for field in form.visible_fields %}
+                <div>
+                  <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-gray-600">{{ field.label }}</label>
+                  {{ field }}
+                  {% if field.errors %}<p class="mt-1 text-xs text-red-600">{{ field.errors }}</p>{% endif %}
+                </div>
+              {% endfor %}
+              {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">UOM Conversions</h2>
+        {{ uom_formset.management_form }}
+        <div class="space-y-3">
+          {% for form in uom_formset %}
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {% for field in form.visible_fields %}
+                <div>
+                  <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-gray-600">{{ field.label }}</label>
+                  {{ field }}
+                  {% if field.errors %}<p class="mt-1 text-xs text-red-600">{{ field.errors }}</p>{% endif %}
+                </div>
+              {% endfor %}
+              {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">Reorder Levels</h2>
+        {{ reorder_formset.management_form }}
+        <div class="space-y-3">
+          {% for form in reorder_formset %}
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {% for field in form.visible_fields %}
+                <div>
+                  <label for="{{ field.id_for_label }}" class="block text-xs font-medium text-gray-600">{{ field.label }}</label>
+                  {{ field }}
+                  {% if field.errors %}<p class="mt-1 text-xs text-red-600">{{ field.errors }}</p>{% endif %}
+                </div>
+              {% endfor %}
+              {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-3">
+        <a href="{% url 'inventory:item_list' %}"
+           class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</a>
+        <button type="submit"
+                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          {% if is_create %}Create Item{% else %}Save Changes{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

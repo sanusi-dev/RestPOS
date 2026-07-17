@@ -1,0 +1,46 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">User Room Assignments</h1>
+      <a href="{% url 'settings:user_room_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Assignment
+      </a>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">User</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Room</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Branch</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for assignment in assignments %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">{{ assignment.user.get_display_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ assignment.room.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ assignment.branch.name }}</td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'settings:user_room_update' assignment.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+                <form method="post" action="{% url 'settings:user_room_delete' assignment.pk %}" class="inline"
+                      onsubmit="return confirm('Delete this assignment?');">
+                  {% csrf_token %}
+                  <button type="submit" class="ml-3 text-red-600 hover:text-red-800">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No assignments yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

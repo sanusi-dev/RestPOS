@@ -1,0 +1,80 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Stock Ledger</h1>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex flex-wrap items-center gap-3">
+        <div>
+          <label for="item-filter" class="block text-xs font-medium text-gray-600">Item</label>
+          <select id="item-filter" name="item"
+                  class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="">All</option>
+            {% for item in items %}
+              <option value="{{ item.pk }}" {% if selected_item == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.item_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="wh-filter" class="block text-xs font-medium text-gray-600">Warehouse</label>
+          <select id="wh-filter" name="warehouse"
+                  class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="">All</option>
+            {% for wh in warehouses %}
+              <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>{{ wh.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="date-from" class="block text-xs font-medium text-gray-600">From</label>
+          <input type="date" id="date-from" name="date_from" value="{{ date_from }}"
+                 class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="date-to" class="block text-xs font-medium text-gray-600">To</label>
+          <input type="date" id="date-to" name="date_to" value="{{ date_to }}"
+                 class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <div class="pt-4">
+          <button type="submit"
+                  class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Filter</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Posting</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Balance</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Val. Rate</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Voucher</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cancelled</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for sle in entries %}
+            <tr class="hover:bg-gray-50 {% if sle.is_cancelled %}opacity-50{% endif %}">
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.posting_datetime|date:"Y-m-d H:i" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ sle.item.item_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.warehouse.name }}</td>
+              <td class="px-6 py-4 text-sm {% if sle.actual_qty >= 0 %}text-green-700{% else %}text-red-700{% endif %}">{{ sle.actual_qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ sle.qty_after_transaction }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.valuation_rate }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.voucher_type }} #{{ sle.voucher_no }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="px-6 py-12 text-center text-sm text-gray-500">No ledger entries.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

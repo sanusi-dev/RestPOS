@@ -1,0 +1,51 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Stock Balance</h1>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="wh-filter" class="text-sm font-medium text-gray-700">Warehouse:</label>
+        <select id="wh-filter" name="warehouse"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All warehouses</option>
+          {% for wh in warehouses %}
+            <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>{{ wh.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actual Qty</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reserved</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Val. Rate</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock Value</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for bin in bins %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm"><a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ bin.item.item_name }}</a></td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.warehouse.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ bin.actual_qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.reserved_qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ bin.stock_value }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No stock.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div
+    x-data="floorPlanEditor()"
+    class="space-y-4"
+  >
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Floor Plan Editor</h1>
+      <div class="flex items-center space-x-2">
+        <button @click="zoomOut()" type="button"
+                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Zoom Out
+        </button>
+        <span class="w-16 text-center text-sm text-gray-600" x-text="Math.round(zoom * 100) + '%'">100%</span>
+        <button @click="zoomIn()" type="button"
+                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Zoom In
+        </button>
+        <button @click="zoom = 1" type="button"
+                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Reset
+        </button>
+      </div>
+    </div>
+
+    {% if rooms %}
+      <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+        <form method="get" class="flex items-center space-x-3">
+          <label for="room-layout-filter" class="text-sm font-medium text-gray-700">Filter by room:</label>
+          <select id="room-layout-filter" name="room" class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  onchange="this.form.submit()">
+            <option value="">All rooms</option>
+            {% for room in rooms %}
+              <option value="{{ room.pk }}" {% if selected_room == room.pk|stringformat:"s" %}selected{% endif %}>
+                {{ room.branch.name }} — {{ room.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+    {% endif %}
+
+    <div class="overflow-auto rounded-lg border border-gray-200 shadow-sm bg-gray-50" style="height: 600px">
+      <div
+        class="relative bg-white"
+        :style="`width: ${2000 * zoom}px; height: ${1200 * zoom}px;`"
+      >
+        <template x-for="t in tables" :key="t.id">
+          <div
+            class="absolute cursor-move select-none rounded-md border-2 shadow-sm flex flex-col items-center justify-center text-center"
+            :class="t.occupied ? 'border-red-400 bg-red-50 text-red-800' : 'border-blue-400 bg-blue-50 text-blue-800'"
+            :style="`left: ${t.x * zoom}px; top: ${t.y * zoom}px; width: ${t.width * zoom}px; height: ${t.height * zoom}px;`"
+            @mousedown="startDrag($event, t)"
+            @mousemove="onDrag($event, t)"
+            @mouseup="endDrag($event, t)"
+            @mouseleave="endDrag($event, t)"
+          >
+            <span class="text-sm font-semibold" x-text="t.name"></span>
+            <span class="text-xs" x-show="t.occupied">Occupied</span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <p class="text-sm text-gray-500">
+      Drag tables to reposition them. Coordinates are saved automatically when you release the mouse.
+    </p>
+  </div>
+
+  <script>
+    function floorPlanEditor() {
+      return {
+        tables: [
+          {% for table in tables %}
+            {
+              id: {{ table.pk }},
+              name: "{{ table.name|escapejs }}",
+              x: {{ table.layout_x|default_if_none:"0" }},
+              y: {{ table.layout_y|default_if_none:"0" }},
+              width: {{ table.layout_width|default_if_none:"120" }},
+              height: {{ table.layout_height|default_if_none:"80" }},
+              occupied: {% if table.occupied %}true{% else %}false{% endif %}
+            }{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        ],
+        zoom: 1,
+        dragging: null,
+        startX: 0,
+        startY: 0,
+        startTableX: 0,
+        startTableY: 0,
+
+        zoomIn() {
+          this.zoom = Math.min(this.zoom + 0.1, 2);
+        },
+        zoomOut() {
+          this.zoom = Math.max(this.zoom - 0.1, 0.3);
+        },
+
+        startDrag(event, table) {
+          this.dragging = table;
+          this.startX = event.clientX;
+          this.startY = event.clientY;
+          this.startTableX = table.x;
+          this.startTableY = table.y;
+          event.preventDefault();
+        },
+        onDrag(event, table) {
+          if (this.dragging && this.dragging.id === table.id) {
+            const dx = (event.clientX - this.startX) / this.zoom;
+            const dy = (event.clientY - this.startY) / this.zoom;
+            table.x = this.startTableX + dx;
+            table.y = this.startTableY + dy;
+          }
+        },
+        async endDrag(event, table) {
+          if (this.dragging && this.dragging.id === table.id) {
+            const t = this.dragging;
+            this.dragging = null;
+            const formData = new FormData();
+            formData.append("x", t.x);
+            formData.append("y", t.y);
+            formData.append("width", t.width);
+            formData.append("height", t.height);
+            const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
+            await fetch(`/backoffice/settings/tables/${t.id}/layout/`, {
+              method: "POST",
+              body: formData,
+              headers: { "X-CSRFToken": csrfToken || "" },
+            });
+          }
+        },
+      };
+    }
+  </script>
+{% endblock %}

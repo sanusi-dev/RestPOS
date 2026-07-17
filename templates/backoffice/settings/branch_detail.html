@@ -1,0 +1,49 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">{{ branch.name }}</h1>
+      <a href="{% url 'settings:branch_update' branch.pk %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        Edit
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Name</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ branch.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Make Aggregator Unpaid</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if branch.make_aggregator_unpaid %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">No Aggregator Taxes</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if branch.no_aggregator_taxes %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm">
+      <div class="border-b border-gray-200 px-6 py-4">
+        <h2 class="text-lg font-semibold text-gray-900">Rooms in this branch</h2>
+      </div>
+      <ul class="divide-y divide-gray-200">
+        {% for room in rooms %}
+          <li class="px-6 py-3 text-sm">
+            <a href="{% url 'settings:room_detail' room.pk %}" class="text-blue-600 hover:text-blue-800">{{ room.name }}</a>
+            {% if room.room_type %}<span class="ml-2 text-gray-400">({{ room.get_room_type_display }}){% endif %}</span>
+          </li>
+        {% empty %}
+          <li class="px-6 py-6 text-center text-sm text-gray-500">No rooms in this branch yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endblock %}

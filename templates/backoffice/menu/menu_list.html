@@ -1,0 +1,69 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Menus</h1>
+      <a href="{% url 'menu:menu_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Menu
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="branch-filter" class="text-sm font-medium text-gray-700">Filter by branch:</label>
+        <select id="branch-filter" name="branch"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.pk }}" {% if selected_branch == branch.pk|stringformat:"s" %}selected{% endif %}>
+              {{ branch.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Branch</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Enabled</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Items</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for menu in menus %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'menu:menu_detail' menu.pk %}" class="font-medium text-blue-600 hover:text-blue-800">
+                  {{ menu.name }}
+                </a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ menu.branch.name }}</td>
+              <td class="px-6 py-4 text-sm">
+                {% if menu.enabled %}
+                  <span class="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Yes</span>
+                {% else %}
+                  <span class="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">No</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ menu.items.count }}</td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'menu:menu_update' menu.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500">No menus yet. Click "New Menu" to create one.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

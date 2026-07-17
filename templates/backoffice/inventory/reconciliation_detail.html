@@ -1,0 +1,110 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Reconciliation #{{ reconciliation.pk }}</h1>
+        <p class="mt-1 text-sm text-gray-500">{{ reconciliation.get_purpose_display }} · {{ reconciliation.warehouse.name }} · {{ reconciliation.posting_date }}</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        {% if reconciliation.status == "DRAFT" %}
+          <form method="post" action="{% url 'inventory:reconciliation_submit' reconciliation.pk %}">
+            {% csrf_token %}
+            <button type="submit"
+                    class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+              Submit
+            </button>
+          </form>
+        {% elif reconciliation.status == "SUBMITTED" %}
+          <form method="post" action="{% url 'inventory:reconciliation_cancel' reconciliation.pk %}">
+            {% csrf_token %}
+            <button type="submit"
+                    class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+              Cancel
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Purpose</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.get_purpose_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Status</dt>
+          <dd class="mt-1 text-sm">
+            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
+              {% if reconciliation.status == 'DRAFT' %}bg-gray-100 text-gray-800
+              {% elif reconciliation.status == 'SUBMITTED' %}bg-green-100 text-green-800
+              {% else %}bg-red-100 text-red-800{% endif %}">{{ reconciliation.get_status_display }}</span>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Warehouse</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.warehouse.name }}</dd>
+        </div>
+        {% if reconciliation.remarks %}
+          <div class="sm:col-span-3">
+            <dt class="text-sm font-medium text-gray-500">Remarks</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.remarks }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm">
+      <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Items</h2></div>
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Current Qty</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Counted Qty</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Rate</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for item in items %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ item.item.item_name }}</a></td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.current_qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ item.qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.valuation_rate|default:"-" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No items.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if ledger_entries %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Stock Ledger Entries</h2></div>
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Balance</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cancelled</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            {% for sle in ledger_entries %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.item.item_name }}</td>
+                <td class="px-6 py-4 text-sm {% if sle.actual_qty >= 0 %}text-green-700{% else %}text-red-700{% endif %}">{{ sle.actual_qty }}</td>
+                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.qty_after_transaction }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

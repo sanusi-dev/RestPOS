@@ -1,0 +1,74 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ price_list.name }}</h1>
+        {% if price_list.menu %}
+          <p class="mt-1 text-sm text-gray-500">
+            Synced from menu:
+            <a href="{% url 'menu:menu_detail' price_list.menu_id %}" class="text-blue-600 hover:text-blue-800">{{ price_list.menu.name }}</a>
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Enabled</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if price_list.enabled %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Selling</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if price_list.selling %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Buying</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if price_list.buying %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Prices</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ item_prices|length }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <div class="border-b border-gray-200 px-6 py-4">
+        <h2 class="text-lg font-semibold text-gray-900">Item Prices (read-only)</h2>
+        <p class="mt-1 text-sm text-gray-500">Prices are synced automatically from the menu's items.</p>
+      </div>
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item Code</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">UOM</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Rate</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for ip in item_prices %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ ip.item.item_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ ip.item.item_code }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ ip.uom.name }}</td>
+              <td class="px-6 py-4 text-right text-sm text-gray-900">₦{{ ip.price_list_rate }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No prices in this price list.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

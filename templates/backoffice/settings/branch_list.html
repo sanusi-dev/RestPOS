@@ -1,0 +1,58 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Branches</h1>
+      <a href="{% url 'settings:branch_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Branch
+      </a>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Aggregator Unpaid</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">No Taxes</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for branch in branches %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">
+                <a href="{% url 'settings:branch_detail' branch.pk %}" class="font-medium text-blue-600 hover:text-blue-800">
+                  {{ branch.name }}
+                </a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                {% if branch.make_aggregator_unpaid %}
+                  <span class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">Yes</span>
+                {% else %}
+                  <span class="text-gray-400">No</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                {% if branch.no_aggregator_taxes %}
+                  <span class="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">Yes</span>
+                {% else %}
+                  <span class="text-gray-400">No</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'settings:branch_update' branch.pk %}"
+                   class="text-blue-600 hover:text-blue-800">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No branches yet. Click "New Branch" to create one.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

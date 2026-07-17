@@ -1,0 +1,72 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Stock Entries</h1>
+      <a href="{% url 'inventory:stock_entry_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Stock Entry
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="status-filter" class="text-sm font-medium text-gray-700">Status:</label>
+        <select id="status-filter" name="status"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+          <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+          <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+        </select>
+        <label for="purpose-filter" class="text-sm font-medium text-gray-700">Purpose:</label>
+        <select id="purpose-filter" name="purpose"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="MATERIAL_RECEIPT" {% if selected_purpose == "MATERIAL_RECEIPT" %}selected{% endif %}>Material Receipt</option>
+          <option value="MATERIAL_ISSUE" {% if selected_purpose == "MATERIAL_ISSUE" %}selected{% endif %}>Material Issue</option>
+          <option value="MATERIAL_TRANSFER" {% if selected_purpose == "MATERIAL_TRANSFER" %}selected{% endif %}>Material Transfer</option>
+          <option value="REPACK" {% if selected_purpose == "REPACK" %}selected{% endif %}>Repack</option>
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">ID</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Purpose</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">From</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">To</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for entry in entries %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'inventory:stock_entry_detail' entry.pk %}" class="font-medium text-blue-600 hover:text-blue-800">#{{ entry.pk }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ entry.get_purpose_display }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ entry.posting_date }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ entry.from_warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ entry.to_warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm">
+                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
+                  {% if entry.status == 'DRAFT' %}bg-gray-100 text-gray-800
+                  {% elif entry.status == 'SUBMITTED' %}bg-green-100 text-green-800
+                  {% else %}bg-red-100 text-red-800{% endif %}">{{ entry.get_status_display }}</span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No stock entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Rooms</h1>
+      <a href="{% url 'settings:room_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Room
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="branch-filter" class="text-sm font-medium text-gray-700">Filter by branch:</label>
+        <select id="branch-filter" name="branch" class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.pk }}" {% if selected_branch == branch.pk|stringformat:"s" %}selected{% endif %}>
+              {{ branch.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Branch</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Type</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for room in rooms %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'settings:room_detail' room.pk %}" class="font-medium text-blue-600 hover:text-blue-800">
+                  {{ room.name }}
+                </a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ room.branch.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ room.get_room_type_display|default:"-" }}</td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'settings:room_update' room.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No rooms yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Stock Entry #{{ entry.pk }}</h1>
+        <p class="mt-1 text-sm text-gray-500">{{ entry.get_purpose_display }} · {{ entry.posting_date }}</p>
+      </div>
+      <div class="flex items-center space-x-3">
+        {% if entry.status == "DRAFT" %}
+          <form method="post" action="{% url 'inventory:stock_entry_submit' entry.pk %}">
+            {% csrf_token %}
+            <button type="submit"
+                    class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+              Submit
+            </button>
+          </form>
+        {% elif entry.status == "SUBMITTED" %}
+          <form method="post" action="{% url 'inventory:stock_entry_cancel' entry.pk %}">
+            {% csrf_token %}
+            <button type="submit"
+                    class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+              Cancel
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Purpose</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ entry.get_purpose_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Status</dt>
+          <dd class="mt-1 text-sm">
+            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
+              {% if entry.status == 'DRAFT' %}bg-gray-100 text-gray-800
+              {% elif entry.status == 'SUBMITTED' %}bg-green-100 text-green-800
+              {% else %}bg-red-100 text-red-800{% endif %}">{{ entry.get_status_display }}</span>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Posting Date</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ entry.posting_date }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">From Warehouse</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ entry.from_warehouse|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">To Warehouse</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ entry.to_warehouse|default:"-" }}</dd>
+        </div>
+        {% if entry.remarks %}
+          <div class="sm:col-span-3">
+            <dt class="text-sm font-medium text-gray-500">Remarks</dt>
+            <dd class="mt-1 text-sm text-gray-900">{{ entry.remarks }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm">
+      <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Items</h2></div>
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Source</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Target</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Rate</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for item in items %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ item.item.item_name }}</a></td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.source_warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.target_warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ item.qty }} {{ item.uom.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.basic_rate }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500">No items.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if ledger_entries %}
+      <div class="rounded-lg border border-gray-200 shadow-sm">
+        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Stock Ledger Entries</h2></div>
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Balance</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cancelled</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            {% for sle in ledger_entries %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.item.item_name }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ sle.warehouse.name }}</td>
+                <td class="px-6 py-4 text-sm {% if sle.actual_qty >= 0 %}text-green-700{% else %}text-red-700{% endif %}">{{ sle.actual_qty }}</td>
+                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.qty_after_transaction }}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

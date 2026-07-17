@@ -1,0 +1,122 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Inventory</h1>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <a href="{% url 'inventory:item_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Items</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ item_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Manage items →</p>
+      </a>
+
+      <a href="{% url 'inventory:warehouse_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Warehouses</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ warehouse_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Manage warehouses →</p>
+      </a>
+
+      <a href="{% url 'inventory:uom_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Units of Measure</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ uom_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Manage UOMs →</p>
+      </a>
+
+      <a href="{% url 'inventory:batch_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Batches</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ batch_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Manage batches →</p>
+      </a>
+
+      <a href="{% url 'inventory:product_bundle_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Product Bundles</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ bundle_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Manage bundles →</p>
+      </a>
+
+      <a href="{% url 'inventory:stock_entry_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-500">Stock Entries</p>
+            <p class="mt-1 text-3xl font-bold text-gray-900">{{ stock_entry_count }}</p>
+          </div>
+        </div>
+        <p class="mt-3 text-sm text-blue-600">Stock movements →</p>
+      </a>
+
+      <a href="{% url 'inventory:stock_balance_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <p class="text-sm font-medium text-gray-500">Stock Balance</p>
+        <p class="mt-3 text-sm text-blue-600">Current stock →</p>
+      </a>
+
+      <a href="{% url 'inventory:stock_ledger_list' %}"
+         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
+        <p class="text-sm font-medium text-gray-500">Stock Ledger</p>
+        <p class="mt-3 text-sm text-blue-600">View ledger →</p>
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm">
+      <div class="border-b border-gray-200 px-6 py-4">
+        <h2 class="text-lg font-semibold text-gray-900">Low Stock Alerts</h2>
+      </div>
+      {% if low_stock_bins %}
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Current Qty</th>
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Safety Stock</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            {% for bin in low_stock_bins %}
+              <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 text-sm">
+                  <a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ bin.item.item_name }}</a>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ bin.warehouse.name }}</td>
+                <td class="px-6 py-4 text-sm">
+                  <span class="inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">{{ bin.actual_qty }}</span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">{{ bin.item.safety_stock }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="px-6 py-6 text-center text-sm text-gray-500">No low-stock alerts.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

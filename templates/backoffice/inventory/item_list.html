@@ -1,0 +1,75 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Items</h1>
+      <a href="{% url 'inventory:item_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Item
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="group-filter" class="text-sm font-medium text-gray-700">Item group:</label>
+        <select id="group-filter" name="item_group"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All groups</option>
+          {% for group in item_groups %}
+            <option value="{{ group.pk }}" {% if selected_item_group == group.pk|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
+          {% endfor %}
+        </select>
+        <label for="dept-filter" class="text-sm font-medium text-gray-700">Department:</label>
+        <select id="dept-filter" name="department"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All departments</option>
+          <option value="FOOD" {% if selected_department == "FOOD" %}selected{% endif %}>Food</option>
+          <option value="DRINKS" {% if selected_department == "DRINKS" %}selected{% endif %}>Drinks</option>
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Code</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Group</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Dept</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">UOM</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for item in items %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm font-mono text-gray-500">{{ item.item_code }}</td>
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'inventory:item_detail' item.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ item.item_name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.item_group.name }}</td>
+              <td class="px-6 py-4 text-sm">
+                <span class="inline-flex rounded-full {% if item.department == 'FOOD' %}bg-amber-100 text-amber-800{% else %}bg-blue-100 text-blue-800{% endif %} px-2 py-1 text-xs font-medium">
+                  {{ item.get_department_display }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.stock_uom.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'inventory:item_update' item.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="px-6 py-12 text-center text-sm text-gray-500">No items yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

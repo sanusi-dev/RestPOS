@@ -1,0 +1,57 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Price Lists</h1>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Menu</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Enabled</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Selling</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Prices</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for pl in price_lists %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'menu:price_list_detail' pl.pk %}" class="font-medium text-blue-600 hover:text-blue-800">
+                  {{ pl.name }}
+                </a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ pl.menu|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm">
+                {% if pl.enabled %}
+                  <span class="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Yes</span>
+                {% else %}
+                  <span class="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">No</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm">
+                {% if pl.selling %}
+                  <span class="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">Yes</span>
+                {% else %}
+                  <span class="text-gray-400">No</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ pl.prices.count }}</td>
+              <td class="px-6 py-4 text-right text-sm">
+                <a href="{% url 'menu:price_list_detail' pl.pk %}" class="text-blue-600 hover:text-blue-800">View</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No price lists yet. Price lists are created automatically when you create a menu.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

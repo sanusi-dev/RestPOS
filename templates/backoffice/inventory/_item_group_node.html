@@ -1,0 +1,12 @@
+<li class="text-sm">
+  <a href="{% url 'inventory:item_group_detail' root.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ root.name }}</a>
+  {% if root.is_group %}<span class="ml-1 text-gray-400">(group)</span>{% endif %}
+  {% if root.description %}<span class="ml-2 text-gray-400">{{ root.description|truncatewords:5 }}</span>{% endif %}
+  {% if root.children.all %}
+    <ul class="ml-6 space-y-1 border-l border-gray-200 pl-4">
+      {% for child in root.children.all %}
+        {% with root=child %}{% include "backoffice/inventory/_item_group_node.html" %}{% endwith %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</li>

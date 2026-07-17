@@ -1,0 +1,50 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">{{ room.name }}</h1>
+      <a href="{% url 'settings:room_update' room.pk %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        Edit
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Branch</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ room.branch.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Name</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ room.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Type</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ room.get_room_type_display|default:"-" }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm">
+      <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <h2 class="text-lg font-semibold text-gray-900">Tables in this room</h2>
+        <a href="{% url 'settings:table_create' %}?room={{ room.pk }}"
+           class="text-sm text-blue-600 hover:text-blue-800">+ Add table</a>
+      </div>
+      <ul class="divide-y divide-gray-200">
+        {% for table in tables %}
+          <li class="px-6 py-3 text-sm">
+            <a href="{% url 'settings:table_detail' table.pk %}" class="text-blue-600 hover:text-blue-800">{{ table.name }}</a>
+            <span class="ml-2 text-gray-400">
+              {% if table.no_of_seats %}{{ table.no_of_seats }} seats{% endif %}
+              {% if table.is_take_away %}· Take-away{% endif %}
+            </span>
+          </li>
+        {% empty %}
+          <li class="px-6 py-6 text-center text-sm text-gray-500">No tables in this room yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Item Variants</h1>
+      <a href="{% url 'menu:variant_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Variant
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="parent-filter" class="text-sm font-medium text-gray-700">Filter by parent item:</label>
+        <select id="parent-filter" name="parent_item"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All parent items</option>
+          {% for item in parent_items %}
+            <option value="{{ item.pk }}" {% if selected_parent == item.pk|stringformat:"s" %}selected{% endif %}>
+              {{ item.item_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Parent Item</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Variant Item</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for variant in variants %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ variant.parent_item.item_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ variant.variant_item.item_name }}</td>
+              <td class="px-6 py-4 text-right text-sm space-x-3">
+                <a href="{% url 'menu:variant_update' variant.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+                <form method="post" action="{% url 'menu:variant_delete' variant.pk %}" class="inline"
+                      onsubmit="return confirm('Delete this variant?');">
+                  {% csrf_token %}
+                  <button type="submit" class="text-red-600 hover:text-red-800">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="px-6 py-12 text-center text-sm text-gray-500">No variants yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

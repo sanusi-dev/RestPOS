@@ -1,0 +1,67 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">{{ table.name }}</h1>
+      <div class="flex space-x-2">
+        <a href="{% url 'settings:table_update' table.pk %}"
+           class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          Edit
+        </a>
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Branch</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ table.branch.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Room</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ table.room.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Seats</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ table.no_of_seats|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Minimum Seating</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ table.minimum_seating|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Shape</dt>
+          <dd class="mt-1 text-sm text-gray-900">{{ table.get_table_shape_display|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Take-away</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if table.is_take_away %}Yes{% else %}No{% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Occupied</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            {% if table.occupied %}
+              <span class="inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">Yes</span>
+            {% else %}
+              No
+            {% endif %}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Layout Position</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            x: {{ table.layout_x|default:"-" }}, y: {{ table.layout_y|default:"-" }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Layout Size</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            w: {{ table.layout_width|default:"-" }}, h: {{ table.layout_height|default:"-" }}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+{% endblock %}

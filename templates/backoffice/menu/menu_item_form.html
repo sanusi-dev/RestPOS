@@ -1,0 +1,67 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  {% partialdef form inline %}
+    <form method="post"
+          {% if request.htmx %}hx-post="{{ request.path }}"{% endif %}
+          class="space-y-4">
+      {% csrf_token %}
+      {{ form.item_name }}
+      {% if menu_id %}
+        <input type="hidden" name="menu" value="{{ menu_id }}" />
+      {% endif %}
+      {% if form.non_field_errors %}
+        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+      <div>
+        <label for="{{ form.item.id_for_label }}" class="block text-sm font-medium text-gray-700">Item</label>
+        <div class="mt-1">{{ form.item }}</div>
+        {% if form.item.errors %}<p class="mt-1 text-sm text-red-600">{{ form.item.errors }}</p>{% endif %}
+      </div>
+      <div>
+        <label for="{{ form.rate.id_for_label }}" class="block text-sm font-medium text-gray-700">Rate</label>
+        <div class="mt-1">{{ form.rate }}</div>
+        {% if form.rate.errors %}<p class="mt-1 text-sm text-red-600">{{ form.rate.errors }}</p>{% endif %}
+      </div>
+      <div class="flex items-center space-x-2">
+        {{ form.special_dish }}
+        <label for="{{ form.special_dish.id_for_label }}" class="text-sm font-medium text-gray-700">Special Dish</label>
+      </div>
+      <div class="flex items-center space-x-2">
+        {{ form.disabled }}
+        <label for="{{ form.disabled.id_for_label }}" class="text-sm font-medium text-gray-700">Disabled</label>
+      </div>
+      <div class="flex justify-end space-x-3 pt-2">
+        {% if menu_id %}
+          <a href="{% url 'menu:menu_detail' menu_id %}"
+             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Cancel
+          </a>
+        {% elif menu_item %}
+          <a href="{% url 'menu:menu_detail' menu_item.menu_id %}"
+             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Cancel
+          </a>
+        {% else %}
+          <a href="{% url 'menu:menu_item_list' %}"
+             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Cancel
+          </a>
+        {% endif %}
+        <button type="submit"
+                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          {% if is_create %}Add Item{% else %}Save Changes{% endif %}
+        </button>
+      </div>
+    </form>
+  {% endpartialdef %}
+  <div class="space-y-6">
+    <h1 class="text-2xl font-bold text-gray-900">
+      {% if is_create %}Add Menu Item{% else %}Edit Menu Item{% endif %}
+    </h1>
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      {% partial form %}
+    </div>
+  </div>
+{% endblock %}

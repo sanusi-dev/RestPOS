@@ -1,0 +1,22 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Item Groups</h1>
+      <a href="{% url 'inventory:item_group_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Item Group
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
+      <ul class="space-y-1">
+        {% for root in roots %}
+          {% include "backoffice/inventory/_item_group_node.html" %}
+        {% empty %}
+          <li class="text-sm text-gray-500">No item groups yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endblock %}

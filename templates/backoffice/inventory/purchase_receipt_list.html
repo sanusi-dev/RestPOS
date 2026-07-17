@@ -1,0 +1,70 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-gray-900">Purchase Receipts</h1>
+      <a href="{% url 'inventory:purchase_receipt_create' %}"
+         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        + New Purchase Receipt
+      </a>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
+      <form method="get" class="flex items-center space-x-3">
+        <label for="status-filter" class="text-sm font-medium text-gray-700">Status:</label>
+        <select id="status-filter" name="status"
+                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+          <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+          <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+        </select>
+        <label for="supplier-filter" class="text-sm font-medium text-gray-700">Supplier:</label>
+        <input id="supplier-filter" type="text" name="supplier" value="{{ selected_supplier }}"
+               class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+               placeholder="Search supplier">
+        <button type="submit"
+                class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Filter</button>
+      </form>
+    </div>
+
+    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Supplier</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 bg-white">
+          {% for receipt in receipts %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ receipt.supplier_name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.posting_date }}</td>
+              <td class="px-6 py-4 text-sm">
+                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
+                  {% if receipt.status == 'DRAFT' %}bg-gray-100 text-gray-800
+                  {% elif receipt.status == 'SUBMITTED' %}bg-green-100 text-green-800
+                  {% else %}bg-red-100 text-red-800{% endif %}">{{ receipt.get_status_display }}</span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.accepted_warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ receipt.total }}</td>
+              <td class="px-6 py-4 text-sm">
+                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="text-blue-600 hover:text-blue-800">View</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No purchase receipts yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
