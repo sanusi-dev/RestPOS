@@ -183,9 +183,18 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 - Any react components also need `{% vite_react_refresh %}` for Vite + React's HMR functionality, from the same `django_vite` template library)
 - Use the Django `{% static %}` tag for loading images and external JavaScript / CSS files not managed by vite.
 - Prefer using alpine.js for page-level JavaScript, and avoid inline `<script>` tags where possible.
-- Break re-usable template components into separate templates with `{% include %}` statements.
-  These normally go into a `components` folder.
-- Use TailwindCSS utility classes for all styling. Do not use DaisyUI.
+- Use Django 6.0 template partials (`{% partialdef %}` / `{% partial %}`) for reusable
+  template fragments. Define partials inline in the template where they're used — this keeps
+  related markup together and avoids scattering fragments across files.
+- Only use `{% include %}` when a fragment is genuinely shared across multiple unrelated
+  templates (e.g. a form widget used in 3+ different pages). In that case, put the shared
+  fragment in a `components/` folder. This should be the exception, not the default.
+- For HTMX responses, use template partials with the `inline` option or direct partial access —
+  one template file serves both the full page render and the HTMX fragment response. This
+  avoids the need for separate `_partial.html` files for every HTMX endpoint.
+- Use TailwindCSS utility classes for all styling. Do not use DaisyUI in new RestPOS code.
+  (DaisyUI exists in the Pegasus boilerplate templates but must not be used in POS or
+  back-office templates.)
 
 ## JavaScript Code Guidelines
 
@@ -406,7 +415,7 @@ Read the `.py` file for business logic (validate, before_insert, on_submit etc.)
 **Step 2 — Find the URY adaptation:**
 ```
 references/ury-develop/ury/ury/doctype/                 ← URY custom doctypes
-references/ury-develop/ury/ury/ury_pos/api.py           ← POS API (722 lines) — read this fully
+references/ury-develop/ury/ury_pos/api.py                ← POS API (722 lines) — read this fully
 references/ury-develop/ury/ury/hooks/                   ← document event handlers
 references/ury-develop/pos/src/                         ← React POS frontend (for UI logic reference)
 references/ury-develop/URYMosaic/src/                   ← Vue kitchen display (reference only)
@@ -425,7 +434,7 @@ These are the most important files in the reference codebases:
 
 | File | Why it matters |
 |---|---|
-| `references/ury-develop/ury/ury/ury_pos/api.py` | Complete POS API — every endpoint your frontend needs |
+| `references/ury-develop/ury/ury_pos/api.py` | Complete POS API — every endpoint your frontend needs |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json` | Core inventory model |
 | `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice/pos_invoice.json` | Order/invoice model |
 | `references/erpnext-develop/erpnext/accounts/doctype/payment_entry/payment_entry.json` | Payment model |
@@ -495,3 +504,50 @@ When writing to `PLAN.md` for a new feature, always include:
 - Implement a POS API endpoint without first reading `ury_pos/api.py`
 - Write more than one feature at a time — always complete and confirm
   one feature before moving to the next, except if necessary
+
+---
+
+## Skills
+
+The following skills are installed and available in `.claude/skills/` (project level)
+and `~/.agents/skills/` (global level). Always load the relevant skill before implementing
+features — they contain battle-tested patterns that prevent common mistakes.
+
+### When to Load Skills
+
+- Building any Django form or validation logic → load `django-forms`
+- Building any Django view, model, or ORM query → load `django-patterns`
+  (Note: the skill's DRF sections do NOT apply to Phase 1 — HTMX only)
+- Implementing any HTMX interaction → load `htmx`
+- Building any UI component, page, or interface → load `frontend-design`
+- Setting up auth, permissions, or reviewing security → load `django-security`
+- Upgrading dependencies → load `upgrade-python-deps` or `upgrade-js-deps`
+- Fixing mypy type errors → load `fix-types`
+
+### Project-Level Skills (in `.claude/skills/`)
+
+| Skill | Purpose |
+|---|---|
+| django-forms | ModelForm patterns, validation, clean methods, HTMX form submission |
+| django-patterns | Django architecture, ORM best practices, caching, signals (DRF sections overridden for Phase 1) |
+| django-security | Security best practices, auth, CSRF, XSS prevention |
+| frontend-design | Distinctive visual design guidance, typography, color theming |
+| htmx | HTMX request attributes, swap strategies, triggers, CSRF handling |
+| fix-types | Interactive mypy type checking fixes |
+| pegasus-projects | Pegasus CLI operations |
+| upgrade-pegasus | Pegasus version upgrades |
+| resolve-pegasus-conflicts | Pegasus upgrade merge conflict resolution |
+| upgrade-python-deps | Python dependency upgrades via uv |
+| upgrade-js-deps | JavaScript dependency upgrades via npm |
+
+### Skill Constraints for RestPOS Phase 1
+
+Each project-level skill has a "RestPOS Project Constraints" section at the top
+that overrides any conflicting content. Key constraints:
+
+- `django-patterns`: Ignore all DRF/REST API sections — Phase 1 uses HTMX + Django views only
+- `django-forms`: Use `{% partialdef %}` (Django 6.0 template partials) instead of separate
+  `_form.html` files where possible
+- `htmx`: URL examples use `/api/` paths — RestPOS uses Django view URLs, not REST API endpoints
+- `django-security`: HTTPS/SSL settings are for Phase 2 — Phase 1 is local network only
+- `frontend-design`: All styling is Tailwind CSS only — no DaisyUI in new RestPOS code
