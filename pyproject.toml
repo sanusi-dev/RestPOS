@@ -26,18 +26,16 @@ line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.14"
-plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+plugins = ["mypy_django_plugin.main"]
 
 # Third-party libraries without type stubs - explicitly list each to suppress import-untyped
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
     "celery.*",
-    "celery_progress.*",
     "django_celery_beat.*",
     "environ.*",
     "kombu.*",
-    "mailchimp3.*",
 ]
 ignore_missing_imports = true
 
@@ -64,17 +62,13 @@ requires-python = ">=3.14"
 dependencies = [
     "Django>=6.0",
     "celery",
-    "celery-progress",
     "celery[redis]",
-    "django-allauth[socialaccount]>=65.13.0",
-    "django-anymail[mailgun]", # email services
+    "django-allauth>=65.13.0",
     "django-celery-beat",
     "django-environ",
     "django-htmx",
     "django-vite>=3.1.0",
-    "django-waffle",
-    "djangorestframework",
-    "drf-spectacular",
+    "pillow>=12.3.0",
     "psycopg",
     "redis",
 ]
@@ -90,9 +84,7 @@ dev = [
     "psycopg[binary]",
     "mypy>=1.18.2",
     "django-stubs>=5.0.0",
-    "djangorestframework-stubs>=3.15.0",
     "types-python-dateutil>=2.9.0.20251108",
-    "types-requests>=2.32.4",
 ]
 prod = [
     "gunicorn",

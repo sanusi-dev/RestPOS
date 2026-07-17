@@ -6,7 +6,7 @@
       <img class="avatar" src="{{ user.avatar_url }}">
       <div id='profile-upload-holder'>
         <label for="profile-upload" >
-          <a id="profile-upload-label" class="btn btn-ghost">
+          <a id="profile-upload-label" class="inline-flex items-center px-3 py-2 rounded-md hover:bg-gray-100 font-medium transition-colors">
             {% translate "Change Picture" %}
           </a>
         </label>
@@ -20,12 +20,12 @@
       {% csrf_token %}
       {% render_text_input form.email %}
       {% if user.emailaddress_set.count > 1 %}
-        <div class="text-sm text-base-content/70"><a href="{% url "account_email" %}" class="link">{%  translate "Manage email addresses" %}</a></div>
+        <div class="text-sm text-gray-500"><a href="{% url "account_email" %}" class="text-blue-600 hover:text-blue-800 underline">{%  translate "Manage email addresses" %}</a></div>
       {% endif %}
       {% render_text_input form.first_name %}
       {% render_text_input form.last_name %}
       <div class="mt-2">
-        <input class="btn btn-primary" type="submit" value="{% translate "Save" %}">
+        <input class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors" type="submit" value="{% translate "Save" %}">
       </div>
     </form>
   </div>

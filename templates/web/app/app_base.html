@@ -6,9 +6,9 @@
 {% block body %}
   {% block notifications %}
   {% endblock %}
-  <div id="htmx-error" class="alert alert-error alert-soft flex justify-between rounded-none! hidden" role="alert">
+  <div id="htmx-error" class="rounded-lg p-4 mb-4 bg-red-50 text-red-800 border border-red-200 flex justify-between hidden" role="alert">
     <span>{% translate "An error occurred while loading the content. Please try again." %}</span>
-    <button class="btn btn-sm btn-ghost" onclick="this.parentElement.classList.add('hidden')">
+    <button class="inline-flex items-center px-3 py-1.5 text-sm rounded-md font-medium hover:bg-gray-100" onclick="this.parentElement.classList.add('hidden')">
       <i class="fa fa-times"></i>
     </button>
   </div>

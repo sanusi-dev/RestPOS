@@ -18,7 +18,7 @@
         <label class="block mb-1 font-bold" for="current_email">
           {% translate "Current email" %}:
         </label>
-        <input id="current_email" type="email" value="{{ current_emailaddress.email }}" disabled class="input input-ghost w-full" />
+        <input id="current_email" type="email" value="{{ current_emailaddress.email }}" disabled class="w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50 text-gray-500" />
       </div>
     {% endif %}
     {% if new_emailaddress %}
@@ -30,14 +30,14 @@
             {% translate "Changing to" %}:
           {% endif %}
         </label>
-        <input id="new_email" type="email" value="{{ new_emailaddress.email }}" disabled class="input input-ghost w-full" />
-        <small class="text-base-content/70">{% blocktranslate %}Your email address is still pending verification.{% endblocktranslate %}</small>
+        <input id="new_email" type="email" value="{{ new_emailaddress.email }}" disabled class="w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50 text-gray-500" />
+        <small class="text-gray-500">{% blocktranslate %}Your email address is still pending verification.{% endblocktranslate %}</small>
         <div class="flex gap-2 mt-2">
-          <button form="pending-email" type="submit" name="action_send" class="btn btn-secondary btn-sm">
+          <button form="pending-email" type="submit" name="action_send" class="inline-flex items-center px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-medium transition-colors">
             {% trans 'Re-send Verification' %}
           </button>
           {% if current_emailaddress %}
-            <button form="pending-email" type="submit" name="action_remove" class="btn btn-error btn-sm">
+            <button form="pending-email" type="submit" name="action_remove" class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 font-medium transition-colors">
               {% trans 'Cancel Change' %}
             </button>
           {% endif %}
@@ -46,7 +46,7 @@
     {% endif %}
     {% render_text_input form.email %}
     <div class="mt-4">
-      <button name="action_add" type="submit" class="btn btn-primary">
+      <button name="action_add" type="submit" class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors">
         {% trans "Change Email" %}
       </button>
     </div>

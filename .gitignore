@@ -32,3 +32,4 @@ static/js/
 static/.vite/
 references/
 .mypy_cache/
+.claude

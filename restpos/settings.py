@@ -43,7 +43,6 @@ DJANGO_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
-    "django.contrib.sitemaps",
     "django.contrib.messages",
     "django.contrib.postgres",
     "django.contrib.staticfiles",
@@ -55,19 +54,17 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "allauth",  # allauth account/registration management
     "allauth.account",
-    "allauth.socialaccount",
     "django_htmx",
     "django_vite",
-    "rest_framework",
-    "drf_spectacular",
-    "celery_progress",
-    "waffle",
     "django_celery_beat",
 ]
 
 # Put your project-specific apps here
 PROJECT_APPS = [
     "apps.users.apps.UserConfig",
+    "apps.settings.apps.SettingsConfig",
+    "apps.inventory.apps.InventoryConfig",
+    "apps.menu.apps.MenuConfig",
     "apps.web",
 ]
 
@@ -84,7 +81,6 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "waffle.middleware.WaffleMiddleware",
 ]
 
 if ENABLE_DEBUG_TOOLBAR:
@@ -126,8 +122,6 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.web.context_processors.project_meta",
                 "apps.web.context_processors.csrf_settings",
-                # this line can be removed if not using google analytics
-                "apps.web.context_processors.google_analytics_id",
             ],
             "loaders": _DEFAULT_LOADERS if DEBUG else _CACHED_LOADERS,
         },
@@ -203,7 +197,7 @@ ACCOUNT_LOGIN_BY_CODE_ENABLED = True
 ACCOUNT_USER_DISPLAY = lambda user: user.get_display_name()  # noqa: E731
 
 ACCOUNT_FORMS = {
-    "signup": "apps.users.forms.TermsSignupForm",
+    "signup": "apps.users.forms.CustomSignupForm",
 }
 
 # User signup configuration: change to "mandatory" to require users to confirm email before signing in.
@@ -216,10 +210,6 @@ AUTHENTICATION_BACKENDS = (
     # `allauth` specific authentication methods, such as login by e-mail
     "allauth.account.auth_backends.AuthenticationBackend",
 )
-
-# For turnstile captchas
-TURNSTILE_KEY = env("TURNSTILE_KEY", default=None)
-TURNSTILE_SECRET = env("TURNSTILE_SECRET", default=None)
 
 
 # Internationalization
@@ -291,48 +281,12 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="sanusio293@gmail.com")
 # and in your environment.
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 
-# Most production backends will require further customization. The below example uses Mailgun.
-# ANYMAIL = {
-#     "MAILGUN_API_KEY": env("MAILGUN_API_KEY", default=None),
-#     "MAILGUN_SENDER_DOMAIN": env("MAILGUN_SENDER_DOMAIN", default=None),
-# }
-
-# use in production
-# see https://github.com/anymail/django-anymail for more details/examples
-# EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-
 EMAIL_SUBJECT_PREFIX = "[RestPOS] "
 
 # Django sites
 
 SITE_ID = 1
 
-# DRF config
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 100,
-}
-
-
-SPECTACULAR_SETTINGS = {
-    "TITLE": "RestPOS",
-    "DESCRIPTION": (
-        "RestPOS is a light weight and easy to use web-based application designed "
-        "for streamlined order management. It serves as an efficient tool for both "
-        "cashiers and captains, facilitating order management and processing with "
-        "ease and efficiency."
-    ),
-    "VERSION": "0.1.0",
-    "SERVE_INCLUDE_SCHEMA": False,
-    "SWAGGER_UI_SETTINGS": {
-        "displayOperationId": True,
-    },
-}
 # Redis, cache, and/or Celery setup
 # `or` treats an empty REDIS_URL as unset so it falls back instead of yielding an empty URL
 REDIS_URL = env("REDIS_URL", default=None) or env("REDIS_TLS_URL", default=None)
@@ -387,9 +341,6 @@ PROJECT_METADATA = {
 USE_HTTPS_IN_ABSOLUTE_URLS = env.bool("USE_HTTPS_IN_ABSOLUTE_URLS", default=False)
 
 ADMINS = ["sanusio293@gmail.com"]
-
-# Add your google analytics ID to the environment to connect to Google Analytics
-GOOGLE_ANALYTICS_ID = env("GOOGLE_ANALYTICS_ID", default="")
 
 
 LOGGING = {

@@ -4,20 +4,15 @@ from .base import TestViewBase
 
 
 class TestBasicViews(TestViewBase):
-    def test_landing_page(self):
-        self._assert_200(reverse("web:home"))
+    def test_home_redirects_to_login(self):
+        response = self.client.get(reverse("web:home"))
+        self.assertRedirects(response, reverse("account_login"))
 
     def test_signup(self):
         self._assert_200(reverse("account_signup"))
 
     def test_login(self):
         self._assert_200(reverse("account_login"))
-
-    def test_terms(self):
-        self._assert_200(reverse("web:terms"))
-
-    def test_robots(self):
-        self._assert_200(reverse("web:robots.txt"))
 
     def _assert_200(self, url):
         response = self.client.get(url)

@@ -21,7 +21,6 @@
     "@tailwindcss/vite": "^4.2.2",
     "alpinejs": "^3.15.11",
     "chart.js": "^4.5.1",
-    "daisyui": "^5.5.19",
     "htmx.org": "^2.0.8",
     "js-cookie": "^3.0.5",
     "tailwindcss": "^4.2.2"

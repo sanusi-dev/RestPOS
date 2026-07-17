@@ -14,7 +14,7 @@
 <form id="email-confirm-form" method="post" action="{% url 'account_confirm_email' confirmation.key %}">
   {% csrf_token %}
   <div class="mt-2">
-    <button id="email-confirm-button" class="btn btn-primary" type="submit"
+    <button id="email-confirm-button" class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors" type="submit"
             data-loading-text="{% translate 'Confirming' %}">
       {% translate 'Confirm' %}
     </button>
@@ -26,7 +26,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     const button = document.getElementById("email-confirm-button");
     button.disabled = true;
-    button.innerHTML = '<span class="loading loading-spinner loading-sm align-middle"></span> ' + button.dataset.loadingText;
+    button.innerHTML = '<svg class="animate-spin inline h-4 w-4 align-middle" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> ' + button.dataset.loadingText;
     document.getElementById("email-confirm-form").submit();
   });
 </script>

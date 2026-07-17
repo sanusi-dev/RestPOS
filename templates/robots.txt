@@ -1,2 +1,0 @@
-User-Agent: *
-Disallow: {% url 'admin:index' %}  # disable crawling django admin

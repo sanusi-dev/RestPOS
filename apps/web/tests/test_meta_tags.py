@@ -49,10 +49,10 @@ The URL is {% absolute_url '/test/1/' %}
     def test_with_url(self):
         template = """
 {% load meta_tags %}
-{% url 'web:terms' as terms_link %}
-The URL is {% absolute_url terms_link %}
+{% url 'account_login' as login_link %}
+The URL is {% absolute_url login_link %}
 """
-        self.assertEqual("The URL is https://example.com/terms/", self._get_rendered_text(template))
+        self.assertEqual("The URL is https://example.com/accounts/login/", self._get_rendered_text(template))
 
     def _get_rendered_text(self, template_text):
         with patch("apps.web.meta.get_server_root") as mock_get_server_root:

@@ -17,21 +17,21 @@
                  {% if emailaddress.primary or user.emailaddress_set.count == 1 %}checked="checked"{% endif %}
                  value="{{ emailaddress.email }}"/>
           {{ emailaddress.email }}
-          <span class="text-sm text-base-content/70">
+          <span class="text-sm text-gray-500">
             {% if emailaddress.verified %}
-              <span class="text-success">{% translate "Verified" %}</span>
+              <span class="text-green-600">{% translate "Verified" %}</span>
             {% else %}
-              <span class="text-base-content/70">{% translate "Unverified" %}</span>
+              <span class="text-gray-500">{% translate "Unverified" %}</span>
             {% endif %}
-            {% if emailaddress.primary %}<span class="text-info">{% translate "Primary" %}</span>{% endif %}
+            {% if emailaddress.primary %}<span class="text-blue-600">{% translate "Primary" %}</span>{% endif %}
           </span>
           </label>
         </div>
       {% endfor %}
       <div class="mt-2">
-        <button class="btn btn-primary" type="submit" name="action_primary">{% translate 'Make Primary' %}</button>
-        <button class="btn btn-outline" type="submit" name="action_send">{% translate 'Re-send Verification' %}</button>
-        <button class="btn btn-outline text-red-500 border-red-500 hover:bg-red-500 hover:border-red-700 hover:text-white" type="submit" name="action_remove">{% translate 'Remove' %}</button>
+        <button class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors" type="submit" name="action_primary">{% translate 'Make Primary' %}</button>
+        <button class="inline-flex items-center px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 font-medium transition-colors" type="submit" name="action_send">{% translate 'Re-send Verification' %}</button>
+        <button class="inline-flex items-center px-4 py-2 rounded-md border border-red-300 text-red-600 hover:bg-red-50 font-medium transition-colors" type="submit" name="action_remove">{% translate 'Remove' %}</button>
       </div>
     </fieldset>
   </form>
@@ -47,7 +47,7 @@
     {% csrf_token %}
     {% render_form_fields form %}
     <div class="mt-2">
-      <button class="btn btn-primary" name="action_add" type="submit">{% translate "Add E-mail" %}</button>
+      <button class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors" name="action_add" type="submit">{% translate "Add E-mail" %}</button>
     </div>
   </form>
 {% endif %}

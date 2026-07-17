@@ -40,7 +40,7 @@
       function showError(message) {
         uploadlabel.innerHTML = '<span title="' + message + '" ><span class="w-6 h-6 inline-flex justify-center items-center"><i class="fa fa-times"></i></span><span>Upload failed!</span></span>';
         uploadlabel.classList.remove('is-active');
-        uploadlabel.classList.add('text-error');
+        uploadlabel.classList.add('text-red-600');
       }
       function genericError(status) {
         if (status === 403) {
@@ -64,7 +64,7 @@
               // update UI
               uploadlabel.innerHTML = '<span class="w-6 h-6 inline-flex justify-center items-center"><i class="fa fa-check"></i></span><span>' + text + '</span>';
               uploadlabel.classList.remove('is-active');
-              uploadlabel.classList.add('text-success');
+              uploadlabel.classList.add('text-green-600');
             });
           } else {
             // the server returns JSON validation errors, but a 403/500 is an HTML page that

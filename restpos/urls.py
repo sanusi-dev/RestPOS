@@ -17,34 +17,19 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from django.views.generic import RedirectView
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
-
-from apps.web.sitemaps import StaticViewSitemap
-
-sitemaps = {
-    "static": StaticViewSitemap(),
-}
 
 urlpatterns = [
     # redirect Django admin login to main login page
     path("admin/login/", RedirectView.as_view(pattern_name="account_login")),
     path("admin/", admin.site.urls),
-    path("sitemap.xml", sitemap, {"sitemaps": sitemaps}, name="django.contrib.sitemaps.views.sitemap"),
     path("accounts/", include("allauth.urls")),
     path("users/", include("apps.users.urls")),
+    path("backoffice/settings/", include("apps.settings.urls")),
+    path("backoffice/inventory/", include("apps.inventory.urls")),
+    path("backoffice/menu/", include("apps.menu.urls")),
     path("", include("apps.web.urls")),
-    path("celery-progress/", include("celery_progress.urls")),
-    # API docs.
-    # These endpoints are public by default. To restrict access, pass `permission_classes`
-    # to the views below (e.g. `[permissions.IsAdminUser]`), gate on `settings.DEBUG`,
-    # or remove them entirely if you don't want to expose your API surface.
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    # Optional UI - you may wish to remove one of these depending on your preference
-    path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
-    path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Add browser reload URL if the middleware is enabled (matches middleware check in settings.py)
