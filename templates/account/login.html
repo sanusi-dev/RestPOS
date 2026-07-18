@@ -1,5 +1,4 @@
 {% extends "web/base.html" %}
-{% load i18n %}
 {% load static %}
 {% load form_tags %}
 {% block body %}
@@ -7,7 +6,7 @@
     <div class="w-96 px-4 py-4">
       <div>
         <h2 class="mt-6 text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {% translate "Sign In" %}
+          Sign In
         </h2>
         <form class="mt-6 space-y-6" method="post">
           {% csrf_token %}
@@ -15,16 +14,9 @@
           {% render_field form.login %}
           {% render_field form.password %}
           <div>
-            <input class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors w-full" type="submit" value="{% translate "Sign In" %}">
+            <input class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors w-full" type="submit" value="Sign In">
           </div>
         </form>
-        {% if LOGIN_BY_CODE_ENABLED %}
-        <p class="text-center text-gray-500">
-          <a class="text-sm muted-link" href="{{ request_login_code_url }}">
-            {% translate "Mail me a sign-in code" %}
-          </a>
-        </p>
-        {% endif %}
       </div>
     </div>
   </div>
