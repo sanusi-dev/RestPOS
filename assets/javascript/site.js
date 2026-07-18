@@ -3,3 +3,5 @@
 import './htmx';
 import './alpine';
 import './logout';
+import './toast';
+import './confirm';

@@ -27,11 +27,17 @@
               <td class="px-6 py-4 text-sm text-gray-500">{{ assignment.branch.name }}</td>
               <td class="px-6 py-4 text-right text-sm">
                 <a href="{% url 'settings:user_room_update' assignment.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
-                <form method="post" action="{% url 'settings:user_room_delete' assignment.pk %}" class="inline"
-                      onsubmit="return confirm('Delete this assignment?');">
-                  {% csrf_token %}
-                  <button type="submit" class="ml-3 text-red-600 hover:text-red-800">Delete</button>
-                </form>
+                <button hx-post="{% url 'settings:user_room_delete' assignment.pk %}"
+                        hx-target="#app-content"
+                        hx-select="#app-content"
+                        hx-swap="outerHTML"
+                        data-confirm-message="Delete this assignment?"
+                        data-confirm-icon="warning"
+                        data-confirm-color="#dc2626"
+                        data-confirm-btn="Yes, delete"
+                        class="text-red-600 hover:text-red-800">
+                  Delete
+                </button>
               </td>
             </tr>
           {% empty %}

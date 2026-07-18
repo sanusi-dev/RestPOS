@@ -1,0 +1,141 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+
+{% partialdef staff-row %}
+<tr id="staff-row-{{ entry.user.pk }}">
+  <td class="px-4 py-3 text-sm font-medium text-gray-900">
+    {{ entry.user.get_display_name|title }}
+  </td>
+  <td class="px-4 py-3 text-sm">
+    {% if entry.role == "manager" %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">{{entry.role|title}}</span>
+    {% elif entry.role == "cashier" %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">{{entry.role|title}}</span>
+    {% else %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-500">No role assigned</span>
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 text-sm text-gray-400">
+    {% if entry.user.last_login %}
+      {{ entry.user.last_login|date:"M j, Y H:i" }}
+    {% else %}
+      Never
+    {% endif %}
+  </td>
+  <td class="px-4 py-3 text-right text-sm">
+    {% if not entry.user.is_superuser %}
+      {% if entry.role == "manager" %}
+        <button hx-post="{% url 'settings:staff_assign_role' entry.user.pk 'cashier' %}"
+                hx-target="#staff-row-{{ entry.user.pk }}"
+                hx-swap="outerHTML"
+                data-confirm-title="Confirm Role Change"
+                data-confirm-message="Assign <strong>{{ entry.user.get_display_name }}</strong> as <strong>Cashier</strong>?"
+                data-confirm-btn="Yes, assign"
+                class="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium mr-1">
+          Demote to Cashier
+        </button>
+      {% elif entry.role == "cashier" %}
+        <button hx-post="{% url 'settings:staff_assign_role' entry.user.pk 'manager' %}"
+                hx-target="#staff-row-{{ entry.user.pk }}"
+                hx-swap="outerHTML"
+                data-confirm-title="Confirm Role Change"
+                data-confirm-message="Assign <strong>{{ entry.user.get_display_name }}</strong> as <strong>Manager</strong>?"
+                data-confirm-btn="Yes, assign"
+                class="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium mr-1">
+          Promote to Manager
+        </button>
+      {% else %}
+        <button hx-post="{% url 'settings:staff_assign_role' entry.user.pk 'cashier' %}"
+                hx-target="#staff-row-{{ entry.user.pk }}"
+                hx-swap="outerHTML"
+                data-confirm-title="Confirm Role Change"
+                data-confirm-message="Assign <strong>{{ entry.user.get_display_name }}</strong> as <strong>Cashier</strong>?"
+                data-confirm-btn="Yes, assign"
+                class="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-green-50 text-green-700 hover:bg-green-100 font-medium mr-1">
+          Assign as Cashier
+        </button>
+        <button hx-post="{% url 'settings:staff_assign_role' entry.user.pk 'manager' %}"
+                hx-target="#staff-row-{{ entry.user.pk }}"
+                hx-swap="outerHTML"
+                data-confirm-title="Confirm Role Change"
+                data-confirm-message="Assign <strong>{{ entry.user.get_display_name }}</strong> as <strong>Manager</strong>?"
+                data-confirm-btn="Yes, assign"
+                class="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium mr-1">
+          Assign as Manager
+        </button>
+      {% endif %}
+      {% if entry.role %}
+        <button hx-post="{% url 'settings:staff_remove_role' entry.user.pk %}"
+                hx-target="#staff-row-{{ entry.user.pk }}"
+                hx-swap="outerHTML"
+                data-confirm-title="Remove Role"
+                data-confirm-message="Remove the staff role from <strong>{{ entry.user.get_display_name }}</strong>?"
+                data-confirm-icon="warning"
+                data-confirm-color="#dc2626"
+                data-confirm-btn="Yes, remove"
+                class="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-red-50 text-red-700 hover:bg-red-100 font-medium">
+          Remove
+        </button>
+      {% endif %}
+    {% endif %}
+  </td>
+</tr>
+{% endpartialdef %}
+
+{% partialdef staff-rows %}
+  {% for entry in staff_data %}
+    {% partial staff-row %}
+  {% endfor %}
+{% endpartialdef %}
+
+<div class="p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Staff Management</h1>
+  </div>
+
+  <div class="mb-4">
+    <form hx-get="{% url 'settings:staff_list' %}" hx-target="#staff-table-body" hx-trigger="keyup changed delay:300ms from:input[name=search]">
+      <input type="text" name="search" value="{{ search }}" placeholder="Search by username..."
+             class="w-full max-w-md rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+    </form>
+  </div>
+
+  <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
+          <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="staff-table-body" class="divide-y divide-gray-100">
+        {% partial staff-rows %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="mt-4 flex items-center justify-between" id="staff-pagination">
+    <p class="text-sm text-gray-500">
+      Page {{ page }} of {{ total_pages }} ({{ total }} users)
+    </p>
+    <div class="flex gap-1">
+      {% if page > 1 %}
+      <button hx-get="{% url 'settings:staff_list' %}?search={{ search }}&page={{ page|add:-1 }}" hx-target="#staff-table-body" hx-swap="innerHTML"
+              class="px-3 py-1 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-medium">
+        Previous
+      </button>
+      {% endif %}
+      {% if page < total_pages %}
+      <button hx-get="{% url 'settings:staff_list' %}?search={{ search }}&page={{ page|add:1 }}" hx-target="#staff-table-body" hx-swap="innerHTML"
+              class="px-3 py-1 text-sm rounded-md border border-gray-300 hover:bg-gray-50 font-medium">
+        Next
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

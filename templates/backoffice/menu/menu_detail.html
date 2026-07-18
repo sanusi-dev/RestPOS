@@ -76,11 +76,17 @@
               </td>
               <td class="px-6 py-4 text-right text-sm space-x-3">
                 <a href="{% url 'menu:menu_item_update' mi.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
-                <form method="post" action="{% url 'menu:menu_item_delete' mi.pk %}" class="inline"
-                      onsubmit="return confirm('Remove {{ mi.item_name }} from this menu?');">
-                  {% csrf_token %}
-                  <button type="submit" class="text-red-600 hover:text-red-800">Remove</button>
-                </form>
+                <button hx-post="{% url 'menu:menu_item_delete' mi.pk %}"
+                        hx-target="#app-content"
+                        hx-select="#app-content"
+                        hx-swap="outerHTML"
+                        data-confirm-message="Remove {{ mi.item_name }} from this menu?"
+                        data-confirm-icon="warning"
+                        data-confirm-color="#dc2626"
+                        data-confirm-btn="Yes, remove"
+                        class="text-red-600 hover:text-red-800">
+                  Remove
+                </button>
               </td>
             </tr>
           {% empty %}

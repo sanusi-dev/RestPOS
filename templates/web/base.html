@@ -5,11 +5,8 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <!--IE compatibility-->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <!--Mobile friendly-->
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!--CSRF cookie name, read by front-end JS (see assets/javascript/csrf.js)-->
     <meta name="csrf-cookie-name" content="{{ csrf_cookie_name }}">
 {% block meta %}
 {% if project_meta %}
@@ -19,12 +16,10 @@
       <title>{% block page_title %}{{ title }}{% endblock %}</title>
       <meta name="description" content="{{ description }}">
       <meta name="keywords" content="{{ project_meta.KEYWORDS }}">
-      <!-- Twitter Card data -->
       <meta name="twitter:card" content="summary_large_image">
       <meta name="twitter:title" content="{{ title }}">
       <meta name="twitter:description" content="{{ description }}">
       <meta name="twitter:image" content="{{ image }}">
-      <!-- Open Graph data -->
       <meta property="og:title" content="{{ title }}" />
       <meta property="og:type" content="website" />
       <meta property="og:url" content="{{ page_url }}" />
@@ -40,7 +35,6 @@
 {% include 'web/components/favicon.html' %}
     <link rel="stylesheet" href="{% vite_asset_url 'assets/styles/site-base.css' %}">
     <link rel="stylesheet" href="{% vite_asset_url 'assets/styles/site-tailwind.css' %}">
-
     {% vite_asset 'assets/javascript/site.js' %}
     {% vite_hmr_client %}
     <script>__cssFramework = 'tailwind';</script>
@@ -49,19 +43,79 @@
 </head>
 <body class="bg-white" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {% block body_wrapper %}
-{% block top_nav %}
-  {% include 'web/components/top_nav.html' %}
-{% endblock %}
-{% block messages %}
-  {% include 'web/components/messages.html' %}
-{% endblock messages %}
+<nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-300"
+     x-data="{ mobileMenuOpen: false }">
+  <div class="flex items-center justify-between h-16 px-4">
+    <div class="flex items-center gap-2">
+      <div class="lg:hidden">
+        <button @click="mobileMenuOpen = true" class="inline-flex items-center px-3 py-2 rounded-md hover:bg-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" /></svg>
+        </button>
+      </div>
+    </div>
+    <div class="flex-1 flex items-center justify-center hidden lg:flex">
+      <a class="px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}bg-blue-50 text-blue-700{% endif %}" href="{% url 'web:home' %}">
+        {{ project_meta.NAME }}
+      </a>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if user.is_authenticated %}
+      {% else %}
+      <a href="{% url 'account_signup' %}" class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors">
+        Sign Up
+      </a>
+      <a href="{% url 'account_login' %}" class="inline-flex items-center px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50 font-medium transition-colors ml-2">
+        Sign In
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <template x-teleport="body">
+    <div x-show="mobileMenuOpen" x-cloak class="fixed inset-0 z-50 lg:hidden">
+      <div x-show="mobileMenuOpen"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0"
+           x-transition:enter-end="opacity-100"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0"
+           @click="mobileMenuOpen = false"
+           class="fixed inset-0 bg-black/30 backdrop-blur-sm"></div>
+      <div x-show="mobileMenuOpen"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="-translate-x-full"
+           x-transition:enter-end="translate-x-0"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="translate-x-0"
+           x-transition:leave-end="-translate-x-full"
+           class="fixed inset-y-0 left-0 w-64 bg-white shadow-xl overflow-y-auto">
+        <div class="flex items-center justify-between p-4 border-b border-gray-200">
+          <span class="font-semibold text-lg">{{ project_meta.NAME }}</span>
+          <button @click="mobileMenuOpen = false" class="inline-flex items-center px-3 py-1.5 text-sm rounded-md font-medium hover:bg-gray-100">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <ul class="flex flex-col gap-1 p-4">
+          {% block mobile_nav_items %}
+          <li>
+            <a class="px-3 py-2 rounded-md text-sm font-medium {% if request.path == '/' %}bg-blue-50 text-blue-700{% endif %}" href="{% url 'web:home' %}">
+              {{ project_meta.NAME }}
+            </a>
+          </li>
+          {% endblock %}
+        </ul>
+      </div>
+    </div>
+  </template>
+</nav>
+{% if messages %}
+<script id="django-messages" type="application/json">[{% for message in messages %}{"message": "{{ message.message|escapejs }}", "level": "{{ message.level_tag }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+{% endif %}
 {% block body %}
 {% endblock body %}
-{% block footer %}
-  {% include 'web/components/footer.html' %}
-{% endblock footer %}
 {% endblock body_wrapper %}
-  {% include 'web/components/messages-js.html' %}
 {% block page_js %}
 {% endblock page_js %}
 </body>

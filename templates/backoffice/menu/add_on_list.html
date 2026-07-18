@@ -41,11 +41,17 @@
               <td class="px-6 py-4 text-sm text-gray-500">{{ add_on.add_on_item.item_name }}</td>
               <td class="px-6 py-4 text-right text-sm space-x-3">
                 <a href="{% url 'menu:add_on_update' add_on.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
-                <form method="post" action="{% url 'menu:add_on_delete' add_on.pk %}" class="inline"
-                      onsubmit="return confirm('Delete this add-on?');">
-                  {% csrf_token %}
-                  <button type="submit" class="text-red-600 hover:text-red-800">Delete</button>
-                </form>
+                <button hx-post="{% url 'menu:add_on_delete' add_on.pk %}"
+                        hx-target="#app-content"
+                        hx-select="#app-content"
+                        hx-swap="outerHTML"
+                        data-confirm-message="Delete this add-on?"
+                        data-confirm-icon="warning"
+                        data-confirm-color="#dc2626"
+                        data-confirm-btn="Yes, delete"
+                        class="text-red-600 hover:text-red-800">
+                  Delete
+                </button>
               </td>
             </tr>
           {% empty %}
