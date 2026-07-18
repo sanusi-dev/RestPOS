@@ -1,37 +1,42 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
+  {% partialdef form inline %}
+    <form method="post"
+          {% if request.htmx %}hx-post="{{ request.path }}"{% endif %}
+          class="space-y-4">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+          <div class="mt-1">{{ field }}</div>
+          {% if field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ field.errors }}</p>
+          {% elif field.help_text %}
+            <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="flex justify-end space-x-3 pt-2">
+        <a href="{% url 'settings:room_list' %}"
+           class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Cancel
+        </a>
+        <button type="submit"
+                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          {% if is_create %}Create Room{% else %}Save Changes{% endif %}
+        </button>
+      </div>
+    </form>
+  {% endpartialdef %}
   <div class="space-y-6">
     <h1 class="text-2xl font-bold text-gray-900">
       {% if is_create %}New Room{% else %}Edit Room{% endif %}
     </h1>
     <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      <form method="post" class="space-y-4">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-          <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
-        {% endif %}
-        {% for field in form %}
-          <div>
-            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-            <div class="mt-1">{{ field }}</div>
-            {% if field.errors %}
-              <p class="mt-1 text-sm text-red-600">{{ field.errors }}</p>
-            {% elif field.help_text %}
-              <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
-            {% endif %}
-          </div>
-        {% endfor %}
-        <div class="flex justify-end space-x-3 pt-2">
-          <a href="{% url 'settings:room_list' %}"
-             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Cancel
-          </a>
-          <button type="submit"
-                  class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            {% if is_create %}Create Room{% else %}Save Changes{% endif %}
-          </button>
-        </div>
-      </form>
+      {% partial form %}
     </div>
   </div>
 {% endblock %}

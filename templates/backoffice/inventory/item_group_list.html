@@ -1,5 +1,21 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
+
+{% partialdef item-group-node %}
+<li class="text-sm">
+  <a href="{% url 'inventory:item_group_detail' node.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ node.name }}</a>
+  {% if node.is_group %}<span class="ml-1 text-gray-400">(group)</span>{% endif %}
+  {% if node.description %}<span class="ml-2 text-gray-400">{{ node.description|truncatewords:5 }}</span>{% endif %}
+  {% if node.children.all %}
+    <ul class="ml-6 space-y-1 border-l border-gray-200 pl-4">
+      {% for child in node.children.all %}
+        {% partial item-group-node node=child %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</li>
+{% endpartialdef %}
+
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">Item Groups</h1>
@@ -12,7 +28,7 @@
     <div class="rounded-lg border border-gray-200 shadow-sm p-6">
       <ul class="space-y-1">
         {% for root in roots %}
-          {% include "backoffice/inventory/_item_group_node.html" %}
+          {% partial item-group-node node=root %}
         {% empty %}
           <li class="text-sm text-gray-500">No item groups yet.</li>
         {% endfor %}

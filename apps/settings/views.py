@@ -1,7 +1,12 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
+from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+from apps.users.models import CustomUser
 
 from .forms import (
     BranchForm,
@@ -21,6 +26,9 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
         "table_count": Table.objects.count(),
         "restaurant_count": Restaurant.objects.count(),
         "assignment_count": UserRoomAssignment.objects.count(),
+        "staff_count": CustomUser.objects.filter(groups__name__in=["RestPOS Manager", "RestPOS Cashier"])
+        .distinct()
+        .count(),
     }
     return render(request, "backoffice/settings/dashboard.html", context)
 
@@ -295,3 +303,125 @@ def user_room_delete(request: HttpRequest, pk: int) -> HttpResponse:
     assignment = get_object_or_404(UserRoomAssignment, pk=pk)
     assignment.delete()
     return redirect("settings:user_room_list")
+
+
+# ---------------------------------------------------------------------------
+# Staff Management
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def staff_list(request: HttpRequest) -> HttpResponse:
+    if not request.user.has_backoffice_access:
+        return redirect("web:home")
+
+    search = request.GET.get("search", "")
+    page = int(request.GET.get("page", 1))
+    per_page = 20
+
+    users = CustomUser.objects.all().order_by("-date_joined")
+    if search:
+        users = users.filter(
+            models.Q(username__icontains=search)
+            | models.Q(first_name__icontains=search)
+            | models.Q(last_name__icontains=search)
+        )
+
+    total = users.count()
+    users = users[(page - 1) * per_page : page * per_page]
+    total_pages = (total + per_page - 1) // per_page
+
+    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+
+    staff_data = []
+    for user in users:
+        if user.groups.filter(pk=manager_group.pk).exists():
+            role = "manager"
+        elif user.groups.filter(pk=cashier_group.pk).exists():
+            role = "cashier"
+        else:
+            role = ""
+        staff_data.append({"user": user, "role": role})
+
+    context = {
+        "staff_data": staff_data,
+        "search": search,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+    }
+    if request.htmx:
+        return render(request, "backoffice/settings/staff_list.html#staff-rows", context)
+    return render(request, "backoffice/settings/staff_list.html", context)
+
+
+@login_required
+@require_POST
+def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
+    if not request.user.has_backoffice_access:
+        return HttpResponse("Unauthorized", status=403)
+
+    user = get_object_or_404(CustomUser, pk=pk)
+    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+
+    # Prevent assigning the manager role to a non-manager user
+    if role == "manager" and not request.user.is_superuser and not request.user.is_manager:
+        return HttpResponse("Unauthorized", status=403)
+
+    user.groups.remove(manager_group, cashier_group)
+
+    if role == "manager":
+        user.groups.add(manager_group)
+        messages.success(request, f"{user.get_display_name()} is now a Manager.")
+    elif role == "cashier":
+        user.groups.add(cashier_group)
+        messages.success(request, f"{user.get_display_name()} is now a Cashier.")
+
+    if request.htmx:
+        response = render(
+            request,
+            "backoffice/settings/staff_list.html#staff-row",
+            {"entry": _build_staff_entry(user, manager_group, cashier_group)},
+        )
+        return response
+    return redirect("settings:staff_list")
+
+
+@login_required
+@require_POST
+def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
+    if not request.user.has_backoffice_access:
+        return HttpResponse("Unauthorized", status=403)
+
+    user = get_object_or_404(CustomUser, pk=pk)
+    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+
+    # Prevent removing role from superuser
+    if user.is_superuser:
+        messages.error(request, "Cannot remove role from a superuser.")
+        return redirect("settings:staff_list")
+
+    user.groups.remove(manager_group, cashier_group)
+    messages.success(request, f"Role removed from {user.get_display_name()}.")
+
+    if request.htmx:
+        response = render(
+            request,
+            "backoffice/settings/staff_list.html#staff-row",
+            {"entry": _build_staff_entry(user, manager_group, cashier_group)},
+        )
+        return response
+    return redirect("settings:staff_list")
+
+
+def _build_staff_entry(user, manager_group, cashier_group):
+    if user.groups.filter(pk=manager_group.pk).exists():
+        role = "manager"
+    elif user.groups.filter(pk=cashier_group.pk).exists():
+        role = "cashier"
+    else:
+        role = ""
+    return {"user": user, "role": role}
