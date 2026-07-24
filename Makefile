@@ -42,6 +42,9 @@ shell: ## Get a Django shell
 dbshell: ## Get a Database shell
 	@docker compose exec db psql -U postgres restpos
 
+drop-test-db:  ## Drop the test database (use when stuck from --keepdb)
+	@docker compose exec db psql -U postgres -c "DROP DATABASE IF EXISTS test_restpos WITH (FORCE)"
+
 test: ## Run Django tests
 	@uv run manage.py test ${ARGS}
 

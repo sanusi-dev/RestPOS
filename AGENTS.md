@@ -137,6 +137,9 @@ make uv run 'pegasus startapp <app_name> <Model1> <Model2Name>'  # Start a new D
 
 ## CHANGE / EDIT MODE
 
+- Use the interactive question tool (`question` tool) whenever a decision requires user input — never
+  assume preferences, design choices, or scope. Present options as clickable choices with clear
+  labels and descriptions so the user can answer on the fly without typing free-text responses.
 - Never implement features yourself if possible — use sub-agents.
 - Identify changes from the plan.
 - Sub-agents to implement features that can be implemented in parallel, using sub-agents efficiently.

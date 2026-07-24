@@ -49,8 +49,8 @@ The project is organised into 8 Django apps under `restpos/apps/`:
 
 | App | Responsibility | FEATURES.md sections |
 |---|---|---|
-| `settings` | Restaurant config, branches, rooms, tables, POS profiles, production units, aggregator settings | A1, A3, A4, A5, D2 |
-| `inventory` | Item master, item groups, warehouses, stock ledger, stock entries, batch/serial tracking, valuation | A12 |
+| `settings` | Restaurant config, branches, rooms, tables, POS profiles, production units | A1, A3, A4, D2 |
+| `inventory` | Item master, item groups, warehouses, stock ledger, stock entries, valuation | A12 |
 | `menu` | Menu definition, menu items, variants, add-ons, bundles, pricing | A2 |
 | `staff` | Roles, POS opening/closing entries, cashier shifts, session management | A9, A17 |
 | `payments` | Payment modes, GL mapping, change calculation, discounts, rounding, write-offs | A10 |
@@ -91,7 +91,7 @@ settings R1 → inventory → menu → staff ↘
 - **Alpine.js:** Client-side interactivity (dropdowns, modals, toggles) that doesn't need server.
 - **SweetAlerts:** Toast notifications and confirmation dialogs.
 - **Tailwind CSS:** All styling. No DaisyUI in new code.
-- **Roles:** Three custom roles — RestPOS Manager, RestPOS Cashier, RestPOS Captain.
+- **Roles:** Two custom roles — RestPOS Manager, RestPOS Cashier.
 
 ---
 
@@ -100,11 +100,11 @@ settings R1 → inventory → menu → staff ↘
 | Phase | App | FEATURES.md sections | Key models | Dependencies | Status |
 |---|---|---|---|---|---|
 | 1 | settings R1 | A1, D2 (partial) | Branch, Room, Table, Restaurant, UserRoomAssignment | None | complete |
-| 2 | inventory | A12 | Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry, Batch, UOM, Bin, ProductBundle, StockReconciliation | settings R1 | complete |
+| 2 | inventory | A12 | Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry, UOM, Bin, ProductBundle, StockReconciliation | settings R1 | complete |
 | 3 | menu | A2 | Menu, MenuItem, PriceList, ItemPrice, ItemAddOn, ItemVariant | inventory | complete (MenuCourse removed) |
 | 4 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, Role definitions | settings R1 | not started |
 | 5 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | not started |
-| 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, ProductionUnit, AggregatorSettings, TaxTemplate | menu, inventory, payments | not started |
+| 6 | settings R2 | A3, A4 | POSProfile, ProductionUnit, TaxTemplate | menu, inventory, payments | not started |
 | 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff | not started |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
@@ -125,28 +125,28 @@ settings R1 → inventory → menu → staff ↘
 
 **Scope:** Restaurant configuration, branches, rooms, tables with floor-plan layout, POS profiles
 (terminal configuration), production units (kitchen/bar stations with printer assignment),
-aggregator settings, tax templates.
+tax templates.
 
 **Split into two rounds:**
 - Round 1 (Phase 1): Branch, Room, Table, Restaurant, UserRoomAssignment — no external dependencies
-- Round 2 (Phase 6): POSProfile, ProductionUnit, AggregatorSettings, TaxTemplate — needs menu's
+- Round 2 (Phase 6): POSProfile, ProductionUnit, TaxTemplate — needs menu's
   ItemGroup, inventory's Warehouse, payments' ModeOfPayment
 
 **Key reference doctypes:** URY Restaurant, URY Room, URY Table, URY Production Unit, URY Printer
-Settings, URY User, ERPNext POS Profile, ERPNext Branch, Aggregator Settings
+Settings, URY User, ERPNext POS Profile, ERPNext Branch
 
 ### inventory (Phase 2)
 
-**Scope:** Item master (products), item groups (hierarchical categories), warehouses, stock ledger
-entries (immutable movement records), stock entries (manual movements), batch tracking, serial
-number tracking, multiple UOM, reorder levels, stock reconciliation, valuation methods (FIFO/
-moving average), product bundles.
+**Scope:** Item master (products), item groups (flat categories), warehouses, stock ledger
+entries (immutable movement records), stock entries (manual movements), stock
+reconciliation, valuation methods (FIFO/moving average). Single UOM per item — no conversions needed.
+Batch tracking, product bundles, barcodes, reorder levels all removed (unnecessary for restaurant use).
 
-**Key models:** Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry, ItemBatch, ItemSerial,
-ItemUOMConversion, ReorderLevel, StockReconciliation, ProductBundle, ProductBundleItem
+**Key models:** Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry,
+StockReconciliation, PurchaseReceipt, Bin
 
 **Key reference doctypes:** ERPNext Item, Item Group, Warehouse, Stock Ledger Entry, Stock Entry,
-Batch, Stock Reconciliation, UOM Conversion, Sales BOM
+Stock Reconciliation, UOM Conversion, Sales BOM
 
 ### menu (Phase 3)
 
@@ -161,7 +161,7 @@ Variant, Sales BOM
 
 ### staff (Phase 4)
 
-**Scope:** Three custom roles (Manager, Cashier, Captain), role-based permissions per model, POS
+**Scope:** Two custom roles (Manager, Cashier), role-based permissions per model, POS
 opening entries (shift start with float), POS closing entries (shift end with reconciliation),
 cashier session validation (one open session per branch, shared across users), daily close
 enforcement.
@@ -289,7 +289,7 @@ When starting a new session to continue RestPOS implementation:
 | `references/ury-develop/ury/ury/doctype/ury_table/ury_table.py` | Table logic (broken autoname — JSON is authoritative) |
 | `references/ury-develop/ury/ury/doctype/ury_user/ury_user.json` | User-room assignment model |
 | `references/ury-develop/ury/ury/doctype/ury_user/ury_user.py` | User logic (empty) |
-| `references/ury-develop/ury/fixtures/custom_field.json` | URY custom fields on Branch (aggregator flags) |
+| `references/ury-develop/ury/fixtures/custom_field.json` | URY custom fields on Branch |
 | `references/ury-develop/ury/ury_pos/api.py` | How user→room→branch resolution works |
 
 #### Models
@@ -301,8 +301,6 @@ All models extend `apps.utils.models.BaseModel` (adds `created_at`, `updated_at`
 | Field | Type | Source | Notes |
 |---|---|---|---|
 | name | CharField, max_length=100, unique | ERPNext Branch.branch | e.g. "Main Branch" |
-| make_aggregator_unpaid | BooleanField, default=False | URY custom_make_unpaid | #45 — aggregator orders as credit sales |
-| no_aggregator_taxes | BooleanField, default=False | URY custom_no_taxes | #46 — remove taxes from aggregator orders |
 
 **Methods:**
 - `__str__` returns `name`
@@ -355,7 +353,6 @@ a single Restaurant per branch (singleton), and the branch is already reachable 
 | company | CharField, max_length=200 | URY Restaurant.company | no Company model in Phase 1 — just a name |
 | branch | ForeignKey→Branch, on_delete=PROTECT | URY Restaurant.branch | required |
 | invoice_series_prefix | CharField, max_length=20, default="REST-" | URY Restaurant.invoice_series_prefix | #1 |
-| aggregator_series_prefix | CharField, max_length=20, blank=True, default="AGR-" | URY Restaurant.aggregator_series_prefix | #44 |
 | address | TextField, blank=True | URY Restaurant.address | simplified to text (no Address model) |
 | default_room | ForeignKey→Room, on_delete=PROTECT | URY Restaurant.default_room | required |
 | active_menu | ForeignKey→menu.Menu, null=True, blank=True | URY Restaurant.active_menu | set when menu app is built |
@@ -466,7 +463,7 @@ Register all 5 models in `settings/admin.py` with `list_display`, `list_filter`,
 
 | Test file | What it covers |
 |---|---|
-| `settings/tests/test_branch.py` | Branch CRUD, aggregator flags defaults |
+| `settings/tests/test_branch.py` | Branch CRUD |
 | `settings/tests/test_room.py` | Room CRUD, branch relationship, unique_together |
 | `settings/tests/test_table.py` | Table CRUD, shape choices, takeaway flag, layout coordinates, editable=False on occupied |
 | `settings/tests/test_restaurant.py` | Restaurant singleton per branch, default_room.branch consistency, prefix defaults |
@@ -486,6 +483,7 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 | `occupied` and `latest_invoice_time` are `editable=False` | System-managed, prevents manual override |
 | Printer settings NOT on Room | RestPOS routes by department flag (#68), printer config on ProductionUnit (#16) |
 | Table links to Room (not Restaurant) | Branch reachable via room.branch; single Restaurant per branch |
+| Branch kept in DB but hidden in Phase 1 UI; auto-set via `Branch.get_default()` (or derived from room) on Menu, Room, Warehouse, Restaurant; Table/UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
 
 #### Implementation steps
 
@@ -513,7 +511,7 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 #### Decisions
 
-- **Serial number tracking:** Excluded entirely — restaurants use batch tracking, not serial
+- **Stock tracking:** Uses FIFO and moving average valuation
 - **Item variants:** Fields on Item only (`has_variants`, `variant_of`). No ItemAttribute/ItemVariantAttribute models. Variant selection handled in menu app (Phase 3).
 - **Tree structure:** Simple parent ForeignKey (self-referential). No django-mptt or treebeard.
 - **UOM:** Separate master model, seeded with common restaurant UOMs.
@@ -528,14 +526,12 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 | `references/erpnext-develop/erpnext/stock/doctype/item_reorder/item_reorder.json` | Reorder level child table |
 | `references/erpnext-develop/erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json` | UOM conversion child table |
 | `references/erpnext-develop/erpnext/setup/doctype/item_group/item_group.json` | Item Group tree structure |
-| `references/erpnext-develop/erpnext/stock/doctype/warehouse/warehouse.json` | Warehouse tree structure |
+| `references/erpnext-develop/erpnext/stock/doctype/warehouse/warehouse.json` | Warehouse doctype |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json` | SLE fields |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.py` | SLE validation |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_entry/stock_entry.json` | Stock Entry fields and purposes |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_entry/stock_entry.py` | Stock Entry submit/cancel logic |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json` | Stock Entry line items |
-| `references/erpnext-develop/erpnext/stock/doctype/batch/batch.json` | Batch fields |
-| `references/erpnext-develop/erpnext/stock/doctype/batch/batch.py` | Batch auto-expiry calculation |
 | `references/erpnext-develop/erpnext/stock/doctype/bin/bin.json` | Bin cache table fields |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json` | Reconciliation fields |
 | `references/erpnext-develop/erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json` | Reconciliation line items |
@@ -562,12 +558,10 @@ Seed data: Each, Kg, Gram, Litre, Millilitre, Case, Box, Dozen, Pack.
 
 | Field | Type | Notes |
 |---|---|---|
-| name | CharField, max_length=100, unique | e.g. "Food", "Beverages", "Starters" |
-| parent | ForeignKey→self, null=True, blank=True, on_delete=PROTECT, related_name="children" | Tree structure |
-| is_group | BooleanField, default=False | True for parent categories (can't hold items) |
+| name | CharField, max_length=100, unique | e.g. "Food", "Beverages" |
 | description | TextField, blank=True | |
 
-**Methods:** `__str__` returns `name`. `clean()`: if `is_group=True`, prevent items from being assigned (enforced in Item.clean).
+**Methods:** `__str__` returns `name`.
 
 ##### Warehouse (`inventory.Warehouse`)
 
@@ -575,9 +569,6 @@ Seed data: Each, Kg, Gram, Litre, Millilitre, Case, Box, Dozen, Pack.
 |---|---|---|
 | name | CharField, max_length=100 | e.g. "Kitchen", "Bar", "Stores" |
 | branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="warehouses" | |
-| parent | ForeignKey→self, null=True, blank=True, on_delete=PROTECT, related_name="children" | Tree structure |
-| is_group | BooleanField, default=False | Group warehouses can't hold stock |
-| is_rejected | BooleanField, default=False | For damaged goods |
 | disabled | BooleanField, default=False | |
 
 **Methods:** `__str__` returns `name`. Meta: `unique_together = [("name", "branch")]`.
@@ -597,22 +588,16 @@ Seed data: Each, Kg, Gram, Litre, Millilitre, Case, Box, Dozen, Pack.
 | is_stock_item | BooleanField, default=True | If False, no stock tracking |
 | default_warehouse | ForeignKey→Warehouse, null=True, blank=True, on_delete=SET_NULL | |
 | valuation_method | CharField, max_length=20, choices=[("FIFO","FIFO"),("MOVING_AVERAGE","Moving Average")], default="FIFO" | |
-| has_batch_no | BooleanField, default=False | Enables batch tracking |
-| has_expiry_date | BooleanField, default=False | Requires has_batch_no |
-| shelf_life_in_days | IntegerField, null=True, blank=True | Required if has_expiry_date |
 | has_variants | BooleanField, default=False | Template item — can't be sold directly |
 | variant_of | ForeignKey→self, null=True, blank=True, on_delete=PROTECT, related_name="variants" | Set on variant items |
 | safety_stock | DecimalField, max_digits=10, decimal_places=2, default=0 | Buffer stock |
-| lead_time_days | IntegerField, null=True, blank=True | Supplier delivery time |
-| end_of_life | DateField, null=True, blank=True | Item can't be used after this date |
-| standard_rate | DecimalField, max_digits=10, decimal_places=2, null=True, blank=True | Default selling rate (used by menu app) |
+| last_purchase_rate | DecimalField, max_digits=10, decimal_places=2, null=True, blank=True | Last purchase rate |
 
 **Methods:**
 - `__str__` returns `item_name or item_code`
 - `clean()`: if `has_variants=True`, item cannot be `is_stock_item=True`
 - `clean()`: if `variant_of` is set, validate parent has `has_variants=True`
-- `clean()`: if `has_expiry_date=True` and `has_batch_no=False`, raise error
-- `clean()`: if `has_expiry_date=True`, `shelf_life_in_days` is required
+
 
 ##### ItemBarcode (`inventory.ItemBarcode`)
 
@@ -642,21 +627,6 @@ Seed data: Each, Kg, Gram, Litre, Millilitre, Case, Box, Dozen, Pack.
 | reorder_qty | DecimalField, max_digits=10, decimal_places=2, default=0 | How much to reorder |
 
 **Meta:** `unique_together = [("item", "warehouse")]`
-
-##### Batch (`inventory.Batch`)
-
-| Field | Type | Notes |
-|---|---|---|
-| batch_id | CharField, max_length=100, unique | |
-| item | ForeignKey→Item, on_delete=PROTECT, related_name="batches" | Must be has_batch_no=True |
-| expiry_date | DateField, null=True, blank=True | |
-| manufacturing_date | DateField, null=True, blank=True | |
-| batch_qty | DecimalField, max_digits=10, decimal_places=2, default=0, editable=False | Auto-calculated from SLEs |
-
-**Methods:**
-- `clean()`: validate `item.has_batch_no=True`
-- `clean()`: if `item.has_expiry_date=True` and `manufacturing_date` is set, auto-compute `expiry_date = manufacturing_date + shelf_life_in_days`
-- `recalculate_batch_qty()`: recompute batch_qty from all SLEs for this batch
 
 ##### ProductBundle (`inventory.ProductBundle`)
 
@@ -713,7 +683,7 @@ Immutable stock movement record. Never created directly by users.
 | stock_queue | TextField, blank=True, default="" | JSON FIFO queue |
 | is_cancelled | BooleanField, default=False, editable=False | |
 
-**Class method:** `create_entry(item, warehouse, actual_qty, voucher_type, voucher_no, rate=0, batch=None)` — creates SLE, updates Bin, recalculates qty_after_transaction and valuation_rate.
+**Class method:** `create_entry(item, warehouse, actual_qty, voucher_type, voucher_no, rate=0)` — creates SLE, updates Bin, recalculates qty_after_transaction and valuation_rate.
 
 ##### StockEntry (`inventory.StockEntry`)
 
@@ -745,7 +715,6 @@ Manual stock movement document. Submit/cancel workflow.
 | uom | ForeignKey→UOM, on_delete=PROTECT | required |
 | conversion_factor | DecimalField, max_digits=10, decimal_places=4, default=1 | |
 | basic_rate | DecimalField, max_digits=10, decimal_places=2, default=0 | Cost per stock UOM |
-| batch | ForeignKey→Batch, null=True, blank=True, on_delete=PROTECT | If item has_batch_no |
 
 ##### StockReconciliation (`inventory.StockReconciliation`)
 
@@ -774,7 +743,7 @@ This is the core method that all stock movements funnel through:
 
 ```python
 @classmethod
-def create_entry(cls, item, warehouse, actual_qty, voucher_type, voucher_no, rate=0, voucher_detail_no="", batch=None):
+def create_entry(cls, item, warehouse, actual_qty, voucher_type, voucher_no, rate=0, voucher_detail_no=""):
     bin = Bin.get_or_create(item, warehouse)
     previous_qty = bin.actual_qty
     new_qty = previous_qty + actual_qty
@@ -812,17 +781,16 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 | supplier_name | CharField, max_length=200 | Supplier name (no Supplier model in Phase 1) |
 | supplier_delivery_note | CharField, max_length=100, blank=True | Supplier's delivery note reference |
 | posting_date | DateField, default=today | Date of receipt |
-| accepted_warehouse | ForeignKey→Warehouse, on_delete=PROTECT, related_name="purchase_receipts" | Default warehouse for accepted items |
-| rejected_warehouse | ForeignKey→Warehouse, null=True, blank=True, on_delete=PROTECT, related_name="rejected_receipts" | Warehouse for damaged items (#123) |
+| warehouse | ForeignKey→Warehouse, on_delete=PROTECT, related_name="purchase_receipts" | Store room that receives the entire delivery |
 | status | CharField, max_length=10, choices=[("DRAFT","Draft"),("SUBMITTED","Submitted"),("CANCELLED","Cancelled")], default="DRAFT" | |
 | total | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | Sum of item amounts |
 | remarks | TextField, blank=True | |
 
 **Methods:**
 - `__str__` returns `f"PR {self.supplier_name} {self.posting_date}"`
-- `submit()`: set status to SUBMITTED, create SLEs for each item (actual_qty=+received_qty to accepted_warehouse, actual_qty=+rejected_qty to rejected_warehouse if set)
+- `submit()`: set status to SUBMITTED, create SLEs for each item (actual_qty=+received_qty to purchase_receipt.warehouse)
 - `cancel()`: set status to CANCELLED, create reversal SLEs
-- `clean()`: accepted_warehouse is required
+- `clean()`: warehouse is required
 
 ##### PurchaseReceiptItem (`inventory.PurchaseReceiptItem`)
 
@@ -830,17 +798,14 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 |---|---|---|
 | purchase_receipt | ForeignKey→PurchaseReceipt, on_delete=CASCADE, related_name="items" | |
 | item | ForeignKey→Item, on_delete=PROTECT | |
-| received_qty | DecimalField, max_digits=10, decimal_places=2 | Total quantity received |
-| rejected_qty | DecimalField, max_digits=10, decimal_places=2, default=0 | Damaged quantity (routed to rejected_warehouse) |
-| accepted_qty | DecimalField, max_digits=10, decimal_places=2, default=0, editable=False | received_qty - rejected_qty (auto-calculated) |
-| uom | ForeignKey→UOM, on_delete=PROTECT | |
+| received_qty | DecimalField, max_digits=10, decimal_places=2 | Quantity entering stock (omit damaged/refused goods) |
 | rate | DecimalField, max_digits=10, decimal_places=2 | Cost per unit |
 | amount | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | received_qty * rate (auto-calculated) |
-| batch | ForeignKey→Batch, null=True, blank=True, on_delete=PROTECT | If item has_batch_no |
-| warehouse | ForeignKey→Warehouse, null=True, blank=True, on_delete=PROTECT | Overrides purchase_receipt.accepted_warehouse per item |
+
+No per-line warehouse — the whole receipt posts to `PurchaseReceipt.warehouse`. Store → kitchen (etc.) moves use Stock Entry.
 
 **Methods:**
-- `save()`: auto-calculate accepted_qty = received_qty - rejected_qty; auto-calculate amount = received_qty * rate
+- `save()`: auto-calculate amount = received_qty * rate
 
 #### Business logic — StockLedgerEntry.create_entry
 
@@ -851,7 +816,6 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 | `/backoffice/inventory/item-groups/` | `item_group_list` / `item_group_create` / `item_group_detail` / `item_group_update` | Item Group CRUD (tree view) |
 | `/backoffice/inventory/warehouses/` | `warehouse_list` / `warehouse_create` / `warehouse_detail` / `warehouse_update` | Warehouse CRUD |
 | `/backoffice/inventory/items/` | `item_list` / `item_create` / `item_detail` / `item_update` | Item CRUD (with barcodes, UOMs, reorder levels as inline formsets) |
-| `/backoffice/inventory/batches/` | `batch_list` / `batch_create` / `batch_detail` / `batch_update` | Batch CRUD |
 | `/backoffice/inventory/bundles/` | `product_bundle_list` / `product_bundle_create` / `product_bundle_detail` / `product_bundle_update` | Product Bundle CRUD |
 | `/backoffice/inventory/stock-entries/` | `stock_entry_list` / `stock_entry_create` / `stock_entry_detail` / `stock_entry_submit` / `stock_entry_cancel` | Stock Entry create + submit/cancel |
 | `/backoffice/inventory/reconciliations/` | `reconciliation_list` / `reconciliation_create` / `reconciliation_detail` / `reconciliation_submit` / `reconciliation_cancel` | Stock Reconciliation create + submit/cancel |
@@ -865,9 +829,8 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 |---|---|
 | `test_uom.py` | UOM CRUD |
 | `test_item_group.py` | Item Group CRUD, parent/child tree, is_group flag |
-| `test_warehouse.py` | Warehouse CRUD, branch link, parent/child tree, is_group |
-| `test_item.py` | Item CRUD, department choices, variant validation, batch/expiry validation, barcode/UOM/reorder child tables |
-| `test_batch.py` | Batch CRUD, expiry auto-calculation, batch_qty recalculation |
+| `test_warehouse.py` | Warehouse CRUD, branch link |
+| `test_item.py` | Item CRUD, department choices, variant validation, barcode/UOM/reorder child tables |
 | `test_bin.py` | Bin auto-creation, get_or_create, actual_qty updates |
 | `test_stock_ledger_entry.py` | SLE creation, qty_after_transaction running balance, Bin update, cancellation reversal |
 | `test_stock_entry.py` | Stock Entry CRUD, submit creates SLEs, cancel reverses, purpose validation (from/to warehouse) |
@@ -878,16 +841,20 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 #### Deviations from reference
 
 | Deviation | Reason |
-|---|---|
-| Serial No not implemented (#114 removed from FEATURES.md) | Restaurants use batch tracking, not serial — user decision |
+|---|---|---|
 | ItemAttribute/ItemVariantAttribute excluded | Variants handled via simple parent FK on Item; menu app handles selection |
-| No tree library (mptt/treebeard) | Simple parent FK is sufficient for ~10 item groups and ~5 warehouses |
+| No tree library (mptt/treebeard) | Flat models — restaurant categories and warehouses are simple enough not to need deep nesting |
 | Accounting fields dropped (expense_account, income_account, cost_center, etc.) | Accounting handled at POS Profile / restaurant config level |
+| Purchase Receipt rejected_warehouse / rejected_qty / accepted_qty dropped | Phase 1: only book what enters sellable stock. Damaged goods at receipt are omitted from the PR; later write-offs use Stock Reconciliation or Material Issue. ERPNext dual accepted/rejected path is overkill for a single-branch restaurant. |
+| Purchase Receipt warehouse only on parent (no item warehouse); renamed accepted_warehouse → warehouse | Restaurant receives into one store room per delivery; item-level override is an ERPNext footgun. Internal moves use Stock Entry (Material Transfer / Issue). |
 | Manufacturing fields dropped (BOM, work_order, subcontract) | Not applicable to a restaurant |
 | Fixed asset fields dropped | Not applicable |
-| UOM Conversion Factor global table dropped | Per-item UOM conversion is sufficient |
+| UOM Conversion dropped | Items use a single stock_uom — the practical unit used in the kitchen (Mudu, Kg, Pieces). No conversions needed |
+| Batches, barcodes, product bundles, reorder levels dropped | Removed as unnecessary for restaurant operations — kitchen manager tracks consumption manually |
 | Bin simplified (no ordered_qty, indented_qty, planned_qty) | Restaurant doesn't use purchase orders or work orders in Phase 1 |
 | `department` field added to Item | RestPOS-specific: FOOD/DRINKS classification (#260) — not in ERPNext |
+| `last_purchase_rate` auto-updated on Purchase Receipt | ERPNext naming: standard_rate = selling price; last_purchase_rate = auto-updated cost from buying transactions |
+| 3-tier roles (Admin/Manager/Cashier) | Only superusers can assign roles. Admin → Manager → Cashier hierarchy |
 
 ---
 
@@ -923,14 +890,15 @@ All models extend `apps.utils.models.BaseModel`.
 | Field | Type | Notes |
 |---|---|---|
 | name | CharField, max_length=100 | e.g. "Main Menu", "Lunch Menu" |
-| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="menus" | required |
+| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="menus" | Required in DB; Phase 1 UI hides it and auto-assigns via `Branch.get_default()` |
 | enabled | BooleanField, default=True | Disabled menus hide all items from POS |
 
 **Methods:**
 - `__str__` returns `name`
-- `save()`: after saving, sync the auto-created PriceList and ItemPrice rows from MenuItem.rate values
+- `save()`: if branch unset, assign `Branch.get_default()`; then sync PriceList / ItemPrice from MenuItem.rate values
 - `sync_price_list()`: get-or-create a PriceList linked to this menu; delete old ItemPrice rows; create new ones from MenuItem rows
-- Meta: `unique_together = [("name", "branch")]`, `ordering = ["branch__name", "name"]`
+- Meta: `unique_together = [("name", "branch")]`, `ordering = ["name"]`
+- Back-office form fields: `name`, `enabled` only (no branch picker / list filter)
 
 ##### MenuItem (`menu.MenuItem`)
 
@@ -946,7 +914,7 @@ All models extend `apps.utils.models.BaseModel`.
 **Methods:**
 - `__str__` returns `item_name or item.item_code`
 - `save()`: auto-set `item_name` from `item.item_name` if blank
-- `clean()`: if `rate` is blank/zero and `item.standard_rate` is set, default to `item.standard_rate`
+- `clean()`: if `rate` is blank/zero and `item.last_purchase_rate` is set, default to `item.last_purchase_rate`
 - Meta: `unique_together = [("menu", "item")]`, `ordering = ["item_name"]`
 
 ##### PriceList (`menu.PriceList`)
@@ -1045,7 +1013,7 @@ class Migration(migrations.Migration):
 | Test file | What it covers |
 |---|---|
 | `test_menu.py` | CRUD, enabled toggle, sync_price_list creates PriceList + ItemPrice rows |
-| `test_menu_item.py` | CRUD, rate default from item.standard_rate, item_name sync, disabled filter, special_dish flag |
+| `test_menu_item.py` | CRUD, rate default from item.last_purchase_rate, item_name sync, disabled filter, special_dish flag |
 | `test_price_list.py` | Auto-creation from Menu, ItemPrice sync, unique constraint |
 | `test_item_add_on.py` | CRUD, unique constraint, validation that add_on_item must be in a Menu |
 | `test_item_variant.py` | CRUD, unique constraint, validation that variant_item must be in a Menu |
@@ -1056,9 +1024,10 @@ class Migration(migrations.Migration):
 | Deviation | Reason |
 |---|---|
 | No `room_wise_menu` or `order_type_wise_menu` | FEATURES.md #7: single menu for all rooms/order types |
-| PriceList/ItemPrice kept but POS reads from MenuItem.rate | Matches URY pattern; PriceList needed for future aggregator price lists |
+| PriceList/ItemPrice kept but POS reads from MenuItem.rate | Matches URY pattern |
 | `department` not on MenuItem | Already on inventory.Item — inherited via FK |
 | ItemAddOn/ItemVariant are standalone models, not child tables on Item | Django ORM pattern — cleaner queries than child tables |
+| Branch kept in DB but hidden in Phase 1 UI across Menu/Room/Warehouse/Restaurant (auto `Branch.get_default()`); Table & UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
 
 ---
 
@@ -1091,7 +1060,7 @@ Permitted, URY hooks for opening/closing validation
 
 **FEATURES.md sections:** A3, A4, A5 (partial)
 **Dependencies:** menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment)
-**Key models:** POSProfile, ProductionUnit, AggregatorSettings, TaxTemplate
+**Key models:** POSProfile, ProductionUnit, TaxTemplate
 **Reference doctypes to consult:** ERPNext POS Profile (+ 38 URY custom fields), URY Production
 Unit, URY Printer Settings, Aggregator Settings
 
