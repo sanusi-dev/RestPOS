@@ -1,3 +1,4 @@
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase, override_settings
 
 from apps.users.models import CustomUser
@@ -21,9 +22,11 @@ class TestLoginRequiredViewBase(TestViewBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.client = Client()
         cls.authenticated_client = Client()
         cls.user = CustomUser.objects.create_user(username="testing@example.com", password="12345")
+        cls.user.groups.add(mgr)
         cls.authenticated_client.login(username="testing@example.com", password="12345")
 
     def _run_tests(self, url: str):

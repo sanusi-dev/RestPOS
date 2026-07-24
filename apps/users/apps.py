@@ -7,4 +7,14 @@ class UserConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
+        from django.contrib.auth.models import Group
+        from django.db.models.signals import post_migrate
+
+        def create_roles(**kwargs):
+            Group.objects.get_or_create(name="RestPOS Admin")
+            Group.objects.get_or_create(name="RestPOS Manager")
+            Group.objects.get_or_create(name="RestPOS Cashier")
+
+        post_migrate.connect(create_roles)
+
         from . import signals  # noqa F401

@@ -1,10 +1,16 @@
-from allauth.account.forms import SignupForm
+from allauth.account.forms import LoginForm, SignupForm
 from django import forms
 from django.contrib.auth.forms import UserChangeForm
 from django.utils.translation import gettext_lazy as _
 
 from .helpers import validate_profile_picture
 from .models import CustomUser
+
+
+class CustomLoginForm(LoginForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["password"].help_text = ""
 
 
 class CustomSignupForm(SignupForm):
@@ -16,7 +22,7 @@ class CustomSignupForm(SignupForm):
 
 
 class CustomUserChangeForm(UserChangeForm):
-    email = forms.EmailField(label=_("Email"), required=True)
+    email = forms.EmailField(label=_("Email"), required=False)
 
     class Meta:
         model = CustomUser
