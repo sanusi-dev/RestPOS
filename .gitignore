@@ -33,3 +33,9 @@ static/.vite/
 references/
 .mypy_cache/
 .claude
+
+# local scratch / prototype files
+landing-after-optimization.png
+restpos_interactive_landing_page*.html
+restpos/templates/
+scripts/inspect_db.py
