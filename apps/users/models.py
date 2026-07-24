@@ -44,3 +44,29 @@ class CustomUser(AbstractUser):
     @cached_property
     def has_verified_email(self):
         return EmailAddress.objects.filter(user=self, verified=True).exists()
+
+    @cached_property
+    def _restpos_group_names(self):
+        # Uses prefetched groups when available (no DB hit); otherwise one query
+        # fetches all the user's group names, which the role checks below reuse.
+        return {group.name for group in self.groups.all()}
+
+    @cached_property
+    def is_admin(self):
+        return self.is_superuser or "RestPOS Admin" in self._restpos_group_names
+
+    @cached_property
+    def is_manager(self):
+        return "RestPOS Manager" in self._restpos_group_names
+
+    @cached_property
+    def is_cashier(self):
+        return "RestPOS Cashier" in self._restpos_group_names
+
+    @cached_property
+    def has_backoffice_access(self):
+        return self.is_superuser or self.is_staff or self.is_admin or self.is_manager
+
+    @cached_property
+    def has_staff_role(self):
+        return self.is_superuser or self.is_admin or self.is_manager or self.is_cashier
