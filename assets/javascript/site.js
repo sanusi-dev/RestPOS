@@ -5,3 +5,4 @@ import './alpine';
 import './logout';
 import './toast';
 import './confirm';
+import './searchable-select';

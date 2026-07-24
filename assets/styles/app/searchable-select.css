@@ -1,0 +1,130 @@
+/* RestPOS Tom Select theme — matches rounded-xl / orange focus inputs */
+
+.ts-wrapper {
+  width: 100%;
+}
+
+.ts-wrapper.single .ts-control,
+.ts-wrapper.multi .ts-control {
+  border-radius: 0.75rem;
+  border: 1px solid #d1d5db;
+  background: rgb(255 255 255 / 0.5);
+  padding: 0.5rem 1rem;
+  min-height: 2.625rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #111827;
+  box-shadow: none;
+}
+
+.ts-wrapper.multi .ts-control {
+  gap: 0.25rem;
+}
+
+.ts-wrapper.single .ts-control {
+  padding-right: 2rem;
+}
+
+.ts-wrapper.focus .ts-control,
+.ts-wrapper.dropdown-active .ts-control {
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgb(249 115 22 / 0.25);
+  outline: none;
+}
+
+.ts-wrapper.disabled .ts-control,
+.ts-wrapper.disabled .ts-control * {
+  background: #f3f4f6 !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.ts-wrapper .ts-control > input {
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+.ts-wrapper .ts-control > input::placeholder {
+  color: #9ca3af;
+}
+
+.ts-wrapper.single .ts-control::after {
+  border-color: #6b7280 transparent transparent transparent;
+  margin-top: -2px;
+}
+
+.ts-dropdown {
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 25px rgb(0 0 0 / 0.08);
+  margin-top: 0.25rem;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.ts-dropdown .dropdown-input-wrap {
+  padding: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+}
+
+.ts-dropdown .dropdown-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  background: #fff;
+}
+
+.ts-dropdown .dropdown-input:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px rgb(249 115 22 / 0.2);
+}
+
+.ts-dropdown .option {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+.ts-dropdown .option:hover,
+.ts-dropdown .option.active {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.ts-dropdown .option.selected {
+  background: #ffedd5;
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.ts-dropdown .no-results {
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.ts-wrapper.multi .ts-control > .item {
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.ts-wrapper.plugin-remove_button .item .remove {
+  border-left-color: #fed7aa;
+  color: #c2410c;
+}
+
+/* Hide the native select (Tom Select keeps it for form posts) */
+.ts-wrapper + select.tomselected,
+select.tomselected {
+  /* Tom Select already hides the original; ensure layout doesn't jump */
+}

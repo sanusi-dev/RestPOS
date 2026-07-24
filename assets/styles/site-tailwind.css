@@ -1,10 +1,15 @@
 @import 'tailwindcss';
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/800.css';
 
 /*
    add custom components using imports, as described here:
    https://tailwindcss.com/docs/using-with-preprocessors#build-time-imports
 */
 @import './app/tailwind/app-components.css';
+@import './app/landing.css';
 
 @config "../../tailwind.config.js";
 
