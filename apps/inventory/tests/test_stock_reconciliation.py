@@ -23,7 +23,6 @@ class ReconciliationTestBase(TestCase):
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
         cls.item = Item.objects.create(
-            item_code="RICE001",
             item_name="Jollof Rice",
             item_group=cls.group,
             stock_uom=cls.uom,

@@ -25,25 +25,23 @@ urlpatterns = [
     path("items/create/", view=views.item_create, name="item_create"),
     path("items/<int:pk>/", view=views.item_detail, name="item_detail"),
     path("items/<int:pk>/edit/", view=views.item_update, name="item_update"),
-    # Batch
-    path("batches/", view=views.batch_list, name="batch_list"),
-    path("batches/create/", view=views.batch_create, name="batch_create"),
-    path("batches/<int:pk>/", view=views.batch_detail, name="batch_detail"),
-    path("batches/<int:pk>/edit/", view=views.batch_update, name="batch_update"),
-    # ProductBundle
-    path("bundles/", view=views.product_bundle_list, name="product_bundle_list"),
-    path("bundles/create/", view=views.product_bundle_create, name="product_bundle_create"),
-    path("bundles/<int:pk>/", view=views.product_bundle_detail, name="product_bundle_detail"),
-    path("bundles/<int:pk>/edit/", view=views.product_bundle_update, name="product_bundle_update"),
     # StockEntry
     path("stock-entries/", view=views.stock_entry_list, name="stock_entry_list"),
     path("stock-entries/create/", view=views.stock_entry_create, name="stock_entry_create"),
+    path("stock-entries/item/add/", view=views.stock_entry_item_add, name="stock_entry_item_add"),
+    path("stock-entries/item/remove/<int:index>/", view=views.stock_entry_item_remove, name="stock_entry_item_remove"),
     path("stock-entries/<int:pk>/", view=views.stock_entry_detail, name="stock_entry_detail"),
     path("stock-entries/<int:pk>/submit/", view=views.stock_entry_submit, name="stock_entry_submit"),
     path("stock-entries/<int:pk>/cancel/", view=views.stock_entry_cancel, name="stock_entry_cancel"),
     # StockReconciliation
     path("reconciliations/", view=views.reconciliation_list, name="reconciliation_list"),
     path("reconciliations/create/", view=views.reconciliation_create, name="reconciliation_create"),
+    path("reconciliations/item/add/", view=views.reconciliation_item_add, name="reconciliation_item_add"),
+    path(
+        "reconciliations/item/remove/<int:index>/",
+        view=views.reconciliation_item_remove,
+        name="reconciliation_item_remove",
+    ),
     path("reconciliations/<int:pk>/", view=views.reconciliation_detail, name="reconciliation_detail"),
     path(
         "reconciliations/<int:pk>/submit/",
@@ -61,6 +59,16 @@ urlpatterns = [
         "purchase-receipts/create/",
         view=views.purchase_receipt_create,
         name="purchase_receipt_create",
+    ),
+    path(
+        "purchase-receipts/item/add/",
+        view=views.purchase_receipt_item_add,
+        name="purchase_receipt_item_add",
+    ),
+    path(
+        "purchase-receipts/item/remove/<int:index>/",
+        view=views.purchase_receipt_item_remove,
+        name="purchase_receipt_item_remove",
     ),
     path(
         "purchase-receipts/<int:pk>/",

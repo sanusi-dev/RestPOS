@@ -13,7 +13,6 @@ class BinModelTest(TestCase):
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item = Item.objects.create(
-            item_code="RICE001",
             item_name="Jollof Rice",
             item_group=cls.group,
             stock_uom=cls.uom,

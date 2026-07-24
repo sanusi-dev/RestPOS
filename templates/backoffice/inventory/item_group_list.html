@@ -1,38 +1,56 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
+<div class="w-full">
 
-{% partialdef item-group-node %}
-<li class="text-sm">
-  <a href="{% url 'inventory:item_group_detail' node.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ node.name }}</a>
-  {% if node.is_group %}<span class="ml-1 text-gray-400">(group)</span>{% endif %}
-  {% if node.description %}<span class="ml-2 text-gray-400">{{ node.description|truncatewords:5 }}</span>{% endif %}
-  {% if node.children.all %}
-    <ul class="ml-6 space-y-1 border-l border-gray-200 pl-4">
-      {% for child in node.children.all %}
-        {% partial item-group-node node=child %}
-      {% endfor %}
-    </ul>
-  {% endif %}
-</li>
-{% endpartialdef %}
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Item Groups" %}
 
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Item Groups</h1>
-      <a href="{% url 'inventory:item_group_create' %}"
-         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-        + New Item Group
-      </a>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Item Groups</h1>
+      <p class="text-sm text-gray-500">Product categories</p>
     </div>
+    <a href="{% url 'inventory:item_group_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Item Group
+    </a>
+  </div>
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      <ul class="space-y-1">
-        {% for root in roots %}
-          {% partial item-group-node node=root %}
-        {% empty %}
-          <li class="text-sm text-gray-500">No item groups yet.</li>
-        {% endfor %}
-      </ul>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for group in groups %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:item_group_detail' group.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ group.name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ group.description|default:"-" }}</td>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'inventory:item_group_update' group.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No item groups yet.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
+</div>
 {% endblock %}

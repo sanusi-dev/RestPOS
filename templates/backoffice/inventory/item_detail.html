@@ -1,132 +1,222 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">{{ item.item_name }}</h1>
-      <a href="{% url 'inventory:item_update' item.pk %}"
-         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Edit</a>
-    </div>
+<div class="w-full">
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Item Code</dt>
-          <dd class="mt-1 text-sm font-mono text-gray-900">{{ item.item_code }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Item Group</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.item_group.name }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Department</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.get_department_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Stock UOM</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.stock_uom.name }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Default Warehouse</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.default_warehouse|default:"-" }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Valuation Method</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.get_valuation_method_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Is Stock Item</dt>
-          <dd class="mt-1 text-sm text-gray-900">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Batch Tracking</dt>
-          <dd class="mt-1 text-sm text-gray-900">{% if item.has_batch_no %}Yes{% else %}No{% endif %}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Expiry Tracking</dt>
-          <dd class="mt-1 text-sm text-gray-900">{% if item.has_expiry_date %}Yes{% else %}No{% endif %}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Safety Stock</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.safety_stock }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Standard Rate</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ item.standard_rate|default:"-" }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Disabled</dt>
-          <dd class="mt-1 text-sm text-gray-900">{% if item.disabled %}Yes{% else %}No{% endif %}</dd>
-        </div>
-        {% if item.description %}
-          <div class="sm:col-span-3">
-            <dt class="text-sm font-medium text-gray-500">Description</dt>
-            <dd class="mt-1 text-sm text-gray-900">{{ item.description }}</dd>
-          </div>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Items" section_url="inventory:item_list" current_label=item.item_name %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ item.item_name }}</h1>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        {% if item.has_variants %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-600/10">Template</span>
         {% endif %}
-      </dl>
+        {% if item.variant_of %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-600/10">Variant</span>
+        {% endif %}
+        {% if item.is_sales_item %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Sellable</span>
+        {% endif %}
+        {% if item.is_purchase_item %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/10">Purchasable</span>
+        {% endif %}
+        {% if item.disabled %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
+        {% else %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Active</span>
+        {% endif %}
+      </div>
     </div>
-
-    {% if barcodes %}
-      <div class="rounded-lg border border-gray-200 shadow-sm">
-        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Barcodes</h2></div>
-        <ul class="divide-y divide-gray-200">
-          {% for bc in barcodes %}
-            <li class="px-6 py-3 text-sm font-mono text-gray-900">{{ bc.barcode }}{% if bc.barcode_type %} <span class="text-gray-400">({{ bc.barcode_type }})</span>{% endif %}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-
-    {% if uom_conversions %}
-      <div class="rounded-lg border border-gray-200 shadow-sm">
-        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">UOM Conversions</h2></div>
-        <ul class="divide-y divide-gray-200">
-          {% for conv in uom_conversions %}
-            <li class="px-6 py-3 text-sm text-gray-900">{{ conv }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-
-    {% if reorder_levels %}
-      <div class="rounded-lg border border-gray-200 shadow-sm">
-        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Reorder Levels</h2></div>
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reorder Level</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reorder Qty</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 bg-white">
-            {% for rl in reorder_levels %}
-              <tr><td class="px-6 py-4 text-sm text-gray-900">{{ rl.warehouse.name }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ rl.reorder_level }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ rl.reorder_qty }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% endif %}
-
-    {% if bins %}
-      <div class="rounded-lg border border-gray-200 shadow-sm">
-        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Stock by Warehouse</h2></div>
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actual Qty</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Valuation Rate</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock Value</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 bg-white">
-            {% for bin in bins %}
-              <tr><td class="px-6 py-4 text-sm text-gray-900">{{ bin.warehouse.name }}</td><td class="px-6 py-4 text-sm text-gray-900">{{ bin.actual_qty }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ bin.stock_value }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% endif %}
+    <a href="{% url 'inventory:item_update' item.pk %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all duration-300">
+      <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+      Edit Item
+    </a>
   </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+
+    {% if item.image %}
+      <div class="mb-6 relative z-10">
+        <img src="{{ item.image.url }}" alt="{{ item.item_name }}" class="h-24 w-24 rounded-2xl object-cover ring-1 ring-gray-100 shadow-sm">
+      </div>
+    {% endif %}
+
+    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Item Details</h2>
+
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Item Code</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ item.item_code }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Item Group</dt>
+        <dd class="text-base font-bold text-gray-900">{{ item.item_group.name }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Department</dt>
+        <dd class="mt-1">
+          {% if item.department == 'FOOD' %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Food</span>
+          {% else %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">Drinks</span>
+          {% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Stock UOM</dt>
+        <dd class="text-base font-bold text-gray-900">{{ item.stock_uom.name }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Default Warehouse</dt>
+        <dd class="text-base font-bold text-gray-900">{{ item.default_warehouse|default:"-" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Sellable (POS / menu)</dt>
+        <dd class="text-base font-bold text-gray-900">{% if item.is_sales_item %}Yes{% else %}No{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Purchasable (receipts)</dt>
+        <dd class="text-base font-bold text-gray-900">{% if item.is_purchase_item %}Yes{% else %}No{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Stock tracked</dt>
+        <dd class="text-base font-bold text-gray-900">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Safety Stock</dt>
+        <dd class="text-base font-bold text-gray-900">{{ item.safety_stock }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Last Purchase Rate</dt>
+        <dd class="text-base font-bold text-gray-900">{{ item.last_purchase_rate|default:"-" }}</dd>
+      </div>
+      {% if item.variant_of %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Variant Of</dt>
+          <dd class="text-base font-bold text-gray-900">
+            <a href="{% url 'inventory:item_detail' item.variant_of.pk %}" class="hover:text-orange-500 transition-colors">{{ item.variant_of.item_name }}</a>
+          </dd>
+        </div>
+      {% endif %}
+      {% if item.description %}
+        <div class="sm:col-span-2 lg:col-span-3">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Description</dt>
+          <dd class="text-base font-medium text-gray-700">{{ item.description }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  {% if item.has_variants %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Variants</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Code</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">UOM</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Sellable</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">On menu</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for v in variants %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-mono text-gray-500">{{ v.item_code }}</td>
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:item_detail' v.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500">{{ v.item_name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ v.stock_uom.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if v.is_sales_item %}Yes{% else %}No{% endif %}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if v.on_menu %}Yes{% else %}No{% endif %}</td>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'inventory:item_update' v.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No variants linked yet. Create items with this template as “Variant of”.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if menu_lines %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-lime-50 text-lime-600 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">On menus</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Menu</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for line in menu_lines %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">
+                <a href="{% url 'menu:menu_detail' line.menu.pk %}" class="hover:text-orange-500">{{ line.menu.name }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ line.rate }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if line.disabled %}Disabled{% else %}Active{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if bins %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Stock by Warehouse</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Actual Qty</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Valuation Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Stock Value</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for bin in bins %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.warehouse.name }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.actual_qty }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.stock_value }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

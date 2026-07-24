@@ -1,65 +1,68 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Warehouses</h1>
-      <a href="{% url 'inventory:warehouse_create' %}"
-         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-        + New Warehouse
-      </a>
-    </div>
+<div class="w-full">
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
-      <form method="get" class="flex items-center space-x-3">
-        <label for="branch-filter" class="text-sm font-medium text-gray-700">Filter by branch:</label>
-        <select id="branch-filter" name="branch"
-                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onchange="this.form.submit()">
-          <option value="">All branches</option>
-          {% for branch in branches %}
-            <option value="{{ branch.pk }}" {% if selected_branch == branch.pk|stringformat:"s" %}selected{% endif %}>
-              {{ branch.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </form>
-    </div>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Warehouses" %}
 
-    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Warehouses</h1>
+      <p class="text-sm text-gray-500">Storage locations in the restaurant</p>
+    </div>
+    <a href="{% url 'inventory:warehouse_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Warehouse
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Branch</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Parent</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Group</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Disabled</th>
-            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-gray-100">
           {% for wh in warehouses %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm">
-                <a href="{% url 'inventory:warehouse_detail' wh.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ wh.name }}</a>
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:warehouse_detail' wh.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ wh.name }}</a>
               </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ wh.branch.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ wh.parent|default:"-" }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if wh.is_group %}Yes{% else %}No{% endif %}</td>
-              <td class="px-6 py-4 text-sm">
-                {% if wh.disabled %}<span class="text-red-600">Yes</span>{% else %}<span class="text-gray-400">No</span>{% endif %}
+              <td class="px-6 py-4">
+                {% if wh.disabled %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
+                {% else %}
+                  <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Active
+                  </span>
+                {% endif %}
               </td>
-              <td class="px-6 py-4 text-right text-sm">
-                <a href="{% url 'inventory:warehouse_update' wh.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'inventory:warehouse_update' wh.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No warehouses yet.</td>
+              <td colspan="3" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No warehouses yet.</span>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+</div>
 {% endblock %}

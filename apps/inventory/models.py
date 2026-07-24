@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.settings.models import Branch
@@ -13,7 +13,6 @@ class UOM(BaseModel):
     """Unit of measure (e.g. Nos, Kg, Litre, Box)."""
 
     name = models.CharField(max_length=50, unique=True)
-    is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["name"]
@@ -23,17 +22,9 @@ class UOM(BaseModel):
 
 
 class ItemGroup(BaseModel):
-    """A node in the item classification tree (e.g. Food > Rice > Jollof)."""
+    """A product category (e.g. Food, Drinks, Proteins)."""
 
     name = models.CharField(max_length=100, unique=True)
-    parent = models.ForeignKey(
-        "self",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="children",
-    )
-    is_group = models.BooleanField(default=False)
     description = models.TextField(blank=True)
 
     class Meta:
@@ -44,33 +35,35 @@ class ItemGroup(BaseModel):
 
 
 class Warehouse(BaseModel):
-    """A stock location within a branch (e.g. Main Store, Kitchen Store, Bar Store)."""
+    """A stock location (e.g. Main Store, Kitchen Store, Bar Store).
+
+    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
+    """
 
     name = models.CharField(max_length=100)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="warehouses")
-    parent = models.ForeignKey(
-        "self",
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="children",
-    )
-    is_group = models.BooleanField(default=False)
-    is_rejected = models.BooleanField(default=False)
     disabled = models.BooleanField(default=False)
 
     class Meta:
         unique_together = [("name", "branch")]
-        ordering = ["branch__name", "name"]
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.branch_id:
+            default_branch = Branch.get_default()
+            if default_branch is None:
+                raise ValidationError({"branch": "Create a branch in Settings before creating a warehouse."})
+            self.branch = default_branch
+        super().save(*args, **kwargs)
 
 
 class Item(BaseModel):
     """A product or material tracked in inventory and sold via POS."""
 
-    item_code = models.CharField(max_length=50, unique=True)
+    item_code = models.CharField(max_length=50, unique=True, blank=True)
     item_name = models.CharField(max_length=200)
     item_group = models.ForeignKey(ItemGroup, on_delete=models.PROTECT, related_name="items")
     stock_uom = models.ForeignKey(UOM, on_delete=models.PROTECT, related_name="items")
@@ -82,6 +75,14 @@ class Item(BaseModel):
     description = models.TextField(blank=True)
     disabled = models.BooleanField(default=False)
     is_stock_item = models.BooleanField(default=True)
+    is_sales_item = models.BooleanField(
+        default=False,
+        help_text="If true, this item may be added to a menu and sold on the POS.",
+    )
+    is_purchase_item = models.BooleanField(
+        default=False,
+        help_text="If true, this item may appear on purchase receipts.",
+    )
     default_warehouse = models.ForeignKey(
         Warehouse,
         null=True,
@@ -89,14 +90,6 @@ class Item(BaseModel):
         on_delete=models.SET_NULL,
         related_name="default_items",
     )
-    valuation_method = models.CharField(
-        max_length=20,
-        choices=[("FIFO", "FIFO"), ("MOVING_AVERAGE", "Moving Average")],
-        default="FIFO",
-    )
-    has_batch_no = models.BooleanField(default=False)
-    has_expiry_date = models.BooleanField(default=False)
-    shelf_life_in_days = models.IntegerField(null=True, blank=True)
     has_variants = models.BooleanField(default=False)
     variant_of = models.ForeignKey(
         "self",
@@ -106,9 +99,7 @@ class Item(BaseModel):
         related_name="variants",
     )
     safety_stock = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    lead_time_days = models.IntegerField(null=True, blank=True)
-    end_of_life = models.DateField(null=True, blank=True)
-    standard_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    last_purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["item_name"]
@@ -116,119 +107,41 @@ class Item(BaseModel):
     def __str__(self):
         return self.item_name or self.item_code
 
+    def save(self, *args, **kwargs):
+        if self.has_variants:
+            # Templates are structure only — never stocked or sold as a line (ERPNext-aligned).
+            self.is_stock_item = False
+            self.is_sales_item = False
+            self.is_purchase_item = False
+        if not self.pk and not self.item_code:
+            with transaction.atomic():
+                last = Item.objects.select_for_update().filter(item_code__regex=r"^ITEM-\d+$").order_by("-pk").first()
+                num = 1 if last is None else int(last.item_code.split("-")[1]) + 1
+                self.item_code = f"ITEM-{num:04d}"
+            super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
         if self.has_variants and self.is_stock_item:
             raise ValidationError("Template items with variants cannot maintain stock")
+        if self.has_variants and (self.is_sales_item or self.is_purchase_item):
+            raise ValidationError("Template items cannot be sold or purchased — sell/buy the size variants instead.")
         if self.variant_of_id and not self.variant_of.has_variants:
             raise ValidationError("Parent item must have has_variants=True")
-        if self.has_expiry_date and not self.has_batch_no:
-            raise ValidationError("Expiry date tracking requires batch tracking (has_batch_no=True)")
-        if self.has_expiry_date and not self.shelf_life_in_days:
-            raise ValidationError("Shelf life in days is required when expiry date tracking is enabled")
+        if self.pk and not self.is_sales_item:
+            from apps.menu.models import MenuItem
 
-
-class ItemBarcode(BaseModel):
-    """A barcode associated with an item (an item may have many barcodes)."""
-
-    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="barcodes")
-    barcode = models.CharField(max_length=100, unique=True)
-    barcode_type = models.CharField(max_length=20, blank=True)
-
-    class Meta:
-        ordering = ["barcode"]
-
-    def __str__(self):
-        return self.barcode
-
-
-class ItemUOMConversion(BaseModel):
-    """Conversion factor from the item's stock UOM to an alternate UOM."""
-
-    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="uom_conversions")
-    uom = models.ForeignKey(UOM, on_delete=models.CASCADE)
-    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4)
-
-    class Meta:
-        unique_together = [("item", "uom")]
-
-    def __str__(self):
-        return f"{self.uom.name} (x{self.conversion_factor})"
-
-
-class ReorderLevel(BaseModel):
-    """Per-warehouse reorder level and quantity for an item."""
-
-    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="reorder_levels")
-    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
-    reorder_level = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    reorder_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-
-    class Meta:
-        unique_together = [("item", "warehouse")]
-
-
-class Batch(BaseModel):
-    """A batch of a batch-tracked item, optionally with expiry."""
-
-    batch_id = models.CharField(max_length=100, unique=True)
-    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="batches")
-    expiry_date = models.DateField(null=True, blank=True)
-    manufacturing_date = models.DateField(null=True, blank=True)
-    batch_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"), editable=False)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return self.batch_id
-
-    def clean(self):
-        super().clean()
-        if self.item_id and not self.item.has_batch_no:
-            raise ValidationError("Item must have has_batch_no=True to use batch tracking")
-        if (
-            self.item_id
-            and self.item.has_expiry_date
-            and self.manufacturing_date
-            and not self.expiry_date
-            and self.item.shelf_life_in_days
-        ):
-            from datetime import timedelta
-
-            self.expiry_date = self.manufacturing_date + timedelta(days=self.item.shelf_life_in_days)
-
-    def recalculate_qty(self):
-        """Recompute batch_qty from net stock ledger entries for this batch."""
-        total = Decimal("0")
-        for sle in self.item.stock_ledger_entries.filter(voucher_detail_no=self.batch_id):
-            total += sle.actual_qty
-        self.batch_qty = total
-        self.save(update_fields=["batch_qty", "updated_at"])
-
-
-class ProductBundle(BaseModel):
-    """A bundle sold as a single item composed of multiple component items."""
-
-    parent_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="bundles")
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        unique_together = [("parent_item",)]
-
-    def __str__(self):
-        return self.parent_item.item_name
-
-
-class ProductBundleItem(BaseModel):
-    """A component line of a product bundle."""
-
-    bundle = models.ForeignKey(ProductBundle, on_delete=models.CASCADE, related_name="items")
-    item = models.ForeignKey(Item, on_delete=models.PROTECT)
-    qty = models.DecimalField(max_digits=10, decimal_places=2)
-
-    def __str__(self):
-        return f"{self.item.item_name} x{self.qty}"
+            if MenuItem.objects.filter(item_id=self.pk, disabled=False).exists():
+                raise ValidationError(
+                    {
+                        "is_sales_item": (
+                            "This item is still on an enabled menu. "
+                            "Disable or remove those menu lines before turning off Sellable."
+                        )
+                    }
+                )
 
 
 class Bin(BaseModel):
@@ -253,10 +166,17 @@ class Bin(BaseModel):
         bin_obj, _created = cls.objects.get_or_create(item=item, warehouse=warehouse)
         return bin_obj
 
+    @classmethod
+    def get_or_create_bin_id(cls, item_id, warehouse_id):
+        """Same as get_or_create_bin but takes ids directly — skips FK instance loads."""
+        bin_obj, _created = cls.objects.get_or_create(item_id=item_id, warehouse_id=warehouse_id)
+        return bin_obj
+
     def current_stock_queue(self):
         """Return the FIFO queue ([qty, rate] pairs) from the latest non-cancelled SLE."""
+        # Filter by ids so this is safe to call on a Bin whose FKs weren't loaded.
         latest = (
-            StockLedgerEntry.objects.filter(item=self.item, warehouse=self.warehouse, is_cancelled=False)
+            StockLedgerEntry.objects.filter(item_id=self.item_id, warehouse_id=self.warehouse_id, is_cancelled=False)
             .order_by("-posting_datetime", "-pk")
             .first()
         )
@@ -314,7 +234,6 @@ class StockLedgerEntry(BaseModel):
         voucher_no,
         rate=Decimal("0"),
         voucher_detail_no="",
-        batch=None,
     ):
         """Create a ledger entry and update the corresponding Bin.
 
@@ -347,52 +266,29 @@ class StockLedgerEntry(BaseModel):
             queue = []
 
         if actual_qty > 0:
-            # Receipt — append to the back of the FIFO queue.
             incoming_rate = rate
             queue.append([actual_qty, rate])
-            if item.valuation_method == "MOVING_AVERAGE":
-                total_value = current_qty * current_rate + actual_qty * rate
-                valuation_rate = (total_value / new_qty) if new_qty != 0 else Decimal("0")
-            else:  # FIFO
-                valuation_rate = rate
+            valuation_rate = rate
         elif actual_qty < 0:
-            # Issue — consume from the queue to compute outgoing rate.
-            if item.valuation_method == "MOVING_AVERAGE":
-                # Moving average: outgoing rate is the current average; rate is unchanged after issue.
-                outgoing_rate = current_rate
-                valuation_rate = current_rate
-                # Drain the queue proportionally so it stays consistent.
-                remaining = abs(actual_qty)
-                while remaining > 0 and queue:
-                    front_qty, front_rate = queue[0]
-                    if front_qty <= remaining:
-                        remaining -= front_qty
-                        queue.pop(0)
-                    else:
-                        queue[0] = [front_qty - remaining, front_rate]
-                        remaining = Decimal("0")
-            else:
-                # FIFO: pop from the front of the queue to compute outgoing rate.
-                remaining = abs(actual_qty)
-                consumed_value = Decimal("0")
-                while remaining > 0 and queue:
-                    front_qty, front_rate = queue[0]
-                    if front_qty <= remaining:
-                        consumed_value += front_qty * front_rate
-                        remaining -= front_qty
-                        queue.pop(0)
-                    else:
-                        consumed_value += remaining * front_rate
-                        queue[0] = [front_qty - remaining, front_rate]
-                        remaining = Decimal("0")
-                outgoing_rate = consumed_value / abs(actual_qty) if actual_qty != 0 else Decimal("0")
-                # Valuation rate after issue is the weighted average of remaining queue.
-                if queue:
-                    remaining_qty = sum(q for q, _ in queue)
-                    remaining_value = sum(q * r for q, r in queue)
-                    valuation_rate = remaining_value / remaining_qty if remaining_qty != 0 else Decimal("0")
+            remaining = abs(actual_qty)
+            consumed_value = Decimal("0")
+            while remaining > 0 and queue:
+                front_qty, front_rate = queue[0]
+                if front_qty <= remaining:
+                    consumed_value += front_qty * front_rate
+                    remaining -= front_qty
+                    queue.pop(0)
                 else:
-                    valuation_rate = Decimal("0")
+                    consumed_value += remaining * front_rate
+                    queue[0] = [front_qty - remaining, front_rate]
+                    remaining = Decimal("0")
+            outgoing_rate = consumed_value / abs(actual_qty) if actual_qty != 0 else Decimal("0")
+            if queue:
+                remaining_qty = sum(q for q, _ in queue)
+                remaining_value = sum(q * r for q, r in queue)
+                valuation_rate = remaining_value / remaining_qty if remaining_qty != 0 else Decimal("0")
+            else:
+                valuation_rate = Decimal("0")
         else:
             # Zero-qty adjustment (e.g. rate-only reconciliation) — no queue change.
             pass
@@ -427,9 +323,6 @@ class StockLedgerEntry(BaseModel):
             ]
         )
 
-        if batch:
-            batch.recalculate_qty()
-
         return sle
 
 
@@ -442,24 +335,9 @@ class StockEntry(BaseModel):
             ("MATERIAL_RECEIPT", "Material Receipt"),
             ("MATERIAL_ISSUE", "Material Issue"),
             ("MATERIAL_TRANSFER", "Material Transfer"),
-            ("REPACK", "Repack"),
         ],
     )
     posting_date = models.DateField(default=timezone.now)
-    from_warehouse = models.ForeignKey(
-        Warehouse,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="outgoing_stock_entries",
-    )
-    to_warehouse = models.ForeignKey(
-        Warehouse,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="incoming_stock_entries",
-    )
     status = models.CharField(
         max_length=10,
         choices=[("DRAFT", "Draft"), ("SUBMITTED", "Submitted"), ("CANCELLED", "Cancelled")],
@@ -473,27 +351,17 @@ class StockEntry(BaseModel):
     def __str__(self):
         return f"{self.purpose} - {self.posting_date}"
 
-    def clean(self):
-        super().clean()
-        if self.purpose == "MATERIAL_RECEIPT" and not self.to_warehouse:
-            raise ValidationError({"to_warehouse": "Material Receipt requires a target warehouse."})
-        if self.purpose == "MATERIAL_ISSUE" and not self.from_warehouse:
-            raise ValidationError({"from_warehouse": "Material Issue requires a source warehouse."})
-        if self.purpose in ("MATERIAL_TRANSFER", "REPACK"):
-            if not self.from_warehouse:
-                raise ValidationError({"from_warehouse": "This purpose requires a source warehouse."})
-            if not self.to_warehouse:
-                raise ValidationError({"to_warehouse": "This purpose requires a target warehouse."})
-
     def submit(self):
         """Post the stock entry: create SLEs for every detail line and mark submitted."""
         if self.status != "DRAFT":
             return
-        for detail in self.items.all():
-            source = detail.source_warehouse or self.from_warehouse
-            target = detail.target_warehouse or self.to_warehouse
+        voucher_no = str(self.pk)
+        updated_items = set()
+        # select_related avoids per-line FK fetches of item/source/target inside the loop.
+        for detail in self.items.select_related("item", "source_warehouse", "target_warehouse").all():
+            source = detail.source_warehouse
+            target = detail.target_warehouse
             rate = detail.basic_rate
-            voucher_no = str(self.pk)
 
             if self.purpose == "MATERIAL_RECEIPT":
                 StockLedgerEntry.create_entry(
@@ -504,8 +372,9 @@ class StockEntry(BaseModel):
                     voucher_no=voucher_no,
                     rate=rate,
                     voucher_detail_no=str(detail.pk),
-                    batch=detail.batch,
                 )
+                detail.item.last_purchase_rate = rate
+                updated_items.add(detail.item)
             elif self.purpose == "MATERIAL_ISSUE":
                 StockLedgerEntry.create_entry(
                     item=detail.item,
@@ -514,9 +383,8 @@ class StockEntry(BaseModel):
                     voucher_type="Stock Entry",
                     voucher_no=voucher_no,
                     voucher_detail_no=str(detail.pk),
-                    batch=detail.batch,
                 )
-            elif self.purpose in ("MATERIAL_TRANSFER", "REPACK"):
+            elif self.purpose == "MATERIAL_TRANSFER":
                 StockLedgerEntry.create_entry(
                     item=detail.item,
                     warehouse=source,
@@ -525,7 +393,6 @@ class StockEntry(BaseModel):
                     voucher_no=voucher_no,
                     rate=Decimal("0"),
                     voucher_detail_no=str(detail.pk),
-                    batch=detail.batch,
                 )
                 StockLedgerEntry.create_entry(
                     item=detail.item,
@@ -535,8 +402,9 @@ class StockEntry(BaseModel):
                     voucher_no=voucher_no,
                     rate=rate,
                     voucher_detail_no=str(detail.pk),
-                    batch=detail.batch,
                 )
+        if updated_items:
+            Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
         self.status = "SUBMITTED"
         self.save(update_fields=["status", "updated_at"])
 
@@ -545,9 +413,8 @@ class StockEntry(BaseModel):
         if self.status != "SUBMITTED":
             return
         voucher_no = str(self.pk)
-        for sle in self.stock_ledger_entries_for_voucher(voucher_no):
-            if sle.is_cancelled:
-                continue
+        # Exclude already-cancelled rows upfront so the loop body runs once per real SLE.
+        for sle in self.stock_ledger_entries_for_voucher(voucher_no).exclude(is_cancelled=True):
             StockLedgerEntry.create_entry(
                 item=sle.item,
                 warehouse=sle.warehouse,
@@ -564,7 +431,11 @@ class StockEntry(BaseModel):
 
     @staticmethod
     def stock_ledger_entries_for_voucher(voucher_no):
-        return StockLedgerEntry.objects.filter(voucher_type="Stock Entry", voucher_no=voucher_no)
+        # select_related avoids per-row FK fetches when callers read sle.item/sle.warehouse
+        # inside loops (StockEntry.cancel + the stock entry detail view both hit this).
+        return StockLedgerEntry.objects.select_related("item", "warehouse").filter(
+            voucher_type="Stock Entry", voucher_no=voucher_no
+        )
 
 
 class StockEntryDetail(BaseModel):
@@ -587,13 +458,31 @@ class StockEntryDetail(BaseModel):
         related_name="incoming_details",
     )
     qty = models.DecimalField(max_digits=10, decimal_places=2)
-    uom = models.ForeignKey(UOM, on_delete=models.PROTECT)
-    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4, default=Decimal("1"))
     basic_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    batch = models.ForeignKey(Batch, null=True, blank=True, on_delete=models.PROTECT)
 
     def __str__(self):
         return f"{self.item.item_code} x{self.qty}"
+
+    def clean(self):
+        super().clean()
+        if not self.stock_entry_id:
+            return
+        purpose = self.stock_entry.purpose
+        if purpose == "MATERIAL_RECEIPT":
+            if not self.target_warehouse_id:
+                raise ValidationError({"target_warehouse": "Material Receipt requires a target warehouse."})
+            if self.source_warehouse_id:
+                raise ValidationError({"source_warehouse": "Material Receipt should not have a source warehouse."})
+        elif purpose == "MATERIAL_ISSUE":
+            if not self.source_warehouse_id:
+                raise ValidationError({"source_warehouse": "Material Issue requires a source warehouse."})
+            if self.target_warehouse_id:
+                raise ValidationError({"target_warehouse": "Material Issue should not have a target warehouse."})
+        elif purpose == "MATERIAL_TRANSFER":
+            if not self.source_warehouse_id:
+                raise ValidationError({"source_warehouse": "Material Transfer requires a source warehouse."})
+            if not self.target_warehouse_id:
+                raise ValidationError({"target_warehouse": "Material Transfer requires a target warehouse."})
 
 
 class StockReconciliation(BaseModel):
@@ -624,12 +513,13 @@ class StockReconciliation(BaseModel):
         if self.status != "DRAFT":
             return
         voucher_no = str(self.pk)
-        for line in self.items.all():
+        # select_related avoids per-line FK fetches of item/warehouse inside the loop.
+        for line in self.items.select_related("item", "warehouse").all():
             current_qty = line.current_qty
             difference = line.qty - current_qty
             if difference == 0:
                 continue
-            rate = line.valuation_rate or Decimal("0")
+            rate = line.valuation_rate if self.purpose == "OPENING_STOCK" else Decimal("0")
             StockLedgerEntry.create_entry(
                 item=line.item,
                 warehouse=line.warehouse,
@@ -647,9 +537,12 @@ class StockReconciliation(BaseModel):
         if self.status != "SUBMITTED":
             return
         voucher_no = str(self.pk)
-        for sle in StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=voucher_no):
-            if sle.is_cancelled:
-                continue
+        sles = (
+            StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=voucher_no)
+            .select_related("item", "warehouse")
+            .exclude(is_cancelled=True)
+        )
+        for sle in sles:
             StockLedgerEntry.create_entry(
                 item=sle.item,
                 warehouse=sle.warehouse,
@@ -689,7 +582,8 @@ class StockReconciliationItem(BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.pk and self.item_id and self.warehouse_id:
-            bin_obj = Bin.get_or_create_bin(self.item, self.warehouse)
+            # Pass ids, not FK instances — avoids two FK fetches per line on a formset save.
+            bin_obj = Bin.get_or_create_bin_id(self.item_id, self.warehouse_id)
             self.current_qty = bin_obj.actual_qty
         super().save(*args, **kwargs)
 
@@ -698,25 +592,20 @@ class PurchaseReceipt(BaseModel):
     """Records the receipt of goods from a supplier (FEATURES.md #123).
 
     When a delivery arrives the storekeeper creates a purchase receipt listing
-    items, quantities and rates. On submit it increases stock levels (via Stock
-    Ledger Entries) and records an implicit liability to the supplier. Damaged
-    items may be routed to a rejected warehouse instead of the main warehouse.
+    items, quantities and rates. On submit it increases stock in the receipt's
+    warehouse (via Stock Ledger Entries). The whole receipt goes to one store
+    room — further movement (e.g. store → kitchen) is done with Stock Entry.
+    Only quantities that enter stock are recorded; damaged/refused goods are
+    omitted (or written off later via Stock Reconciliation / Material Issue).
     """
 
     supplier_name = models.CharField(max_length=200)
     supplier_delivery_note = models.CharField(max_length=100, blank=True)
     posting_date = models.DateField(default=timezone.now)
-    accepted_warehouse = models.ForeignKey(
+    warehouse = models.ForeignKey(
         Warehouse,
         on_delete=models.PROTECT,
         related_name="purchase_receipts",
-    )
-    rejected_warehouse = models.ForeignKey(
-        Warehouse,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="rejected_receipts",
     )
     status = models.CharField(
         max_length=10,
@@ -734,40 +623,32 @@ class PurchaseReceipt(BaseModel):
 
     def clean(self):
         super().clean()
-        if not self.accepted_warehouse_id:
-            raise ValidationError({"accepted_warehouse": "Accepted warehouse is required."})
+        if not self.warehouse_id:
+            raise ValidationError({"warehouse": "Warehouse is required."})
 
     def submit(self):
-        """Post the receipt: create SLEs for accepted and rejected quantities."""
+        """Post the receipt: create SLEs for each line into self.warehouse."""
         if self.status != "DRAFT":
             return
         voucher_no = str(self.pk)
         total = Decimal("0")
-        for line in self.items.all():
-            target = line.warehouse or self.accepted_warehouse
-            if line.accepted_qty > 0:
+        updated_items = set()
+        # select_related avoids per-line FK fetches of line.item inside the loop.
+        for line in self.items.select_related("item").all():
+            if line.received_qty > 0:
                 StockLedgerEntry.create_entry(
                     item=line.item,
-                    warehouse=target,
-                    actual_qty=line.accepted_qty,
+                    warehouse=self.warehouse,
+                    actual_qty=line.received_qty,
                     voucher_type="Purchase Receipt",
                     voucher_no=voucher_no,
                     rate=line.rate,
                     voucher_detail_no=str(line.pk),
-                    batch=line.batch,
                 )
-            if line.rejected_qty > 0 and self.rejected_warehouse_id:
-                StockLedgerEntry.create_entry(
-                    item=line.item,
-                    warehouse=self.rejected_warehouse,
-                    actual_qty=line.rejected_qty,
-                    voucher_type="Purchase Receipt",
-                    voucher_no=voucher_no,
-                    rate=line.rate,
-                    voucher_detail_no=str(line.pk),
-                    batch=line.batch,
-                )
+            line.item.last_purchase_rate = line.rate
+            updated_items.add(line.item)
             total += line.amount
+        Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
         self.total = total
         self.status = "SUBMITTED"
         self.save(update_fields=["status", "total", "updated_at"])
@@ -777,9 +658,12 @@ class PurchaseReceipt(BaseModel):
         if self.status != "SUBMITTED":
             return
         voucher_no = str(self.pk)
-        for sle in StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt", voucher_no=voucher_no):
-            if sle.is_cancelled:
-                continue
+        sles = (
+            StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt", voucher_no=voucher_no)
+            .select_related("item", "warehouse")
+            .exclude(is_cancelled=True)
+        )
+        for sle in sles:
             StockLedgerEntry.create_entry(
                 item=sle.item,
                 warehouse=sle.warehouse,
@@ -791,12 +675,39 @@ class PurchaseReceipt(BaseModel):
             )
             sle.is_cancelled = True
             sle.save(update_fields=["is_cancelled", "updated_at"])
+        self._revert_last_purchase_rates()
         self.status = "CANCELLED"
         self.save(update_fields=["status", "updated_at"])
 
+    def _revert_last_purchase_rates(self):
+        # select_related("item") avoids per-line FK fetch. We keep the per-line prior-rate
+        # lookup (FIFO queue tail is intentionally per item) but combine the writes into
+        # a single bulk_update at the end instead of one UPDATE per line.
+        lines = list(self.items.select_related("item").all())
+        if not lines:
+            return
+        items_to_update = []
+        for line in lines:
+            prior = (
+                PurchaseReceiptItem.objects.filter(
+                    item=line.item,
+                    purchase_receipt__status="SUBMITTED",
+                )
+                .exclude(purchase_receipt=self)
+                .select_related("purchase_receipt")
+                .order_by("-purchase_receipt__posting_date", "-purchase_receipt__pk")
+                .first()
+            )
+            line.item.last_purchase_rate = prior.rate if prior else None
+            items_to_update.append(line.item)
+        Item.objects.bulk_update(items_to_update, ["last_purchase_rate", "updated_at"])
+
 
 class PurchaseReceiptItem(BaseModel):
-    """A single line item of a purchase receipt."""
+    """A single line item of a purchase receipt.
+
+    Warehouse is on the parent PurchaseReceipt — every line posts to the same store.
+    """
 
     purchase_receipt = models.ForeignKey(
         PurchaseReceipt,
@@ -805,34 +716,12 @@ class PurchaseReceiptItem(BaseModel):
     )
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="purchase_receipt_items")
     received_qty = models.DecimalField(max_digits=10, decimal_places=2)
-    rejected_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    accepted_qty = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0"),
-        editable=False,
-    )
-    uom = models.ForeignKey(UOM, on_delete=models.PROTECT)
     rate = models.DecimalField(max_digits=10, decimal_places=2)
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
-    batch = models.ForeignKey(Batch, null=True, blank=True, on_delete=models.PROTECT)
-    warehouse = models.ForeignKey(
-        Warehouse,
-        null=True,
-        blank=True,
-        on_delete=models.PROTECT,
-        related_name="purchase_receipt_item_warehouses",
-    )
 
     def __str__(self):
         return f"{self.item.item_code} x{self.received_qty}"
 
     def save(self, *args, **kwargs):
-        self.accepted_qty = self.received_qty - self.rejected_qty
         self.amount = self.received_qty * self.rate
         super().save(*args, **kwargs)
-
-    def clean(self):
-        super().clean()
-        if self.rejected_qty > self.received_qty:
-            raise ValidationError("rejected_qty cannot exceed received_qty")

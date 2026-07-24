@@ -1,75 +1,164 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Items</h1>
-      <a href="{% url 'inventory:item_create' %}"
-         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-        + New Item
-      </a>
-    </div>
+<div class="w-full">
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
-      <form method="get" class="flex items-center space-x-3">
-        <label for="group-filter" class="text-sm font-medium text-gray-700">Item group:</label>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Items" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Items</h1>
+      <p class="text-sm text-gray-500">Inventory catalog — raw materials, dishes, drinks, and size variants</p>
+    </div>
+    <a href="{% url 'inventory:item_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Item
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex flex-col gap-1 min-w-[10rem]">
+        <label for="q-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Search</label>
+        <input id="q-filter" type="search" name="q" value="{{ search_q }}"
+               placeholder="Name or code…"
+               class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+      </div>
+      <div class="flex flex-col gap-1 min-w-[9rem]">
+        <label for="group-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Group</label>
         <select id="group-filter" name="item_group"
-                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
                 onchange="this.form.submit()">
           <option value="">All groups</option>
           {% for group in item_groups %}
             <option value="{{ group.pk }}" {% if selected_item_group == group.pk|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
           {% endfor %}
         </select>
-        <label for="dept-filter" class="text-sm font-medium text-gray-700">Department:</label>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[8rem]">
+        <label for="dept-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Department</label>
         <select id="dept-filter" name="department"
-                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
                 onchange="this.form.submit()">
-          <option value="">All departments</option>
+          <option value="">All</option>
           <option value="FOOD" {% if selected_department == "FOOD" %}selected{% endif %}>Food</option>
           <option value="DRINKS" {% if selected_department == "DRINKS" %}selected{% endif %}>Drinks</option>
         </select>
-      </form>
-    </div>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[8rem]">
+        <label for="sellable-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sellable</label>
+        <select id="sellable-filter" name="sellable"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="1" {% if selected_sellable == "1" %}selected{% endif %}>Sellable</option>
+          <option value="0" {% if selected_sellable == "0" %}selected{% endif %}>Not sellable</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[8rem]">
+        <label for="purchasable-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Purchasable</label>
+        <select id="purchasable-filter" name="purchasable"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="1" {% if selected_purchasable == "1" %}selected{% endif %}>Purchasable</option>
+          <option value="0" {% if selected_purchasable == "0" %}selected{% endif %}>Not purchasable</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[8rem]">
+        <label for="kind-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Kind</label>
+        <select id="kind-filter" name="kind"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+                onchange="this.form.submit()">
+          <option value="">All kinds</option>
+          <option value="plain" {% if selected_kind == "plain" %}selected{% endif %}>Plain</option>
+          <option value="template" {% if selected_kind == "template" %}selected{% endif %}>Template</option>
+          <option value="variant" {% if selected_kind == "variant" %}selected{% endif %}>Variant</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[8rem]">
+        <label for="status-filter" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Status</label>
+        <select id="status-filter" name="status"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+                onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active</option>
+          <option value="disabled" {% if selected_status == "disabled" %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+        Apply
+      </button>
+    </form>
+  </div>
 
-    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Code</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Group</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Dept</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">UOM</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock</th>
-            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Code</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Group</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Dept</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Roles</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">UOM</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-gray-100">
           {% for item in items %}
-            <tr class="hover:bg-gray-50">
+            <tr class="hover:bg-gray-50/50 transition-colors {% if item.disabled %}opacity-60{% endif %}">
               <td class="px-6 py-4 text-sm font-mono text-gray-500">{{ item.item_code }}</td>
-              <td class="px-6 py-4 text-sm">
-                <a href="{% url 'inventory:item_detail' item.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ item.item_name }}</a>
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:item_detail' item.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ item.item_name }}</a>
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ item.item_group.name }}</td>
-              <td class="px-6 py-4 text-sm">
-                <span class="inline-flex rounded-full {% if item.department == 'FOOD' %}bg-amber-100 text-amber-800{% else %}bg-blue-100 text-blue-800{% endif %} px-2 py-1 text-xs font-medium">
-                  {{ item.get_department_display }}
-                </span>
+              <td class="px-6 py-4">
+                {% if item.department == 'FOOD' %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Food</span>
+                {% else %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">Drinks</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                <div class="flex flex-wrap gap-1">
+                  {% if item.has_variants %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-600/10">Template</span>
+                  {% endif %}
+                  {% if item.variant_of_id %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-600/10">Variant</span>
+                  {% endif %}
+                  {% if item.is_sales_item %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Sellable</span>
+                  {% endif %}
+                  {% if item.is_purchase_item %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/10">Purchasable</span>
+                  {% endif %}
+                  {% if item.disabled %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
+                  {% endif %}
+                </div>
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ item.stock_uom.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</td>
-              <td class="px-6 py-4 text-right text-sm">
-                <a href="{% url 'inventory:item_update' item.pk %}" class="text-blue-600 hover:text-blue-800">Edit</a>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'inventory:item_update' item.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="px-6 py-12 text-center text-sm text-gray-500">No items yet.</td>
+              <td colspan="7" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No items match these filters.</span>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+</div>
 {% endblock %}

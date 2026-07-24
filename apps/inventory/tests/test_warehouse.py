@@ -15,13 +15,15 @@ class WarehouseModelTest(TestCase):
         self.assertEqual(str(self.warehouse), "Main Store")
 
     def test_defaults(self):
-        self.assertFalse(self.warehouse.is_group)
-        self.assertFalse(self.warehouse.is_rejected)
         self.assertFalse(self.warehouse.disabled)
 
     def test_branch_link(self):
         self.assertEqual(self.warehouse.branch, self.branch)
         self.assertIn(self.warehouse, self.branch.warehouses.all())
+
+    def test_auto_assigns_default_branch(self):
+        wh = Warehouse.objects.create(name="Kitchen Store")
+        self.assertEqual(wh.branch_id, self.branch.pk)
 
     def test_unique_together_name_branch(self):
         with self.assertRaises(IntegrityError):
@@ -32,28 +34,11 @@ class WarehouseModelTest(TestCase):
         wh = Warehouse.objects.create(name="Main Store", branch=branch2)
         self.assertEqual(wh.name, "Main Store")
 
-    def test_parent_child(self):
-        child = Warehouse.objects.create(name="Kitchen Store", branch=self.branch, parent=self.warehouse)
-        self.assertEqual(child.parent, self.warehouse)
-        self.assertIn(child, self.warehouse.children.all())
-
-    def test_is_group(self):
-        self.warehouse.is_group = True
-        self.warehouse.save()
-        self.warehouse.refresh_from_db()
-        self.assertTrue(self.warehouse.is_group)
-
     def test_disabled(self):
         self.warehouse.disabled = True
         self.warehouse.save()
         self.warehouse.refresh_from_db()
         self.assertTrue(self.warehouse.disabled)
-
-    def test_is_rejected(self):
-        self.warehouse.is_rejected = True
-        self.warehouse.save()
-        self.warehouse.refresh_from_db()
-        self.assertTrue(self.warehouse.is_rejected)
 
     def test_delete(self):
         pk = self.warehouse.pk

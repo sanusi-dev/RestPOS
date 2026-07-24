@@ -1,110 +1,153 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
+<div class="w-full">
+
+  {% with current_label="#"|add:reconciliation.pk %}
+    {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Reconciliations" section_url="inventory:reconciliation_list" current_label=current_label %}
+  {% endwith %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Reconciliation #{{ reconciliation.pk }}</h1>
+      <p class="text-sm text-gray-500">{{ reconciliation.get_purpose_display }} · {{ reconciliation.warehouse.name }} · {{ reconciliation.posting_date }}</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if reconciliation.status == "DRAFT" %}
+        <form method="post" action="{% url 'inventory:reconciliation_submit' reconciliation.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+            Submit
+          </button>
+        </form>
+      {% elif reconciliation.status == "SUBMITTED" %}
+        <form method="post" action="{% url 'inventory:reconciliation_cancel' reconciliation.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold shadow-sm hover:bg-red-50 transition-all duration-300">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            Cancel
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-pink-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+
+    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Reconciliation Details</h2>
+
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-3 relative z-10">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Reconciliation #{{ reconciliation.pk }}</h1>
-        <p class="mt-1 text-sm text-gray-500">{{ reconciliation.get_purpose_display }} · {{ reconciliation.warehouse.name }} · {{ reconciliation.posting_date }}</p>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Purpose</dt>
+        <dd class="text-base font-bold text-gray-900">{{ reconciliation.get_purpose_display }}</dd>
       </div>
-      <div class="flex items-center space-x-3">
-        {% if reconciliation.status == "DRAFT" %}
-          <form method="post" action="{% url 'inventory:reconciliation_submit' reconciliation.pk %}">
-            {% csrf_token %}
-            <button type="submit"
-                    class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
-              Submit
-            </button>
-          </form>
-        {% elif reconciliation.status == "SUBMITTED" %}
-          <form method="post" action="{% url 'inventory:reconciliation_cancel' reconciliation.pk %}">
-            {% csrf_token %}
-            <button type="submit"
-                    class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
-              Cancel
-            </button>
-          </form>
-        {% endif %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
+        <dd class="mt-1">
+          {% if reconciliation.status == 'DRAFT' %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 ring-1 ring-gray-300/30">Draft</span>
+          {% elif reconciliation.status == 'SUBMITTED' %}
+            <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Submitted
+            </span>
+          {% else %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
+          {% endif %}
+        </dd>
       </div>
-    </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Warehouse</dt>
+        <dd class="text-base font-bold text-gray-900">{{ reconciliation.warehouse.name }}</dd>
+      </div>
+      {% if reconciliation.remarks %}
+        <div class="sm:col-span-3">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+          <dd class="text-base font-medium text-gray-700">{{ reconciliation.remarks }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Purpose</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.get_purpose_display }}</dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Status</dt>
-          <dd class="mt-1 text-sm">
-            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
-              {% if reconciliation.status == 'DRAFT' %}bg-gray-100 text-gray-800
-              {% elif reconciliation.status == 'SUBMITTED' %}bg-green-100 text-green-800
-              {% else %}bg-red-100 text-red-800{% endif %}">{{ reconciliation.get_status_display }}</span>
-          </dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Warehouse</dt>
-          <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.warehouse.name }}</dd>
-        </div>
-        {% if reconciliation.remarks %}
-          <div class="sm:col-span-3">
-            <dt class="text-sm font-medium text-gray-500">Remarks</dt>
-            <dd class="mt-1 text-sm text-gray-900">{{ reconciliation.remarks }}</dd>
-          </div>
-        {% endif %}
-      </dl>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-pink-50 text-pink-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Items</h3>
     </div>
-
-    <div class="rounded-lg border border-gray-200 shadow-sm">
-      <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Items</h2></div>
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Current Qty</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Counted Qty</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Current Qty</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Counted Qty</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-gray-100">
           {% for item in items %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ item.item.item_name }}</a></td>
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ item.item.item_name }}</a>
+              </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ item.current_qty }}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">{{ item.qty }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ item.qty }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ item.valuation_rate|default:"-" }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">No items.</td></tr>
+            <tr>
+              <td colspan="4" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No items.</span>
+                </div>
+              </td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
-    {% if ledger_entries %}
-      <div class="rounded-lg border border-gray-200 shadow-sm">
-        <div class="border-b border-gray-200 px-6 py-4"><h2 class="text-lg font-semibold text-gray-900">Stock Ledger Entries</h2></div>
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Qty</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Balance</th>
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cancelled</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 bg-white">
-            {% for sle in ledger_entries %}
-              <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.item.item_name }}</td>
-                <td class="px-6 py-4 text-sm {% if sle.actual_qty >= 0 %}text-green-700{% else %}text-red-700{% endif %}">{{ sle.actual_qty }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900">{{ sle.qty_after_transaction }}</td>
-                <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% endif %}
   </div>
+
+  {% if ledger_entries %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Stock Ledger Entries</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Balance</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cancelled</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for sle in ledger_entries %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ sle.item.item_name }}</td>
+              <td class="px-6 py-4 text-sm font-semibold {% if sle.actual_qty >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ sle.actual_qty }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ sle.qty_after_transaction }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

@@ -22,12 +22,10 @@ class StockLedgerEntryTestBase(TestCase):
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
         cls.item = Item.objects.create(
-            item_code="RICE001",
             item_name="Jollof Rice",
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            valuation_method="FIFO",
         )
 
 
@@ -233,62 +231,6 @@ class FIFOQueueTest(StockLedgerEntryTestBase):
         self.assertEqual(sle_out.valuation_rate, Decimal("0"))
         bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
         self.assertEqual(bin_obj.actual_qty, Decimal("0"))
-
-
-class MovingAverageTest(StockLedgerEntryTestBase):
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        cls.item.valuation_method = "MOVING_AVERAGE"
-        cls.item.save()
-
-    def test_moving_average_valuation(self):
-        sle1 = StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
-            voucher_type="T",
-            voucher_no="1",
-            rate=Decimal("100"),
-        )
-        self.assertEqual(sle1.valuation_rate, Decimal("100"))
-        sle2 = StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
-            voucher_type="T",
-            voucher_no="2",
-            rate=Decimal("200"),
-        )
-        self.assertEqual(sle2.valuation_rate, Decimal("150"))
-
-    def test_moving_average_after_partial_issue(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
-            voucher_type="T",
-            voucher_no="1",
-            rate=Decimal("100"),
-        )
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
-            voucher_type="T",
-            voucher_no="2",
-            rate=Decimal("200"),
-        )
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("-5"),
-            voucher_type="T",
-            voucher_no="3",
-        )
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
-        self.assertEqual(bin_obj.actual_qty, Decimal("15"))
-        self.assertEqual(bin_obj.valuation_rate, Decimal("150"))
 
 
 class SLEFieldsNotEditable(StockLedgerEntryTestBase):

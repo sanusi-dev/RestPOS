@@ -1,51 +1,68 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Stock Balance</h1>
-    </div>
+<div class="w-full">
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
-      <form method="get" class="flex items-center space-x-3">
-        <label for="wh-filter" class="text-sm font-medium text-gray-700">Warehouse:</label>
-        <select id="wh-filter" name="warehouse"
-                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onchange="this.form.submit()">
-          <option value="">All warehouses</option>
-          {% for wh in warehouses %}
-            <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>{{ wh.name }}</option>
-          {% endfor %}
-        </select>
-      </form>
-    </div>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Stock Balance" %}
 
-    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Stock Balance</h1>
+    <p class="text-sm text-gray-500">Current stock levels across warehouses</p>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="flex items-center gap-3" x-data>
+      <label for="wh-filter" class="text-sm font-semibold text-gray-700">Warehouse:</label>
+      <select id="wh-filter" name="warehouse"
+              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+              x-on:change="$el.form.submit()">
+        <option value="">All warehouses</option>
+        {% for wh in warehouses %}
+          <option value="{{ wh.pk }}" {% if selected_warehouse == wh.pk|stringformat:"s" %}selected{% endif %}>{{ wh.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Item</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actual Qty</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Reserved</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Val. Rate</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stock Value</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Actual Qty</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Reserved</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Val. Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Stock Value</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-gray-100">
           {% for bin in bins %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm"><a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-blue-600 hover:text-blue-800">{{ bin.item.item_name }}</a></td>
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ bin.item.item_name }}</a>
+              </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ bin.warehouse.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">{{ bin.actual_qty }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.actual_qty }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ bin.reserved_qty }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">{{ bin.stock_value }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.stock_value }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No stock.</td></tr>
+            <tr>
+              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No stock.</span>
+                </div>
+              </td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+</div>
 {% endblock %}

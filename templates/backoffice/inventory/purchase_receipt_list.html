@@ -1,70 +1,95 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Purchase Receipts</h1>
-      <a href="{% url 'inventory:purchase_receipt_create' %}"
-         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-        + New Purchase Receipt
-      </a>
-    </div>
+<div class="w-full">
 
-    <div class="rounded-lg border border-gray-200 shadow-sm p-4">
-      <form method="get" class="flex items-center space-x-3">
-        <label for="status-filter" class="text-sm font-medium text-gray-700">Status:</label>
-        <select id="status-filter" name="status"
-                class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                onchange="this.form.submit()">
-          <option value="">All</option>
-          <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
-          <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
-          <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
-        </select>
-        <label for="supplier-filter" class="text-sm font-medium text-gray-700">Supplier:</label>
-        <input id="supplier-filter" type="text" name="supplier" value="{{ selected_supplier }}"
-               class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-               placeholder="Search supplier">
-        <button type="submit"
-                class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">Filter</button>
-      </form>
-    </div>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Purchase Receipts" %}
 
-    <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Purchase Receipts</h1>
+      <p class="text-sm text-gray-500">Goods received from suppliers</p>
+    </div>
+    <a href="{% url 'inventory:purchase_receipt_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Purchase Receipt
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="flex flex-wrap items-center gap-3" x-data>
+      <label for="status-filter" class="text-sm font-semibold text-gray-700">Status:</label>
+      <select id="status-filter" name="status"
+              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+              x-on:change="$el.form.submit()">
+        <option value="">All</option>
+        <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+        <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+        <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+      </select>
+      <label for="supplier-filter" class="text-sm font-semibold text-gray-700">Supplier:</label>
+      <input id="supplier-filter" type="text" name="supplier" value="{{ selected_supplier }}"
+             class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+             placeholder="Search supplier">
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Filter</button>
+    </form>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Supplier</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Date</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Warehouse</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Supplier</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-gray-100">
           {% for receipt in receipts %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm">
-                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="font-medium text-blue-600 hover:text-blue-800">{{ receipt.supplier_name }}</a>
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ receipt.supplier_name }}</a>
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.posting_date }}</td>
-              <td class="px-6 py-4 text-sm">
-                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium
-                  {% if receipt.status == 'DRAFT' %}bg-gray-100 text-gray-800
-                  {% elif receipt.status == 'SUBMITTED' %}bg-green-100 text-green-800
-                  {% else %}bg-red-100 text-red-800{% endif %}">{{ receipt.get_status_display }}</span>
+              <td class="px-6 py-4">
+                {% if receipt.status == 'DRAFT' %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 ring-1 ring-gray-300/30">Draft</span>
+                {% elif receipt.status == 'SUBMITTED' %}
+                  <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Submitted
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
+                {% endif %}
               </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.accepted_warehouse|default:"-" }}</td>
-              <td class="px-6 py-4 text-sm text-gray-900">{{ receipt.total }}</td>
-              <td class="px-6 py-4 text-sm">
-                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="text-blue-600 hover:text-blue-800">View</a>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.warehouse|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900 text-right">{{ receipt.total }}</td>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">View</a>
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="px-6 py-12 text-center text-sm text-gray-500">No purchase receipts yet.</td></tr>
+            <tr>
+              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No purchase receipts yet.</span>
+                </div>
+              </td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+</div>
 {% endblock %}
