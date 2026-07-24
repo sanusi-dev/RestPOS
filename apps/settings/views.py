@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
 from django.db import models
+from django.db.models.functions import Now
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -17,6 +18,17 @@ from .forms import (
 )
 from .models import Branch, Restaurant, Room, Table, UserRoomAssignment
 
+RESTPOS_GROUP_NAMES = ["RestPOS Admin", "RestPOS Manager", "RestPOS Cashier"]
+
+
+def _ensure_restpos_groups():
+    """Fetch RestPOS role groups in one query, creating any missing ones. Returns dict keyed by name."""
+    groups = {group.name: group for group in Group.objects.filter(name__in=RESTPOS_GROUP_NAMES)}
+    for name in RESTPOS_GROUP_NAMES:
+        if name not in groups:
+            groups[name] = Group.objects.create(name=name)
+    return groups
+
 
 @login_required
 def settings_dashboard(request: HttpRequest) -> HttpResponse:
@@ -26,7 +38,9 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
         "table_count": Table.objects.count(),
         "restaurant_count": Restaurant.objects.count(),
         "assignment_count": UserRoomAssignment.objects.count(),
-        "staff_count": CustomUser.objects.filter(groups__name__in=["RestPOS Manager", "RestPOS Cashier"])
+        "staff_count": CustomUser.objects.filter(
+            groups__name__in=["RestPOS Admin", "RestPOS Manager", "RestPOS Cashier"]
+        )
         .distinct()
         .count(),
     }
@@ -53,7 +67,7 @@ def branch_create(request: HttpRequest) -> HttpResponse:
             return redirect("settings:branch_list")
     else:
         form = BranchForm()
-    return render(request, "backoffice/settings/branch_form.html", {"form": form, "is_create": True})
+    return render(request, "backoffice/settings/branch_form.html", {"form": form, "title": "Branch"})
 
 
 @login_required
@@ -73,7 +87,7 @@ def branch_update(request: HttpRequest, pk: int) -> HttpResponse:
             return redirect("settings:branch_detail", pk=branch.pk)
     else:
         form = BranchForm(instance=branch)
-    return render(request, "backoffice/settings/branch_form.html", {"form": form, "is_create": False, "branch": branch})
+    return render(request, "backoffice/settings/branch_form.html", {"form": form, "title": "Branch", "branch": branch})
 
 
 # ---------------------------------------------------------------------------
@@ -83,16 +97,8 @@ def branch_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def room_list(request: HttpRequest) -> HttpResponse:
-    branch_id = request.GET.get("branch")
-    rooms = Room.objects.select_related("branch").all()
-    if branch_id:
-        rooms = rooms.filter(branch_id=branch_id)
-    branches = Branch.objects.all().order_by("name")
-    return render(
-        request,
-        "backoffice/settings/room_list.html",
-        {"rooms": rooms, "branches": branches, "selected_branch": branch_id},
-    )
+    rooms = Room.objects.all()
+    return render(request, "backoffice/settings/room_list.html", {"rooms": rooms})
 
 
 @login_required
@@ -109,7 +115,7 @@ def room_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def room_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    room = get_object_or_404(Room.objects.select_related("branch"), pk=pk)
+    room = get_object_or_404(Room, pk=pk)
     tables = room.tables.all()
     return render(request, "backoffice/settings/room_detail.html", {"room": room, "tables": tables})
 
@@ -135,10 +141,10 @@ def room_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def table_list(request: HttpRequest) -> HttpResponse:
     room_id = request.GET.get("room")
-    tables = Table.objects.select_related("room", "branch", "room__branch").all()
+    tables = Table.objects.select_related("room").all()
     if room_id:
         tables = tables.filter(room_id=room_id)
-    rooms = Room.objects.select_related("branch").all().order_by("branch__name", "name")
+    rooms = Room.objects.all().order_by("name")
     return render(
         request,
         "backoffice/settings/table_list.html",
@@ -149,14 +155,27 @@ def table_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def table_layout(request: HttpRequest) -> HttpResponse:
     room_id = request.GET.get("room")
-    tables = Table.objects.select_related("room", "branch", "room__branch").all()
+    # Template/JS read pk/name/layout_*/occupied only — no need to JOIN room.
+    tables = Table.objects.all()
     if room_id:
         tables = tables.filter(room_id=room_id)
-    rooms = Room.objects.select_related("branch").all().order_by("branch__name", "name")
+    rooms = Room.objects.all().order_by("name")
+    tables_data = [
+        {
+            "id": table.pk,
+            "name": table.name,
+            "x": table.layout_x or 0,
+            "y": table.layout_y or 0,
+            "width": table.layout_width or 120,
+            "height": table.layout_height or 80,
+            "occupied": table.occupied,
+        }
+        for table in tables
+    ]
     return render(
         request,
         "backoffice/settings/table_layout.html",
-        {"tables": tables, "rooms": rooms, "selected_room": room_id},
+        {"tables": tables, "tables_data": tables_data, "rooms": rooms, "selected_room": room_id},
     )
 
 
@@ -174,7 +193,7 @@ def table_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def table_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    table = get_object_or_404(Table.objects.select_related("room", "branch", "room__branch"), pk=pk)
+    table = get_object_or_404(Table.objects.select_related("room"), pk=pk)
     return render(request, "backoffice/settings/table_detail.html", {"table": table})
 
 
@@ -194,15 +213,22 @@ def table_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def table_update_layout(request: HttpRequest, pk: int) -> HttpResponse:
-    table = get_object_or_404(Table, pk=pk)
+    # Single UPDATE, no SELECT, no FK fetch. Bypasses Table.save's room→branch
+    # resync — fine for layout-only autosaves (room is never changed by this endpoint).
     try:
-        table.layout_x = float(request.POST.get("x", 0))
-        table.layout_y = float(request.POST.get("y", 0))
-        table.layout_width = float(request.POST.get("width", 100))
-        table.layout_height = float(request.POST.get("height", 80))
-        table.save(update_fields=["layout_x", "layout_y", "layout_width", "layout_height", "updated_at"])
+        layout_x = float(request.POST.get("x", 0))
+        layout_y = float(request.POST.get("y", 0))
+        layout_width = float(request.POST.get("width", 100))
+        layout_height = float(request.POST.get("height", 80))
     except TypeError, ValueError:
         return HttpResponse("Invalid coordinates", status=400)
+    Table.objects.filter(pk=pk).update(
+        layout_x=layout_x,
+        layout_y=layout_y,
+        layout_width=layout_width,
+        layout_height=layout_height,
+        updated_at=Now(),
+    )
     return HttpResponse("")
 
 
@@ -213,7 +239,7 @@ def table_update_layout(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def restaurant_detail(request: HttpRequest) -> HttpResponse:
-    restaurant = Restaurant.objects.select_related("branch", "default_room", "default_room__branch").first()
+    restaurant = Restaurant.objects.select_related("default_room").first()
     if restaurant is None:
         return render(request, "backoffice/settings/restaurant_detail.html", {"restaurant": None})
     if request.method == "POST":
@@ -232,7 +258,7 @@ def restaurant_detail(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def restaurant_update(request: HttpRequest) -> HttpResponse:
-    restaurant = Restaurant.objects.select_related("branch", "default_room").first()
+    restaurant = Restaurant.objects.select_related("default_room").first()
     if restaurant is None:
         return redirect("settings:restaurant_detail")
     if request.method == "POST":
@@ -256,7 +282,7 @@ def restaurant_update(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def user_room_list(request: HttpRequest) -> HttpResponse:
-    assignments = UserRoomAssignment.objects.select_related("user", "room", "room__branch", "branch").all()
+    assignments = UserRoomAssignment.objects.select_related("user", "room").all()
     return render(
         request,
         "backoffice/settings/user_room_list.html",
@@ -326,23 +352,17 @@ def staff_list(request: HttpRequest) -> HttpResponse:
             | models.Q(first_name__icontains=search)
             | models.Q(last_name__icontains=search)
         )
+    # Prefetch only RestPOS role groups so role derivation uses the prefetch cache
+    # (one group-membership query for the whole page rather than ~3 per user).
+    users = users.prefetch_related(
+        models.Prefetch("groups", queryset=Group.objects.filter(name__in=RESTPOS_GROUP_NAMES))
+    )
 
     total = users.count()
     users = users[(page - 1) * per_page : page * per_page]
     total_pages = (total + per_page - 1) // per_page
 
-    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
-    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
-
-    staff_data = []
-    for user in users:
-        if user.groups.filter(pk=manager_group.pk).exists():
-            role = "manager"
-        elif user.groups.filter(pk=cashier_group.pk).exists():
-            role = "cashier"
-        else:
-            role = ""
-        staff_data.append({"user": user, "role": role})
+    staff_data = [_build_staff_entry(user) for user in users]
 
     context = {
         "staff_data": staff_data,
@@ -362,20 +382,35 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
     if not request.user.has_backoffice_access:
         return HttpResponse("Unauthorized", status=403)
 
-    user = get_object_or_404(CustomUser, pk=pk)
-    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
-    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
-
-    # Prevent assigning the manager role to a non-manager user
-    if role == "manager" and not request.user.is_superuser and not request.user.is_manager:
+    if not request.user.is_superuser:
         return HttpResponse("Unauthorized", status=403)
 
-    user.groups.remove(manager_group, cashier_group)
+    user = get_object_or_404(CustomUser, pk=pk)
+    groups = _ensure_restpos_groups()
+    admin_group = groups["RestPOS Admin"]
+    manager_group = groups["RestPOS Manager"]
+    cashier_group = groups["RestPOS Cashier"]
 
-    if role == "manager":
+    user.groups.remove(admin_group, manager_group, cashier_group)
+
+    if role == "admin":
+        user.is_superuser = True
+        user.is_staff = True
+        user.groups.add(admin_group)
+        user.save()
+        messages.success(request, f"{user.get_display_name()} is now an Admin.")
+    elif role == "manager":
+        if user.is_superuser:
+            user.is_superuser = False
+            user.is_staff = False
+        user.save()
         user.groups.add(manager_group)
         messages.success(request, f"{user.get_display_name()} is now a Manager.")
     elif role == "cashier":
+        if user.is_superuser:
+            user.is_superuser = False
+            user.is_staff = False
+        user.save()
         user.groups.add(cashier_group)
         messages.success(request, f"{user.get_display_name()} is now a Cashier.")
 
@@ -383,7 +418,7 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
         response = render(
             request,
             "backoffice/settings/staff_list.html#staff-row",
-            {"entry": _build_staff_entry(user, manager_group, cashier_group)},
+            {"entry": _build_staff_entry(user)},
         )
         return response
     return redirect("settings:staff_list")
@@ -395,32 +430,41 @@ def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
     if not request.user.has_backoffice_access:
         return HttpResponse("Unauthorized", status=403)
 
-    user = get_object_or_404(CustomUser, pk=pk)
-    manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
-    cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+    if not request.user.is_superuser:
+        return HttpResponse("Unauthorized", status=403)
 
-    # Prevent removing role from superuser
-    if user.is_superuser:
-        messages.error(request, "Cannot remove role from a superuser.")
+    user = get_object_or_404(CustomUser, pk=pk)
+    groups = _ensure_restpos_groups()
+    admin_group = groups["RestPOS Admin"]
+    manager_group = groups["RestPOS Manager"]
+    cashier_group = groups["RestPOS Cashier"]
+
+    if user.groups.filter(pk=admin_group.pk).exists():
+        messages.error(request, "Cannot remove role from an Admin. Demote them to Manager first.")
         return redirect("settings:staff_list")
 
-    user.groups.remove(manager_group, cashier_group)
+    user.groups.remove(admin_group, manager_group, cashier_group)
     messages.success(request, f"Role removed from {user.get_display_name()}.")
 
     if request.htmx:
         response = render(
             request,
             "backoffice/settings/staff_list.html#staff-row",
-            {"entry": _build_staff_entry(user, manager_group, cashier_group)},
+            {"entry": _build_staff_entry(user)},
         )
         return response
     return redirect("settings:staff_list")
 
 
-def _build_staff_entry(user, manager_group, cashier_group):
-    if user.groups.filter(pk=manager_group.pk).exists():
+def _build_staff_entry(user):
+    # Uses the user's prefetched groups (from staff_list) or cached role lookups;
+    # one query total per user rather than up to three per-row exists() checks.
+    user_group_names = set(user._restpos_group_names)
+    if user.is_superuser or "RestPOS Admin" in user_group_names:
+        role = "admin"
+    elif "RestPOS Manager" in user_group_names:
         role = "manager"
-    elif user.groups.filter(pk=cashier_group.pk).exists():
+    elif "RestPOS Cashier" in user_group_names:
         role = "cashier"
     else:
         role = ""

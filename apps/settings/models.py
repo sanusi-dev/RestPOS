@@ -9,34 +9,49 @@ class Branch(BaseModel):
     """A restaurant branch/location."""
 
     name = models.CharField(max_length=100, unique=True)
-    make_aggregator_unpaid = models.BooleanField(default=False)
-    no_aggregator_taxes = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def get_default(cls):
+        """Phase 1 single-site helper: the first (usually only) branch.
+
+        Multi-branch UI can replace this later with the user's assigned branch.
+        """
+        return cls.objects.order_by("pk").first()
 
 
 class Room(BaseModel):
-    """A dining room/area within a branch."""
+    """A dining room/area within a branch.
+
+    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
+    """
 
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="rooms")
     name = models.CharField(max_length=100)
-    room_type = models.CharField(
-        max_length=10,
-        choices=[("AC", "AC"), ("NON_AC", "Non-AC")],
-        blank=True,
-    )
 
     class Meta:
         unique_together = [("branch", "name")]
-        ordering = ["branch__name", "name"]
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        if not self.branch_id:
+            default_branch = Branch.get_default()
+            if default_branch is None:
+                raise ValidationError({"branch": "Create a branch in Settings before creating a room."})
+            self.branch = default_branch
+        super().save(*args, **kwargs)
+
 
 class Table(BaseModel):
-    """A physical table within a room."""
+    """A physical table within a room.
+
+    ``branch`` is denormalized from ``room.branch`` — never selected in UI.
+    """
 
     room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="tables")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="tables")
@@ -63,14 +78,28 @@ class Table(BaseModel):
     def __str__(self):
         return self.name
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Track room_id at load time so save() can skip the Room→Branch fetch
+        # pair when room hasn't changed (layout edits, name edits, etc.).
+        self._original_room_id = self.room_id
+
+    def save(self, *args, **kwargs):
+        if self.room_id and (self._state.adding or self._original_room_id != self.room_id):
+            self.branch = self.room.branch
+        super().save(*args, **kwargs)
+        self._original_room_id = self.room_id
+
 
 class Restaurant(BaseModel):
-    """Restaurant-level configuration for a branch."""
+    """Restaurant-level configuration for a branch.
+
+    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
+    """
 
     company = models.CharField(max_length=200)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="restaurants")
     invoice_series_prefix = models.CharField(max_length=20, default="REST-")
-    aggregator_series_prefix = models.CharField(max_length=20, blank=True, default="AGR-")
     address = models.TextField(blank=True)
     default_room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="restaurants")
     active_menu = models.ForeignKey(
@@ -82,25 +111,41 @@ class Restaurant(BaseModel):
     )
 
     class Meta:
-        ordering = ["branch__name"]
+        ordering = ["company"]
 
     def __str__(self):
         return self.company or self.branch.name
 
+    def save(self, *args, **kwargs):
+        if not self.branch_id:
+            default_branch = Branch.get_default()
+            if default_branch is None:
+                raise ValidationError({"branch": "Create a branch in Settings before creating restaurant config."})
+            self.branch = default_branch
+        super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
-        if self.pk:
-            existing = Restaurant.objects.filter(branch=self.branch).exclude(pk=self.pk)
-        else:
-            existing = Restaurant.objects.filter(branch=self.branch)
-        if existing.exists():
-            raise ValidationError({"branch": "A restaurant configuration already exists for this branch."})
-        if self.default_room_id and self.default_room.branch_id != self.branch_id:
+        if not self.branch_id:
+            default_branch = Branch.get_default()
+            if default_branch is not None:
+                self.branch = default_branch
+        if self.branch_id:
+            if self.pk:
+                existing = Restaurant.objects.filter(branch=self.branch).exclude(pk=self.pk)
+            else:
+                existing = Restaurant.objects.filter(branch=self.branch)
+            if existing.exists():
+                raise ValidationError({"branch": "A restaurant configuration already exists for this branch."})
+        if self.default_room_id and self.branch_id and self.default_room.branch_id != self.branch_id:
             raise ValidationError({"default_room": "The default room must belong to the same branch."})
 
 
 class UserRoomAssignment(BaseModel):
-    """Assigns a user (cashier/captain) to a room."""
+    """Assigns a user (cashier/captain) to a room.
+
+    ``branch`` is always derived from ``room.branch`` — never selected in UI.
+    """
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="room_assignments")
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="user_assignments")
@@ -113,7 +158,12 @@ class UserRoomAssignment(BaseModel):
     def __str__(self):
         return f"{self.user.username} → {self.room.name}"
 
+    def save(self, *args, **kwargs):
+        if self.room_id:
+            self.branch = self.room.branch
+        super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
-        if self.room_id and self.branch_id and self.room.branch_id != self.branch_id:
-            raise ValidationError({"branch": "The room must belong to the selected branch."})
+        if self.room_id:
+            self.branch = self.room.branch

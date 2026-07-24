@@ -1,136 +1,92 @@
 {% extends "web/app/app_base.html" %}
+{% load django_vite %}
 {% block app %}
-  <div
-    x-data="floorPlanEditor()"
-    class="space-y-4"
-  >
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Floor Plan Editor</h1>
-      <div class="flex items-center space-x-2">
-        <button @click="zoomOut()" type="button"
-                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Zoom Out
-        </button>
-        <span class="w-16 text-center text-sm text-gray-600" x-text="Math.round(zoom * 100) + '%'">100%</span>
-        <button @click="zoomIn()" type="button"
-                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Zoom In
-        </button>
-        <button @click="zoom = 1" type="button"
-                class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Reset
-        </button>
-      </div>
+<div x-data="floorPlanEditor" class="w-full">
+
+  <!-- Breadcrumbs -->
+  <nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+      <li class="inline-flex items-center">
+        <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Settings
+        </a>
+      </li>
+      <li>
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <a href="{% url 'settings:table_list' %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">Tables</a>
+        </div>
+      </li>
+      <li aria-current="page">
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">Floor Plan</span>
+        </div>
+      </li>
+    </ol>
+  </nav>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Floor Plan</h1>
+      <p class="text-sm text-gray-500">Drag tables to arrange your room layout — positions save automatically</p>
     </div>
-
-    {% if rooms %}
-      <div class="rounded-lg border border-gray-200 shadow-sm p-4">
-        <form method="get" class="flex items-center space-x-3">
-          <label for="room-layout-filter" class="text-sm font-medium text-gray-700">Filter by room:</label>
-          <select id="room-layout-filter" name="room" class="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  onchange="this.form.submit()">
-            <option value="">All rooms</option>
-            {% for room in rooms %}
-              <option value="{{ room.pk }}" {% if selected_room == room.pk|stringformat:"s" %}selected{% endif %}>
-                {{ room.branch.name }} — {{ room.name }}
-              </option>
-            {% endfor %}
-          </select>
-        </form>
-      </div>
-    {% endif %}
-
-    <div class="overflow-auto rounded-lg border border-gray-200 shadow-sm bg-gray-50" style="height: 600px">
-      <div
-        class="relative bg-white"
-        :style="`width: ${2000 * zoom}px; height: ${1200 * zoom}px;`"
-      >
-        <template x-for="t in tables" :key="t.id">
-          <div
-            class="absolute cursor-move select-none rounded-md border-2 shadow-sm flex flex-col items-center justify-center text-center"
-            :class="t.occupied ? 'border-red-400 bg-red-50 text-red-800' : 'border-blue-400 bg-blue-50 text-blue-800'"
-            :style="`left: ${t.x * zoom}px; top: ${t.y * zoom}px; width: ${t.width * zoom}px; height: ${t.height * zoom}px;`"
-            @mousedown="startDrag($event, t)"
-            @mousemove="onDrag($event, t)"
-            @mouseup="endDrag($event, t)"
-            @mouseleave="endDrag($event, t)"
-          >
-            <span class="text-sm font-semibold" x-text="t.name"></span>
-            <span class="text-xs" x-show="t.occupied">Occupied</span>
-          </div>
-        </template>
-      </div>
+    <div class="flex items-center gap-1 bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-xl p-1.5">
+      <button @click="zoomOut()" type="button" class="w-9 h-9 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors" title="Zoom out">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" /></svg>
+      </button>
+      <span class="w-14 text-center text-xs font-bold text-gray-600" x-text="Math.round(zoom * 100) + '%'">100%</span>
+      <button @click="zoomIn()" type="button" class="w-9 h-9 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors" title="Zoom in">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      </button>
+      <div class="w-px h-5 bg-gray-200 mx-1"></div>
+      <button @click="zoom = 1" type="button" class="px-3 h-9 inline-flex items-center justify-center rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors">Reset</button>
     </div>
-
-    <p class="text-sm text-gray-500">
-      Drag tables to reposition them. Coordinates are saved automatically when you release the mouse.
-    </p>
   </div>
 
-  <script>
-    function floorPlanEditor() {
-      return {
-        tables: [
-          {% for table in tables %}
-            {
-              id: {{ table.pk }},
-              name: "{{ table.name|escapejs }}",
-              x: {{ table.layout_x|default_if_none:"0" }},
-              y: {{ table.layout_y|default_if_none:"0" }},
-              width: {{ table.layout_width|default_if_none:"120" }},
-              height: {{ table.layout_height|default_if_none:"80" }},
-              occupied: {% if table.occupied %}true{% else %}false{% endif %}
-            }{% if not forloop.last %},{% endif %}
+  {% if rooms %}
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+      <form method="get" class="flex items-center gap-3">
+        <label for="room-layout-filter" class="text-sm font-semibold text-gray-700">Filter by room:</label>
+        <select id="room-layout-filter" name="room" onchange="this.form.submit()"
+                class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+          <option value="">All rooms</option>
+          {% for room in rooms %}
+            <option value="{{ room.pk }}" {% if selected_room == room.pk|stringformat:"s" %}selected{% endif %}>
+              {{ room.name }}
+            </option>
           {% endfor %}
-        ],
-        zoom: 1,
-        dragging: null,
-        startX: 0,
-        startY: 0,
-        startTableX: 0,
-        startTableY: 0,
+        </select>
+      </form>
+    </div>
+  {% endif %}
 
-        zoomIn() {
-          this.zoom = Math.min(this.zoom + 0.1, 2);
-        },
-        zoomOut() {
-          this.zoom = Math.max(this.zoom - 0.1, 0.3);
-        },
+  <div class="overflow-auto rounded-[1.5rem] border border-white/60 shadow-[0_4px_20px_rgb(0,0,0,0.05)] bg-gray-100 [background-image:radial-gradient(circle_at_1px_1px,rgb(0_0_0/0.07)_1px,transparent_0)] [background-size:24px_24px] h-[600px]">
+    <div class="relative bg-white/40" :style="`width: ${2000 * zoom}px; height: ${1200 * zoom}px;`">
+      <template x-for="t in tables" :key="t.id">
+        <div
+          class="absolute cursor-move select-none rounded-xl border-2 shadow-md flex flex-col items-center justify-center text-center transition-colors"
+          :class="t.occupied ? 'border-red-300 bg-red-50 text-red-700' : 'border-orange-300 bg-orange-50 text-orange-700'"
+          :style="`left: ${t.x * zoom}px; top: ${t.y * zoom}px; width: ${t.width * zoom}px; height: ${t.height * zoom}px;`"
+          @mousedown="startDrag($event, t)"
+          @mousemove="onDrag($event, t)"
+          @mouseup="endDrag($event, t)"
+          @mouseleave="endDrag($event, t)"
+        >
+          <span class="text-sm font-bold" x-text="t.name"></span>
+          <span class="text-[11px] font-semibold opacity-70" x-show="t.occupied">Occupied</span>
+        </div>
+      </template>
+    </div>
+  </div>
 
-        startDrag(event, table) {
-          this.dragging = table;
-          this.startX = event.clientX;
-          this.startY = event.clientY;
-          this.startTableX = table.x;
-          this.startTableY = table.y;
-          event.preventDefault();
-        },
-        onDrag(event, table) {
-          if (this.dragging && this.dragging.id === table.id) {
-            const dx = (event.clientX - this.startX) / this.zoom;
-            const dy = (event.clientY - this.startY) / this.zoom;
-            table.x = this.startTableX + dx;
-            table.y = this.startTableY + dy;
-          }
-        },
-        async endDrag(event, table) {
-          if (this.dragging && this.dragging.id === table.id) {
-            const t = this.dragging;
-            this.dragging = null;
-            const formData = new FormData();
-            formData.append("x", t.x);
-            formData.append("y", t.y);
-            formData.append("width", t.width);
-            formData.append("height", t.height);
-            const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1];
-            await fetch(`/backoffice/settings/tables/${t.id}/layout/`, {
-              method: "POST",
-              body: formData,
-              headers: { "X-CSRFToken": csrfToken || "" },
-            });
-          }
-        },
-      };
-    }
-  </script>
+  <p class="text-xs text-gray-400 font-medium mt-4">Drag tables to reposition them. Coordinates are saved automatically when you release the mouse.</p>
+
+  {{ tables_data|json_script:"floor-plan-data" }}
+</div>
+{% endblock %}
+
+{% block page_js %}
+  {% vite_asset 'assets/javascript/floor-plan.js' %}
 {% endblock %}

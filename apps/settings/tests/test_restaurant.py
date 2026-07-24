@@ -25,9 +25,6 @@ class RestaurantModelTest(TestCase):
     def test_invoice_series_prefix_default(self):
         self.assertEqual(self.restaurant.invoice_series_prefix, "REST-")
 
-    def test_aggregator_series_prefix_default(self):
-        self.assertEqual(self.restaurant.aggregator_series_prefix, "AGR-")
-
     def test_singleton_per_branch_validation(self):
         r2 = Restaurant(company="Other", branch=self.branch, default_room=self.room)
         with self.assertRaises(ValidationError):
@@ -60,7 +57,11 @@ class RestaurantModelTest(TestCase):
         self.restaurant.delete()
         self.assertFalse(Restaurant.objects.filter(pk=pk).exists())
 
-    def test_ordering_by_branch_name(self):
-        Branch.objects.create(name="AAA Branch")
+    def test_ordering_by_company(self):
         first = Restaurant.objects.first()
         self.assertEqual(first, self.restaurant)
+
+    def test_auto_assigns_default_branch(self):
+        Restaurant.objects.all().delete()
+        r = Restaurant.objects.create(company="Auto Branch Co", default_room=self.room)
+        self.assertEqual(r.branch_id, self.branch.pk)

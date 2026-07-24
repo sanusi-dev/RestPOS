@@ -1,42 +1,166 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  {% partialdef form inline %}
-    <form method="post"
-          {% if request.htmx %}hx-post="{{ request.path }}"{% endif %}
-          class="space-y-4">
-      {% csrf_token %}
-      {% if form.non_field_errors %}
-        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ form.non_field_errors }}</div>
-      {% endif %}
-      {% for field in form %}
-        <div>
-          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-          <div class="mt-1">{{ field }}</div>
-          {% if field.errors %}
-            <p class="mt-1 text-sm text-red-600">{{ field.errors }}</p>
-          {% elif field.help_text %}
-            <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
-          {% endif %}
-        </div>
-      {% endfor %}
-      <div class="flex justify-end space-x-3 pt-2">
-        <a href="{% url 'settings:table_list' %}"
-           class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Cancel
+
+
+<div class="w-full">
+
+  <!-- Breadcrumbs -->
+  <nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+      <li class="inline-flex items-center">
+        <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Settings
         </a>
-        <button type="submit"
-                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          {% if is_create %}Create Table{% else %}Save Changes{% endif %}
-        </button>
-      </div>
-    </form>
-  {% endpartialdef %}
-  <div class="space-y-6">
-    <h1 class="text-2xl font-bold text-gray-900">
+      </li>
+      <li>
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <a href="{% url 'settings:table_list' %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">Tables</a>
+        </div>
+      </li>
+      <li aria-current="page">
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">{% if is_create %}New Table{% else %}Edit Table{% endif %}</span>
+        </div>
+      </li>
+    </ol>
+  </nav>
+
+  <div class="mb-5">
+    <h1 class="text-xl font-extrabold text-gray-900 tracking-tight">
       {% if is_create %}New Table{% else %}Edit Table{% endif %}
     </h1>
-    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      {% partial form %}
-    </div>
   </div>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
+    {% partialdef form inline %}
+  <form method="post"
+        class="space-y-6">
+    {% csrf_token %}
+     
+    {% if form.non_field_errors %}
+      <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider">Table details</h3>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="{{ form.room.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.room.label }}</label>
+      {{ form.room }}
+      {% if form.room.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.room.errors|join:", " }}</p>
+      {% elif form.room.help_text %}
+        <p class="text-xs text-gray-500">{{ form.room.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="{{ form.name.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.name.label }}</label>
+      {{ form.name }}
+      {% if form.name.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.name.errors|join:", " }}</p>
+      {% elif form.name.help_text %}
+        <p class="text-xs text-gray-500">{{ form.name.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="{{ form.no_of_seats.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.no_of_seats.label }}</label>
+      {{ form.no_of_seats }}
+      {% if form.no_of_seats.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.no_of_seats.errors|join:", " }}</p>
+      {% elif form.no_of_seats.help_text %}
+        <p class="text-xs text-gray-500">{{ form.no_of_seats.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="{{ form.minimum_seating.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.minimum_seating.label }}</label>
+      {{ form.minimum_seating }}
+      {% if form.minimum_seating.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.minimum_seating.errors|join:", " }}</p>
+      {% elif form.minimum_seating.help_text %}
+        <p class="text-xs text-gray-500">{{ form.minimum_seating.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="{{ form.table_shape.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.table_shape.label }}</label>
+      {{ form.table_shape }}
+      {% if form.table_shape.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.table_shape.errors|join:", " }}</p>
+      {% elif form.table_shape.help_text %}
+        <p class="text-xs text-gray-500">{{ form.table_shape.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">{{ form.is_take_away }} {{ form.is_take_away.label }}</label>
+      {% if form.is_take_away.errors %}
+        <p class="text-xs font-semibold text-red-500">{{ form.is_take_away.errors|join:", " }}</p>
+      {% elif form.is_take_away.help_text %}
+        <p class="text-xs text-gray-500">{{ form.is_take_away.help_text }}</p>
+      {% endif %}
+    </div>
+
+    <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider pt-4 border-t border-gray-100">Floor plan position</h3>
+    <p class="text-xs text-gray-400 -mt-3">Optional — set this visually in the Floor Plan Editor instead.</p>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label for="{{ form.layout_x.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.layout_x.label }}</label>
+        {{ form.layout_x }}
+        {% if form.layout_x.errors %}
+          <p class="text-xs font-semibold text-red-500">{{ form.layout_x.errors|join:", " }}</p>
+        {% elif form.layout_x.help_text %}
+          <p class="text-xs text-gray-500">{{ form.layout_x.help_text }}</p>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="{{ form.layout_y.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.layout_y.label }}</label>
+        {{ form.layout_y }}
+        {% if form.layout_y.errors %}
+          <p class="text-xs font-semibold text-red-500">{{ form.layout_y.errors|join:", " }}</p>
+        {% elif form.layout_y.help_text %}
+          <p class="text-xs text-gray-500">{{ form.layout_y.help_text }}</p>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="{{ form.layout_width.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.layout_width.label }}</label>
+        {{ form.layout_width }}
+        {% if form.layout_width.errors %}
+          <p class="text-xs font-semibold text-red-500">{{ form.layout_width.errors|join:", " }}</p>
+        {% elif form.layout_width.help_text %}
+          <p class="text-xs text-gray-500">{{ form.layout_width.help_text }}</p>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="{{ form.layout_height.id_for_label }}" class="text-sm font-bold text-gray-700">{{ form.layout_height.label }}</label>
+        {{ form.layout_height }}
+        {% if form.layout_height.errors %}
+          <p class="text-xs font-semibold text-red-500">{{ form.layout_height.errors|join:", " }}</p>
+        {% elif form.layout_height.help_text %}
+          <p class="text-xs text-gray-500">{{ form.layout_height.help_text }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+      <a href="{% url 'settings:table_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
+        Cancel
+      </a>
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">
+        {% if is_create %}Create Table{% else %}Save Changes{% endif %}
+      </button>
+    </div>
+  </form>
+{% endpartialdef %}
+  </div>
+</div>
 {% endblock %}

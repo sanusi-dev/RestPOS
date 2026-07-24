@@ -20,6 +20,10 @@ class TableModelTest(TestCase):
     def test_str_returns_name(self):
         self.assertEqual(str(self.table), "T1")
 
+    def test_branch_derived_from_room(self):
+        t = Table.objects.create(room=self.room, name="T-auto")
+        self.assertEqual(t.branch_id, self.room.branch_id)
+
     def test_default_values(self):
         self.assertFalse(self.table.is_take_away)
         self.assertFalse(self.table.occupied)

@@ -26,4 +26,7 @@ urlpatterns = [
     path("users/create/", view=views.user_room_create, name="user_room_create"),
     path("users/<int:pk>/edit/", view=views.user_room_update, name="user_room_update"),
     path("users/<int:pk>/delete/", view=views.user_room_delete, name="user_room_delete"),
+    path("staff/", view=views.staff_list, name="staff_list"),
+    path("staff/<int:pk>/assign/<str:role>/", view=views.staff_assign_role, name="staff_assign_role"),
+    path("staff/<int:pk>/remove/", view=views.staff_remove_role, name="staff_remove_role"),
 ]

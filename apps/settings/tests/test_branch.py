@@ -12,24 +12,19 @@ class BranchModelTest(TestCase):
     def test_str_returns_name(self):
         self.assertEqual(str(self.branch), "Main Branch")
 
-    def test_default_values(self):
-        self.assertFalse(self.branch.make_aggregator_unpaid)
-        self.assertFalse(self.branch.no_aggregator_taxes)
-
     def test_name_unique(self):
         with self.assertRaises(IntegrityError):
             Branch.objects.create(name="Main Branch")
 
-    def test_create_with_flags(self):
-        branch = Branch.objects.create(name="Branch 2", make_aggregator_unpaid=True, no_aggregator_taxes=True)
-        self.assertTrue(branch.make_aggregator_unpaid)
-        self.assertTrue(branch.no_aggregator_taxes)
+    def test_create(self):
+        branch = Branch.objects.create(name="Branch 2")
+        self.assertEqual(branch.name, "Branch 2")
 
     def test_update(self):
-        self.branch.make_aggregator_unpaid = True
+        self.branch.name = "Updated Branch"
         self.branch.save()
         self.branch.refresh_from_db()
-        self.assertTrue(self.branch.make_aggregator_unpaid)
+        self.assertEqual(self.branch.name, "Updated Branch")
 
     def test_delete(self):
         pk = self.branch.pk

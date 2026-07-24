@@ -5,39 +5,64 @@ from apps.users.models import CustomUser
 from .models import Branch, Restaurant, Room, Table, UserRoomAssignment
 
 TAILWIND_INPUT_CLASS = (
-    "w-full rounded-md border border-gray-300 px-3 py-2 text-sm "
-    "focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    "w-full rounded-xl border border-gray-300 px-4 py-3 text-sm "
+    "focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 "
+    "bg-white/50 transition-shadow"
 )
+
+TAILWIND_CHECKBOX_CLASS = "rounded border-gray-300 text-orange-500 focus:ring-orange-500/25"
 
 
 class SettingsModelForm(forms.ModelForm):
     """Base ModelForm that applies Tailwind CSS classes to all fields."""
 
+    TEXT_WIDGETS = (
+        forms.TextInput,
+        forms.Textarea,
+        forms.EmailInput,
+        forms.URLInput,
+        forms.NumberInput,
+        forms.PasswordInput,
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
-            if not field.widget.attrs.get("class"):
+            if isinstance(field.widget, forms.CheckboxInput) and not field.widget.attrs.get("class"):
+                field.widget.attrs["class"] = TAILWIND_CHECKBOX_CLASS
+            elif (
+                isinstance(field.widget, self.TEXT_WIDGETS)
+                and not field.widget.attrs.get("class")
+                or isinstance(field.widget, forms.Select)
+                and not field.widget.attrs.get("class")
+            ):
                 field.widget.attrs["class"] = TAILWIND_INPUT_CLASS
+        for _name, field in self.fields.items():
+            if isinstance(field, forms.ModelChoiceField):
+                field.empty_label = f"Select {field.label.lower()}..."
 
 
 class BranchForm(SettingsModelForm):
     class Meta:
         model = Branch
-        fields = ["name", "make_aggregator_unpaid", "no_aggregator_taxes"]
+        fields = ["name"]
 
 
 class RoomForm(SettingsModelForm):
+    """Branch is implicit in Phase 1 — Room.save assigns Branch.get_default()."""
+
     class Meta:
         model = Room
-        fields = ["branch", "name", "room_type"]
+        fields = ["name"]
 
 
 class TableForm(SettingsModelForm):
+    """Branch is derived from room on save — never shown in the form."""
+
     class Meta:
         model = Table
         fields = [
             "room",
-            "branch",
             "name",
             "no_of_seats",
             "minimum_seating",
@@ -49,32 +74,22 @@ class TableForm(SettingsModelForm):
             "layout_height",
         ]
 
-    def clean(self):
-        cleaned_data = super().clean()
-        room = cleaned_data.get("room")
-        if room:
-            cleaned_data["branch"] = room.branch
-        return cleaned_data
-
 
 class RestaurantForm(SettingsModelForm):
+    """Branch is implicit in Phase 1 — Restaurant.save assigns Branch.get_default()."""
+
     class Meta:
         model = Restaurant
-        fields = ["company", "branch", "invoice_series_prefix", "aggregator_series_prefix", "address", "default_room"]
+        fields = ["company", "invoice_series_prefix", "address", "default_room"]
 
 
 class UserRoomAssignmentForm(SettingsModelForm):
+    """Branch is derived from room on save — never shown in the form."""
+
     class Meta:
         model = UserRoomAssignment
-        fields = ["user", "room", "branch"]
+        fields = ["user", "room"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["user"].queryset = CustomUser.objects.order_by("username")
-
-    def clean(self):
-        cleaned_data = super().clean()
-        room = cleaned_data.get("room")
-        if room:
-            cleaned_data["branch"] = room.branch
-        return cleaned_data

@@ -8,13 +8,17 @@ class RoomModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.branch = Branch.objects.create(name="Main Branch")
-        cls.room = Room.objects.create(branch=cls.branch, name="Hall", room_type="AC")
+        cls.room = Room.objects.create(branch=cls.branch, name="Hall")
 
     def test_str_returns_name(self):
         self.assertEqual(str(self.room), "Hall")
 
     def test_branch_relationship(self):
         self.assertEqual(self.room.branch, self.branch)
+
+    def test_auto_assigns_default_branch(self):
+        room = Room.objects.create(name="Patio")
+        self.assertEqual(room.branch_id, self.branch.pk)
 
     def test_unique_together_branch_name(self):
         with self.assertRaises(IntegrityError):
@@ -24,15 +28,6 @@ class RoomModelTest(TestCase):
         other = Branch.objects.create(name="Other Branch")
         room = Room.objects.create(branch=other, name="Hall")
         self.assertEqual(room.name, "Hall")
-
-    def test_room_type_choices(self):
-        self.assertEqual(self.room.room_type, "AC")
-        room2 = Room.objects.create(branch=self.branch, name="Garden", room_type="NON_AC")
-        self.assertEqual(room2.get_room_type_display(), "Non-AC")
-
-    def test_blank_room_type(self):
-        room = Room.objects.create(branch=self.branch, name="Patio")
-        self.assertEqual(room.room_type, "")
 
     def test_ordering(self):
         Room.objects.create(branch=self.branch, name="AAA")
