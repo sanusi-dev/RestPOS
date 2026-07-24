@@ -1,31 +1,27 @@
-{% extends "web/base.html" %}
+{% extends "web/public_base.html" %}
 {% load static %}
 {% load form_tags %}
+{% block page_title %}Create Account - RestPOS{% endblock %}
 {% block body %}
-  <div class="flex justify-center my-8 ">
-    <div class="w-96 px-4 py-4">
-      <div>
-        <h2 class="mt-6 text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Sign Up
-        </h2>
-        <form class="mt-6 space-y-6" method="post">
-          {% csrf_token %}
-          {{ form.non_field_errors }}
-          {% render_field form.username %}
-          {% render_field form.password1 %}
-          {% render_field form.password2 %}
-          <div class="relative overflow-hidden">
-            {% render_field form.phone_number_x %}
-          </div>
-          <input class="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors w-full" type="submit" value="Sign Up">
-        </form>
-        <div class="text-sm mt-4">
-          Already have account?
-          <a href="{% url 'account_login' %}" class="font-medium text-blue-600 hover:text-blue-800">
-            Sign in.
-          </a>
-        </div>
+<div class="flex-grow max-w-5xl mx-auto w-full px-8 relative z-10 flex flex-col items-center justify-center">
+  <div class="glass-card p-10 rounded-3xl w-full max-w-md shadow-2xl">
+    <h2 class="text-3xl font-bold text-gray-900 mb-10 text-center">Create Account</h2>
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% render_field form.username %}
+      {% render_field form.password1 %}
+      {% render_field form.password2 %}
+      <div class="relative overflow-hidden">
+        {% render_field form.phone_number_x %}
       </div>
-    </div>
+      <button type="submit" class="w-full bg-orange-500 text-white font-bold py-3.5 rounded-xl hover:bg-orange-600 transition-colors shadow-lg">
+        Register
+      </button>
+    </form>
+    <p class="mt-6 text-center text-sm text-gray-600">
+      Already have an account? <a href="{% url 'account_login' %}" class="text-gray-900 font-bold hover:underline">Sign In</a>
+    </p>
   </div>
+</div>
 {% endblock %}
