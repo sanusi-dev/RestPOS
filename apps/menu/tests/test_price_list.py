@@ -20,6 +20,7 @@ class PriceListModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
 

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.test import TestCase
 
@@ -20,7 +21,8 @@ class MenuItemModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            standard_rate=Decimal("1200"),
+            is_sales_item=True,
+            last_purchase_rate=Decimal("1200"),
         )
         cls.item_drink = Item.objects.create(
             item_code="DRINK001",
@@ -28,7 +30,8 @@ class MenuItemModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
-            standard_rate=Decimal("300"),
+            is_sales_item=True,
+            last_purchase_rate=Decimal("300"),
         )
         cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
 
@@ -40,10 +43,36 @@ class MenuItemModelTest(TestCase):
         mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))
         self.assertEqual(mi.item_name, "Jollof Rice")
 
-    def test_rate_default_from_standard_rate(self):
+    def test_rate_default_from_last_purchase_rate(self):
         mi = MenuItem(menu=self.menu, item=self.item_food, rate=Decimal("0"))
         mi.clean()
         self.assertEqual(mi.rate, Decimal("1200"))
+
+    def test_non_sales_item_rejected(self):
+        raw = Item.objects.create(
+            item_name="Raw Rice",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_sales_item=False,
+            is_purchase_item=True,
+        )
+        mi = MenuItem(menu=self.menu, item=raw, rate=Decimal("100"))
+        with self.assertRaises(ValidationError):
+            mi.full_clean()
+
+    def test_template_item_rejected(self):
+        template = Item.objects.create(
+            item_name="Size Template",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            has_variants=True,
+            is_stock_item=False,
+        )
+        mi = MenuItem(menu=self.menu, item=template, rate=Decimal("100"))
+        with self.assertRaises(ValidationError):
+            mi.full_clean()
 
     def test_default_special_dish_false(self):
         mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))

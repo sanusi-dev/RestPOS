@@ -1,80 +1,82 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Menu</h1>
-    </div>
-
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <a href="{% url 'menu:menu_list' %}"
-         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-gray-500">Menus</p>
-            <p class="mt-1 text-3xl font-bold text-gray-900">{{ menu_count }}</p>
-          </div>
-          <svg class="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </div>
-        <p class="mt-3 text-sm text-blue-600">Manage menus →</p>
-      </a>
-
-      <a href="{% url 'menu:menu_item_list' %}"
-         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-gray-500">Menu Items</p>
-            <p class="mt-1 text-3xl font-bold text-gray-900">{{ menu_item_count }}</p>
-          </div>
-          <svg class="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-        </div>
-        <p class="mt-3 text-sm text-blue-600">Manage menu items →</p>
-      </a>
-
-      <a href="{% url 'menu:price_list_list' %}"
-         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-gray-500">Price Lists</p>
-            <p class="mt-1 text-3xl font-bold text-gray-900">{{ price_list_count }}</p>
-          </div>
-          <svg class="h-10 w-10 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5a1.5 1.5 0 01.5.5l7 7a1.5 1.5 0 010 2l-5 5a1.5 1.5 0 01-2 0l-7-7a1.5 1.5 0 01-.5-.5V4a1 1 0 011-1z" />
-          </svg>
-        </div>
-        <p class="mt-3 text-sm text-blue-600">View price lists →</p>
-      </a>
-
-      <a href="{% url 'menu:add_on_list' %}"
-         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-gray-500">Item Add-ons</p>
-            <p class="mt-1 text-3xl font-bold text-gray-900">{{ add_on_count }}</p>
-          </div>
-          <svg class="h-10 w-10 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-        </div>
-        <p class="mt-3 text-sm text-blue-600">Manage add-ons →</p>
-      </a>
-
-      <a href="{% url 'menu:variant_list' %}"
-         class="rounded-lg border border-gray-200 shadow-sm p-5 hover:border-blue-400 hover:shadow transition">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-medium text-gray-500">Item Variants</p>
-            <p class="mt-1 text-3xl font-bold text-gray-900">{{ variant_count }}</p>
-          </div>
-          <svg class="h-10 w-10 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-        </div>
-        <p class="mt-3 text-sm text-blue-600">Manage variants →</p>
-      </a>
-    </div>
+<div class="w-full">
+  <div class="mb-8">
+    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Menu</h1>
+    <p class="mt-2 text-sm font-medium text-gray-500">Manage menus, items, and pricing for your restaurant</p>
   </div>
+
+  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
+    <a href="{% url 'menu:menu_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-orange-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Menus</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-orange-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">{{ menu_count }}</p>
+        <p class="mt-3 text-xs font-bold text-orange-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage menus →</p>
+      </div>
+    </a>
+
+    <a href="{% url 'menu:menu_item_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Menu Items</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">{{ menu_item_count }}</p>
+        <p class="mt-3 text-xs font-bold text-emerald-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage items →</p>
+      </div>
+    </a>
+
+    <a href="{% url 'menu:price_list_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Price Lists</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5a1.5 1.5 0 01.5.5l7 7a1.5 1.5 0 010 2l-5 5a1.5 1.5 0 01-2 0l-7-7a1.5 1.5 0 01-.5-.5V4a1 1 0 011-1z" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">{{ price_list_count }}</p>
+        <p class="mt-3 text-xs font-bold text-indigo-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">View price lists →</p>
+      </div>
+    </a>
+
+    <a href="{% url 'menu:add_on_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-sky-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Item Add-ons</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-sky-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">{{ add_on_count }}</p>
+        <p class="mt-3 text-xs font-bold text-sky-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage add-ons →</p>
+      </div>
+    </a>
+
+    <a href="{% url 'menu:variant_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-rose-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Item Variants</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-rose-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">{{ variant_count }}</p>
+        <p class="mt-3 text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage variants →</p>
+      </div>
+    </a>
+  </div>
+</div>
 {% endblock %}

@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -33,18 +34,9 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def menu_list(request: HttpRequest) -> HttpResponse:
-    branch_id = request.GET.get("branch")
-    menus = Menu.objects.select_related("branch").all()
-    if branch_id:
-        menus = menus.filter(branch_id=branch_id)
-    from apps.settings.models import Branch
-
-    branches = Branch.objects.all().order_by("name")
-    return render(
-        request,
-        "backoffice/menu/menu_list.html",
-        {"menus": menus, "branches": branches, "selected_branch": branch_id},
-    )
+    # annotate Avoids per-row COUNT query in template ({ menu.items.count }).
+    menus = Menu.objects.annotate(item_count=Count("items"))
+    return render(request, "backoffice/menu/menu_list.html", {"menus": menus})
 
 
 @login_required
@@ -61,8 +53,9 @@ def menu_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    menu = get_object_or_404(Menu.objects.select_related("branch"), pk=pk)
-    menu_items = menu.items.select_related("item").all()
+    menu = get_object_or_404(Menu, pk=pk)
+    # Template reads denormalized mi.item_name only — no need to JOIN item.
+    menu_items = menu.items.all()
     return render(
         request,
         "backoffice/menu/menu_detail.html",
@@ -95,10 +88,11 @@ def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def menu_item_list(request: HttpRequest) -> HttpResponse:
     menu_id = request.GET.get("menu")
-    menu_items = MenuItem.objects.select_related("menu", "item").all()
+    # Template reads mi.item_name (denormalized) + mi.menu.name — no need to JOIN item.
+    menu_items = MenuItem.objects.select_related("menu").all()
     if menu_id:
         menu_items = menu_items.filter(menu_id=menu_id)
-    menus = Menu.objects.all().order_by("branch__name", "name")
+    menus = Menu.objects.all().order_by("name")
     return render(
         request,
         "backoffice/menu/menu_item_list.html",
@@ -118,8 +112,6 @@ def menu_item_create(request: HttpRequest) -> HttpResponse:
             return redirect("menu:menu_detail", pk=menu_item.menu_id)
     else:
         form = MenuItemForm()
-        if menu_id:
-            form.fields["item"].queryset = Item.objects.order_by("item_name")
     return render(
         request,
         "backoffice/menu/menu_item_form.html",
@@ -164,7 +156,7 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
     add_ons = ItemAddOn.objects.select_related("parent_item", "add_on_item").all()
     if parent_id:
         add_ons = add_ons.filter(parent_item_id=parent_id)
-    parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name")
+    parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
         "backoffice/menu/add_on_list.html",
@@ -220,7 +212,7 @@ def variant_list(request: HttpRequest) -> HttpResponse:
     variants = ItemVariant.objects.select_related("parent_item", "variant_item").all()
     if parent_id:
         variants = variants.filter(parent_item_id=parent_id)
-    parent_items = Item.objects.filter(pos_variants__isnull=False).distinct().order_by("item_name")
+    parent_items = Item.objects.filter(pos_variants__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
         "backoffice/menu/variant_list.html",
@@ -272,7 +264,8 @@ def variant_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def price_list_list(request: HttpRequest) -> HttpResponse:
-    price_lists = PriceList.objects.all()
+    # select_related avoids per-row FK fetch of pl.menu; annotate avoids per-row COUNT.
+    price_lists = PriceList.objects.select_related("menu").annotate(price_count=Count("prices"))
     return render(request, "backoffice/menu/price_list_list.html", {"price_lists": price_lists})
 
 

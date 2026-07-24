@@ -20,6 +20,7 @@ class MenuModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.item2 = Item.objects.create(
             item_code="DRINK001",
@@ -27,6 +28,7 @@ class MenuModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
 
@@ -35,6 +37,10 @@ class MenuModelTest(TestCase):
 
     def test_default_enabled(self):
         self.assertTrue(self.menu.enabled)
+
+    def test_auto_assigns_default_branch(self):
+        menu = Menu.objects.create(name="Dinner Menu")
+        self.assertEqual(menu.branch_id, self.branch.pk)
 
     def test_name_branch_unique(self):
         with self.assertRaises(IntegrityError):

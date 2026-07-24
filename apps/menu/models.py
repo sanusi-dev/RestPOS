@@ -7,7 +7,11 @@ from apps.utils.models import BaseModel
 
 
 class Menu(BaseModel):
-    """A named menu scoped to a branch. Owns a synced PriceList."""
+    """A named menu for the restaurant. Owns a synced PriceList.
+
+    ``branch`` is kept for multi-branch isolation (FEATURES #7 / #269) but is
+    implicit in Phase 1: forms hide it and ``save()`` assigns Branch.get_default().
+    """
 
     name = models.CharField(max_length=100)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="menus")
@@ -15,12 +19,17 @@ class Menu(BaseModel):
 
     class Meta:
         unique_together = [("name", "branch")]
-        ordering = ["branch__name", "name"]
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
 
     def save(self, *args, **kwargs):
+        if not self.branch_id:
+            default_branch = Branch.get_default()
+            if default_branch is None:
+                raise ValidationError({"branch": "Create a branch in Settings before creating a menu."})
+            self.branch = default_branch
         super().save(*args, **kwargs)
         self.sync_price_list()
 
@@ -34,13 +43,19 @@ class Menu(BaseModel):
             price_list.name = self.name
             price_list.enabled = self.enabled
         price_list.prices.all().delete()
-        for menu_item in self.items.filter(disabled=False).select_related("item", "item__stock_uom"):
-            ItemPrice.objects.create(
+        menu_items = self.items.filter(disabled=False).select_related("item", "item__stock_uom")
+        # Build rows in memory and bulk-insert instead of issuing one INSERT per item.
+        item_prices = [
+            ItemPrice(
                 price_list=price_list,
                 item=menu_item.item,
                 price_list_rate=menu_item.rate,
                 uom=menu_item.item.stock_uom,
             )
+            for menu_item in menu_items
+        ]
+        if item_prices:
+            ItemPrice.objects.bulk_create(item_prices)
         price_list.save()
 
 
@@ -70,8 +85,17 @@ class MenuItem(BaseModel):
 
     def clean(self):
         super().clean()
-        if not self.rate and self.item and self.item.standard_rate:
-            self.rate = self.item.standard_rate
+        if self.item_id:
+            if self.item.has_variants:
+                raise ValidationError(
+                    {"item": "Template items cannot be added to a menu — add the size variants instead."}
+                )
+            if not self.item.is_sales_item:
+                raise ValidationError({"item": "Only sellable items can be added to a menu."})
+            if self.item.disabled:
+                raise ValidationError({"item": "Disabled items cannot be added to a menu."})
+        if not self.rate and self.item and self.item.last_purchase_rate:
+            self.rate = self.item.last_purchase_rate
 
 
 class PriceList(BaseModel):

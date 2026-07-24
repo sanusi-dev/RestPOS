@@ -1,67 +1,52 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-  {% partialdef form inline %}
-    <form method="post"
-          {% if request.htmx %}hx-post="{{ request.path }}"{% endif %}
-          class="space-y-4">
+<div class="w-full">
+  {% with is_create|yesno:"Add Menu Item,Edit Menu Item" as current_label %}
+    {% include "backoffice/components/breadcrumbs.html" with root_label="Menu" root_url="menu:dashboard" root_icon="menu" section_label="Menu Items" section_url="menu:menu_item_list" current_label=current_label %}
+  {% endwith %}
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">
+        {% if is_create %}Add Menu Item{% else %}Edit Menu Item{% endif %}
+      </h1>
+      <p class="text-sm text-gray-500">Add an inventory item to a menu with its selling rate</p>
+    </div>
+  </div>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Menu Item Details</h3>
+    </div>
+    {% partialdef form inline %}
+    <form method="post" class="space-y-6">
       {% csrf_token %}
       {{ form.item_name }}
-      {% if menu_id %}
-        <input type="hidden" name="menu" value="{{ menu_id }}" />
-      {% endif %}
+      {% if menu_id %}<input type="hidden" name="menu" value="{{ menu_id }}" />{% endif %}
       {% if form.non_field_errors %}
-        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">
-          {{ form.non_field_errors }}
-        </div>
+        <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ form.non_field_errors }}</div>
       {% endif %}
-      <div>
-        <label for="{{ form.item.id_for_label }}" class="block text-sm font-medium text-gray-700">Item</label>
-        <div class="mt-1">{{ form.item }}</div>
-        {% if form.item.errors %}<p class="mt-1 text-sm text-red-600">{{ form.item.errors }}</p>{% endif %}
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% include "backoffice/components/form_field.html" with field=form.item %}
+        {% include "backoffice/components/form_field.html" with field=form.rate %}
+        {% include "backoffice/components/form_field.html" with field=form.special_dish %}
+        {% include "backoffice/components/form_field.html" with field=form.disabled %}
       </div>
-      <div>
-        <label for="{{ form.rate.id_for_label }}" class="block text-sm font-medium text-gray-700">Rate</label>
-        <div class="mt-1">{{ form.rate }}</div>
-        {% if form.rate.errors %}<p class="mt-1 text-sm text-red-600">{{ form.rate.errors }}</p>{% endif %}
-      </div>
-      <div class="flex items-center space-x-2">
-        {{ form.special_dish }}
-        <label for="{{ form.special_dish.id_for_label }}" class="text-sm font-medium text-gray-700">Special Dish</label>
-      </div>
-      <div class="flex items-center space-x-2">
-        {{ form.disabled }}
-        <label for="{{ form.disabled.id_for_label }}" class="text-sm font-medium text-gray-700">Disabled</label>
-      </div>
-      <div class="flex justify-end space-x-3 pt-2">
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
         {% if menu_id %}
-          <a href="{% url 'menu:menu_detail' menu_id %}"
-             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Cancel
-          </a>
+          <a href="{% url 'menu:menu_detail' menu_id %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
         {% elif menu_item %}
-          <a href="{% url 'menu:menu_detail' menu_item.menu_id %}"
-             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Cancel
-          </a>
+          <a href="{% url 'menu:menu_detail' menu_item.menu_id %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
         {% else %}
-          <a href="{% url 'menu:menu_item_list' %}"
-             class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Cancel
-          </a>
+          <a href="{% url 'menu:menu_item_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
         {% endif %}
-        <button type="submit"
-                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
           {% if is_create %}Add Item{% else %}Save Changes{% endif %}
         </button>
       </div>
     </form>
-  {% endpartialdef %}
-  <div class="space-y-6">
-    <h1 class="text-2xl font-bold text-gray-900">
-      {% if is_create %}Add Menu Item{% else %}Edit Menu Item{% endif %}
-    </h1>
-    <div class="rounded-lg border border-gray-200 shadow-sm p-6">
-      {% partial form %}
-    </div>
+    {% endpartialdef %}
   </div>
+</div>
 {% endblock %}

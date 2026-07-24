@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
@@ -15,6 +16,8 @@ class MenuViewTestBase(TestCase):
         cls.user = CustomUser.objects.create_user(
             username="admin@test.com", password="testpass123", email="admin@test.com"
         )
+        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        cls.user.groups.add(mgr)
         cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
@@ -24,6 +27,7 @@ class MenuViewTestBase(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.item_drink = Item.objects.create(
             item_code="DRINK001",
@@ -31,6 +35,7 @@ class MenuViewTestBase(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item_food, rate=Decimal("1500"))
@@ -63,22 +68,19 @@ class TestMenuViews(MenuViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lunch Menu")
 
-    def test_menu_list_filter_by_branch(self):
-        response = self.client.get(reverse("menu:menu_list"), {"branch": str(self.branch.pk)})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Lunch Menu")
-
     def test_menu_create_get(self):
         response = self.client.get(reverse("menu:menu_create"))
         self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="branch"')
 
     def test_menu_create_post(self):
         response = self.client.post(
             reverse("menu:menu_create"),
-            {"name": "Dinner Menu", "branch": self.branch.pk, "enabled": "on"},
+            {"name": "Dinner Menu", "enabled": "on"},
         )
         self.assertRedirects(response, reverse("menu:menu_list"))
-        self.assertTrue(Menu.objects.filter(name="Dinner Menu").exists())
+        menu = Menu.objects.get(name="Dinner Menu")
+        self.assertEqual(menu.branch_id, self.branch.pk)
 
     def test_menu_detail_200(self):
         response = self.client.get(reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
@@ -92,11 +94,12 @@ class TestMenuViews(MenuViewTestBase):
     def test_menu_update_post(self):
         response = self.client.post(
             reverse("menu:menu_update", kwargs={"pk": self.menu.pk}),
-            {"name": "Updated Menu", "branch": self.branch.pk, "enabled": "on"},
+            {"name": "Updated Menu", "enabled": "on"},
         )
         self.assertRedirects(response, reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
         self.menu.refresh_from_db()
         self.assertEqual(self.menu.name, "Updated Menu")
+        self.assertEqual(self.menu.branch_id, self.branch.pk)
 
 
 class TestMenuItemViews(MenuViewTestBase):
@@ -121,6 +124,7 @@ class TestMenuItemViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         response = self.client.post(
             reverse("menu:menu_item_create"),
@@ -173,6 +177,7 @@ class TestItemAddOnViews(MenuViewTestBase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=cls.menu, item=cls.add_on_item, rate=Decimal("100"))
         cls.add_on = ItemAddOn.objects.create(parent_item=cls.item_food, add_on_item=cls.add_on_item)
@@ -193,6 +198,7 @@ class TestItemAddOnViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("50"))
         response = self.client.post(
@@ -209,6 +215,7 @@ class TestItemAddOnViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("75"))
         response = self.client.post(
@@ -240,6 +247,7 @@ class TestItemVariantViews(MenuViewTestBase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=cls.menu, item=cls.variant_item, rate=Decimal("700"))
         cls.variant = ItemVariant.objects.create(parent_item=cls.item_drink, variant_item=cls.variant_item)
@@ -260,6 +268,7 @@ class TestItemVariantViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("600"))
         response = self.client.post(
@@ -276,6 +285,7 @@ class TestItemVariantViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("650"))
         response = self.client.post(

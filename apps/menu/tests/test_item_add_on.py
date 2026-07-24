@@ -21,6 +21,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.add_on_item = Item.objects.create(
             item_code="CHEESE001",
@@ -28,6 +29,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.non_menu_item = Item.objects.create(
             item_code="BACON001",
@@ -35,6 +37,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
         MenuItem.objects.create(menu=cls.menu, item=cls.add_on_item, rate=Decimal("200"))
@@ -74,6 +77,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
+            is_sales_item=True,
         )
         ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
         add_on2 = ItemAddOn.objects.create(parent_item=parent2, add_on_item=self.add_on_item)

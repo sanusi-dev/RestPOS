@@ -21,6 +21,7 @@ class ItemVariantModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         cls.variant_item = Item.objects.create(
             item_code="COFFEE-L",
@@ -28,6 +29,7 @@ class ItemVariantModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         cls.non_menu_item = Item.objects.create(
             item_code="COFFEE-XL",
@@ -35,6 +37,7 @@ class ItemVariantModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         cls.menu = Menu.objects.create(name="Drink Menu", branch=cls.branch)
         MenuItem.objects.create(menu=cls.menu, item=cls.variant_item, rate=Decimal("800"))
@@ -74,6 +77,7 @@ class ItemVariantModelTest(TestCase):
             item_group=self.group,
             stock_uom=self.uom,
             department="DRINKS",
+            is_sales_item=True,
         )
         ItemVariant.objects.create(parent_item=self.parent_item, variant_item=self.variant_item)
         variant2 = ItemVariant.objects.create(parent_item=parent2, variant_item=self.variant_item)
