@@ -1,0 +1,42 @@
+{% comment %}
+Shared backoffice breadcrumb navigation.
+
+Parameters:
+  root_label    (required) - label of the section root, e.g. "Inventory"
+  root_url      (required) - URL name of the section root, e.g. "inventory:dashboard"
+  root_icon     (optional) - "inventory" | "menu" - picks the root icon
+  section_label (optional) - middle crumb label, e.g. "Items"
+  section_url   (optional) - URL name for the middle crumb
+  current_label (required) - label of the current page (not a link)
+
+Usage:
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Items" section_url="inventory:item_list" current_label="New Item" %}
+{% endcomment %}
+<nav class="flex mb-6" aria-label="Breadcrumb">
+  <ol class="inline-flex items-center space-x-1 md:space-x-3">
+    <li class="inline-flex items-center">
+      <a href="{% url root_url %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
+        {% if root_icon == "inventory" %}
+          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+        {% elif root_icon == "menu" %}
+          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+        {% endif %}
+        {{ root_label }}
+      </a>
+    </li>
+    {% if section_label and section_url %}
+      <li>
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <a href="{% url section_url %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">{{ section_label }}</a>
+        </div>
+      </li>
+    {% endif %}
+    <li aria-current="page">
+      <div class="flex items-center">
+        <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">{{ current_label }}</span>
+      </div>
+    </li>
+  </ol>
+</nav>
