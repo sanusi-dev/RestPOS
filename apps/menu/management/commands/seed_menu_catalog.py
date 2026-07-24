@@ -13,7 +13,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.inventory.models import UOM, Item, ItemGroup
-from apps.menu.models import ItemAddOn, ItemVariant, Menu, MenuItem
+from apps.menu.models import ItemVariant, Menu, MenuItem
 from apps.settings.models import Branch, Restaurant
 
 # (item_name, group, uom, department, last_purchase_rate_or_None)
