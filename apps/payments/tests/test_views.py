@@ -1,0 +1,185 @@
+from django.contrib.auth.models import Group
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.users.models import CustomUser
+
+
+class PaymentsViewTestBase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = CustomUser.objects.create_user(
+            username="admin@test.com", password="testpass123", email="admin@test.com"
+        )
+        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        cls.user.groups.add(mgr)
+        # Use test-only names so we don't conflict with the seed migration's defaults.
+        cls.cash = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
+        cls.bank = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
+        cls.mapping = PaymentGLMapping.objects.create(
+            mode_of_payment=cls.cash,
+            company="Test Co",
+            default_account="Cash in Hand",
+        )
+
+    def setUp(self):
+        self.client.login(username="admin@test.com", password="testpass123")
+
+
+class TestLoginRequired(TestCase):
+    def test_dashboard_requires_login(self):
+        response = self.client.get(reverse("payments:dashboard"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_mode_list_requires_login(self):
+        response = self.client.get(reverse("payments:mode_list"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_mode_create_requires_login(self):
+        response = self.client.get(reverse("payments:mode_create"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_gl_mapping_list_requires_login(self):
+        response = self.client.get(reverse("payments:gl_mapping_list"))
+        self.assertEqual(response.status_code, 302)
+
+
+class TestDashboardView(PaymentsViewTestBase):
+    def test_dashboard_200(self):
+        response = self.client.get(reverse("payments:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Payments")
+
+    def test_dashboard_shows_counts(self):
+        response = self.client.get(reverse("payments:dashboard"))
+        self.assertContains(response, str(ModeOfPayment.objects.count()))
+
+
+class TestModeOfPaymentViews(PaymentsViewTestBase):
+    def test_mode_list_200(self):
+        response = self.client.get(reverse("payments:mode_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Test Cash")
+        self.assertContains(response, "Test Bank")
+
+    def test_mode_create_get(self):
+        response = self.client.get(reverse("payments:mode_create"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "New Payment Mode")
+
+    def test_mode_create_post(self):
+        response = self.client.post(
+            reverse("payments:mode_create"),
+            data={"name": "Opay Transfer", "type": "BANK", "enabled": "on"},
+        )
+        # Redirect target pk is unknown without counting; assert the redirect
+        # happened and the new mode exists.
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ModeOfPayment.objects.filter(name="Opay Transfer").exists())
+
+    def test_mode_detail_200(self):
+        response = self.client.get(reverse("payments:mode_detail", kwargs={"pk": self.cash.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Test Cash")
+        # Should show the GL mapping for this mode
+        self.assertContains(response, "Cash in Hand")
+
+    def test_mode_detail_404(self):
+        response = self.client.get(reverse("payments:mode_detail", kwargs={"pk": 9999}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_mode_update_get(self):
+        response = self.client.get(reverse("payments:mode_update", kwargs={"pk": self.cash.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Payment Mode")
+
+    def test_mode_update_post(self):
+        response = self.client.post(
+            reverse("payments:mode_update", kwargs={"pk": self.cash.pk}),
+            data={"name": "Test Cash", "type": "CASH", "enabled": ""},
+        )
+        self.assertRedirects(response, reverse("payments:mode_detail", kwargs={"pk": self.cash.pk}))
+        self.cash.refresh_from_db()
+        self.assertFalse(self.cash.enabled)
+
+
+class TestPaymentGLMappingViews(PaymentsViewTestBase):
+    def test_gl_mapping_list_200(self):
+        response = self.client.get(reverse("payments:gl_mapping_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cash in Hand")
+
+    def test_gl_mapping_create_get(self):
+        response = self.client.get(reverse("payments:gl_mapping_create"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "New GL Mapping")
+
+    def test_gl_mapping_create_post(self):
+        response = self.client.post(
+            reverse("payments:gl_mapping_create"),
+            data={
+                "mode_of_payment": self.bank.pk,
+                "company": "Test Co",
+                "default_account": "Bank Clearing",
+            },
+        )
+        self.assertRedirects(response, reverse("payments:gl_mapping_list"))
+        self.assertTrue(PaymentGLMapping.objects.filter(default_account="Bank Clearing").exists())
+
+    def test_gl_mapping_create_post_unique_together(self):
+        response = self.client.post(
+            reverse("payments:gl_mapping_create"),
+            data={
+                "mode_of_payment": self.cash.pk,
+                "company": "Test Co",
+                "default_account": "Another Account",
+            },
+        )
+        # Form should be invalid (re-render with errors), not redirect
+        self.assertEqual(response.status_code, 200)
+        # The Cash + "Test Co" pair already exists, so a duplicate must NOT be created.
+        self.assertEqual(
+            PaymentGLMapping.objects.filter(mode_of_payment=self.cash, company="Test Co").count(),
+            1,
+        )
+
+    def test_gl_mapping_create_post_missing_account(self):
+        response = self.client.post(
+            reverse("payments:gl_mapping_create"),
+            data={
+                "mode_of_payment": self.bank.pk,
+                "company": "Test Co",
+                "default_account": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        # Form re-rendered with errors, not redirected
+
+    def test_gl_mapping_update_get(self):
+        response = self.client.get(reverse("payments:gl_mapping_update", kwargs={"pk": self.mapping.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit GL Mapping")
+
+    def test_gl_mapping_update_post(self):
+        response = self.client.post(
+            reverse("payments:gl_mapping_update", kwargs={"pk": self.mapping.pk}),
+            data={
+                "mode_of_payment": self.cash.pk,
+                "company": "Test Co",
+                "default_account": "Cash in Drawer",
+            },
+        )
+        self.assertRedirects(response, reverse("payments:gl_mapping_list"))
+        self.mapping.refresh_from_db()
+        self.assertEqual(self.mapping.default_account, "Cash in Drawer")
+
+    def test_gl_mapping_delete_post(self):
+        pk = self.mapping.pk
+        response = self.client.post(reverse("payments:gl_mapping_delete", kwargs={"pk": pk}))
+        self.assertRedirects(response, reverse("payments:gl_mapping_list"))
+        self.assertFalse(PaymentGLMapping.objects.filter(pk=pk).exists())
+
+    def test_gl_mapping_delete_requires_post(self):
+        response = self.client.get(reverse("payments:gl_mapping_delete", kwargs={"pk": self.mapping.pk}))
+        self.assertEqual(response.status_code, 405)
