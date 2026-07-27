@@ -219,10 +219,26 @@ class TestRestaurantViews(SettingsViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Co")
 
-    def test_restaurant_update_redirects_when_no_config(self):
+    def test_restaurant_update_get_when_no_config_shows_create_form(self):
         Restaurant.objects.all().delete()
         response = self.client.get(reverse("settings:restaurant_update"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "New Restaurant")
+
+    def test_restaurant_update_post_when_no_config_creates_restaurant(self):
+        Restaurant.objects.all().delete()
+        response = self.client.post(
+            reverse("settings:restaurant_update"),
+            {
+                "company": "New Co",
+                "invoice_series_prefix": "REST-",
+                "address": "123 Street",
+                "default_room": self.room.pk,
+            },
+        )
         self.assertRedirects(response, reverse("settings:restaurant_detail"))
+        r = Restaurant.objects.get(branch=self.branch)
+        self.assertEqual(r.company, "New Co")
 
     def test_restaurant_update_get(self):
         Restaurant.objects.create(company="Test Co", branch=self.branch, default_room=self.room)

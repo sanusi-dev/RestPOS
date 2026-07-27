@@ -259,8 +259,6 @@ def restaurant_detail(request: HttpRequest) -> HttpResponse:
 @login_required
 def restaurant_update(request: HttpRequest) -> HttpResponse:
     restaurant = Restaurant.objects.select_related("default_room").first()
-    if restaurant is None:
-        return redirect("settings:restaurant_detail")
     if request.method == "POST":
         form = RestaurantForm(request.POST, instance=restaurant)
         if form.is_valid():
