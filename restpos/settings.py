@@ -1,12 +1,4 @@
-"""
-Django settings for RestPOS project.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/stable/topics/settings/
-
-For the full list of settings and their values, see
-https://docs.djangoproject.com/en/stable/ref/settings/
-"""
+"""Django settings for RestPOS."""
 
 import os
 import sys
@@ -66,6 +58,8 @@ PROJECT_APPS = [
     "apps.inventory.apps.InventoryConfig",
     "apps.menu.apps.MenuConfig",
     "apps.web",
+    "apps.payments.apps.PaymentsConfig",
+    "apps.staff.apps.StaffConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PROJECT_APPS
@@ -90,12 +84,10 @@ if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append("debug_toolbar")
     INTERNAL_IPS = ["127.0.0.1"]
 
-# add browser reload only in debug mode
 if DEBUG:
     INSTALLED_APPS.append("django_browser_reload")
     MIDDLEWARE.append("django_browser_reload.middleware.BrowserReloadMiddleware")
 
-# add watchfiles only in debug mode
 if DEBUG:
     INSTALLED_APPS.append("django_watchfiles")
 
@@ -273,7 +265,6 @@ FORMS_URLFIELD_ASSUME_HTTPS = True
 
 # Email setup
 
-# default email used by your server
 SERVER_EMAIL = env("SERVER_EMAIL", default="noreply@localhost:8000")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="sanusio293@gmail.com")
 
