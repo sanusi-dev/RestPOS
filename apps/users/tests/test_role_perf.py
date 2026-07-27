@@ -1,21 +1,4 @@
-"""Regression tests for the role-check query collapse (Phase 1 perf fix).
-
-Before the fix, every access to ``CustomUser.is_admin`` / ``is_manager`` / ``is_cashier``
-ran ``groups.filter(name=...).exists()`` — one query per access. A POS cashier page
-checks roles from middleware + templates ~9 times, so each page issued ~9 group
-membership queries.
-
-After the fix:
-- ``is_admin`` / ``is_manager`` / ``is_cashier`` are ``@cached_property``.
-- They read from ``_restpos_group_names`` (also a ``cached_property``) which uses
-  the prefetched ``groups`` relation when available and otherwise issues exactly
-  one query per request.
-- ``BackofficeAccessMiddleware`` prefetches ``request.user.groups`` once on
-  ``/pos/*`` and ``/backoffice/*`` paths.
-
-These tests pin that behaviour down so a future refactor cannot silently
-re-introduce the N+1.
-"""
+"""Tests for role-check query collapse (N+1 prevention)."""
 
 from django.contrib.auth.models import Group
 from django.db import connection
@@ -139,16 +122,7 @@ class StaffListPerformanceTest(TestCase):
 
 
 class RoleCacheInvalidationTest(TestCase):
-    """Regression tests for ``clear_role_caches_on_group_change``.
-
-    ``is_admin`` / ``is_manager`` / ``is_cashier`` are ``@cached_property`` reading from
-    ``_restpos_group_names``. Without invalidation, mutating a user's groups via
-    ``user.groups.add/remove/clear`` would leave the cached role values stale — e.g. a
-    cashier just demoted would still pass ``has_staff_role``.
-
-    The ``m2m_changed`` receiver pops the cache so the next access re-computes from the
-    current group membership. These tests pin that behaviour.
-    """
+    """Tests that role caches are invalidated when groups change."""
 
     @classmethod
     def setUpTestData(cls):
