@@ -1,0 +1,66 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+  {% if is_create %}
+    {% include "backoffice/components/breadcrumbs.html" with root_label="Staff" root_url="staff:dashboard" section_label="Opening Entries" section_url="staff:opening_entry_list" current_label="Open Shift" %}
+  {% else %}
+    {% include "backoffice/components/breadcrumbs.html" with root_label="Staff" root_url="staff:dashboard" section_label="Opening Entries" section_url="staff:opening_entry_list" current_label="Edit Opening" %}
+  {% endif %}
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}Open Shift{% else %}Edit Opening Entry{% endif %}</h1>
+      <p class="text-sm text-gray-500">Enter the opening balance for each payment method. The shift opens as soon as you save and submit.</p>
+    </div>
+  </div>
+
+  {% if form.modes %}
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3 relative z-10">
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+        <h3 class="text-base font-bold text-gray-900">Opening Float</h3>
+      </div>
+      <form method="post" class="space-y-6">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {% for field in form %}
+            {% include "backoffice/components/form_field.html" with field=field %}
+          {% endfor %}
+        </div>
+        <div class="rounded-xl bg-amber-50/70 border border-amber-100 p-4 text-xs text-amber-800 leading-relaxed">
+          Enter the actual cash-in-drawer and (where accessible) the opening
+          bank/POS balance for each electronic payment method. Leave a field
+          at <span class="font-mono font-semibold">0.00</span> if the balance
+          isn't available at shift-open — the system records the 0 honestly
+          and reconciliation at shift close will flag that method as
+          unreconciled rather than reporting a fake shortage.
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+          <a href="{% url 'staff:opening_entry_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+            {% if is_create %}Create Opening{% else %}Save Changes{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  {% else %}
+    <div class="bg-white border border-red-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-10 text-center">
+      <div class="mx-auto w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" /></svg>
+      </div>
+      <h3 class="text-lg font-bold text-gray-900 mb-2">No payment methods configured</h3>
+        {% if form.non_field_errors %}
+          <p class="text-sm text-red-700 font-medium mb-6">{{ form.non_field_errors|join:" " }}</p>
+        {% else %}
+          <p class="text-sm text-gray-600 mb-6">At least one payment method must exist in Settings before a shift can be opened.</p>
+        {% endif %}
+      <a href="{% url 'staff:opening_entry_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 transition-colors">Back to Opening Entries</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

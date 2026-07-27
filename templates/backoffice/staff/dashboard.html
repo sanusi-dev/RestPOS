@@ -1,0 +1,111 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+  <div class="mb-8">
+    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Staff &amp; Shifts</h1>
+    <p class="mt-2 text-sm font-medium text-gray-500">POS opening and closing entries — one shared shift per branch</p>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <a href="{% url 'staff:opening_entry_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Opening Entries</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">Open</p>
+        <p class="mt-3 text-xs font-bold text-emerald-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">View opening entries →</p>
+      </div>
+    </a>
+
+    <a href="{% url 'staff:closing_entry_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+      <div class="flex items-center justify-between mb-4 relative z-10">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Closing Entries</h3>
+        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-500 ring-1 ring-gray-100">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+        </div>
+      </div>
+      <div class="relative z-10">
+        <p class="text-3xl font-extrabold text-gray-900">Closes</p>
+        <p class="mt-3 text-xs font-bold text-indigo-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">View closing entries →</p>
+      </div>
+    </a>
+  </div>
+
+  <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+        <h3 class="text-base font-bold text-gray-900">Current Shift State</h3>
+      </div>
+      <ul class="divide-y divide-gray-50 bg-white/30">
+        {% for state in shift_states %}
+          <li class="group transition-colors hover:bg-white p-5">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-bold text-gray-900">{{ state.branch.name }}</p>
+                {% if state.open_entry %}
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    Open since <span class="font-mono">{{ state.open_entry.period_start_date|date:"M j, H:i" }}</span>
+                    by {{ state.open_entry.cashier.get_display_name }}
+                  </p>
+                {% else %}
+                  <p class="text-xs text-gray-400 mt-0.5">No open shift</p>
+                {% endif %}
+              </div>
+              <div>
+                {% if state.open_entry %}
+                  <a href="{% url 'staff:closing_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">
+                    Close shift →
+                  </a>
+                {% else %}
+                  <a href="{% url 'staff:opening_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
+                    Open shift →
+                  </a>
+                {% endif %}
+              </div>
+            </div>
+          </li>
+        {% empty %}
+          <li class="p-8 text-center text-sm font-medium text-gray-500">No branches configured yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+        </div>
+        <h3 class="text-base font-bold text-gray-900">Recent Closes</h3>
+      </div>
+      <ul class="divide-y divide-gray-50 bg-white/30">
+        {% for close in recent_closes %}
+          <li class="group transition-colors hover:bg-white p-5">
+            <a href="{% url 'staff:closing_entry_detail' close.pk %}" class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-bold text-gray-900 group-hover:text-orange-500 transition-colors">
+                  {{ close.branch.name }} · {{ close.period_end_date|date:"M j, H:i" }}
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">
+                  Opened by {{ close.cashier.get_display_name }} · total short/excess
+                  <span class="font-mono {% if close.total_short_excess < 0 %}text-red-600{% elif close.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ close.total_short_excess }}</span>
+                </p>
+              </div>
+              <svg class="w-5 h-5 text-gray-300 group-hover:text-orange-500 transition-colors group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+          </li>
+        {% empty %}
+          <li class="p-8 text-center text-sm font-medium text-gray-500">No closing entries yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

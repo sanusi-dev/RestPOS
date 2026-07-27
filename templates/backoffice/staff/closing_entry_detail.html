@@ -1,0 +1,168 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Staff" root_url="staff:dashboard" section_label="Closing Entries" section_url="staff:closing_entry_list" current_label="Closing #"|add:closing.pk|stringformat:"s" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Closing Entry #{{ closing.pk }}</h1>
+      <p class="text-sm text-gray-500">
+        {{ closing.branch.name }}
+        {% if closing.status == "DRAFT" %} · reconciliation in progress{% else %} · closed {{ closing.period_end_date|date:"M j, Y H:i" }}{% endif %}
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if closing.status == "DRAFT" %}
+        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing draft?" data-confirm-body="This will discard the closing entry. The shift will remain open." data-confirm-button="Cancel">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+            Cancel
+          </button>
+        </form>
+        <button type="submit" form="reconciliation-form" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+          Save Counted Amounts
+        </button>
+        <form method="post" action="{% url 'staff:closing_entry_submit' closing.pk %}" id="submit-close-form" class="inline"
+              data-confirm-title="Submit closing entry and close the shift?"
+              data-confirm-body="This finalises the reconciliation. The shift will be marked Closed and cannot be reopened (only cancelled)."
+              data-confirm-button="Submit & Close Shift">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
+            Submit &amp; Close Shift
+          </button>
+        </form>
+      {% elif closing.status == "SUBMITTED" %}
+        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing entry?" data-confirm-body="This will cancel the submitted closing entry. The opening entry will NOT be reopened." data-confirm-button="Cancel">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+            Cancel Closing Entry
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Close Details</h2>
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 relative z-10">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Branch</dt>
+        <dd class="text-base font-bold text-gray-900">{{ closing.branch.name }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cashier Closing</dt>
+        <dd class="text-base font-bold text-gray-900">{{ closing.cashier.get_display_name }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Opening Entry</dt>
+        <dd><a href="{% url 'staff:opening_entry_detail' closing.opening_entry_id %}" class="text-base font-bold text-orange-500 hover:text-orange-600">#{{ closing.opening_entry_id }}</a></dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
+        <dd class="text-base font-bold text-gray-900">
+          {% if closing.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+          {% elif closing.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+        </dd>
+      </div>
+      {% if closing.status == "SUBMITTED" and closing.total_short_excess %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Short/Excess</dt>
+          <dd class="text-base font-mono font-bold {% if closing.total_short_excess < 0 %}text-red-600{% elif closing.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ closing.total_short_excess }}</dd>
+        </div>
+      {% endif %}
+      {% if closing.remarks %}
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+          <dd class="text-base font-medium text-gray-700">{{ closing.remarks }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Reconciliation</h3>
+    </div>
+    <div class="px-6 py-3 bg-amber-50/40 border-b border-amber-100 text-xs text-amber-800 leading-relaxed">
+      <strong>How to read this table:</strong>
+      <span class="font-mono font-semibold">Opening</span> = the float declared at shift start.
+      <span class="font-mono font-semibold">Expected</span> = opening + collected sales during the shift (Phase 1 has no order tracking yet, so expected equals opening).
+      <span class="font-mono font-semibold">Closing</span> = what the cashier physically counted at shift end.
+      <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess. In Phase 7, once sales are tracked, the difference will catch failed settlements and drawer discrepancies.
+    </div>
+
+    {% if closing.status == "DRAFT" and form_data %}
+      {% comment %}Inline editable form for DRAFT entries.{% endcomment %}
+      <form method="post" action="{% url 'staff:closing_entry_detail' closing.pk %}" id="reconciliation-form" class="space-y-0">
+        {% csrf_token %}
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-100">
+            <thead class="bg-gray-50/50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+                <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Opening</th>
+                <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Expected</th>
+                <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Counted (Closing)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {% for cp, form in form_data %}
+                <tr>
+                  <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ cp.mode_of_payment.name }}</td>
+                  <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.opening_amount }}</td>
+                  <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.expected_amount }}</td>
+                  <td class="px-6 py-4 text-right">
+                    {% for field in form %}
+                      {{ field }}
+                      {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+                    {% endfor %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="px-6 py-4 bg-gray-50/30 border-t border-gray-100 text-xs text-gray-500">
+          Tip: enter the counted amount for each method. <span class="font-mono font-semibold">Expected</span> = opening + collected sales (collected is added in Phase 7). The difference is computed on submit.
+        </div>
+      </form>
+    {% else %}
+      {% comment %}Read-only view for SUBMITTED / CANCELLED entries.{% endcomment %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-100">
+          <thead class="bg-gray-50/50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Opening</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Expected</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Closing</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Difference</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for cp in closing_payments %}
+              <tr>
+                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ cp.mode_of_payment.name }}</td>
+                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.opening_amount }}</td>
+                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.expected_amount }}</td>
+                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.closing_amount }}</td>
+                <td class="px-6 py-4 text-right text-sm font-mono {% if cp.difference < 0 %}text-red-600{% elif cp.difference > 0 %}text-emerald-600{% endif %}">{{ cp.difference }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No closing payments recorded.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
