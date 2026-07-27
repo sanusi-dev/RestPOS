@@ -34,6 +34,21 @@
     Menu
   </a>
 </li>
+<li class="px-4 py-3 mt-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+  <span>POS</span>
+</li>
+<li>
+  <a href="{% url 'payments:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/payments' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+    Payments
+  </a>
+</li>
+<li>
+  <a href="{% url 'staff:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/staff' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    Shifts
+  </a>
+</li>
 {% endif %}
 {% if not user.is_anonymous %}
 <li class="px-4 py-3 mt-4 text-xs font-bold text-gray-400 uppercase tracking-widest border-t border-gray-100">
