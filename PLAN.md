@@ -104,7 +104,7 @@ settings R1 → inventory → menu → staff ↘
 | 3 | menu | A2 | Menu, MenuItem, PriceList, ItemPrice, ItemAddOn, ItemVariant | inventory | complete (MenuCourse removed) |
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (43 tests passing, migrations applied) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings R1, payments core | complete (58 tests passing, 472 total) |
-| 6 | settings R2 | A3, A4 | POSProfile, ProductionUnit, TaxTemplate | menu, inventory, payments, staff | not started |
+| 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, POSProfileUser, POSProfilePayment, ProductionUnit, TaxTemplate, TaxRate | menu, inventory, payments, staff | planned |
 | 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff, payments | not started |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
@@ -1654,15 +1654,450 @@ class ClosingPaymentAdmin(admin.ModelAdmin):
 
 ### 6.6 Settings App — Round 2 (Phase 6)
 
-**Status:** not started — detailed plan to be written after staff is complete.
+**Status:** planned — detailed plan ready for implementation
+**FEATURES.md sections:** A3 (Production / Kitchen Station Configuration), A4 (POS Profile /
+Terminal Configuration), A5 partial (Tax template)
+**Dependencies:** menu (ItemGroup, PriceList), inventory (Warehouse, ItemGroup), payments
+(ModeOfPayment, PaymentGLMapping), staff (POSOpeningEntry receives `pos_profile` FK via a
+migration in this phase)
+**Key models:** `POSProfile`, `POSProfileUser`, `POSProfilePayment`, `ProductionUnit`,
+`TaxTemplate`, `TaxRate`
 
-**FEATURES.md sections:** A3, A4, A5 (partial)
-**Dependencies:** menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment), staff
-(`POSProfile.applicable_users` references the staff shift model; the `pos_profile` FK is
-backfilled onto `POSOpeningEntry` via a migration in this phase)
-**Key models:** POSProfile, ProductionUnit, TaxTemplate
-**Reference doctypes to consult:** ERPNext POS Profile (+ 38 URY custom fields), URY Production
-Unit, URY Printer Settings, Aggregator Settings
+#### Reference files consulted
+
+| Reference file | What was extracted |
+|---|---|
+| `references/erpnext-develop/erpnext/selling/doctype/pos_profile/pos_profile.json` | POS Profile core fields (44 fields across 4 tabs: identity, accounting, POS configurations, more info) |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_profile/pos_profile.py` | Validation: `validate_disabled`, `validate_default_profile`, `validate_all_link_fields`, `validate_duplicate_groups`, `validate_payment_methods`, `validate_accounting_dimensions`; lifecycle `on_update`/`on_trash` → `set_defaults` |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_profile_user/pos_profile_user.json` | Applicable-users child: `user` (Link→User), `default` (Check) |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_payment_method/pos_payment_method.json` | Payment-methods child: `mode_of_payment` (Link), `default` (Check), `allow_in_returns` (Check) |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_item_group/pos_item_group.json` | Item-group filter child: `item_group` (Link) |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_customer_group/pos_customer_group.json` | Customer-group filter child (studied and dropped — no Customer model in Phase 1) |
+| `references/ury-develop/ury/fixtures/custom_field.json` | 38 URY custom fields on POS Profile (verified); 1 on POS Profile User (`custom_main_cashier`); 3 on URY Printer Settings (`custom_kot_print`, `custom_kot_print_format`, `custom_block_takeaway_kot`); 5 on Branch (aggregator block — dropped) |
+| `references/ury-develop/ury/ury/doctype/ury_production_unit/ury_production_unit.json` | Production Unit fields: `production` (autoname), `pos_profile`, `branch` (fetch_from), `warehouse` (fetch_from), `item_groups` child, `printer_settings` child, KDS fields (dropped) |
+| `references/ury-develop/ury/ury/doctype/ury_production_unit/ury_production_unit.py` | Empty — no validation logic |
+| `references/ury-develop/ury/ury/doctype/ury_printer_settings/ury_printer_settings.json` | Printer-settings child: `bill` (Check), `printer` (Link→Network Printer Settings) + 3 URY custom fields |
+| `references/ury-develop/ury/ury/doctype/ury_restaurant/ury_restaurant.json` | `default_tax_template` (core Link → Sales Taxes and Charges Template) — URY's restaurant-wide tax default |
+| `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json` | TaxTemplate fields: `title`, `is_default`, `disabled`, `company`, `tax_category`, `taxes` (Table→Sales Taxes and Charges) |
+| `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.py` | Validation: default exclusivity per company, disabled-not-default, tax_category uniqueness, per-row account/cost_center validation; `autoname` = `f"{title} - {company_abbr}"` |
+| `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json` | TaxRate row: `charge_type`, `rate`, `account_head`, `description`, `cost_center`, `included_in_print_rate`, `row_id` + computed `*_base_*` fields (deferred to Phase 9) |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json` | `pos_profile` is a required Link on POS Opening Entry (Phase 6 adds nullable FK to RestPOS POSOpeningEntry) |
+| `references/ury-develop/ury/ury_pos/api.py` | Fields the POS frontend consumes from POSProfile (§G of research): `branch`, `warehouse`, `company`, `table_attention_time`, `paid_limit`, `custom_enable_discount`, `custom_enable_multiple_cashier`, `custom_edit_order_type`, `custom_enable_kot_reprint`, `printer_settings`, `role_allowed_for_billing`, `payments`, `applicable_for_users`, `custom_daily_pos_close` |
+| `references/ury-develop/ury/ury/doctype/aggregator_settings/aggregator_settings.json` | Reviewed and dropped — third-party food-delivery aggregator integration is out of Phase 1 scope |
+
+#### Decisions
+
+- **TaxTemplate has two attachment points.** `POSProfile.taxes_and_charges` (per-profile override,
+  ERPNext core) and `Restaurant.default_tax_template` (restaurant-wide default, URY core, already
+  declared nullable in §6.1). Phase 7 resolves at order time: profile's template wins if set, else
+  restaurant's default. Phase 6 introduces the TaxTemplate model that `Restaurant.default_tax_template`
+  references (the FK was declared in §6.1 but pointed at a model that didn't exist yet).
+
+- **Printer config lives on ProductionUnit as string fields for Phase 6.** Phase 8 owns `PrinterConfig`
+  as a standalone model. To avoid a cross-phase stub, Phase 6 stores `printer_ip` (CharField),
+  `printer_paper_width` (choices), and `printer_cut_mode` (choices) directly on `ProductionUnit`.
+  Phase 8 extracts these into a `PrinterConfig` model and migrates. Documented deviation from URY's
+  child-table `printer_settings` approach.
+
+- **`POSOpeningEntry.pos_profile` is a nullable FK in Phase 6.** ERPNext requires it (`reqd:1`).
+  RestPOS adds it as nullable to avoid breaking existing Phase 5 opening entries. The FK is not
+  enforced as NOT NULL until Phase 7 (orders) requires it for order creation. Additive migration —
+  no data backfill needed since Phase 5 entries predate POSProfile.
+
+- **Role-permitted children → M2M to `django.contrib.auth.models.Group`.** URY uses Frappe's `Role`
+  via `Role Permitted` child tables. RestPOS uses Django's `Group` with named roles ("RestPOS Admin",
+  "RestPOS Manager", "RestPOS Cashier" — Phase 5 staff app). The four role-multiselect fields
+  (`role_allowed_for_billing`, `role_restricted_for_table_order`, `transfer_role_permissions`,
+  `notification_recipients`) become plain M2M to `Group` with no through model (the through adds no
+  data beyond the role ref).
+
+- **`POSProfile.applicable_users` uses a through model `POSProfileUser`.** Preserves the per-user
+  `is_default` flag (ERPNext enforces one default per user per company) and `is_main_cashier`
+  (URY custom — flags the primary cashier for the API's `get_cashier` logic).
+
+- **`POSProfile.payments` uses a through model `POSProfilePayment`.** Preserves `is_default`
+  (exactly one default per profile — ERPNext validation) and `allow_in_returns`.
+
+- **`ProductionUnit.branch` and `warehouse` are stored, auto-set from `pos_profile` in `save()`.**
+  Matches the RestPOS denormalization pattern (see `Table.branch`, `UserRoomAssignment.branch`).
+  Avoids stale data by re-setting on every save. Deviates from URY which uses `fetch_from` display
+  fields.
+
+- **`ProductionUnit.item_groups` child table dropped.** FEATURES.md A3 #14 explicitly states RestPOS
+  routes tickets by the `department` flag on each item, not by item-group mappings. The URY
+  `item_groups` child is redundant for Phase 1.
+
+- **Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert — all dropped.** Out of Phase 1
+  scope per AGENTS.md.
+
+- **KOT-related config fields modeled on POSProfile now, enforced in Phase 7/8.** `kot_naming_series`,
+  `reset_order_number_daily`, `kot_warning_time`, `notify_kot_delay`, `enable_kot_reprint`,
+  `reprint_kot_format` — config toggles consumed by the orders/printing apps. Modeling them now
+  keeps POSProfile complete; enforcement is deferred to the consuming phase.
+
+- **Accounting fields kept as CharField, enforcement deferred to Phase 9.** `cost_center`,
+  `income_account`, `expense_account`, `write_off_account`, `write_off_cost_center`,
+  `account_for_change_amount` — stored as strings (account names). Phase 9 introduces `LedgerAccount`
+  and migrates to FK. FEATURES #40 says cost center is mandatory — Phase 6 keeps the field optional
+  with a documented deviation (no model to FK to yet); Phase 9 enforces mandatory.
+
+- **`currency` defaults to "NGN".** Single-currency Phase 1. `selling_price_list` kept as nullable
+  FK to `menu.PriceList` for ERPNext alignment, but Phase 7 resolves pricing from the active menu
+  regardless.
+
+- **`customer` and `customer_groups` dropped.** No Customer model in Phase 1 (walk-in customer is a
+  default string handled in Phase 7 if needed).
+
+- **`utm_source`, `utm_campaign`, `utm_medium`, `ignore_pricing_rule`, `letter_head`, `tc_name`,
+  `select_print_heading` dropped.** Marketing analytics irrelevant to a local restaurant POS / no
+  ERPNext pricing-rule engine / ERPNext print cosmetics. `print_format` kept (consumed by URY API;
+  Phase 8 defines RestPOS print formats).
+
+#### Models (6 total)
+
+All models extend `apps.utils.models.BaseModel`.
+
+##### `TaxTemplate` (`settings.TaxTemplate`)
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| title | CharField, max_length=100, required | ERPNext `title` | used in display name |
+| is_default | BooleanField, default=False | ERPNext `is_default` | one default per company enforced in `clean()` |
+| disabled | BooleanField, default=False | ERPNext `disabled` | disabled templates can't be assigned |
+| company | CharField, max_length=200, required | ERPNext `company` | defaults from `Restaurant.company` in `clean()`; no Company model in Phase 1 |
+| tax_category | CharField, max_length=100, blank=True | ERPNext `tax_category` | Phase 9 migrates to FK; uniqueness enforced in `clean()` |
+
+**Methods:**
+- `__str__` returns `title`
+- `clean()`: if `is_default` and `disabled`, raise `ValidationError("Disabled template must not be default")`
+- `clean()`: if `is_default`, unset `is_default` on other templates with the same `company` (default exclusivity)
+- `clean()`: if `tax_category` set, no other non-disabled template in same `company` may share it
+- Meta: `ordering = ["title"]`, `unique_together = [("title", "company")]`
+
+##### `TaxRate` (`settings.TaxRate`) — child table
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| tax_template | ForeignKey→TaxTemplate, on_delete=CASCADE, related_name="rates" | ERPNext `taxes` | |
+| charge_type | CharField, max_length=30, choices: ACTUAL / ON_NET_TOTAL / ON_PREVIOUS_ROW_AMOUNT / ON_PREVIOUS_ROW_TOTAL / ON_ITEM_QUANTITY, default=ON_NET_TOTAL | ERPNext `charge_type` | |
+| rate | DecimalField, max_digits=8, decimal_places=4, default=0 | ERPNext `rate` | percentage for ON_NET_TOTAL |
+| account_head | CharField, max_length=200, required | ERPNext `account_head` | account name string; Phase 9 migrates to FK→LedgerAccount |
+| description | CharField, max_length=255, required | ERPNext `description` | |
+| cost_center | CharField, max_length=200, blank=True | ERPNext `cost_center` | Phase 9 migrates to FK |
+| included_in_print_rate | BooleanField, default=False | ERPNext `included_in_print_rate` | |
+| row_id | PositiveIntegerField, null=True, blank=True | ERPNext `row_id` | for previous-row charge types |
+
+**Methods:**
+- `__str__` returns `f"{charge_type} {rate}% → {account_head}"`
+- Meta: `ordering = ["pk"]`
+
+##### `POSProfile` (`settings.POSProfile`)
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| name | CharField, max_length=100, required | ERPNext Prompt naming | e.g. "Main Cashier", "Bar POS" |
+| company | CharField, max_length=200, required | ERPNext core | defaults from `Restaurant.company` in `clean()` |
+| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="pos_profiles" | URY custom | auto-set via `Branch.get_default()` in `save()` if blank |
+| restaurant | ForeignKey→settings.Restaurant, on_delete=PROTECT, null=True, blank=True, related_name="pos_profiles" | URY custom | auto-set from `branch.restaurants.first()` in `save()` if blank |
+| warehouse | ForeignKey→inventory.Warehouse, on_delete=PROTECT, related_name="pos_profiles" | ERPNext core | required — default stock deduction warehouse |
+| disabled | BooleanField, default=False | ERPNext core | |
+| currency | CharField, max_length=3, default="NGN" | ERPNext core | single-currency Phase 1 |
+| selling_price_list | ForeignKey→menu.PriceList, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | Phase 7 resolves from active menu |
+| taxes_and_charges | ForeignKey→TaxTemplate, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | per-profile tax override |
+| tax_category | CharField, max_length=100, blank=True | ERPNext core | Phase 9 |
+| cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 9 migrates to FK; FEATURES #40 mandatory deferred |
+| income_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| expense_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| write_off_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| write_off_cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| write_off_limit | DecimalField, max_digits=12, decimal_places=2, default=Decimal("1.00") | ERPNext core | FEATURES #23 |
+| account_for_change_amount | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| set_grand_total_to_default_mop | BooleanField, default=True | ERPNext core | FEATURES #25 |
+| allow_partial_payment | BooleanField, default=False | ERPNext core | |
+| apply_discount_on | CharField, max_length=15, choices: GRAND_TOTAL / NET_TOTAL, default=GRAND_TOTAL | ERPNext core | FEATURES #99 |
+| enable_discount | BooleanField, default=False | URY `custom_enable_discount` | FEATURES #18 |
+| action_on_new_invoice | CharField, max_length=40, choices: ALWAYS_ASK / SAVE_AND_LOAD_NEW / DISCARD_AND_LOAD_NEW, default=ALWAYS_ASK | ERPNext core | FEATURES #24 |
+| validate_stock_on_save | BooleanField, default=False | ERPNext core | |
+| hide_images | BooleanField, default=False | ERPNext core | FEATURES #22 |
+| hide_unavailable_items | BooleanField, default=False | ERPNext core | FEATURES #22 |
+| auto_add_item_to_cart | BooleanField, default=False | ERPNext core | FEATURES #21 |
+| allow_rate_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
+| allow_discount_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
+| allow_warehouse_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
+| print_receipt_on_order_complete | BooleanField, default=False | ERPNext core | FEATURES #20 |
+| view_all_status | BooleanField, default=False | URY `view_all_status` | FEATURES #32 |
+| paid_limit | IntegerField, default=20 | URY `paid_limit` | FEATURES #33 |
+| edit_order_type | BooleanField, default=False | URY `custom_edit_order_type` | FEATURES #34 |
+| remove_items | BooleanField, default=False | URY `remove_items` | FEATURES #35 |
+| show_image | BooleanField, default=True | URY `show_image` | POS item cards |
+| require_daily_pos_close | BooleanField, default=False | URY `custom_daily_pos_close` | FEATURES #29 |
+| table_attention_time | IntegerField, default=0 | URY `table_attention_time` | FEATURES #74 — minutes |
+| multiple_cashier | BooleanField, default=False | URY `custom_enable_multiple_cashier` | |
+| kot_naming_series | CharField, max_length=50, default="KOT-####" | URY `custom_kot_naming_series` | FEATURES #27; consumed in Phase 7 |
+| reset_order_number_daily | BooleanField, default=False | URY `custom_reset_order_number_daily` | FEATURES #30 |
+| kot_warning_time | IntegerField, default=15 | URY `custom_kot_warning_time` | FEATURES #74 — minutes |
+| notify_kot_delay | BooleanField, default=False | URY `custom_notify_kot_delay` | FEATURES #38 |
+| enable_kot_reprint | BooleanField, default=False | URY `custom_enable_kot_reprint` | FEATURES #28 |
+| reprint_kot_format | CharField, max_length=100, blank=True | URY `custom_reprint_kot_format` | Phase 8 defines print formats |
+| print_format | CharField, max_length=100, blank=True | ERPNext core | Phase 8 defines |
+| applicable_users | ManyToManyField→CustomUser, through=POSProfileUser, related_name="pos_profiles", blank=True | ERPNext core child | |
+| payments | ManyToManyField→payments.ModeOfPayment, through=POSProfilePayment, related_name="pos_profiles", blank=True | ERPNext core child | |
+| item_groups | ManyToManyField→inventory.ItemGroup, related_name="pos_profiles", blank=True | ERPNext core child | empty = all groups visible |
+| role_allowed_for_billing | ManyToManyField→Group, related_name="billing_profiles", blank=True | URY `role_allowed_for_billing` | FEATURES #36 |
+| role_restricted_for_table_order | ManyToManyField→Group, related_name="table_order_restricted_profiles", blank=True | URY `role_restricted_for_table_order` | FEATURES #37 |
+| transfer_role_permissions | ManyToManyField→Group, related_name="transfer_profiles", blank=True | URY `transfer_role_permissions` | FEATURES #59 |
+| notification_recipients | ManyToManyField→Group, related_name="delay_notification_profiles", blank=True | URY `custom_recipients` | FEATURES #38 |
+
+**Methods:**
+- `__str__` returns `name`
+- `save()`: auto-assign `branch` from `Branch.get_default()` if blank; auto-assign `restaurant`
+  from `branch.restaurants.first()` if blank
+- `clean()`:
+  - if `disabled` and an open `POSOpeningEntry` exists for this profile → raise
+    `ValidationError("POS Profile cannot be disabled as there are ongoing POS sessions.")`
+  - `payments` must be non-empty → raise
+    `ValidationError("Payment methods are mandatory. Please add at least one payment method.")`
+  - exactly one `POSProfilePayment` row with `is_default=True` → raise
+    `ValidationError("Please select exactly one default mode of payment.")`
+  - for every `mode_of_payment` in `payments`, a `PaymentGLMapping` must exist for the current
+    `company` → raise `ValidationError("Please set default account for mode(s) of payment: {list}")`
+  - no duplicate `item_groups` → raise `ValidationError("Duplicate item group found.")`
+  - for each `POSProfileUser` with `is_default=True`, no other non-disabled POSProfile in the same
+    `company` may have that user as default → raise
+    `ValidationError("User {user} already has a default POS Profile in {company}.")`
+- Meta: `ordering = ["name"]`, `unique_together = [("name", "branch")]`
+
+##### `POSProfileUser` (`settings.POSProfileUser`) — through model
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| pos_profile | ForeignKey→POSProfile, on_delete=CASCADE, related_name="user_links" | ERPNext `applicable_for_users` | |
+| user | ForeignKey→CustomUser, on_delete=PROTECT, related_name="profile_links" | ERPNext core | |
+| is_default | BooleanField, default=False | ERPNext core | one default per user per company (enforced in POSProfile.clean) |
+| is_main_cashier | BooleanField, default=False | URY `custom_main_cashier` | flags the primary cashier for API `get_cashier` logic |
+
+**Methods:**
+- `__str__` returns `f"{user.username} @ {pos_profile.name}"`
+- Meta: `unique_together = [("pos_profile", "user")]`, `ordering = ["user__username"]`
+
+##### `POSProfilePayment` (`settings.POSProfilePayment`) — through model
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| pos_profile | ForeignKey→POSProfile, on_delete=CASCADE, related_name="payment_links" | ERPNext `payments` | |
+| mode_of_payment | ForeignKey→payments.ModeOfPayment, on_delete=PROTECT, related_name="profile_links" | ERPNext core | |
+| is_default | BooleanField, default=False | ERPNext core | exactly one default per profile (enforced in POSProfile.clean) |
+| allow_in_returns | BooleanField, default=False | ERPNext core | |
+
+**Methods:**
+- `__str__` returns `f"{mode_of_payment.name} @ {pos_profile.name}"`
+- Meta: `unique_together = [("pos_profile", "mode_of_payment")]`,
+  `ordering = ["mode_of_payment__name"]`
+
+##### `ProductionUnit` (`settings.ProductionUnit`)
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| name | CharField, max_length=100, required | URY `production` (autoname source) | e.g. "Kitchen", "Bar" |
+| pos_profile | ForeignKey→POSProfile, on_delete=PROTECT, null=True, blank=True, related_name="production_units" | URY core | nullable for RestPOS flexibility (unit can exist without a profile in Phase 1) |
+| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="production_units" | URY `fetch_from pos_profile.branch` | stored (denormalized); auto-set from `pos_profile.branch` or `Branch.get_default()` in `save()` |
+| warehouse | ForeignKey→inventory.Warehouse, on_delete=PROTECT, related_name="production_units" | URY `fetch_from pos_profile.warehouse` | stored (denormalized); auto-set from `pos_profile.warehouse` in `save()` if blank |
+| department | CharField, max_length=10, choices: FOOD / DRINKS, required | RestPOS-specific | drives ticket routing per FEATURES #14 |
+| block_takeaway_kot | BooleanField, default=False | URY `custom_block_takeaway_kot` (on printer settings) | FEATURES #15 — suppresses ticket for takeaway orders |
+| printer_ip | CharField, max_length=50, blank=True | RestPOS-specific (replaces URY `printer_settings` child) | LAN printer static IP; Phase 8 migrates to FK→PrinterConfig |
+| printer_paper_width | CharField, max_length=10, choices: WIDTH_58MM / WIDTH_80MM, default=WIDTH_80MM | RestPOS-specific | ESC/POS paper width |
+| printer_cut_mode | CharField, max_length=15, choices: FULL_CUT / PARTIAL_CUT / NO_CUT, default=FULL_CUT | RestPOS-specific | ESC/POS cut mode |
+
+**Methods:**
+- `__str__` returns `name`
+- `save()`: auto-assign `branch` from `pos_profile.branch` if blank, else `Branch.get_default()`;
+  auto-assign `warehouse` from `pos_profile.warehouse` if blank
+- `clean()`: if `pos_profile` is set, validate `self.branch_id == self.pos_profile.branch_id`
+- Meta: `ordering = ["name"]`, `unique_together = [("name", "branch")]`
+
+**Dropped from URY:**
+- `item_groups` child table (RestPOS routes by department, not item groups)
+- `enable_order_type_wise_display_on_mosaic` (KDS/Mosaic out of scope)
+- `order_type` child table (KDS out of scope)
+- `printer_settings` child table (folded into `printer_*` fields; Phase 8 may extract)
+
+#### Cross-app migration: add `pos_profile` FK to `POSOpeningEntry`
+
+Phase 5 deferred the `pos_profile` FK on `POSOpeningEntry` (it lives in `apps.staff`). Phase 6 adds
+it via a migration in `apps.staff` that depends on the new `apps.settings` migration creating
+`POSProfile`. `makemigrations` handles the cross-app dependency automatically. The migration is
+additive (`AddField nullable`) — no data backfill needed since Phase 5 entries predate POSProfile.
+Do NOT enforce NOT NULL in Phase 6; Phase 7 may enforce when orders require a profile.
+
+```python
+# apps/staff/migrations/000X_posopeningentry_pos_profile.py
+# Generated by makemigrations — do NOT hand-write the AddField.
+# Dependencies: ("settings", "0003_posprofile_..."), ("staff", "<latest>")
+operations = [
+    migrations.AddField(
+        model_name="posopeningentry",
+        name="pos_profile",
+        field=models.ForeignKey(
+            "settings.POSProfile",
+            on_delete=models.PROTECT,
+            null=True,
+            blank=True,
+            related_name="opening_entries",
+        ),
+    ),
+]
+```
+
+#### Business logic — `POSProfile.clean()`
+
+```python
+def clean(self):
+    super().clean()
+    if self.disabled and self.pk:
+        open_exists = POSOpeningEntry.objects.filter(
+            pos_profile=self, status="SUBMITTED", closing_entry__isnull=True
+        ).exists()
+        if open_exists:
+            raise ValidationError("POS Profile cannot be disabled as there are ongoing POS sessions.")
+    if not self.payment_links.exists():
+        raise ValidationError("Payment methods are mandatory. Please add at least one payment method.")
+    defaults = self.payment_links.filter(is_default=True)
+    if defaults.count() != 1:
+        raise ValidationError("Please select exactly one default mode of payment.")
+    modes_without_gl = []
+    for link in self.payment_links.all():
+        if not PaymentGLMapping.objects.filter(
+            mode_of_payment=link.mode_of_payment, company=self.company
+        ).exists():
+            modes_without_gl.append(link.mode_of_payment.name)
+    if modes_without_gl:
+        raise ValidationError(
+            f"Please set default account for mode(s) of payment: {', '.join(modes_without_gl)}"
+        )
+    seen = set()
+    for ig in self.item_groups.all():
+        if ig.pk in seen:
+            raise ValidationError("Duplicate item group found.")
+        seen.add(ig.pk)
+    for link in self.user_links.filter(is_default=True):
+        other = POSProfileUser.objects.filter(
+            user=link.user, is_default=True,
+            pos_profile__company=self.company, pos_profile__disabled=False,
+        ).exclude(pos_profile=self).exists()
+        if other:
+            raise ValidationError(
+                f"User {link.user.username} already has a default POS Profile in {self.company}."
+            )
+```
+
+#### Views & URLs
+
+Function-based views, `@login_required`, protected by `BackofficeAccessMiddleware`. Mutating
+endpoints (create/edit/delete) require `request.user.is_manager or request.user.is_admin` (view-level
+guard returning 302 → `web:pending_approval` if false). Delete endpoints use `@require_POST`.
+
+| URL pattern | View | Purpose |
+|---|---|---|
+| `/backoffice/settings/pos-profiles/` | `pos_profile_list` | List POS profiles (HTMX partial for rows) |
+| `/backoffice/settings/pos-profiles/create/` | `pos_profile_create` | Create profile (inline formsets for users, payments) |
+| `/backoffice/settings/pos-profiles/<int:pk>/` | `pos_profile_detail` | View profile + tabs |
+| `/backoffice/settings/pos-profiles/<int:pk>/edit/` | `pos_profile_update` | Update profile |
+| `/backoffice/settings/pos-profiles/<int:pk>/delete/` | `pos_profile_delete` | Delete profile — `@require_POST` (blocked if open shifts exist) |
+| `/backoffice/settings/production-units/` | `production_unit_list` | List units (filterable by branch/department) |
+| `/backoffice/settings/production-units/create/` | `production_unit_create` | Create unit |
+| `/backoffice/settings/production-units/<int:pk>/` | `production_unit_detail` | View/edit unit |
+| `/backoffice/settings/production-units/<int:pk>/edit/` | `production_unit_update` | Update unit |
+| `/backoffice/settings/production-units/<int:pk>/delete/` | `production_unit_delete` | Delete unit — `@require_POST` |
+| `/backoffice/settings/tax-templates/` | `tax_template_list` | List templates |
+| `/backoffice/settings/tax-templates/create/` | `tax_template_create` | Create template (inline formset for rates) |
+| `/backoffice/settings/tax-templates/<int:pk>/` | `tax_template_detail` | View template |
+| `/backoffice/settings/tax-templates/<int:pk>/edit/` | `tax_template_update` | Update template |
+| `/backoffice/settings/tax-templates/<int:pk>/delete/` | `tax_template_delete` | Delete template — `@require_POST` |
+
+#### Templates
+
+| Template | Purpose |
+|---|---|
+| `templates/backoffice/settings/pos_profile_list.html` | List with `{% partialdef row %}` |
+| `templates/backoffice/settings/pos_profile_form.html` | Create/edit with inline formsets for users, payments; M2M widgets for groups/item_groups |
+| `templates/backoffice/settings/pos_profile_detail.html` | Tabs: identity, payments, permissions, KOT, print |
+| `templates/backoffice/settings/production_unit_list.html` | List with department filter |
+| `templates/backoffice/settings/production_unit_form.html` | Create/edit |
+| `templates/backoffice/settings/production_unit_detail.html` | View unit + printer config |
+| `templates/backoffice/settings/tax_template_list.html` | List |
+| `templates/backoffice/settings/tax_template_form.html` | Create/edit with inline formset for rates |
+| `templates/backoffice/settings/tax_template_detail.html` | View template + rates |
+
+#### Forms
+
+| Form | Model | Notes |
+|---|---|---|
+| `POSProfileForm` | `POSProfile` | Excludes `company` (auto from Restaurant), `branch` (auto from `Branch.get_default()`). Inline formsets for `POSProfileUser` and `POSProfilePayment`. M2M widgets for `item_groups`, `role_*` groups. |
+| `POSProfileUserForm` | `POSProfileUser` | Fields: `user`, `is_default`, `is_main_cashier` |
+| `POSProfilePaymentForm` | `POSProfilePayment` | `mode_of_payment` queryset via `active_choices(ModeOfPayment, ..., enabled=True)`; fields: `is_default`, `allow_in_returns` |
+| `ProductionUnitForm` | `ProductionUnit` | `pos_profile` queryset via `active_choices(POSProfile, ..., disabled=False)`. Branch/warehouse auto-set on save. |
+| `TaxTemplateForm` | `TaxTemplate` | Fields: `title`, `is_default`, `disabled`, `tax_category`. `company` auto-defaulted in `__init__`. Inline formset for `TaxRate`. |
+| `TaxRateForm` | `TaxRate` | Fields: `charge_type`, `rate`, `account_head`, `description`, `cost_center`, `included_in_print_rate`, `row_id` |
+
+Forms extend `apps.utils.forms.StyledModelForm` via the existing `SettingsModelForm` base.
+
+#### Admin
+
+Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list_select_related`.
+`POSProfileAdmin` shows key toggles in list. `ProductionUnitAdmin` filters by department.
+`TaxTemplateAdmin` filters by company, shows `is_default`. `POSProfileUserAdmin` and
+`POSProfilePaymentAdmin` show the parent profile and the linked user/mode.
+
+#### Tests
+
+| Test file | What it covers |
+|---|---|
+| `test_tax_template.py` | CRUD, default exclusivity per company, disabled-not-default, tax_category uniqueness, TaxRate child CRUD, PROTECT on template delete, `unique_together(title, company)` |
+| `test_pos_profile.py` | CRUD, branch auto-default, restaurant auto-default, `clean()` validation (disabled-with-open-shift, payments non-empty, one default payment, GL mapping check, duplicate item groups, default-per-user), `unique_together(name, branch)` |
+| `test_pos_profile_user.py` | Through-model CRUD, `is_default` uniqueness per user per company, `is_main_cashier` flag, PROTECT on user delete, `unique_together(profile, user)` |
+| `test_pos_profile_payment.py` | Through-model CRUD, `is_default` exactly-one validation, `allow_in_returns`, PROTECT on mode delete, `unique_together(profile, mode)` |
+| `test_production_unit.py` | CRUD, department choices, branch/warehouse auto-set from `pos_profile`, `block_takeaway_kot` flag, `printer_ip`/`printer_paper_width`/`printer_cut_mode` fields, `unique_together(name, branch)` |
+| `test_pos_opening_entry_pos_profile_fk.py` | The Phase 6 migration adds nullable `pos_profile` FK; existing opening entries still work without one; new entries can reference a profile |
+| `test_views.py` | Login required, manager-only on mutating endpoints, HTMX partial responses, `@require_POST` on delete (GET → 405), list filtering (department, branch) |
+
+#### Deviations from reference
+
+| Deviation | Reason |
+|---|---|
+| TaxTemplate attached to both POSProfile and Restaurant | ERPNext = per-profile only; URY = per-restaurant default. RestPOS supports both — profile overrides restaurant. Phase 7 resolves. |
+| Printer config as string fields on ProductionUnit (not child table) | Phase 8 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 8 migrates. |
+| `POSOpeningEntry.pos_profile` nullable (not required) | Phase 5 entries predate POSProfile. ERPNext requires it; Phase 7 may enforce NOT NULL. |
+| Role-permitted children → M2M to `Group` (not child table to Frappe `Role`) | RestPOS uses Django `Group` with named roles, not Frappe Role. M2M is cleaner than child tables. |
+| `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). |
+| `ProductionUnit.branch`/`warehouse` stored (not `fetch_from` display) | RestPOS denormalization pattern (matches `Table.branch`); auto-set in `save()`. |
+| `item_groups` child on ProductionUnit dropped | RestPOS routes by department flag, not item-group mappings (FEATURES #14). |
+| Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert dropped | Out of Phase 1 scope per AGENTS.md. |
+| `customer`, `customer_groups`, `utm_*`, `ignore_pricing_rule`, `letter_head`, `tc_name`, `select_print_heading` dropped | No Customer model in Phase 1 / irrelevant to local restaurant POS / ERPNext print cosmetics. |
+| Accounting fields (`cost_center`, `income_account`, etc.) as CharField, optional | Phase 9 introduces `LedgerAccount` and migrates to FK; FEATURES #40 mandatory deferred. |
+| `currency` hardcoded to "NGN" default | Single-currency Phase 1. |
+| `selling_price_list` kept but Phase 7 ignores it | ERPNext alignment; RestPOS resolves pricing from active menu. |
+| `restaurant` field on POSProfile auto-set from branch | URY has it as user-selected; RestPOS single-site auto-derives. |
+| KOT config fields modeled now, enforced in Phase 7/8 | Config toggles consumed by orders/printing apps; modeling now keeps POSProfile complete. |
+
+#### Implementation steps
+
+1. Write models in `apps/settings/models.py` (`TaxTemplate`, `TaxRate`, `POSProfile`,
+   `POSProfileUser`, `POSProfilePayment`, `ProductionUnit`)
+2. Write forms in `apps/settings/forms.py` (with inline formsets for through models and `TaxRate`)
+3. Write views in `apps/settings/views.py` (manager-only mutating endpoints; `@require_POST` on delete)
+4. Add URL patterns in `apps/settings/urls.py`
+5. Register all 6 models in `apps/settings/admin.py`
+6. Create and run migrations: `make migrations && make migrate` (`apps.settings` gets new models;
+   `apps.staff` gets `pos_profile` FK — `makemigrations` handles cross-app deps automatically).
+   Review the generated `apps.staff` migration to confirm it depends on the new `apps.settings` one.
+7. Optional: write a seed migration for a default tax template ("Nigerian VAT 7.5%" with one
+   `TaxRate` row: `charge_type=ON_NET_TOTAL`, `rate=7.5`, `account_head="VAT Payable"`)
+8. Write templates in `templates/backoffice/settings/`
+9. Write tests: `apps/settings/tests/`
+10. Run tests: `make test ARGS='apps.settings'`
+11. Run lint: `make ruff`
+12. Update §3 status table: Phase 6 → `complete`; Phase 7 → `planned` or `not started` (depending
+    on whether §6.7 plan exists)
 
 ---
 
