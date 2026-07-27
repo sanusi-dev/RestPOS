@@ -62,8 +62,7 @@ The project is organised into 8 Django apps under `restpos/apps/`:
 
 ```
 settings R1 → inventory → menu → staff ↘
-                                      settings R2 → orders → printing → reports
-                         payments core ↗
+                         payments core ↗    settings R2 → orders → printing → reports
                                                                     refunds (cross-app)
 ```
 
@@ -71,9 +70,10 @@ settings R1 → inventory → menu → staff ↘
 - `settings R1` first — every other app references branches, rooms, and tables
 - `inventory` before `menu` — menu items reference the Item master
 - `menu` before `orders` — orders contain menu items
-- `staff` and `payments` can be built in either order (no mutual dependency)
-- `settings R2` needs menu (ItemGroup), inventory (Warehouse), and payments (ModeOfPayment)
-- `orders` is the central app — needs settings, menu, and staff
+- `payments core` is standalone (no deps); built before `staff` because `OpeningPayment.mode_of_payment` is a FK to `ModeOfPayment`
+- `staff` needs `settings R1` (Branch) and `payments core` (ModeOfPayment); is built before `orders` because the order-app validate path enforces "exactly one Open shift per branch"
+- `settings R2` needs menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment), and staff (POSProfile.applicable_users; the `pos_profile` FK is backfilled onto `POSOpeningEntry` here)
+- `orders` is the central app — needs settings (R1+R2), menu, staff, and payments
 - `printing` needs orders (ticket data to format and print)
 - `reports` needs everything
 - `refunds` extends orders/payments/inventory (reversal entries)
@@ -102,13 +102,19 @@ settings R1 → inventory → menu → staff ↘
 | 1 | settings R1 | A1, D2 (partial) | Branch, Room, Table, Restaurant, UserRoomAssignment | None | complete |
 | 2 | inventory | A12 | Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry, UOM, Bin, ProductBundle, StockReconciliation | settings R1 | complete |
 | 3 | menu | A2 | Menu, MenuItem, PriceList, ItemPrice, ItemAddOn, ItemVariant | inventory | complete (MenuCourse removed) |
-| 4 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, Role definitions | settings R1 | not started |
-| 5 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | not started |
-| 6 | settings R2 | A3, A4 | POSProfile, ProductionUnit, TaxTemplate | menu, inventory, payments | not started |
-| 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff | not started |
+| 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (43 tests passing, migrations applied) |
+| 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings R1, payments core | complete (58 tests passing, 472 total) |
+| 6 | settings R2 | A3, A4 | POSProfile, ProductionUnit, TaxTemplate | menu, inventory, payments, staff | not started |
+| 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff, payments | not started |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
 | 10 | refunds | A18 | Refund flow completion (reversal entries, stock restoration) | orders, payments, inventory | not started |
+
+> **Phase 4/5 reordering note:** Payments Core is built before Staff because `OpeningPayment.mode_of_payment`
+> is a FK to `payments.ModeOfPayment`. Payments Core is standalone (no dependencies), so promoting it
+> ahead of Staff removes the only forward dependency and keeps Staff free of stub models. Staff's
+> original Phase 4 designation becomes Phase 5. POSProfile FK on `POSOpeningEntry` is **deferred to
+> Phase 6** via a migration (Phase 5 identifies shifts by branch alone for single-site Phase 1).
 
 ### Status values
 
@@ -159,27 +165,36 @@ POS add-ons, product bundles.
 **Key reference doctypes:** URY Menu, URY Menu Item, URY Menu Course, Item Add On, ERPNext Item
 Variant, Sales BOM
 
-### staff (Phase 4)
+### payments core (Phase 4)
 
-**Scope:** Two custom roles (Manager, Cashier), role-based permissions per model, POS
-opening entries (shift start with float), POS closing entries (shift end with reconciliation),
-cashier session validation (one open session per branch, shared across users), daily close
-enforcement.
-
-**Key models:** POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment
-
-**Key reference doctypes:** ERPNext POS Opening Entry, POS Closing Entry, URY User, Role Permitted,
-URY hooks for opening/closing validation
-
-### payments core (Phase 5)
-
-**Scope:** Payment modes (Cash, Bank, General, Phone), GL account mapping per company, change
-calculation, outstanding amount tracking, additional discounts, rounded total, auto-fill
-remaining balance, write-off config.
+**Scope:** Payment modes (Cash, Bank, General, Phone) as a flat master, GL account mapping per
+company (account name as a CharField — Phase 9 introduces a real `LedgerAccount` and migrates to
+a FK), `enabled` toggle. **Phase 4 covers modes and GL mapping only** — change calculation,
+outstanding amount, discounts, rounding, write-off, and split-payment UI live in the orders app
+(Phase 7).
 
 **Key models:** ModeOfPayment, PaymentGLMapping
 
-**Key reference doctypes:** ERPNext Mode of Payment, POS Payment Method
+**Key reference doctypes:** ERPNext Mode of Payment, Mode of Payment Account, URY POS Profile
+payment-method resolution
+
+### staff (Phase 5)
+
+**Scope:** Single shared cashier shift per branch (FEATURES.md #85). POS opening entries (shift
+start with float per payment method), POS closing entries (shift end with reconciliation
+between opening float, expected sales, and cashier-counted amounts). Manager + Cashier roles
+can both open/close. The role-group conventions (Admin / Manager / Cashier) already live in
+`apps/users` and the settings-app staff list; this phase enforces `has_staff_role` on the
+shift-management views.
+
+**Key models:** POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment
+
+**Key reference doctypes:** ERPNext POS Opening Entry, POS Closing Entry, URY User, Role
+Permitted, URY hooks for opening/closing validation
+
+**Phase 1 simplifications (documented in §6.5 Deviations):** no multi-cashier / Sub POS Closing,
+no async / Queued/Failed consolidation, no daily-close "5 AM day boundary" check, no Order FK
+on the closing entry totals, no `pos_profile` FK on the opening entry (deferred to Phase 6).
 
 ### orders (Phase 7)
 
@@ -264,6 +279,30 @@ When starting a new session to continue RestPOS implementation:
 
 8. **Always:** Run `make ruff` and `make test` after any code changes. Never commit unless
    explicitly asked.
+
+---
+
+## 5.5 Cross-cutting UI Conventions
+
+> **Backoffice sidebar structure** (settled in the Phase 5 follow-up):
+> - **Backoffice group** (Manager/Admin only): Dashboard, Settings, Inventory, Menu
+> - **POS sub-header** (under Backoffice): Payments, Shifts, + Phase 6 will add POS Profile + POS Settings here
+> - **Quick Access group**: Launch POS, Sign out
+> - The shift item is labelled **"Shifts"** (not "Staff") to avoid colliding with
+>   `settings:staff_list` (role assignment, surfaced in the Settings dashboard as the
+>   "User Roles" card)
+>
+> **Main backoffice dashboard** (`/backoffice/dashboard/`) follows the **ERPNext Home pattern**:
+> a navigator, NOT a status board. Structure: "Your Shortcuts" row (4 quick-action buttons)
+> + "Masters & Setup" grid (4 grouped link cards: Menu, POS, Inventory, Setup). No live
+> operational panels — those live on per-app dashboards (Staff dashboard for shifts, Inventory
+> dashboard for low stock). No charts/number cards on Home. Analytics will live on a separate
+> `/backoffice/operations-dashboard/` page in Phase 7+ once orders and reports exist.
+>
+> **ERPNect vs RestPOS deviation:** ERPNext puts Mode of Payment in the Accounts Setup workspace
+> (configuration), not in the POS section. RestPOS Phase 1 groups it under POS because that's
+> the only place it's used (shift floats) and there's no separate Accounts app. Documented
+> in `apps/web/views.py` and `templates/web/app/app_base.html` code comments.
 
 ---
 
@@ -1031,35 +1070,596 @@ class Migration(migrations.Migration):
 
 ---
 
-### 6.4 Staff App (Phase 4)
+### 6.4 Payments Core App (Phase 4)
 
-**Status:** not started — detailed plan to be written after menu is complete.
+**Status:** complete — 43 tests passing, lint clean (1 pre-existing scratch-script error), migrations applied
+**FEATURES.md sections:** A10 (partial — modes and GL mapping only)
+**Dependencies:** None (standalone). Promoted ahead of Staff because `OpeningPayment.mode_of_payment`
+is a FK to `ModeOfPayment`.
+**Key models:** `ModeOfPayment`, `PaymentGLMapping`
+**Reference doctypes to consult:** ERPNext Mode of Payment, Mode of Payment Account
 
-**FEATURES.md sections:** A9, A17
-**Dependencies:** settings R1 (POSOpeningEntry references Branch, POSProfile)
-**Key models:** POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment
-**Reference doctypes to consult:** ERPNext POS Opening Entry, POS Closing Entry, URY User, Role
-Permitted, URY hooks for opening/closing validation
+#### Reference files consulted
+
+| Reference file | What was extracted |
+|---|---|
+| `references/erpnext-develop/erpnext/accounts/doctype/mode_of_payment/mode_of_payment.json` | Fields: `mode_of_payment` (name), `type` (Cash/Bank/General/Phone), `enabled` |
+| `references/erpnext-develop/erpnext/accounts/doctype/mode_of_payment/mode_of_payment.py` | Empty `Document` class — no validation logic |
+| `references/erpnext-develop/erpnext/accounts/doctype/mode_of_payment_account/mode_of_payment_account.json` | Child-table fields: `company`, `default_account` |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_profile/pos_profile.json` | How POS Profile lists allowed payment methods per terminal |
+| `references/ury-develop/ury/ury_pos/api.py` | How URY resolves `mode_of_payment` against the active POS profile |
+
+#### Decisions
+
+- **Flat master, no tree.** Modes are categorised by a `type` field, not nested under a parent mode.
+- **`PaymentGLMapping.default_account` is a CharField, not a Link→Account.** Phase 1 has no
+  `LedgerAccount` model — that lives in Phase 9 (reports). We store the account name as a string
+  here and migrate to a FK when the chart of accounts is introduced.
+- **`company` is a CharField** read from `Restaurant.company` (single-company Phase 1). No
+  per-company switcher in Phase 1; refactor in Phase 2.
+- **No `is_change` flag.** A mode of payment's ability to dispense physical change is inferred
+  from `type == "CASH"`. The Order app (Phase 7) handles change calculation, not here.
+- **Simple `enabled` toggle.** Disabled modes are hidden from the opening-balance form on the
+  staff app while remaining valid historical references on past opening entries. ERPNext hides
+  modes via the POS Profile's `payments` child table; RestPOS has no POS Profile yet, so we keep
+  the toggle on the master.
+
+#### Models (2 total)
+
+All models extend `apps.utils.models.BaseModel`.
+
+##### `ModeOfPayment` (`payments.ModeOfPayment`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | CharField, max_length=50, unique | e.g. "Cash", "Bank Transfer", "Opay Transfer" |
+| `type` | CharField, max_length=10, choices: CASH / BANK / GENERAL / PHONE | required — #94 |
+| `enabled` | BooleanField, default=True | disabled modes hidden from new opening entries |
+
+**Methods:**
+- `__str__` returns `name`
+- Meta: `ordering = ["name"]`
+
+**Seed data (migration 0002):** Cash (CASH), Bank Transfer (BANK), Card (BANK), USSD / Mobile Money (PHONE).
+The manager can add specific providers (Opay, Moniepoint, FirstBank POS) or disable unused ones.
+
+##### `PaymentGLMapping` (`payments.PaymentGLMapping`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `mode_of_payment` | ForeignKey→`payments.ModeOfPayment`, on_delete=PROTECT, related_name="gl_mappings" | required |
+| `company` | CharField, max_length=200 | defaults from `Restaurant.company`; Phase 1 has one company |
+| `default_account` | CharField, max_length=200 | account name as string — Phase 9 will FK to a real `LedgerAccount` |
+
+**Methods:**
+- `__str__` returns `f"{mode_of_payment.name} → {default_account}"`
+- `clean()`: default `company` from `Restaurant.objects.first().company` if blank
+- Meta: `unique_together = [("mode_of_payment", "company")]`, `ordering = ["mode_of_payment__name"]`
+
+#### Views & URLs
+
+Function-based views, `@login_required`, protected by `BackofficeAccessMiddleware` via the
+`/backoffice/...` path prefix. HTMX partials return `"<template>.html#<partialdef>"`.
+
+| URL pattern | View | Purpose |
+|---|---|---|
+| `/backoffice/payments/` | `payments_dashboard` | Overview: mode count, GL mapping count, disabled count |
+| `/backoffice/payments/modes/` | `mode_list` | List modes with HTMX partial for rows |
+| `/backoffice/payments/modes/create/` | `mode_create` | Create mode |
+| `/backoffice/payments/modes/<int:pk>/` | `mode_detail` | View mode + its GL mappings inline |
+| `/backoffice/payments/modes/<int:pk>/edit/` | `mode_update` | Update mode |
+| `/backoffice/payments/gl-mappings/` | `gl_mapping_list` | List GL mappings |
+| `/backoffice/payments/gl-mappings/create/` | `gl_mapping_create` | Create mapping |
+| `/backoffice/payments/gl-mappings/<int:pk>/edit/` | `gl_mapping_update` | Edit mapping |
+| `/backoffice/payments/gl-mappings/<int:pk>/delete/` | `gl_mapping_delete` | Remove mapping (`@require_POST`) |
+
+#### Templates
+
+| Template | Purpose |
+|---|---|
+| `templates/backoffice/payments/dashboard.html` | Overview landing page |
+| `templates/backoffice/payments/mode_list.html` with `{% partialdef mode-row %}` + `{% partialdef mode-rows %}` | List with HTMX partials |
+| `templates/backoffice/payments/mode_form.html` with `{% partialdef form inline %}` | Create/edit mode |
+| `templates/backoffice/payments/mode_detail.html` | Show mode + GL mappings inline |
+| `templates/backoffice/payments/gl_mapping_list.html` | List mappings with `{% partialdef gl-mapping-row %}` |
+| `templates/backoffice/payments/gl_mapping_form.html` | Create/edit mapping |
+
+#### Forms
+
+| Form | Model | Notes |
+|---|---|---|
+| `ModeOfPaymentForm` | `ModeOfPayment` | Fields: name, type, enabled |
+| `PaymentGLMappingForm` | `PaymentGLMapping` | `mode_of_payment` queryset via `active_choices(ModeOfPayment, self.instance.mode_of_payment_id, enabled=True)`; `company` defaulted in `__init__` from `Restaurant.objects.first().company` |
+
+Both extend `apps.utils.forms.StyledModelForm` via a `PaymentsModelForm(StyledModelForm)` base.
+
+#### Admin
+
+```python
+@admin.register(ModeOfPayment)
+class ModeOfPaymentAdmin(admin.ModelAdmin):
+    list_display = ("name", "type", "enabled", "created_at")
+    list_filter = ("type", "enabled")
+    search_fields = ("name",)
+    ordering = ("name",)
+
+
+@admin.register(PaymentGLMapping)
+class PaymentGLMappingAdmin(admin.ModelAdmin):
+    list_display = ("mode_of_payment", "company", "default_account", "created_at")
+    list_filter = ("company",)
+    list_select_related = ("mode_of_payment",)
+    search_fields = ("mode_of_payment__name", "default_account")
+    ordering = ("mode_of_payment__name",)
+```
+
+#### Tests
+
+| Test file | What it covers |
+|---|---|
+| `test_mode_of_payment.py` | CRUD, type choices, `enabled` flag, unique name, seed migration creates 4 defaults |
+| `test_payment_gl_mapping.py` | CRUD, `unique_together(mode, company)`, company defaulting from `Restaurant`, PROTECT on mode delete |
+| `test_views.py` | Login required, list/create/update/delete, HTMX partial responses, `@require_POST` on delete (GET → 405) |
+
+#### Deviations from reference
+
+| Deviation | Reason |
+|---|---|
+| `default_account` is CharField, not Link→Account | No `LedgerAccount` model in Phase 1; Phase 9 introduces one and migrates to FK |
+| `company` is CharField, not Link→Company | No Company model in Phase 1 — single `Restaurant` singleton per branch with a company name string |
+| No per-warehouse or per-branch isolation on modes | Phase 1 is single-branch; modes are shared restaurant-wide |
+| No `is_change` flag | Change capability inferred from `type == "CASH"`; only cash modes dispense physical notes |
+| Simple `enabled` toggle on mode | ERPNext hides modes via POS Profile's `payments` child table. RestPOS has no POS Profile yet, so the toggle lives on the master. |
+| Seed includes "USSD / Mobile Money" (PHONE) | Common in Nigerian restaurant context; matches #94 ("Phone (mobile money / USSD)") |
+
+#### Implementation steps
+
+1. Create the app: `make uv run 'pegasus startapp payments ModeOfPayment PaymentGLMapping'`
+2. Write models in `apps/payments/models.py`
+3. Write forms in `apps/payments/forms.py`
+4. Write views in `apps/payments/views.py`
+5. Write URLs in `apps/payments/urls.py`
+6. Register in `apps/payments/admin.py`
+7. Add `apps.payments` to `INSTALLED_APPS` in `restpos/settings.py` (after `apps.menu`)
+8. Include payments URLs in `restpos/urls.py`
+9. Write templates in `templates/backoffice/payments/`
+10. Create and run migrations: `make migrations && make migrate`
+11. Write seed migration `0002_seed_payment_modes.py` — creates Cash, Bank Transfer, Card, USSD
+12. Write tests: `apps/payments/tests/`
+13. Run tests: `make test ARGS='apps.payments'`
+14. Run lint: `make ruff`
 
 ---
 
-### 6.5 Payments Core App (Phase 5)
+### 6.5 Staff App (Phase 5)
 
-**Status:** not started — detailed plan to be written after staff is complete.
+**Status:** complete — 58 tests passing, lint clean (1 pre-existing scratch-script error), 472 total tests
+across the project, migrations applied
+**FEATURES.md sections:** A9 (POS session / cashier shift), A17 (role enforcement on shift ops;
+the role-group conventions themselves already live in `apps/users` and the settings-app staff list)
+**Dependencies:** settings R1 (Branch), payments core (ModeOfPayment)
+**Key models:** `POSOpeningEntry`, `OpeningPayment`, `POSClosingEntry`, `ClosingPayment`
+**Reference doctypes to consult:** ERPNext POS Opening Entry + Detail, POS Closing Entry + Detail +
+Taxes, URY User, Role Permitted, URY hooks for opening/closing validation
 
-**FEATURES.md sections:** A10 (partial — modes and GL mapping only)
-**Dependencies:** None (standalone — can be built in parallel with staff)
-**Key models:** ModeOfPayment, PaymentGLMapping
-**Reference doctypes to consult:** ERPNext Mode of Payment, POS Payment Method
+#### Reference files consulted
+
+| Reference file | What was extracted |
+|---|---|
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json` | Submittable doctype — fields: period_start_date, period_end_date, posting_date, company, pos_profile, user, balance_details, status, amended_from |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.py` | `validate_pos_profile_and_cashier`, `check_open_pos_exists`, `check_user_already_assigned`, `validate_payment_method_account`, submit/cancel logic, `check_poe_is_cancellable` |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry_detail/pos_opening_entry_detail.json` | Child table: `mode_of_payment` (Link), `opening_amount` (Currency) |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.json` | Submittable — fields: period dates, posting_date/time, pos_opening_entry (Link), pos_invoices, sales_invoices, taxes, totals, payment_reconciliation, status, amended_from |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.py` | `validate_pos_opening_entry`, `validate_duplicate_pos_invoices`, `validate_pos_invoices`, `on_submit` (consolidates), `on_cancel` (unconsolidates, does NOT reopen opening), `get_invoices` |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_closing_entry_detail/pos_closing_entry_detail.json` | Child table: mode_of_payment, opening_amount, expected_amount, closing_amount, difference |
+| `references/erpnext-develop/erpnext/controllers/status_updater.py` (lines 150–162) | Derived `status` rules for both doctypes: opening `Draft→Open→Closed→Cancelled` keyed on `docstatus` + presence of `pos_closing_entry`; closing `Draft→Submitted→Queued/Failed→Cancelled` |
+| `references/ury-develop/ury/ury/doctype/ury_user/ury_user.json` | Child table of URY User (user + room) on Branch — single shared session per branch |
+| `references/ury-develop/ury/ury/hooks/ury_pos_opening_entry.py` | `set_cashier_room`, `main_pos_open_check` (sub-cashier must wait for main) — **not ported**; RestPOS uses single-session model |
+| `references/ury-develop/ury/ury/hooks/ury_pos_closing_entry.py` | `calculate_closing_amount`, `validate_cashier` — **not ported**; single-session model |
+| `references/ury-develop/ury/ury_pos/api.py` `getPosProfile` / `posOpening` / `pos_opening_check` | How URY exposes shift state to the POS frontend — pattern for `staff_dashboard` view |
+| `references/ury-develop/ury/ury/doctype/sub_pos_closing/sub_pos_closing.json` | Sub-cashier close — **not ported**; single-session model |
+
+#### Decisions
+
+- **Single shared session per branch (FEATURES.md #85).** One Open shift per branch; any permitted
+  cashier rings sales on it; orders are attributed to whoever is logged in. No multi-cashier mode,
+  no `Sub POS Closing`, no main/sub hierarchy. The session is shared; the shift's `cashier` field
+  records who opened it for audit.
+- **POSProfile FK deferred to Phase 6.** `POSProfile` is built in Phase 6 (settings R2). In Phase 5
+  the shift is identified by `(branch, status="SUBMITTED" AND closing_entry IS NULL)`. Phase 6 adds
+  a nullable `pos_profile` FK via a migration.
+- **Synchronous close only.** No `QUEUED`/`FAILED` statuses, no Celery task, no `error_message`,
+  no Retry button. Phase 5's close-time work is a SQL `SUM` across the shift's `OpeningPayment`
+  rows plus the cashier-entered `closing_amount` — milliseconds even for 1,000+ orders. Add async
+  only when a future phase introduces heavy close-time write work (e.g. Phase 9 reports writing GL
+  entries on close, or a real `Sales Invoice` consolidation).
+- **Daily-close enforcement deferred.** The ERPNext `validate_pos_opening_entry` "outdated shift"
+  check and URY's `validate_pos_close` 5 AM day boundary live in the Order-app `validate` path
+  (Phase 7), not on the opening entry. Mirrors ERPNext's placement in
+  `sales_invoice/services/pos.py` and avoids coupling Phase 5 to order-creation concerns.
+- **Order FK linkage deferred to Phase 7.** Phase 5 builds the opening/closing shell with totals
+  defaulting to 0. Phase 7 (orders) adds `Order.pos_opening_entry` and `Order.pos_closing_entry`
+  FKs, and extends `POSClosingEntry.submit()` to sum order payments into `expected_amount`.
+- **Derived status via property.** `POSOpeningEntry.is_open` returns `True` iff
+  `status == "SUBMITTED" AND closing_entry_id IS NULL`. The "Open" / "Closed" labelling is
+  implied by `status` + `closing_entry`, not stored as a separate field.
+- **Cancel does NOT reopen the opening entry** (matches ERPNext). Once a closing entry exists,
+  the opening entry stays closed. Cancellation of a closing entry is blocked if a new Open shift
+  exists for the branch.
+- **Manager + Cashier can both open/close.** Whoever is logged in with `has_staff_role` can act.
+  Admin can always act. `cashier` field is the user who opened (audit), not a single permitted user.
+- **GL-account check on opening balance deferred.** ERPNext requires every `mode_of_payment` in
+  the opening balance to have a GL account mapped. RestPOS has no `LedgerAccount` in Phase 1, so
+  this check is deferred — the manager ensures each enabled mode has a `PaymentGLMapping` row via
+  the payments core CRUD before opening a shift.
+- **Round two-decimal precision only.** `opening_amount`, `expected_amount`, `closing_amount`,
+  `difference` are all `DecimalField(max_digits=12, decimal_places=2)`. The restaurant deals in
+  whole naira (see FEATURES #100 — rounding is a Phase 7 / 9 concern).
+
+#### Models (4 total)
+
+All models extend `apps.utils.models.BaseModel`.
+
+##### `POSOpeningEntry` (`staff.POSOpeningEntry`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `branch` | ForeignKey→`settings.Branch`, on_delete=PROTECT, related_name="pos_opening_entries" | required; auto-set via `Branch.get_default()` in `save()` if blank |
+| `period_start_date` | DateTimeField, default=timezone.now, editable=False | shift start |
+| `period_end_date` | DateTimeField, null=True, blank=True, editable=False | set when closing entry submits |
+| `posting_date` | DateField, default=timezone.localdate | calendar day of shift |
+| `cashier` | ForeignKey→`users.CustomUser`, on_delete=PROTECT, related_name="pos_opening_entries" | the user who opened the shift (audit) |
+| `closing_entry` | OneToOneField→`staff.POSClosingEntry`, on_delete=SET_NULL, null=True, blank=True, related_name="opening_entry_ref" | set when shift closes — status driver |
+| `status` | CharField, max_length=10, choices: DRAFT / SUBMITTED / CANCELLED, default="DRAFT" | submit/cancel workflow |
+| `remarks` | TextField, blank=True | optional notes |
+| `cancelled_by` | ForeignKey→`users.CustomUser`, on_delete=SET_NULL, null=True, blank=True, related_name="cancelled_opening_entries" | audit |
+| `cancelled_at` | DateTimeField, null=True, blank=True, editable=False | audit |
+
+**Methods:**
+- `__str__` returns `f"Opening #{self.pk} — {self.branch.name} {self.posting_date}"`
+- `save()`: auto-assign `branch` from `Branch.get_default()` if blank; raise `ValidationError` if
+  no default branch exists (caller must create a branch first). Follows the `Warehouse` pattern in
+  `apps/inventory/models.py`.
+- `clean()`:
+  - if no other validation, call `super().clean()` first
+  - if `status == "SUBMITTED"` and `closing_entry_id` is None: verify no other submitted
+    opening entry with a null closing entry exists for the same branch (one Open shift per branch)
+- `is_open` → `@property` returning `self.status == "SUBMITTED" and self.closing_entry_id is None`
+- `is_closed` → `@property` returning `self.status == "SUBMITTED" and self.closing_entry_id is not None`
+- `submit()`: idempotency guard `if self.status != "DRAFT": return`; set `status = "SUBMITTED"`;
+  `self.save(update_fields=["status", "updated_at"])`. No side effects — no SLE creation, no
+  revenue posting. The shift is now "Open" and any permitted cashier can ring sales on it (the
+  Order-app validate path enforces the "exactly one Open per branch" rule at order-create time).
+- `cancel()`: idempotency guard `if self.status != "DRAFT": return`; set `status = "CANCELLED"`,
+  `cancelled_at = timezone.now()`; caller is responsible for setting `cancelled_by` (the view
+  passes the current user). Cannot cancel a shift that has a `closing_entry` (closed shifts are
+  immutable — matches ERPNext). The view raises a `ValidationError` if `closing_entry_id` is not
+  None.
+
+**Meta:** `ordering = ["-period_start_date"]`.
+
+##### `OpeningPayment` (`staff.OpeningPayment`) — child table
+
+| Field | Type | Notes |
+|---|---|---|
+| `opening_entry` | ForeignKey→`POSOpeningEntry`, on_delete=CASCADE, related_name="opening_payments" | required |
+| `mode_of_payment` | ForeignKey→`payments.ModeOfPayment`, on_delete=PROTECT, related_name="opening_payments" | required |
+| `opening_amount` | DecimalField, max_digits=12, decimal_places=2, default=0 | the float entered by the cashier |
+
+**Methods:**
+- `__str__` returns `f"{mode_of_payment.name}: {opening_amount}"`
+- Meta: `unique_together = [("opening_entry", "mode_of_payment")]`,
+  `ordering = ["mode_of_payment__name"]`
+
+##### `POSClosingEntry` (`staff.POSClosingEntry`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `branch` | ForeignKey→`settings.Branch`, on_delete=PROTECT, related_name="pos_closing_entries" | denormalized from opening_entry for query efficiency |
+| `opening_entry` | OneToOneField→`POSOpeningEntry`, on_delete=PROTECT, related_name="closing_entry_for" | required; validated to be `is_open` in `clean()` |
+| `period_start_date` | DateTimeField, editable=False | denormalized from opening_entry |
+| `period_end_date` | DateTimeField, default=timezone.now | when the close is being submitted |
+| `posting_date` | DateField, default=timezone.localdate | calendar day of close |
+| `cashier` | ForeignKey→`users.CustomUser`, on_delete=PROTECT, related_name="pos_closing_entries" | user submitting the close |
+| `total_quantity` | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | Phase 7 backfills from Order totals |
+| `net_total` | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | Phase 7 backfills |
+| `total_taxes` | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | Phase 7 backfills |
+| `grand_total` | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | Phase 7 backfills |
+| `total_short_excess` | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | sum of `difference` across all `ClosingPayment` rows |
+| `status` | CharField, max_length=10, choices: DRAFT / SUBMITTED / CANCELLED, default="DRAFT" | |
+| `remarks` | TextField, blank=True | |
+| `cancelled_by` | ForeignKey→`users.CustomUser`, on_delete=SET_NULL, null=True, blank=True, related_name="cancelled_closing_entries" | audit |
+| `cancelled_at` | DateTimeField, null=True, blank=True, editable=False | audit |
+
+**Methods:**
+- `__str__` returns `f"Closing #{self.pk} — {self.branch.name} {self.posting_date}"`
+- `save()`: if `opening_entry_id` is set, auto-assign `branch`, `period_start_date`, and
+  `posting_date` from it. Avoids the user re-entering values the opening already has.
+- `clean()`:
+  - call `super().clean()` first
+  - validate `opening_entry.is_open` is True (cannot close a draft, cancelled, or already-closed
+    opening). Use field-keyed `ValidationError({...})` for form binding.
+  - validate `self.branch_id == self.opening_entry.branch_id`
+- `submit()`: see "Business logic" below.
+- `cancel()`: idempotency guard; raise `ValidationError` if a new Open shift exists for this
+  branch (caller passes the field-keyed dict). Set `status = "CANCELLED"`, `cancelled_at = now()`.
+  **Does NOT reopen the opening entry** — matches ERPNext.
+
+**Meta:** `ordering = ["-period_end_date"]`.
+
+##### `ClosingPayment` (`staff.ClosingPayment`) — child table
+
+| Field | Type | Notes |
+|---|---|---|
+| `closing_entry` | ForeignKey→`POSClosingEntry`, on_delete=CASCADE, related_name="closing_payments" | required |
+| `mode_of_payment` | ForeignKey→`payments.ModeOfPayment`, on_delete=PROTECT, related_name="closing_payments" | required |
+| `opening_amount` | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | denormalized from the matching `OpeningPayment` |
+| `expected_amount` | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | Phase 5: `= opening_amount`. Phase 7: `+ sum of order payments in this method` |
+| `closing_amount` | DecimalField, max_digits=12, decimal_places=2, default=0 | the cashier's counted amount — only editable field on the row |
+| `difference` | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | `= closing_amount − expected_amount` |
+
+**Methods:**
+- `__str__` returns `f"{mode_of_payment.name}: closing {closing_amount} / expected {expected_amount}"`
+- `clean()`: call `super().clean()` first; if `closing_entry_id` and `opening_entry_id` are both
+  set, validate `mode_of_payment` exists in `closing_entry.opening_entry.opening_payments` (the
+  mode must be one declared at shift-open time).
+- Meta: `unique_together = [("closing_entry", "mode_of_payment")]`,
+  `ordering = ["mode_of_payment__name"]`
+
+#### Business logic — `POSOpeningEntry.submit()`
+
+```python
+def submit(self):
+    """Mark the opening entry as submitted (the shift is now Open)."""
+    if self.status != "DRAFT":
+        return
+    self.status = "SUBMITTED"
+    self.save(update_fields=["status", "updated_at"])
+```
+
+#### Business logic — `POSOpeningEntry.cancel()`
+
+```python
+def cancel(self, by_user=None):
+    """Cancel a draft or open shift. Cannot cancel a closed shift (closing_entry set)."""
+    if self.status != "DRAFT":
+        return
+    self.status = "CANCELLED"
+    self.cancelled_at = timezone.now()
+    if by_user is not None:
+        self.cancelled_by = by_user
+    self.save(update_fields=["status", "cancelled_at", "cancelled_by", "updated_at"])
+```
+
+#### Business logic — `POSClosingEntry.submit()`
+
+```python
+def submit(self):
+    """Compute expected amounts, validate, then mark the opening entry as closed."""
+    if self.status != "DRAFT":
+        return
+    opening_modes = {op.mode_of_payment_id: op for op in self.opening_entry.opening_payments.all()}
+    for cp in self.closing_payments.all():
+        if cp.mode_of_payment_id not in opening_modes:
+            raise ValidationError({
+                "mode_of_payment": f"{cp.mode_of_payment} was not declared at shift open.",
+            })
+        cp.opening_amount = opening_modes[cp.mode_of_payment_id].opening_amount
+        cp.expected_amount = cp.opening_amount  # Phase 7 will add: + sum(OrderPayment) for this method
+        cp.difference = cp.closing_amount - cp.expected_amount
+        cp.save(update_fields=["opening_amount", "expected_amount", "difference", "updated_at"])
+    self.total_short_excess = sum((cp.difference for cp in self.closing_payments.all()), Decimal("0"))
+    self.status = "SUBMITTED"
+    self.save(update_fields=["total_short_excess", "status", "updated_at"])
+    # Flip opening entry to Closed
+    self.opening_entry.closing_entry = self
+    self.opening_entry.period_end_date = self.period_end_date
+    self.opening_entry.save(update_fields=["closing_entry", "period_end_date", "updated_at"])
+```
+
+#### Business logic — `POSClosingEntry.cancel()`
+
+```python
+def cancel(self, by_user=None):
+    """Cancel a submitted closing entry. Does NOT reopen the opening entry (matches ERPNext).
+    Blocked if a new Open shift exists for this branch — a fresh shift would already
+    reference its own opening entry, and unconsolidating an old close mid-shift would
+    corrupt the new session's accounting.
+    """
+    if self.status != "DRAFT":
+        return
+    # Check no new Open shift for this branch
+    new_open_exists = POSOpeningEntry.objects.filter(
+        branch=self.branch,
+        status="SUBMITTED",
+        closing_entry__isnull=True,
+    ).exclude(pk=self.opening_entry_id).exists()
+    if new_open_exists:
+        raise ValidationError({
+            "branch": (
+                f"Cannot cancel this closing entry — a new shift is open for {self.branch.name}. "
+                "Close or cancel the new shift first."
+            ),
+        })
+    self.status = "CANCELLED"
+    self.cancelled_at = timezone.now()
+    if by_user is not None:
+        self.cancelled_by = by_user
+    self.save(update_fields=["status", "cancelled_at", "cancelled_by", "updated_at"])
+    # Note: opening entry stays Closed (closing_entry_id still set) — matches ERPNext.
+```
+
+#### Circular FK handling
+
+`POSOpeningEntry.closing_entry` (`OneToOneField→POSClosingEntry`) and
+`POSClosingEntry.opening_entry` (`OneToOneField→POSOpeningEntry`) form a circular dependency.
+Django handles this with string references and `related_name` — declare both fields normally and
+the migration generates two `AddField` operations in the order Django can resolve (one FK added in
+each model's initial migration, the other added in a follow-up migration that depends on the
+first). Pattern: define `POSOpeningEntry` first with `closing_entry` as a nullable OneToOneField
+using `to="staff.POSClosingEntry"` (string), then define `POSClosingEntry` with
+`opening_entry = OneToOneField(POSOpeningEntry, ...)`. Tests assert the bidirectional linkage
+with `opening.closing_entry == closing` and `closing.opening_entry == opening`.
+
+#### Views & URLs
+
+Function-based views, `@login_required`, protected by `BackofficeAccessMiddleware` via the
+`/backoffice/...` path prefix. Shift-management views also require `request.user.has_staff_role`
+(view-level guard returning 302 → `web:pending_approval` if false). Mutating endpoints
+(`submit`/`cancel`/`create`/`update`/`delete`) use `@require_POST`.
+
+| URL pattern | View | Purpose |
+|---|---|---|
+| `/backoffice/staff/` | `staff_dashboard` | Overview: current shift state per branch (Open / Closed / None), recent closes |
+| `/backoffice/staff/opening-entries/` | `opening_entry_list` | List with HTMX partial for rows |
+| `/backoffice/staff/opening-entries/create/` | `opening_entry_create` | Open a new shift (inline formset for `OpeningPayment` rows) |
+| `/backoffice/staff/opening-entries/<int:pk>/` | `opening_entry_detail` | View shift + opening payments + action buttons |
+| `/backoffice/staff/opening-entries/<int:pk>/edit/` | `opening_entry_update` | Edit draft shift (no edits after submit) |
+| `/backoffice/staff/opening-entries/<int:pk>/submit/` | `opening_entry_submit` | Submit (open the shift) — `@require_POST` |
+| `/backoffice/staff/opening-entries/<int:pk>/cancel/` | `opening_entry_cancel` | Cancel draft/open shift — `@require_POST` |
+| `/backoffice/staff/closing-entries/` | `closing_entry_list` | List with HTMX partial for rows |
+| `/backoffice/staff/closing-entries/create/` | `closing_entry_create` | Start a close (selects the branch's Open opening entry; seeds `ClosingPayment` rows from `OpeningPayment`) |
+| `/backoffice/staff/closing-entries/<int:pk>/` | `closing_entry_detail` | View shift close + reconciliation form |
+| `/backoffice/staff/closing-entries/<int:pk>/edit/` | `closing_entry_update` | Edit `closing_amount` per payment method (HTMX recompute of `difference` on blur) |
+| `/backoffice/staff/closing-entries/<int:pk>/submit/` | `closing_entry_submit` | Submit (close the shift) — `@require_POST` |
+| `/backoffice/staff/closing-entries/<int:pk>/cancel/` | `closing_entry_cancel` | Cancel — `@require_POST` |
+
+#### Templates
+
+| Template | Purpose |
+|---|---|
+| `templates/backoffice/staff/dashboard.html` | Current shift state per branch (Open / Closed / None) + recent closes |
+| `templates/backoffice/staff/opening_entry_list.html` with `{% partialdef opening-row %}` + `{% partialdef opening-rows %}` | List with HTMX partials |
+| `templates/backoffice/staff/opening_entry_form.html` with `{% partialdef form inline %}` | Create/edit with `OpeningCashFloatForm` (cash-only); renders a no-cash error card if no active CASH-type `ModeOfPayment` exists |
+| `templates/backoffice/staff/opening_entry_detail.html` | Show shift + opening payments + Submit/Cancel action buttons |
+| `templates/backoffice/staff/closing_entry_list.html` with `{% partialdef closing-row %}` + `{% partialdef closing-rows %}` | List with HTMX partials |
+| `templates/backoffice/staff/closing_entry_form.html` | Reconciliation form (one row per `mode_of_payment`; read-only opening/expected/diff; editable closing_amount) |
+| `templates/backoffice/staff/closing_entry_detail.html` | Show shift close summary + reconciliation |
+
+#### Forms
+
+| Form | Model | Notes |
+|---|---|---|
+| `POSOpeningEntryForm` | `POSOpeningEntry` | Fields: `posting_date`, `remarks`. Branch auto-assigned by `save()`. Cashier auto-set in view from `request.user`. |
+| `OpeningPaymentForm` | `OpeningPayment` | Fields: `mode_of_payment` (active_choices, `enabled=True`), `opening_amount`. `clean()`: at least one row required; no duplicate modes. |
+| `POSClosingEntryForm` | `POSClosingEntry` | Fields: `opening_entry` (filtered to `is_open` entries for the branch). Branch, dates, cashier auto-set in view. |
+| `ClosingPaymentForm` | `ClosingPayment` | Fields: `mode_of_payment` (read-only), `opening_amount` (read-only), `expected_amount` (read-only), `closing_amount`, `difference` (read-only). The HTMX `hx-post` on `closing_amount` blur recomputes `difference` server-side. |
+
+Forms extend `apps.utils.forms.StyledModelForm` via a `StaffModelForm(StyledModelForm)` base
+(for the closing-entry forms). The opening-entry form is a plain `forms.Form`
+(`OpeningCashFloatForm`) that dynamically renders one `DecimalField` per active
+CASH-type `ModeOfPayment` — see §6.5 Deviations "Opening-float UI is cash-only".
+On submit, `opening_entry_create` / `opening_entry_update` auto-seed
+`OpeningPayment` rows for **every** active `ModeOfPayment` (cash modes get the
+entered amounts; non-cash modes get `0`), preserving ERPNext's one-row-per-MOP
+data model for closing reconciliation. The closing-form seed step (creating one
+`ClosingPayment` row per `OpeningPayment` row on the opening) happens in the
+`closing_entry_create` view after the parent form is saved.
+
+#### Admin
+
+```python
+@admin.register(POSOpeningEntry)
+class POSOpeningEntryAdmin(admin.ModelAdmin):
+    list_display = ("pk", "branch", "cashier", "posting_date", "period_start_date", "period_end_date", "status", "closing_entry")
+    list_filter = ("branch", "status", "posting_date")
+    list_select_related = ("branch", "cashier", "closing_entry")
+    search_fields = ("pk", "cashier__username", "remarks")
+    readonly_fields = ("period_start_date", "period_end_date", "cancelled_at", "created_at", "updated_at")
+    date_hierarchy = "posting_date"
+    ordering = ("-period_start_date",)
+
+
+@admin.register(OpeningPayment)
+class OpeningPaymentAdmin(admin.ModelAdmin):
+    list_display = ("opening_entry", "mode_of_payment", "opening_amount")
+    list_filter = ("mode_of_payment",)
+    list_select_related = ("opening_entry", "mode_of_payment")
+    search_fields = ("opening_entry__pk", "mode_of_payment__name")
+    ordering = ("opening_entry__pk", "mode_of_payment__name")
+
+
+@admin.register(POSClosingEntry)
+class POSClosingEntryAdmin(admin.ModelAdmin):
+    list_display = ("pk", "branch", "cashier", "opening_entry", "period_end_date", "status", "total_short_excess", "grand_total")
+    list_filter = ("branch", "status", "posting_date")
+    list_select_related = ("branch", "cashier", "opening_entry")
+    search_fields = ("pk", "opening_entry__pk", "remarks")
+    readonly_fields = (
+        "period_start_date", "total_quantity", "net_total", "total_taxes",
+        "grand_total", "total_short_excess", "cancelled_at", "created_at", "updated_at",
+    )
+    date_hierarchy = "posting_date"
+    ordering = ("-period_end_date",)
+
+
+@admin.register(ClosingPayment)
+class ClosingPaymentAdmin(admin.ModelAdmin):
+    list_display = ("closing_entry", "mode_of_payment", "opening_amount", "expected_amount", "closing_amount", "difference")
+    list_filter = ("mode_of_payment",)
+    list_select_related = ("closing_entry", "mode_of_payment")
+    search_fields = ("closing_entry__pk", "mode_of_payment__name")
+    ordering = ("closing_entry__pk", "mode_of_payment__name")
+```
+
+#### Tests
+
+| Test file | What it covers |
+|---|---|
+| `test_pos_opening_entry.py` | CRUD, `is_open` / `is_closed` properties, submit/cancel idempotency guards, "one Open shift per branch" `clean()` enforcement, branch auto-default in `save()` |
+| `test_opening_payment.py` | Child rows, `unique_together(entry, mode)`, PROTECT on mode delete, queryset ordering |
+| `test_pos_closing_entry.py` | CRUD, auto-fill from opening on `save()`, `clean()` opening-must-be-Open check, submit flow (computes `expected_amount` = `opening_amount`, sets `difference`, marks opening closed), cancel blocked by new open shift, cancel does NOT reopen opening |
+| `test_closing_payment.py` | `difference` recomputed on submit, `clean()` validates mode matches an opening payment, `unique_together(entry, mode)` |
+| `test_views.py` | Login required, role enforcement (`has_staff_role`), HTMX partial responses for list rows, `@require_POST` for submit/cancel (GET → 405), reconciliation-form seed step, hidden branch (no branch picker), opening-edit blocked after submit, dashboard reflects current shift state |
+| `test_circular_fk.py` | `opening.closing_entry == closing` and `closing.opening_entry == opening` (the bidirectional linkage survives round-trips) |
+
+#### Deviations from reference
+
+| Deviation | Reason |
+|---|---|
+| No `pos_profile` FK on `POSOpeningEntry` | `POSProfile` is Phase 6 (settings R2). Phase 5 identifies shifts by branch alone for single-site Phase 1. Phase 6 migration adds the nullable FK. |
+| No multi-cashier mode, no `Sub POS Closing` | FEATURES.md #85: one shared session per branch, shared across users. URY's main+sub hierarchy is overkill for Phase 1. |
+| No `QUEUED`/`FAILED` statuses, no async consolidation, no Celery task, no `error_message`, no Retry button | Phase 5's close-time work is a SQL `SUM` across `OpeningPayment` rows + a cashier-entered `closing_amount` — milliseconds even for 1,000+ orders. Add async only when a future phase introduces heavy close-time write work. |
+| No daily-close "outdated shift" / "5 AM day boundary" check | Lives in the Order-app `validate` path (Phase 7), not on the opening entry. Mirrors ERPNext's placement in `sales_invoice/services/pos.py` and avoids coupling Phase 5 to order-creation concerns. |
+| No `pos_invoices` / `sales_invoices` child table on `POSClosingEntry` | `Order` is Phase 7. Phase 5's closing entry has the `total_*` summary fields defaulting to 0; Phase 7 backfills them via computation on close. |
+| `closing_entry` is a `OneToOneField`, not ERPNext's `Data` field | Django supports the FK cleanly. ERPNext used `Data` because Frappe uses the field's presence as a status driver for the parent opening's `Open→Closed` transition. In Django we set the FK in `closing_entry.submit()`. |
+| Cancel of opening entry allowed iff no `closing_entry` exists (simpler than ERPNext's "no unconsolidated invoices" check) | No invoices exist before Phase 7. |
+| `cashier` = creating user (audit), not a single permitted user | Single-session per branch means whoever's logged in with a staff role can act; `cashier` is who opened the shift, recorded for audit. |
+| Manager + Cashier roles can both open/close | Single-session model — whoever is logged in with `has_staff_role` acts. Admin can always act. |
+| GL account validation on opening balance deferred | No `LedgerAccount` model in Phase 1; the manager ensures each enabled `ModeOfPayment` has a `PaymentGLMapping` row via the payments core CRUD before opening a shift. |
+| `expected_amount` in Phase 5 = `opening_amount` only | Phase 7 extends `POSClosingEntry.submit()` to add Σ order payments in the same mode. The Phase 5 plan explicitly notes the extension point. |
+| `period_start_date` defaults to `timezone.now()` on creation, not on submit | The cashier expects the shift to start when they hit "Open", not when they finished typing the form. Matches ERPNext's `pos_opening_entry.js` `period_start_date: now_datetime()` on form load. |
+| **Opening-float form: all-methods with 0 default.** `OpeningFloatForm` renders one `DecimalField` per active `ModeOfPayment` (CASH-type sorted first), every field pre-filled with `0.00` and `required=False`. This is a faithful carbon-copy of ERPNext's Desk JS pre-population (`pos_opening_entry.js` lines 42-54, which adds one row per configured payment method with `opening_amount=0`) and the Frappe docs ("Opening balances for other payment methods (e.g., Card, UPI, Wallet) can be entered if applicable"). The cashier typically only fills the cash drawer count; electronic fields are left at 0 when the bank/POS balance is not accessible at shift-open time, and can be overridden with the actual opening balance when it is. The ERPNext data model is preserved exactly — `OpeningPayment` has one row per configured `ModeOfPayment` so `POSClosingEntry.submit()` (which iterates `entry.opening_payments.all()`) works unchanged. `posting_date` (defaults to today on the model) and `remarks` (blank by default) are no longer exposed in the cashier-facing form. If no active `ModeOfPayment` exists at all, the form renders a no-modes error card and blocks shift open. | (1) Cashier friction: the original ERPNext Desk UI shows an editable table with a mode-of-payment dropdown per row, requiring the cashier to add/remove rows manually. A pre-populated grid with one numeric input per active mode is faster and eliminates the duplicate-mode / missing-mode risk of free-form rows. (2) Field validation (`min_value=0`, `step=0.01`, `inputmode=decimal`) gives mobile-friendly numeric input without needing the custom `OpeningPaymentForm`+`OpeningPaymentFormSet` machinery — the per-row mode is rendered as a display label, not a FK dropdown, because the cashier is filling amounts for pre-determined modes, not choosing which modes to declare. (3) All fields default to 0 and are `required=False` so a POST with no entered amounts doesn't fail form validation but creates fully-reconcilable rows — matches ERPNext's `reqd: 1 + default: "0"` semantics (a row must exist, 0 is a valid amount). |
+| **Closing flow: auto-create-or-reuse draft, inline-edit detail page, no manual shift selection.** Both ERPNext Desk (`pos_closing_entry.js` lines 5-9 — `frm.set_query("pos_opening_entry", ...)` filtered to `status="Open", docstatus=1`) and URY's `sub_pos_closing.js` (lines 37-39, same filter + `user=session.user`) make the cashier manually pick which open shift to close from a filtered Link dropdown. RestPOS Phase 1 **does not** — `closing_entry_create` is now a GET-only endpoint that immediately auto-creates (or reuses an existing) DRAFT `POSClosingEntry` for the single Open shift and redirects to its detail page. `select_for_update()` on the open shift serialises concurrent double-clicks on the "Close Shift" button so they cannot create duplicate drafts; a second GET when a DRAFT already exists just redirects to it. The detail page then renders the reconciliation table as an **inline-editable form** (POSTs back to the same detail URL — PRG pattern) for DRAFT entries, and a read-only `Difference` column for SUBMITTED/CANCELLED entries. The "Submit & Close Shift" button is wired to a SweetAlert confirmation dialog (`data-confirm-title` / `data-confirm-body` / `data-confirm-button` attributes — existing pattern used in `opening_entry_detail.html`, `gl_mapping_list.html`, `staff_list.html`) so the cashier must explicitly confirm before the close finalises. The separate `closing_entry_update` view + URL are removed; `closing_entry_form.html` and `closing_entry_reconcile.html` templates are deleted. The "Close Shift" action is available from the staff dashboard (existing), the opening-entry list (new `Close shift` link on `is_open` rows), and the closing-entry list (detail view). | (1) RestPOS Phase 1 enforces "one Open shift per branch" (see `POSOpeningEntry.clean()` + `submit()` re-check inside `select_for_update`), so a dropdown of open shifts is a list-of-one and pure friction. ERPNext/URY require manual selection only because their architecture permits multi-open-shifts per user and multi-cashier per profile — neither applies to Phase 1. (2) Industry consensus for single-shift-per-register POS systems (Lightspeed S-Series, Dynamics 365 Commerce `Tender declaration`→`Close shift`, StoreHub, ConnectPOS) is one-click close against the current shift, no selection step. (3) The auto-reuse-existing-draft guard prevents the double-click-on-`Close-Shift` race and the page-refresh-after-creating-draft race from leaking orphan drafts. (4) Folding the edit form into the detail page (one page instead of two) halves click count and matches the existing `opening_entry_form.html` symmetry. (5) The SweetAlert confirmation on submit honours ERPNext's submit-then-immutable pattern (the closing entry cannot be edited after submit, only cancelled) — the cashier explicitly agrees before the irreversibility kicks in. |
+| **Opening flow: inline-edit detail page for DRAFT, no separate edit form.** Symmetric with the closing-flow change. `opening_entry_detail` now accepts POST for DRAFT entries (re-uses `_save_opening_entry` to persist the edited amounts via the same `OpeningFloatForm`), renders the float table as an inline-editable form for DRAFT entries (POST back to the same detail URL — PRG), and a read-only two-column table for SUBMITTED/CANCELLED/Open entries. The separate `opening_entry_update` view + URL are removed; `opening_entry_form.html` is kept ONLY for `opening_entry_create` (the "Open Shift" action on the dashboard creates the initial draft, then redirects to the detail page for editing — same pattern as `closing_entry_create`). The "Submit & Open Shift" button is now wired to a SweetAlert confirmation dialog (symmetry with "Submit & Close Shift"). The legacy `confirm_empty` branch in `opening_entry_submit` is removed because `_save_opening_entry` now always seeds one row per active `ModeOfPayment` — a draft with no rows only exists if no modes are configured, in which case the create form blocks it at the form level. | (1) Symmetry: closing detail already had inline editing; opening detail now matches — both draft pages edit in place, both submitted pages are read-only. (2) Cuts one navigation hop per draft edit (no separate Edit button + form page). (3) SweetAlert confirmation on submit mirrors the closing submit — the cashier explicitly confirms before the irreversible shift-open. (4) The `confirm_empty` path was dead code — removing it eliminates an untestable branch. |
+| **Closing reconciliation: clarify `expected_amount` column to the cashier.** A tooltip is rendered on both the closing-detail page and the opening-detail page's closing-reconciliation table explaining that `Expected = Opening + collected sales during the shift (Phase 1 has no order tracking yet, so expected equals opening)`, and `Difference = closing − expected` (negative = short, positive = excess). | Without this, Phase 1 cashiers see `expected = opening` and assume it's a bug (it's not — it's correct for Phase 5's scope; Phase 7's `POSClosingEntry.submit()` extension adds Σ collected sales per method, making `expected ≠ opening` and `difference ≈ 0` for honest shifts). The tooltip makes the Phase 5 / Phase 7 expansion point visible to the user, not just an internal PLAN.md note. |
+
+#### Implementation steps
+
+1. Create the app: `make uv run 'pegasus startapp staff POSOpeningEntry POSClosingEntry OpeningPayment ClosingPayment'`
+2. Write models in `apps/staff/models.py` (handle the circular FK with string references)
+3. Write forms in `apps/staff/forms.py` (`OpeningFloatForm` — see §6.5 Deviations; `ClosingPaymentForm` for inline detail-page edit)
+4. Write views in `apps/staff/views.py` (with `has_staff_role` guard, `@require_POST` for mutating endpoints, HTMX partial returns)
+5. Write URLs in `apps/staff/urls.py`
+6. Register in `apps/staff/admin.py`
+7. Add `apps.staff` to `INSTALLED_APPS` in `restpos/settings.py` (after `apps.payments`)
+8. Include staff URLs in `restpos/urls.py`
+9. Write templates in `templates/backoffice/staff/`
+10. Create and run migrations: `make migrations && make migrate`
+11. Write tests: `apps/staff/tests/`
+12. Run tests: `make test ARGS='apps.staff'`
+13. Run lint: `make ruff`
 
 ---
 
 ### 6.6 Settings App — Round 2 (Phase 6)
 
-**Status:** not started — detailed plan to be written after payments core is complete.
+**Status:** not started — detailed plan to be written after staff is complete.
 
 **FEATURES.md sections:** A3, A4, A5 (partial)
-**Dependencies:** menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment)
+**Dependencies:** menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment), staff
+(`POSProfile.applicable_users` references the staff shift model; the `pos_profile` FK is
+backfilled onto `POSOpeningEntry` via a migration in this phase)
 **Key models:** POSProfile, ProductionUnit, TaxTemplate
 **Reference doctypes to consult:** ERPNext POS Profile (+ 38 URY custom fields), URY Production
 Unit, URY Printer Settings, Aggregator Settings
@@ -1071,10 +1671,18 @@ Unit, URY Printer Settings, Aggregator Settings
 **Status:** not started — detailed plan to be written after settings R2 is complete.
 
 **FEATURES.md sections:** A6, A7, A18
-**Dependencies:** settings (R1+R2), menu, staff
+**Dependencies:** settings (R1+R2), menu, staff, payments (ModeOfPayment on each payment row)
 **Key models:** Order, OrderItem, KOT, KOTItem, RefundEntry, RefundPaymentEntry, RefundStockEntry
 **Reference doctypes to consult:** ERPNext POS Invoice, POS Invoice Item, URY Order, URY Order
 Item, URY KOT, URY KOT Items, URY hooks for order/KOT/invoice events, URY POS API
+
+> **POS-screen shift UI is a Phase 7 deliverable.** Per user decision (Phase 5 follow-up),
+> Phase 7 builds the actual POS screen, which checks for an open shift on load and shows
+> an inline "Open Shift" form (opening float per mode) if none is open. The order screen
+> will have a "Close Shift" button that walks the cashier through reconciliation. The
+> backoffice Staff app (Phase 5) remains the manager audit/reconciliation surface.
+> This is a documented deviation from URY, which puts shift open/close entirely in the
+> backoffice and gates the POS screen with a "Switch to Desk" blocker.
 
 ---
 
