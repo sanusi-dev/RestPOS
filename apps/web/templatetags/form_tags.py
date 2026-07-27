@@ -71,9 +71,7 @@ def _render_field(template_text, form_field, **attrs):
 
 
 def _transform_x_attrs(attrs):
-    """
-    No support for `@click` style attributes or `.` modifiers
-    """
+    """Transform attribute keys prefixed with \'x\' into Alpine.js bindings."""
 
     def _make_x_attr(key):
         if key.startswith("x"):

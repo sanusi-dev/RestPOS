@@ -1,8 +1,8 @@
-"""Seed Nigerian restaurant Items (raw + finished) and the Main Menu.
+"""Seed Nigerian restaurant Items and the Main Menu.
 
 Usage:
     make manage ARGS='seed_menu_catalog'
-    make manage ARGS='seed_menu_catalog --force'   # re-link menu items / variants
+    make manage ARGS='seed_menu_catalog --force'
 """
 
 from __future__ import annotations
@@ -314,7 +314,7 @@ class Command(BaseCommand):
         return result
 
     def _seed_variant_families(self) -> list[dict]:
-        """Create parent template + size variants. Templates are never on the menu."""
+        """Create parent template items with POS-level size variants."""
         families = []
         for fam in VARIANT_FAMILIES:
             group = self._get_group(fam["group"])

@@ -49,7 +49,7 @@ class BranchForm(SettingsModelForm):
 
 
 class RoomForm(SettingsModelForm):
-    """Branch is implicit in Phase 1 — Room.save assigns Branch.get_default()."""
+    """Form for Room. Branch is auto-assigned on save."""
 
     class Meta:
         model = Room
@@ -57,7 +57,7 @@ class RoomForm(SettingsModelForm):
 
 
 class TableForm(SettingsModelForm):
-    """Branch is derived from room on save — never shown in the form."""
+    """Form for Table. Branch is derived from room on save."""
 
     class Meta:
         model = Table
@@ -76,7 +76,7 @@ class TableForm(SettingsModelForm):
 
 
 class RestaurantForm(SettingsModelForm):
-    """Branch is implicit in Phase 1 — Restaurant.save assigns Branch.get_default()."""
+    """Form for Restaurant. Branch is auto-assigned on save."""
 
     class Meta:
         model = Restaurant
@@ -84,7 +84,7 @@ class RestaurantForm(SettingsModelForm):
 
 
 class UserRoomAssignmentForm(SettingsModelForm):
-    """Branch is derived from room on save — never shown in the form."""
+    """Form for UserRoomAssignment. Branch is derived from room on save."""
 
     class Meta:
         model = UserRoomAssignment

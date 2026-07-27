@@ -357,7 +357,6 @@ class StockEntry(BaseModel):
             return
         voucher_no = str(self.pk)
         updated_items = set()
-        # select_related avoids per-line FK fetches of item/source/target inside the loop.
         for detail in self.items.select_related("item", "source_warehouse", "target_warehouse").all():
             source = detail.source_warehouse
             target = detail.target_warehouse
@@ -431,8 +430,6 @@ class StockEntry(BaseModel):
 
     @staticmethod
     def stock_ledger_entries_for_voucher(voucher_no):
-        # select_related avoids per-row FK fetches when callers read sle.item/sle.warehouse
-        # inside loops (StockEntry.cancel + the stock entry detail view both hit this).
         return StockLedgerEntry.objects.select_related("item", "warehouse").filter(
             voucher_type="Stock Entry", voucher_no=voucher_no
         )
@@ -513,7 +510,6 @@ class StockReconciliation(BaseModel):
         if self.status != "DRAFT":
             return
         voucher_no = str(self.pk)
-        # select_related avoids per-line FK fetches of item/warehouse inside the loop.
         for line in self.items.select_related("item", "warehouse").all():
             current_qty = line.current_qty
             difference = line.qty - current_qty
@@ -633,7 +629,6 @@ class PurchaseReceipt(BaseModel):
         voucher_no = str(self.pk)
         total = Decimal("0")
         updated_items = set()
-        # select_related avoids per-line FK fetches of line.item inside the loop.
         for line in self.items.select_related("item").all():
             if line.received_qty > 0:
                 StockLedgerEntry.create_entry(

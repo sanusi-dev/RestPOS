@@ -2,9 +2,7 @@ from django.db import models
 
 
 class BaseModel(models.Model):
-    """
-    Base model that includes default created / updated timestamps.
-    """
+    """Base model with created_at and updated_at timestamps."""
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

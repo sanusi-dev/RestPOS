@@ -33,7 +33,7 @@ class ItemGroupForm(InventoryModelForm):
 
 
 class WarehouseForm(InventoryModelForm):
-    """Branch is implicit in Phase 1 — Warehouse.save assigns Branch.get_default()."""
+    """Form for Warehouse. Branch is auto-assigned on save."""
 
     class Meta:
         model = Warehouse

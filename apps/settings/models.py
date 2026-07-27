@@ -6,7 +6,7 @@ from apps.utils.models import BaseModel
 
 
 class Branch(BaseModel):
-    """A restaurant branch/location."""
+    """A restaurant branch or physical location."""
 
     name = models.CharField(max_length=100, unique=True)
 
@@ -15,18 +15,12 @@ class Branch(BaseModel):
 
     @classmethod
     def get_default(cls):
-        """Phase 1 single-site helper: the first (usually only) branch.
-
-        Multi-branch UI can replace this later with the user's assigned branch.
-        """
+        """Return the first branch (single-site default)."""
         return cls.objects.order_by("pk").first()
 
 
 class Room(BaseModel):
-    """A dining room/area within a branch.
-
-    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
-    """
+    """A dining room or area within a branch."""
 
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="rooms")
     name = models.CharField(max_length=100)
@@ -48,10 +42,7 @@ class Room(BaseModel):
 
 
 class Table(BaseModel):
-    """A physical table within a room.
-
-    ``branch`` is denormalized from ``room.branch`` — never selected in UI.
-    """
+    """A physical table within a room. Branch is denormalized from room."""
 
     room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="tables")
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="tables")
@@ -92,10 +83,7 @@ class Table(BaseModel):
 
 
 class Restaurant(BaseModel):
-    """Restaurant-level configuration for a branch.
-
-    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
-    """
+    """Restaurant-level configuration for a branch."""
 
     company = models.CharField(max_length=200)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="restaurants")
@@ -142,10 +130,7 @@ class Restaurant(BaseModel):
 
 
 class UserRoomAssignment(BaseModel):
-    """Assigns a user (cashier/captain) to a room.
-
-    ``branch`` is always derived from ``room.branch`` — never selected in UI.
-    """
+    """Assigns a user to a room. Branch is derived from room on save."""
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="room_assignments")
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="user_assignments")

@@ -7,11 +7,7 @@ from apps.utils.models import BaseModel
 
 
 class Menu(BaseModel):
-    """A named menu for the restaurant. Owns a synced PriceList.
-
-    ``branch`` is kept for multi-branch isolation (FEATURES #7 / #269) but is
-    implicit in Phase 1: forms hide it and ``save()`` assigns Branch.get_default().
-    """
+    """A named menu for the restaurant. Owns a synced PriceList."""
 
     name = models.CharField(max_length=100)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="menus")
@@ -99,7 +95,7 @@ class MenuItem(BaseModel):
 
 
 class PriceList(BaseModel):
-    """A named price list. The POS sells items at prices from the active menu's list."""
+    """A named price list for selling items at specific rates."""
 
     name = models.CharField(max_length=100)
     enabled = models.BooleanField(default=True)
@@ -121,7 +117,7 @@ class PriceList(BaseModel):
 
 
 class ItemPrice(BaseModel):
-    """The rate at which an item sells in a specific PriceList (per UOM)."""
+    """The rate at which an item sells in a specific PriceList."""
 
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="prices")
     price_list = models.ForeignKey(PriceList, on_delete=models.CASCADE, related_name="prices")
@@ -137,7 +133,7 @@ class ItemPrice(BaseModel):
 
 
 class ItemAddOn(BaseModel):
-    """An add-on that can be upsold alongside a parent item (e.g. extra cheese)."""
+    """An add-on that can be upsold alongside a parent item."""
 
     parent_item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="add_ons")
     add_on_item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="add_on_for")

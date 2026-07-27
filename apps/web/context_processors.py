@@ -20,11 +20,7 @@ def project_meta(request):
 
 
 def csrf_settings(request):
-    """
-    Exposes the configured CSRF cookie name to templates so front-end JS can
-    read the correct cookie regardless of how CSRF_COOKIE_NAME is set. See
-    base.html (the <meta> tag) and assets/javascript/csrf.js.
-    """
+    """Expose the CSRF cookie name to templates."""
     return {
         "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
     }

@@ -11,7 +11,7 @@ class MenuModelForm(StyledModelForm):
 
 
 class MenuForm(MenuModelForm):
-    """Branch is not user-facing in Phase 1 — Menu.save assigns Branch.get_default()."""
+    """Form for Menu. Branch is auto-assigned on save."""
 
     class Meta:
         model = Menu

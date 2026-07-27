@@ -17,12 +17,7 @@ TAILWIND_FILE_CLASS = (
 
 
 def active_choices(model_class, current_id=None, **active_filters):
-    """Choices for a ModelChoiceField: rows passing ``active_filters``, with
-    ``current_id`` always included (so editing a record whose currently-assigned
-    FK row is now inactive still shows that option as the selected value in the
-    ``<select>``). Use for dropdowns where the source model has a
-    ``disabled`` (or similar) flag.
-    """
+    """Return a queryset filtered by active_filters, always including current_id if set."""
     qs = model_class.objects.filter(**active_filters)
     if current_id:
         return qs | model_class.objects.filter(Q(pk=current_id))
@@ -30,16 +25,7 @@ def active_choices(model_class, current_id=None, **active_filters):
 
 
 class StyledModelForm(forms.ModelForm):
-    """ModelForm that applies the backoffice Tailwind design system to every widget.
-
-    - text-like inputs, selects and textareas get the standard input class
-    - checkboxes get a compact accent-coloured style (never the full-width input class)
-    - file inputs get a styled file-button treatment
-    - date fields are rendered with an HTML5 date picker (type="date")
-    - ModelChoiceFields get a "Select ..." empty placeholder
-    - required ChoiceFields whose model field has no default get a placeholder
-      empty option so the user must make an explicit choice
-    """
+    """ModelForm that applies the backoffice Tailwind design system to every widget."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,7 +57,7 @@ class StyledModelForm(forms.ModelForm):
                 widget.attrs.setdefault("rows", 3)
 
     def _apply_placeholder(self, name, field):
-        """Add a "Select ..." placeholder to choice fields where appropriate."""
+        """Add a \"Select ...\" placeholder to choice fields where appropriate."""
         if isinstance(field, forms.ModelChoiceField):
             field.empty_label = f"Select {field.label.lower()}..."
             return
