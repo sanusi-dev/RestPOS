@@ -2,7 +2,34 @@
 {% load static %}
 
 {% block body %}
-<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeTab: 'dine-in', activeGroup: 'All', guestCount: {{ order.guest_count|default:1 }}, activeCard: 1 }">
+<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeTab: 'dine-in', activeGroup: 'All', guestCount: {{ order.guest_count|default:1 }}, activeCard: 1 }"
+     x-init="window.posOrderId = {{ order.pk|default:'null' }}">
+
+  <!-- CSRF token for JS-driven HTMX POSTs -->
+  {% csrf_token %}
+  <script>
+  function addToCart(itemId, cardIdx, qty) {
+    if (!window.posOrderId) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/pos/order/${window.posOrderId}/add-item/`;
+    form.setAttribute('hx-post', form.action);
+    form.setAttribute('hx-target', '#cart-items');
+    form.setAttribute('hx-swap', 'innerHTML');
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrf) { const i = csrf.cloneNode(); form.appendChild(i); }
+    for (const [k, v] of [['item_id', itemId], ['customer_index', cardIdx], ['qty', qty]]) {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = k; input.value = v;
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.addEventListener('htmx:afterRequest', () => form.remove());
+    htmx.process(form);
+    form.requestSubmit();
+  }
+  </script>
+
   <!-- Top Bar -->
   <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
     <div class="flex items-center gap-4">
@@ -32,9 +59,8 @@
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {% for mi in menu_items %}
           <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name }}'"
-               x-data
-               @click="await hxPost(`{% url 'pos:pos_order_add_item' order.pk %}`, {item_id: {{ mi.item.pk }}, customer_index: activeCard, qty: 1})"
-               class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+               {% if order %}onclick="addToCart({{ mi.item.pk }}, activeCard, 1)"{% endif %}
+               class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm {% if order %}cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95{% endif %} transition-all duration-200 {% if not order %}opacity-50{% endif %}">
             <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
               {{ mi.item.item_name|slice:":2"|upper }}
             </div>
@@ -77,52 +103,26 @@
         {% if order %}
           {% include "pos/_partials/cart_items.html" %}
         {% else %}
-          <div class="flex items-center justify-center h-full text-gray-400 text-sm">
-            Click "New Order" to begin
+          <div class="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
+            Click <strong class="mx-1">+ New Order</strong> to begin. Menu items are dimmed until an order is active.
           </div>
         {% endif %}
       </div>
 
       <!-- Order Actions -->
-      {% if order and order.items.exists %}
-        <div class="p-4 border-t border-gray-100 space-y-2">
-          <form method="post" action="{% url 'pos:pos_order_sync' order.pk %}" hx-post="{% url 'pos:pos_order_sync' order.pk %}" hx-target="#cart-items">
+      <div class="p-4 border-t border-gray-100 space-y-2">
+        {% if order and order.items.exists %}
+          <form method="post" action="{% url 'pos:pos_order_sync' order.pk %}"
+                hx-post="{% url 'pos:pos_order_sync' order.pk %}" hx-target="#cart-items" hx-swap="innerHTML">
             {% csrf_token %}
             <button class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">Update Order &amp; Send to Kitchen</button>
           </form>
           <a href="{% url 'pos:pos_order_settle' order.pk %}" class="block text-center w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">Pay ₦{{ order.net_total }}</a>
-        </div>
-      {% endif %}
+        {% elif order %}
+          <div class="text-center text-sm text-gray-400 py-2">Add items to the order to continue</div>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
-
-<script>
-function hxPost(url, data) {
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = url;
-  const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
-  if (csrf) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'csrfmiddlewaretoken';
-    input.value = csrf.value;
-    form.appendChild(input);
-  }
-  for (const [k, v] of Object.entries(data)) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = k;
-    input.value = v;
-    form.appendChild(input);
-  }
-  form.setAttribute('hx-post', url);
-  form.setAttribute('hx-target', '#cart-items');
-  document.body.appendChild(form);
-  htmx.process(form);
-  form.requestSubmit();
-  setTimeout(() => form.remove(), 100);
-}
-</script>
 {% endblock %}
