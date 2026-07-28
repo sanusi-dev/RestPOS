@@ -218,14 +218,9 @@ class ProductionUnitForm(SettingsModelForm):
         model = ProductionUnit
         fields = [
             "name",
-            "warehouse",
             "department",
             "block_takeaway_kot",
             "printer_ip",
             "printer_paper_width",
             "printer_cut_mode",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)
