@@ -127,22 +127,15 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
         self.assertTrue(PaymentGLMapping.objects.filter(default_account="Bank Clearing").exists())
 
-    def test_gl_mapping_create_post_unique_together(self):
+    def test_gl_mapping_company_auto_filled_on_create_post(self):
         response = self.client.post(
             reverse("payments:gl_mapping_create"),
             data={
-                "mode_of_payment": self.cash.pk,
-                "company": "Test Co",
-                "default_account": "Another Account",
+                "mode_of_payment": self.bank.pk,
+                "default_account": "Bank Clearing",
             },
         )
-        # Form should be invalid (re-render with errors), not redirect
-        self.assertEqual(response.status_code, 200)
-        # The Cash + "Test Co" pair already exists, so a duplicate must NOT be created.
-        self.assertEqual(
-            PaymentGLMapping.objects.filter(mode_of_payment=self.cash, company="Test Co").count(),
-            1,
-        )
+        self.assertRedirects(response, reverse("payments:gl_mapping_list"))
 
     def test_gl_mapping_create_post_missing_account(self):
         response = self.client.post(

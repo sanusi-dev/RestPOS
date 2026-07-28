@@ -16,7 +16,7 @@ class ModeOfPaymentForm(PaymentsModelForm):
 class PaymentGLMappingForm(PaymentsModelForm):
     class Meta:
         model = PaymentGLMapping
-        fields = ["mode_of_payment", "company", "default_account"]
+        fields = ["mode_of_payment", "default_account"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
