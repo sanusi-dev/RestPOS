@@ -10,7 +10,6 @@ from .models import (
     Branch,
     POSProfile,
     POSProfilePayment,
-    POSProfileUser,
     ProductionUnit,
     Restaurant,
     Room,
@@ -96,7 +95,13 @@ class RestaurantForm(SettingsModelForm):
 
     class Meta:
         model = Restaurant
-        fields = ["company", "invoice_series_prefix", "address", "default_room"]
+        fields = ["company", "invoice_series_prefix", "address", "default_room", "default_tax_template"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["default_tax_template"].queryset = active_choices(
+            TaxTemplate, self.instance.default_tax_template_id, disabled=False
+        )
 
 
 class UserRoomAssignmentForm(SettingsModelForm):
@@ -192,16 +197,6 @@ class POSProfileForm(SettingsModelForm):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)
         self.fields["selling_price_list"].queryset = active_choices(PriceList, self.instance.selling_price_list_id)
-
-
-class POSProfileUserForm(SettingsModelForm):
-    class Meta:
-        model = POSProfileUser
-        fields = ["user", "is_default", "is_main_cashier"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["user"].queryset = CustomUser.objects.order_by("username")
 
 
 class POSProfilePaymentForm(SettingsModelForm):

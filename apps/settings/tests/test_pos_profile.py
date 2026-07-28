@@ -8,11 +8,9 @@ from apps.settings.models import (
     Branch,
     POSProfile,
     POSProfilePayment,
-    POSProfileUser,
     Restaurant,
     Room,
 )
-from apps.users.models import CustomUser
 
 
 class POSProfileModelTest(TestCase):
@@ -41,10 +39,10 @@ class POSProfileModelTest(TestCase):
         profile = POSProfile.objects.create(name="Auto Co", warehouse=self.warehouse)
         self.assertEqual(profile.company, "Test Co")
 
-    def test_unique_together_name_branch(self):
+    def test_unique_together_restaurant(self):
         POSProfile.objects.create(name="Main Cashier", warehouse=self.warehouse)
         with self.assertRaises(IntegrityError):
-            POSProfile.objects.create(name="Main Cashier", warehouse=self.warehouse)
+            POSProfile.objects.create(name="Other Cashier", warehouse=self.warehouse)
 
     def test_default_currency_ngn(self):
         profile = POSProfile.objects.create(name="P1", warehouse=self.warehouse)
@@ -77,6 +75,7 @@ class POSProfileCleanTest(TestCase):
         self.profile.clean()
 
     def test_clean_fails_no_payments(self):
+        self.profile.delete()
         profile = POSProfile.objects.create(name="No Pay", warehouse=self.warehouse)
         with self.assertRaises(ValidationError):
             profile.clean()
@@ -89,6 +88,7 @@ class POSProfileCleanTest(TestCase):
             self.profile.clean()
 
     def test_clean_fails_no_default_payment(self):
+        self.profile.delete()
         profile = POSProfile.objects.create(name="No Default", warehouse=self.warehouse)
         POSProfilePayment.objects.create(pos_profile=profile, mode_of_payment=self.cash, is_default=False)
         with self.assertRaises(ValidationError):
@@ -96,6 +96,7 @@ class POSProfileCleanTest(TestCase):
 
     def test_clean_fails_payment_without_gl_mapping(self):
         ungleared = ModeOfPayment.objects.create(name="Ungleared", type="CASH")
+        self.profile.delete()
         profile = POSProfile.objects.create(name="No GL", warehouse=self.warehouse)
         POSProfilePayment.objects.create(pos_profile=profile, mode_of_payment=ungleared, is_default=True)
         with self.assertRaises(ValidationError):
@@ -106,25 +107,3 @@ class POSProfileCleanTest(TestCase):
         drinks = ItemGroup.objects.create(name="Drinks")
         self.profile.item_groups.add(food, drinks)
         self.profile.clean()
-
-
-class POSProfileUserDefaultTest(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
-        cls.room = Room.objects.create(branch=cls.branch, name="Hall")
-        cls.restaurant = Restaurant.objects.create(company="Test Co", branch=cls.branch, default_room=cls.room)
-        cls.warehouse = Warehouse.objects.create(name="Kitchen", branch=cls.branch)
-        cls.cash = ModeOfPayment.objects.get(name="Cash")
-        PaymentGLMapping.objects.create(mode_of_payment=cls.cash, company="Test Co", default_account="Cash Account")
-        cls.user = CustomUser.objects.create_user(username="cashier1", password="testpass123")
-        cls.profile1 = POSProfile.objects.create(name="Profile A", warehouse=cls.warehouse)
-        POSProfilePayment.objects.create(pos_profile=cls.profile1, mode_of_payment=cls.cash, is_default=True)
-        POSProfileUser.objects.create(pos_profile=cls.profile1, user=cls.user, is_default=True)
-
-    def test_user_default_on_two_profiles_raises(self):
-        profile2 = POSProfile.objects.create(name="Profile B", warehouse=self.warehouse)
-        POSProfilePayment.objects.create(pos_profile=profile2, mode_of_payment=self.cash, is_default=True)
-        POSProfileUser.objects.create(pos_profile=profile2, user=self.user, is_default=True)
-        with self.assertRaises(ValidationError):
-            profile2.clean()

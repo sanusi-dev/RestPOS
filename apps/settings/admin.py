@@ -4,7 +4,6 @@ from .models import (
     Branch,
     POSProfile,
     POSProfilePayment,
-    POSProfileUser,
     ProductionUnit,
     Restaurant,
     Room,
@@ -83,15 +82,6 @@ class POSProfileAdmin(admin.ModelAdmin):
     list_select_related = ("branch", "warehouse")
     search_fields = ("name",)
     ordering = ("name",)
-
-
-@admin.register(POSProfileUser)
-class POSProfileUserAdmin(admin.ModelAdmin):
-    list_display = ("pos_profile", "user", "is_default", "is_main_cashier")
-    list_filter = ("is_default", "is_main_cashier")
-    list_select_related = ("pos_profile", "user")
-    search_fields = ("user__username", "pos_profile__name")
-    ordering = ("user__username",)
 
 
 @admin.register(POSProfilePayment)

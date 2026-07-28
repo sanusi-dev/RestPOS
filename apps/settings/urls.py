@@ -29,12 +29,8 @@ urlpatterns = [
     path("staff/", view=views.staff_list, name="staff_list"),
     path("staff/<int:pk>/assign/<str:role>/", view=views.staff_assign_role, name="staff_assign_role"),
     path("staff/<int:pk>/remove/", view=views.staff_remove_role, name="staff_remove_role"),
-    # POS Profiles
-    path("pos-profiles/", view=views.pos_profile_list, name="pos_profile_list"),
-    path("pos-profiles/create/", view=views.pos_profile_create, name="pos_profile_create"),
-    path("pos-profiles/<int:pk>/", view=views.pos_profile_detail, name="pos_profile_detail"),
-    path("pos-profiles/<int:pk>/edit/", view=views.pos_profile_update, name="pos_profile_update"),
-    path("pos-profiles/<int:pk>/delete/", view=views.pos_profile_delete, name="pos_profile_delete"),
+    # POS Profile (singleton)
+    path("pos-profile/", view=views.pos_profile_settings, name="pos_profile_settings"),
     # Production Units
     path("production-units/", view=views.production_unit_list, name="production_unit_list"),
     path("production-units/create/", view=views.production_unit_create, name="production_unit_create"),

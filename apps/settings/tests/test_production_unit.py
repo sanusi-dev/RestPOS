@@ -97,6 +97,8 @@ class ProductionUnitModelTest(TestCase):
 
     def test_clean_branch_mismatch_with_pos_profile(self):
         other_branch = Branch.objects.create(name="Other Branch")
+        other_room = Room.objects.create(branch=other_branch, name="Other Hall")
+        Restaurant.objects.create(company="Other Co", branch=other_branch, default_room=other_room)
         other_warehouse = Warehouse.objects.create(name="Other WH", branch=other_branch)
         other_profile = POSProfile.objects.create(name="Other Profile", warehouse=other_warehouse, branch=other_branch)
         unit = ProductionUnit(

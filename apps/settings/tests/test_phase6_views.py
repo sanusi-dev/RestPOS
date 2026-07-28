@@ -42,8 +42,8 @@ class Phase6ViewTestBase(TestCase):
 
 
 class TestLoginRequired(TestCase):
-    def test_pos_profile_list_requires_login(self):
-        response = self.client.get(reverse("settings:pos_profile_list"))
+    def test_pos_profile_settings_requires_login(self):
+        response = self.client.get(reverse("settings:pos_profile_settings"))
         self.assertEqual(response.status_code, 302)
 
     def test_production_unit_list_requires_login(self):
@@ -55,21 +55,23 @@ class TestLoginRequired(TestCase):
         self.assertEqual(response.status_code, 302)
 
 
-class TestPOSProfileViews(Phase6ViewTestBase):
-    def test_list_200(self):
-        response = self.client.get(reverse("settings:pos_profile_list"))
+class TestPOSProfileSettingsView(Phase6ViewTestBase):
+    def test_get_200(self):
+        response = self.client.get(reverse("settings:pos_profile_settings"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Main Cashier")
 
-    def test_create_get_200(self):
-        response = self.client.get(reverse("settings:pos_profile_create"))
+    def test_get_200_no_profile(self):
+        POSProfile.objects.all().delete()
+        response = self.client.get(reverse("settings:pos_profile_settings"))
         self.assertEqual(response.status_code, 200)
 
-    def test_create_post(self):
+    def test_post_creates_when_none(self):
+        POSProfile.objects.all().delete()
         response = self.client.post(
-            reverse("settings:pos_profile_create"),
+            reverse("settings:pos_profile_settings"),
             {
-                "name": "Bar POS",
+                "name": "New Profile",
                 "warehouse": self.warehouse.pk,
                 "currency": "NGN",
                 "apply_discount_on": "GRAND_TOTAL",
@@ -81,21 +83,12 @@ class TestPOSProfileViews(Phase6ViewTestBase):
                 "kot_naming_series": "KOT-####",
             },
         )
-        self.assertRedirects(response, reverse("settings:pos_profile_list"))
-        self.assertTrue(POSProfile.objects.filter(name="Bar POS").exists())
+        self.assertRedirects(response, reverse("settings:pos_profile_settings"))
+        self.assertTrue(POSProfile.objects.filter(name="New Profile").exists())
 
-    def test_detail_200(self):
-        response = self.client.get(reverse("settings:pos_profile_detail", kwargs={"pk": self.profile.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Cashier")
-
-    def test_update_get_200(self):
-        response = self.client.get(reverse("settings:pos_profile_update", kwargs={"pk": self.profile.pk}))
-        self.assertEqual(response.status_code, 200)
-
-    def test_update_post(self):
+    def test_post_updates_existing(self):
         response = self.client.post(
-            reverse("settings:pos_profile_update", kwargs={"pk": self.profile.pk}),
+            reverse("settings:pos_profile_settings"),
             {
                 "name": "Updated Cashier",
                 "warehouse": self.warehouse.pk,
@@ -109,19 +102,9 @@ class TestPOSProfileViews(Phase6ViewTestBase):
                 "kot_naming_series": "KOT-####",
             },
         )
-        self.assertRedirects(response, reverse("settings:pos_profile_detail", kwargs={"pk": self.profile.pk}))
+        self.assertRedirects(response, reverse("settings:pos_profile_settings"))
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.name, "Updated Cashier")
-
-    def test_delete_get_405(self):
-        response = self.client.get(reverse("settings:pos_profile_delete", kwargs={"pk": self.profile.pk}))
-        self.assertEqual(response.status_code, 405)
-
-    def test_delete_post(self):
-        pk = self.profile.pk
-        response = self.client.post(reverse("settings:pos_profile_delete", kwargs={"pk": pk}))
-        self.assertRedirects(response, reverse("settings:pos_profile_list"))
-        self.assertFalse(POSProfile.objects.filter(pk=pk).exists())
 
 
 class TestProductionUnitViews(Phase6ViewTestBase):
@@ -234,12 +217,12 @@ class TestManagerGuard(TestCase):
     def setUp(self):
         self.client.login(username="regular@test.com", password="testpass123")
 
-    def test_pos_profile_create_redirects_non_manager(self):
-        response = self.client.get(reverse("settings:pos_profile_create"))
-        self.assertEqual(response.status_code, 302)
+    def test_pos_profile_settings_get_ok(self):
+        response = self.client.get(reverse("settings:pos_profile_settings"))
+        self.assertEqual(response.status_code, 200)
 
-    def test_pos_profile_update_redirects_non_manager(self):
-        response = self.client.get(reverse("settings:pos_profile_update", kwargs={"pk": self.profile.pk}))
+    def test_pos_profile_settings_post_redirects_non_manager(self):
+        response = self.client.post(reverse("settings:pos_profile_settings"), {"name": "X", "warehouse": 1})
         self.assertEqual(response.status_code, 302)
 
     def test_production_unit_create_redirects_non_manager(self):
@@ -249,7 +232,3 @@ class TestManagerGuard(TestCase):
     def test_tax_template_create_redirects_non_manager(self):
         response = self.client.get(reverse("settings:tax_template_create"))
         self.assertEqual(response.status_code, 302)
-
-    def test_list_accessible_to_non_manager(self):
-        response = self.client.get(reverse("settings:pos_profile_list"))
-        self.assertEqual(response.status_code, 200)

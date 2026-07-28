@@ -265,8 +265,6 @@ class POSProfile(BaseModel):
     restaurant = models.ForeignKey(
         Restaurant,
         on_delete=models.PROTECT,
-        null=True,
-        blank=True,
         related_name="pos_profiles",
     )
     warehouse = models.ForeignKey(
@@ -318,9 +316,6 @@ class POSProfile(BaseModel):
     enable_kot_reprint = models.BooleanField(default=False)
     reprint_kot_format = models.CharField(max_length=100, blank=True)
     print_format = models.CharField(max_length=100, blank=True)
-    applicable_users = models.ManyToManyField(
-        CustomUser, through="POSProfileUser", related_name="pos_profiles", blank=True
-    )
     payments = models.ManyToManyField(
         "payments.ModeOfPayment",
         through="POSProfilePayment",
@@ -337,7 +332,7 @@ class POSProfile(BaseModel):
 
     class Meta:
         ordering = ["name"]
-        unique_together = [("name", "branch")]
+        unique_together = [("restaurant",)]
 
     def __str__(self):
         return self.name
@@ -348,7 +343,7 @@ class POSProfile(BaseModel):
             if default_branch is None:
                 raise ValidationError({"branch": "Create a branch in Settings before creating a POS profile."})
             self.branch = default_branch
-        if not self.restaurant_id and self.branch_id:
+        if not self.restaurant_id:
             self.restaurant = self.branch.restaurants.first()
         if not self.company and self.restaurant_id:
             self.company = self.restaurant.company
@@ -356,10 +351,8 @@ class POSProfile(BaseModel):
 
     def clean(self):
         super().clean()
-        if not self.company and self.branch_id:
-            restaurant = self.branch.restaurants.first()
-            if restaurant:
-                self.company = restaurant.company
+        if not self.company and self.restaurant_id:
+            self.company = self.restaurant.company
         if self.disabled and self.pk:
             from apps.staff.models import POSOpeningEntry
 
@@ -391,37 +384,6 @@ class POSProfile(BaseModel):
                 if ig.pk in seen:
                     raise ValidationError("Duplicate item group found.")
                 seen.add(ig.pk)
-            for link in self.user_links.select_related("user").filter(is_default=True):
-                other = (
-                    POSProfileUser.objects.filter(
-                        user=link.user,
-                        is_default=True,
-                        pos_profile__company=self.company,
-                        pos_profile__disabled=False,
-                    )
-                    .exclude(pos_profile=self)
-                    .exists()
-                )
-                if other:
-                    raise ValidationError(
-                        f"User {link.user.username} already has a default POS Profile in {self.company}."
-                    )
-
-
-class POSProfileUser(BaseModel):
-    """Through model linking POSProfile to CustomUser with per-user flags."""
-
-    pos_profile = models.ForeignKey(POSProfile, on_delete=models.CASCADE, related_name="user_links")
-    user = models.ForeignKey(CustomUser, on_delete=models.PROTECT, related_name="profile_links")
-    is_default = models.BooleanField(default=False)
-    is_main_cashier = models.BooleanField(default=False)
-
-    class Meta:
-        unique_together = [("pos_profile", "user")]
-        ordering = ["user__username"]
-
-    def __str__(self):
-        return f"{self.user.username} @ {self.pos_profile.name}"
 
 
 class POSProfilePayment(BaseModel):

@@ -2069,7 +2069,8 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 | Printer config as string fields on ProductionUnit (not child table) | Phase 8 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 8 migrates. |
 | `POSOpeningEntry.pos_profile` nullable (not required) | Phase 5 entries predate POSProfile. ERPNext requires it; Phase 7 may enforce NOT NULL. |
 | Role-permitted children → M2M to `Group` (not child table to Frappe `Role`) | RestPOS uses Django `Group` with named roles, not Frappe Role. M2M is cleaner than child tables. |
-| `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). |
+| `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). `POSProfileUser` dropped in single-profile refactor — Phase 2 re-introduces when multi-profile/club operations are needed. |
+| POSProfile limited to one per Restaurant | ERPNext/URY allow multiple profiles per branch (multi-terminal configs). RestPOS Phase 1 is single-site — one POS terminal = one profile. Singleton enforced via `unique_together`. POS profile UI is a settings page, not a list/create/detail CRUD. |
 | `ProductionUnit.branch`/`warehouse` stored (not `fetch_from` display) | RestPOS denormalization pattern (matches `Table.branch`); auto-set in `save()`. |
 | `item_groups` child on ProductionUnit dropped | RestPOS routes by department flag, not item-group mappings (FEATURES #14). |
 | Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert dropped | Out of Phase 1 scope per AGENTS.md. |

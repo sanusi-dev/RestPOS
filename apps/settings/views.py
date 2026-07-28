@@ -490,86 +490,23 @@ def _build_staff_entry(user):
 
 
 @login_required
-def pos_profile_list(request: HttpRequest) -> HttpResponse:
-    pos_profiles = POSProfile.objects.select_related("branch", "warehouse").all()
-    return render(
-        request,
-        "backoffice/settings/pos_profile_list.html",
-        {"pos_profiles": pos_profiles},
-    )
-
-
-@login_required
-def pos_profile_create(request: HttpRequest) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
-        return redirect("web:home")
+def pos_profile_settings(request: HttpRequest) -> HttpResponse:
+    pos_profile = POSProfile.objects.select_related("branch", "warehouse", "restaurant").first()
     if request.method == "POST":
-        form = POSProfileForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("settings:pos_profile_list")
-    else:
-        form = POSProfileForm()
-    return render(
-        request,
-        "backoffice/settings/pos_profile_form.html",
-        {"form": form, "title": "POS Profile", "is_create": True},
-    )
-
-
-@login_required
-def pos_profile_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    pos_profile = get_object_or_404(
-        POSProfile.objects.select_related("branch", "warehouse", "restaurant").prefetch_related(
-            "user_links__user",
-            "payment_links__mode_of_payment",
-            "item_groups",
-            "role_allowed_for_billing",
-            "role_restricted_for_table_order",
-            "transfer_role_permissions",
-            "notification_recipients",
-        ),
-        pk=pk,
-    )
-    return render(
-        request,
-        "backoffice/settings/pos_profile_detail.html",
-        {"pos_profile": pos_profile},
-    )
-
-
-@login_required
-def pos_profile_update(request: HttpRequest, pk: int) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
-        return redirect("web:home")
-    pos_profile = get_object_or_404(POSProfile, pk=pk)
-    if request.method == "POST":
+        if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+            return redirect("web:home")
         form = POSProfileForm(request.POST, instance=pos_profile)
         if form.is_valid():
             form.save()
-            return redirect("settings:pos_profile_detail", pk=pos_profile.pk)
+            messages.success(request, "POS profile settings saved.")
+            return redirect("settings:pos_profile_settings")
     else:
-        form = POSProfileForm(instance=pos_profile)
+        form = POSProfileForm(instance=pos_profile) if pos_profile else POSProfileForm()
     return render(
         request,
         "backoffice/settings/pos_profile_form.html",
-        {"form": form, "title": "POS Profile", "is_create": False, "pos_profile": pos_profile},
+        {"form": form, "pos_profile": pos_profile},
     )
-
-
-@login_required
-@require_POST
-def pos_profile_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
-        return redirect("web:home")
-    pos_profile = get_object_or_404(POSProfile, pk=pk)
-    from apps.staff.models import POSOpeningEntry
-
-    if POSOpeningEntry.objects.filter(pos_profile=pos_profile, status="SUBMITTED", closing_entry__isnull=True).exists():
-        messages.error(request, "Cannot delete a POS profile with open cashier sessions.")
-        return redirect("settings:pos_profile_list")
-    pos_profile.delete()
-    return redirect("settings:pos_profile_list")
 
 
 # ---------------------------------------------------------------------------

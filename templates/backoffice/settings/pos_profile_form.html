@@ -10,28 +10,33 @@
           Settings
         </a>
       </li>
-      <li>
-        <div class="flex items-center">
-          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <a href="{% url 'settings:pos_profile_list' %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">POS Profiles</a>
-        </div>
-      </li>
       <li aria-current="page">
         <div class="flex items-center">
           <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">{% if is_create %}New POS Profile{% else %}Edit POS Profile{% endif %}</span>
+          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">POS Profile</span>
         </div>
       </li>
     </ol>
   </nav>
 
-  <div class="mb-5">
-    <h1 class="text-xl font-extrabold text-gray-900 tracking-tight">
-      {% if is_create %}New POS Profile{% else %}Edit POS Profile{% endif %}
-    </h1>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">POS Profile Settings</h1>
+      <p class="text-sm text-gray-500">Terminal configuration — payment methods, behaviour, and printer defaults</p>
+    </div>
   </div>
 
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
+  {% if not pos_profile %}
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-16 text-center">
+      <div class="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-400 ring-1 ring-violet-100 mx-auto">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m2 2v-4m2 2v-6m2 2V9M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+      </div>
+      <p class="mt-4 text-sm font-medium text-gray-600">No POS profile has been created yet.</p>
+      <p class="text-xs text-gray-400 mt-1">Save the form below to create one with sensible defaults.</p>
+    </div>
+  {% endif %}
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mt-6">
     {% partialdef form inline %}
     <form method="post" class="space-y-6">
       {% csrf_token %}
@@ -83,9 +88,9 @@
       {% endfor %}
 
       <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-        <a href="{% url 'settings:pos_profile_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
+        <a href="{% url 'settings:dashboard' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
         <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">
-          {% if is_create %}Create POS Profile{% else %}Save Changes{% endif %}
+          {% if pos_profile %}Save Changes{% else %}Create Profile{% endif %}
         </button>
       </div>
     </form>

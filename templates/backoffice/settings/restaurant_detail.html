@@ -59,6 +59,16 @@
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Address</dt>
           <dd class="text-sm text-gray-700">{{ restaurant.address|default:"-"|linebreaksbr }}</dd>
         </div>
+        <div class="sm:col-span-1">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Default Tax Template</dt>
+          <dd class="text-base font-bold text-gray-900">
+            {% if restaurant.default_tax_template %}
+              <a href="{% url 'settings:tax_template_detail' restaurant.default_tax_template.pk %}" class="hover:text-orange-500 transition-colors">{{ restaurant.default_tax_template.title }}</a>
+            {% else %}
+              -
+            {% endif %}
+          </dd>
+        </div>
       </dl>
     </div>
   {% else %}
