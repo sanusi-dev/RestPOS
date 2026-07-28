@@ -63,7 +63,7 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
     profile = POSProfile.objects.select_related("restaurant", "restaurant__branch").first()
     if not profile:
         messages.error(request, "No POS profile configured.")
-        return redirect("orders:pos_home")
+        return redirect("pos:pos_home")
     order = Order.objects.create(
         order_type=order_type,
         restaurant=profile.restaurant,
@@ -72,7 +72,7 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
         table_id=table_id if table_id else None,
     )
     request.session["pos_order_id"] = order.pk
-    return redirect("orders:pos_home")
+    return redirect("pos:pos_home")
 
 
 @login_required
@@ -80,7 +80,7 @@ def pos_order_load(request: HttpRequest, pk: int) -> HttpResponse:
     """Load an existing order into the POS session."""
     order = get_object_or_404(Order, pk=pk)
     request.session["pos_order_id"] = order.pk
-    return redirect("orders:pos_home")
+    return redirect("pos:pos_home")
 
 
 @login_required
@@ -156,10 +156,10 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
             request.session.pop("pos_order_id", None)
             request.session.pop(f"order_{pk}_items", None)
             messages.success(request, f"Order {order.invoice_number} settled.")
-            return redirect("orders:pos_home")
+            return redirect("pos:pos_home")
         except ValidationError as e:
             messages.error(request, str(e))
-            return redirect("orders:pos_order_settle", pk=order.pk)
+            return redirect("pos:pos_order_settle", pk=order.pk)
     order.calculate_taxes()
     payment_modes = ModeOfPayment.objects.filter(profile_links__pos_profile=order.pos_profile, enabled=True).distinct()
     return render(
@@ -178,7 +178,7 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     request.session.pop("pos_order_id", None)
     request.session.pop(f"order_{pk}_items", None)
     messages.success(request, f"Order {order.invoice_number} cancelled.")
-    return redirect("orders:pos_home")
+    return redirect("pos:pos_home")
 
 
 @login_required
