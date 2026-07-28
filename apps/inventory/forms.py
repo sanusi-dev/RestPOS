@@ -109,12 +109,11 @@ class StockReconciliationForm(InventoryModelForm):
 class StockReconciliationItemForm(InventoryModelForm):
     class Meta:
         model = StockReconciliationItem
-        fields = ["item", "warehouse", "qty", "valuation_rate"]
+        fields = ["item", "qty", "valuation_rate"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False)
-        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
 
 
 class PurchaseReceiptForm(InventoryModelForm):

@@ -572,7 +572,7 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
         StockReconciliation.objects.select_related("warehouse"),
         pk=pk,
     )
-    items = reconciliation.items.select_related("item", "warehouse").all()
+    items = reconciliation.items.select_related("item").all()
     voucher_no = str(pk)
     ledger_entries = StockLedgerEntry.objects.filter(
         voucher_type="Stock Reconciliation", voucher_no=voucher_no

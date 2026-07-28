@@ -44,7 +44,6 @@ class StockReconciliationSubmitTest(ReconciliationTestBase):
         line = StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("8"),
         )
         self.assertEqual(line.current_qty, Decimal("5"))
@@ -67,7 +66,6 @@ class StockReconciliationSubmitTest(ReconciliationTestBase):
         StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("3"),
         )
         rec.submit()
@@ -87,7 +85,6 @@ class StockReconciliationSubmitTest(ReconciliationTestBase):
         StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("5"),
         )
         rec.submit()
@@ -107,7 +104,6 @@ class StockReconciliationSubmitTest(ReconciliationTestBase):
         StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("10"),
         )
         rec.submit()
@@ -130,7 +126,6 @@ class StockReconciliationCancelTest(ReconciliationTestBase):
         StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("10"),
         )
         rec.submit()
@@ -154,7 +149,6 @@ class StockReconciliationOpeningStockTest(ReconciliationTestBase):
         StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("50"),
             valuation_rate=Decimal("100"),
         )
@@ -191,7 +185,6 @@ class StockReconciliationCRUDTest(ReconciliationTestBase):
         line = StockReconciliationItem.objects.create(
             reconciliation=rec,
             item=self.item,
-            warehouse=self.warehouse,
             qty=Decimal("10"),
         )
         self.assertEqual(line.current_qty, Decimal("7"))

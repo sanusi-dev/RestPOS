@@ -510,7 +510,7 @@ class StockReconciliation(BaseModel):
         if self.status != "DRAFT":
             return
         voucher_no = str(self.pk)
-        for line in self.items.select_related("item", "warehouse").all():
+        for line in self.items.select_related("item").all():
             current_qty = line.current_qty
             difference = line.qty - current_qty
             if difference == 0:
@@ -518,7 +518,7 @@ class StockReconciliation(BaseModel):
             rate = line.valuation_rate if self.purpose == "OPENING_STOCK" else Decimal("0")
             StockLedgerEntry.create_entry(
                 item=line.item,
-                warehouse=line.warehouse,
+                warehouse=self.warehouse,
                 actual_qty=difference,
                 voucher_type="Stock Reconciliation",
                 voucher_no=voucher_no,
@@ -563,7 +563,6 @@ class StockReconciliationItem(BaseModel):
         related_name="items",
     )
     item = models.ForeignKey(Item, on_delete=models.PROTECT)
-    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
     qty = models.DecimalField(max_digits=10, decimal_places=2)
     current_qty = models.DecimalField(
         max_digits=10,
@@ -577,9 +576,8 @@ class StockReconciliationItem(BaseModel):
         return f"{self.item.item_code}: {self.qty}"
 
     def save(self, *args, **kwargs):
-        if not self.pk and self.item_id and self.warehouse_id:
-            # Pass ids, not FK instances — avoids two FK fetches per line on a formset save.
-            bin_obj = Bin.get_or_create_bin_id(self.item_id, self.warehouse_id)
+        if not self.pk and self.item_id and self.reconciliation_id:
+            bin_obj = Bin.get_or_create_bin_id(self.item_id, self.reconciliation.warehouse_id)
             self.current_qty = bin_obj.actual_qty
         super().save(*args, **kwargs)
 
