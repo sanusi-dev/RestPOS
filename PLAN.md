@@ -104,7 +104,7 @@ settings R1 → inventory → menu → staff ↘
 | 3 | menu | A2 | Menu, MenuItem, PriceList, ItemPrice, ItemAddOn, ItemVariant | inventory | complete (MenuCourse removed) |
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (43 tests passing, migrations applied) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings R1, payments core | complete (58 tests passing, 472 total) |
-| 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, POSProfileUser, POSProfilePayment, ProductionUnit, TaxTemplate, TaxRate | menu, inventory, payments, staff | planned |
+| 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, POSProfileUser, POSProfilePayment, ProductionUnit, TaxTemplate, TaxRate | menu, inventory, payments, staff | complete |
 | 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff, payments | not started |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
@@ -1654,7 +1654,7 @@ class ClosingPaymentAdmin(admin.ModelAdmin):
 
 ### 6.6 Settings App — Round 2 (Phase 6)
 
-**Status:** planned — detailed plan ready for implementation
+**Status:** complete — 200 tests passing (96 new Phase 6 tests), lint clean, migrations applied
 **FEATURES.md sections:** A3 (Production / Kitchen Station Configuration), A4 (POS Profile /
 Terminal Configuration), A5 partial (Tax template)
 **Dependencies:** menu (ItemGroup, PriceList), inventory (Warehouse, ItemGroup), payments
