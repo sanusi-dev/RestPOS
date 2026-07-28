@@ -62,11 +62,13 @@ class TestPOSProfileSettingsView(Phase6ViewTestBase):
         self.assertContains(response, "Main Cashier")
 
     def test_get_200_no_profile(self):
+        ProductionUnit.objects.all().delete()
         POSProfile.objects.all().delete()
         response = self.client.get(reverse("settings:pos_profile_settings"))
         self.assertEqual(response.status_code, 200)
 
     def test_post_creates_when_none(self):
+        ProductionUnit.objects.all().delete()
         POSProfile.objects.all().delete()
         response = self.client.post(
             reverse("settings:pos_profile_settings"),

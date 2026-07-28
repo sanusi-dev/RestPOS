@@ -462,6 +462,8 @@ class ProductionUnit(BaseModel):
         return self.name
 
     def save(self, *args, **kwargs):
+        if not self.pos_profile_id:
+            self.pos_profile = POSProfile.objects.first()
         if not self.branch_id:
             if self.pos_profile_id and self.pos_profile.branch_id:
                 self.branch = self.pos_profile.branch
@@ -476,6 +478,8 @@ class ProductionUnit(BaseModel):
 
     def clean(self):
         super().clean()
+        if not self.pos_profile_id:
+            self.pos_profile = POSProfile.objects.first()
         if not self.branch_id:
             if self.pos_profile_id and self.pos_profile.branch_id:
                 self.branch = self.pos_profile.branch

@@ -76,7 +76,7 @@
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">POS Profile</dt>
           <dd class="text-base font-bold text-gray-900">
             {% if production_unit.pos_profile %}
-              <a href="{% url 'settings:pos_profile_detail' production_unit.pos_profile.pk %}" class="hover:text-orange-500 transition-colors">{{ production_unit.pos_profile.name }}</a>
+              <a href="{% url 'settings:pos_profile_settings' %}" class="hover:text-orange-500 transition-colors">{{ production_unit.pos_profile.name }}</a>
             {% else %}
               -
             {% endif %}

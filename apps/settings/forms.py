@@ -212,13 +212,12 @@ class POSProfilePaymentForm(SettingsModelForm):
 
 
 class ProductionUnitForm(SettingsModelForm):
-    """Form for ProductionUnit. Branch and warehouse auto-set in save()."""
+    """Form for ProductionUnit. Branch, warehouse, and pos_profile auto-set in save()."""
 
     class Meta:
         model = ProductionUnit
         fields = [
             "name",
-            "pos_profile",
             "warehouse",
             "department",
             "block_takeaway_kot",
@@ -229,5 +228,4 @@ class ProductionUnitForm(SettingsModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["pos_profile"].queryset = active_choices(POSProfile, self.instance.pos_profile_id, disabled=False)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)
