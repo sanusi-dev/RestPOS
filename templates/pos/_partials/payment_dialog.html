@@ -1,0 +1,36 @@
+<div class="p-6">
+  <h2 class="text-xl font-extrabold text-gray-900 mb-4">Settle Order #{{ order.pk }}</h2>
+
+  <div class="bg-gray-50 rounded-2xl p-4 mb-6">
+    <div class="flex justify-between text-sm">
+      <span class="text-gray-500">Subtotal</span>
+      <span class="font-bold text-gray-900">₦{{ order.net_total }}</span>
+    </div>
+    {% for tax in order.taxes.all %}
+      <div class="flex justify-between text-sm mt-1">
+        <span class="text-gray-500">{{ tax.description }}</span>
+        <span class="font-bold text-gray-900">₦{{ tax.tax_amount }}</span>
+      </div>
+    {% endfor %}
+    <div class="flex justify-between text-lg font-extrabold text-gray-900 mt-2 pt-2 border-t border-gray-200">
+      <span>Total</span>
+      <span>₦{{ order.grand_total }}</span>
+    </div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div id="payments-container" class="space-y-3 mb-4">
+      {% for mode in payment_modes %}
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-semibold text-gray-700 w-24">{{ mode.name }}</label>
+          <input type="number" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00"
+                 class="flex-1 rounded-xl border border-gray-300 px-4 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+        </div>
+      {% endfor %}
+    </div>
+    <button type="submit" class="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition">
+      Process Payment
+    </button>
+  </form>
+</div>

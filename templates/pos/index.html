@@ -1,31 +1,128 @@
 {% extends "web/base.html" %}
-{% block body %}
-<div class="min-h-[80vh] flex flex-col items-center justify-center">
-  <div class="text-center max-w-lg px-4">
-    <h1 class="text-3xl font-bold text-gray-900 tracking-tight">
-      POS Screen
-    </h1>
-    <p class="mt-4 text-gray-500">
-      The point of sale interface will be available here.
-    </p>
+{% load static %}
 
-      <!-- Sign out button -->
-      <div class="mt-8">
-        <a href="{% url 'account_logout' %}" data-logout-link
-           class="group flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-600 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 hover:shadow-md active:scale-[0.98]">
-          <svg class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
-          Sign Out
-        </a>
+{% block body %}
+<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeTab: 'dine-in', activeGroup: 'All', guestCount: {{ order.guest_count|default:1 }}, activeCard: 1 }">
+  <!-- Top Bar -->
+  <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
+    <div class="flex items-center gap-4">
+      <span class="font-extrabold text-gray-900 text-lg">RestPOS</span>
+      <div class="flex bg-gray-100 rounded-lg p-1">
+        <button @click="activeTab = 'dine-in'" :class="activeTab === 'dine-in' ? 'bg-white shadow text-gray-900' : 'text-gray-500'" class="px-3 py-1 text-sm font-semibold rounded-md transition">Dine In</button>
+        <button @click="activeTab = 'takeaway'" :class="activeTab === 'takeaway' ? 'bg-white shadow text-gray-900' : 'text-gray-500'" class="px-3 py-1 text-sm font-semibold rounded-md transition">Take Away</button>
       </div>
     </div>
-    {% if user.has_backoffice_access %}
-    <div class="mt-8">
-      <a href="{% url 'web:dashboard' %}"
-         class="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
-        Go to Backoffice
-      </a>
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-gray-500">{{ request.user.get_display_name }}</span>
+      <a href="{% url 'web:home' %}" class="text-sm font-semibold text-gray-400 hover:text-gray-700 transition">Backoffice</a>
     </div>
-    {% endif %}
+  </div>
+
+  <div class="flex flex-1 overflow-hidden">
+    <!-- Menu Grid (Left) -->
+    <div class="flex-1 overflow-y-auto p-6">
+      <!-- Category Filter -->
+      <div class="flex gap-2 mb-6 flex-wrap">
+        <button @click="activeGroup = 'All'" :class="activeGroup === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">All</button>
+        {% for group_name, items in item_groups.items %}
+          <button @click="activeGroup = '{{ group_name }}'" :class="activeGroup === '{{ group_name }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
+        {% endfor %}
+      </div>
+      <!-- Items Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {% for mi in menu_items %}
+          <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name }}'"
+               x-data
+               @click="await hxPost(`{% url 'pos:pos_order_add_item' order.pk %}`, {item_id: {{ mi.item.pk }}, customer_index: activeCard, qty: 1})"
+               class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+            <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
+              {{ mi.item.item_name|slice:":2"|upper }}
+            </div>
+            <p class="text-sm font-semibold text-gray-900 truncate">{{ mi.item.item_name }}</p>
+            <p class="text-sm font-bold text-gray-900">₦{{ mi.rate }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Order Panel (Right) -->
+    <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg">
+      <div class="p-4 border-b border-gray-100">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-extrabold text-gray-900">
+            {% if order %}Order #{{ order.pk }}{% else %}New Order{% endif %}
+          </h2>
+          <div class="flex gap-2">
+            <form method="post" action="{% url 'pos:pos_order_new' %}">
+              {% csrf_token %}
+              <input type="hidden" name="order_type" value="DINE_IN">
+              <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow hover:bg-orange-500 transition">+ New Order</button>
+            </form>
+          </div>
+        </div>
+        {% if order and order.table %}
+          <p class="text-sm text-gray-500">Table: {{ order.table.name }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Customer Cards -->
+      {% if order and order.guest_count > 1 %}
+        <div class="px-4 py-3 border-b border-gray-100" id="customer-cards">
+          {% include "pos/_partials/customer_cards.html" %}
+        </div>
+      {% endif %}
+
+      <!-- Cart -->
+      <div class="flex-1 overflow-y-auto" id="cart-items">
+        {% if order %}
+          {% include "pos/_partials/cart_items.html" %}
+        {% else %}
+          <div class="flex items-center justify-center h-full text-gray-400 text-sm">
+            Click "New Order" to begin
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Order Actions -->
+      {% if order and order.items.exists %}
+        <div class="p-4 border-t border-gray-100 space-y-2">
+          <form method="post" action="{% url 'pos:pos_order_sync' order.pk %}" hx-post="{% url 'pos:pos_order_sync' order.pk %}" hx-target="#cart-items">
+            {% csrf_token %}
+            <button class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">Update Order &amp; Send to Kitchen</button>
+          </form>
+          <a href="{% url 'pos:pos_order_settle' order.pk %}" class="block text-center w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">Pay ₦{{ order.net_total }}</a>
+        </div>
+      {% endif %}
+    </div>
   </div>
 </div>
+
+<script>
+function hxPost(url, data) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = url;
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrf) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'csrfmiddlewaretoken';
+    input.value = csrf.value;
+    form.appendChild(input);
+  }
+  for (const [k, v] of Object.entries(data)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = k;
+    input.value = v;
+    form.appendChild(input);
+  }
+  form.setAttribute('hx-post', url);
+  form.setAttribute('hx-target', '#cart-items');
+  document.body.appendChild(form);
+  htmx.process(form);
+  form.requestSubmit();
+  setTimeout(() => form.remove(), 100);
+}
+</script>
 {% endblock %}

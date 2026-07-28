@@ -60,6 +60,7 @@ PROJECT_APPS = [
     "apps.web",
     "apps.payments.apps.PaymentsConfig",
     "apps.staff.apps.StaffConfig",
+    "apps.orders.apps.OrdersConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PROJECT_APPS

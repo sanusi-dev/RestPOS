@@ -1,0 +1,14 @@
+<div class="flex gap-2 overflow-x-auto">
+  {% for i in "1234567890"|make_list %}
+    {% with idx=forloop.counter %}
+      {% if idx <= order.guest_count %}
+        <button hx-post="{% url 'pos:pos_customer_card_activate' idx %}"
+                hx-target="#customer-cards"
+                class="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition border
+                       {% if idx == request.session.pos_active_card|default:1 %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200{% endif %}">
+          Customer {{ idx }}
+        </button>
+      {% endif %}
+    {% endwith %}
+  {% endfor %}
+</div>

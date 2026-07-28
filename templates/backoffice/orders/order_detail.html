@@ -1,0 +1,90 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:order_list" current_label=order.invoice_number %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ order.invoice_number }}</h1>
+      <p class="text-sm text-gray-500">{{ order.get_order_type_display }} · {{ order.customer_name }}</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if order.status == "DRAFT" %}
+        <form method="post" action="{% url 'orders:order_cancel' order.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="reason" value="Manager cancellation">
+          <button class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold shadow-sm hover:bg-red-50 transition-all duration-300">Cancel Order</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Order Details</h2>
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-3 relative z-10">
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
+        <dd class="text-base font-bold text-gray-900">{{ order.get_status_display }}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Type</dt>
+        <dd class="text-base font-bold text-gray-900">{{ order.get_order_type_display }}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Table</dt>
+        <dd class="text-base font-bold text-gray-900">{{ order.table.name|default:"-" }}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Net Total</dt>
+        <dd class="text-base font-bold text-gray-900">₦{{ order.net_total }}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Grand Total</dt>
+        <dd class="text-base font-bold text-gray-900">₦{{ order.grand_total }}</dd></div>
+      <div><dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Paid</dt>
+        <dd class="text-base font-bold text-gray-900">₦{{ order.paid_amount }}</dd></div>
+    </dl>
+  </div>
+
+  {% if order.items.exists %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <h3 class="text-base font-bold text-gray-900">Items</h3>
+    </div>
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50"><tr>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+        <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+        <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+        <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for item in order.items.all %}
+          <tr class="hover:bg-gray-50/50 transition-colors">
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ item.item_name }}</td>
+            <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
+            <td class="px-6 py-4 text-right text-sm text-gray-500">₦{{ item.rate }}</td>
+            <td class="px-6 py-4 text-right text-sm font-semibold text-gray-900">₦{{ item.amount }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if order.payments.exists %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <h3 class="text-base font-bold text-gray-900">Payments</h3>
+    </div>
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50"><tr>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Method</th>
+        <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for p in order.payments.all %}
+          <tr class="hover:bg-gray-50/50 transition-colors">
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ p.mode_of_payment.name }}</td>
+            <td class="px-6 py-4 text-right text-sm font-semibold text-gray-900">₦{{ p.amount }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

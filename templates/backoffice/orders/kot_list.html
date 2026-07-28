@@ -1,0 +1,34 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:order_list" current_label="KOTs" %}
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">KOTs</h1>
+    <p class="text-sm text-gray-500">Kitchen Order Tickets</p>
+  </div>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50"><tr>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">KOT #</th>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Unit</th>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Order</th>
+        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for kot in kots %}
+          <tr class="hover:bg-gray-50/50">
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ kot.kot_number }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.type }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.production_unit.name }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.order.invoice_number }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.posting_datetime }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="px-6 py-16 text-center text-gray-500">No KOTs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

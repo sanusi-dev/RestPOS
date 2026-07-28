@@ -105,7 +105,7 @@ settings R1 → inventory → menu → staff ↘
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (43 tests passing, migrations applied) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings R1, payments core | complete (58 tests passing, 472 total) |
 | 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, POSProfileUser, POSProfilePayment, ProductionUnit, TaxTemplate, TaxRate | menu, inventory, payments, staff | complete |
-| 7 | orders | A6, A7, A18 | Order, OrderItem, KOT, Ticket, RefundOrder, RefundPaymentEntry | settings (R1+R2), menu, staff, payments | not started |
+| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, OrderTax, KOT, KOTItem | settings (R1+R2), menu, staff, payments | in progress (18 tests, models/views/forms/templates built) |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
 | 10 | refunds | A18 | Refund flow completion (reversal entries, stock restoration) | orders, payments, inventory | not started |
