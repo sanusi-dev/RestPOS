@@ -283,14 +283,6 @@ class POSProfile(BaseModel):
         blank=True,
         related_name="pos_profiles",
     )
-    taxes_and_charges = models.ForeignKey(
-        TaxTemplate,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="pos_profiles",
-    )
-    tax_category = models.CharField(max_length=100, blank=True)
     cost_center = models.CharField(max_length=200, blank=True)
     income_account = models.CharField(max_length=200, blank=True)
     expense_account = models.CharField(max_length=200, blank=True)

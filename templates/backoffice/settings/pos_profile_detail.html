@@ -135,17 +135,6 @@
       <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Payment</h2>
 
       <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
-        <div class="sm:col-span-1">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Taxes and Charges</dt>
-          <dd class="text-base font-bold text-gray-900">
-            {% if pos_profile.taxes_and_charges %}
-              <a href="{% url 'settings:tax_template_detail' pos_profile.taxes_and_charges.pk %}" class="hover:text-orange-500 transition-colors">{{ pos_profile.taxes_and_charges.title }}</a>
-            {% else %}
-              -
-            {% endif %}
-          </dd>
-        </div>
-        {% with label="Tax category" value=pos_profile.tax_category %}{% partial dl_row %}{% endwith %}
         {% with label="Cost center" value=pos_profile.cost_center %}{% partial dl_row %}{% endwith %}
         {% with label="Income account" value=pos_profile.income_account %}{% partial dl_row %}{% endwith %}
         {% with label="Expense account" value=pos_profile.expense_account %}{% partial dl_row %}{% endwith %}

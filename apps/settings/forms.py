@@ -151,8 +151,6 @@ class POSProfileForm(SettingsModelForm):
             "disabled",
             "currency",
             "selling_price_list",
-            "taxes_and_charges",
-            "tax_category",
             "cost_center",
             "income_account",
             "expense_account",
@@ -194,9 +192,6 @@ class POSProfileForm(SettingsModelForm):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)
         self.fields["selling_price_list"].queryset = active_choices(PriceList, self.instance.selling_price_list_id)
-        self.fields["taxes_and_charges"].queryset = active_choices(
-            TaxTemplate, self.instance.taxes_and_charges_id, disabled=False
-        )
 
 
 class POSProfileUserForm(SettingsModelForm):

@@ -520,7 +520,7 @@ def pos_profile_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def pos_profile_detail(request: HttpRequest, pk: int) -> HttpResponse:
     pos_profile = get_object_or_404(
-        POSProfile.objects.select_related("branch", "warehouse", "restaurant", "taxes_and_charges").prefetch_related(
+        POSProfile.objects.select_related("branch", "warehouse", "restaurant").prefetch_related(
             "user_links__user",
             "payment_links__mode_of_payment",
             "item_groups",

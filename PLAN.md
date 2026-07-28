@@ -1687,11 +1687,12 @@ migration in this phase)
 
 #### Decisions
 
-- **TaxTemplate has two attachment points.** `POSProfile.taxes_and_charges` (per-profile override,
-  ERPNext core) and `Restaurant.default_tax_template` (restaurant-wide default, URY core, already
-  declared nullable in §6.1). Phase 7 resolves at order time: profile's template wins if set, else
-  restaurant's default. Phase 6 introduces the TaxTemplate model that `Restaurant.default_tax_template`
-  references (the FK was declared in §6.1 but pointed at a model that didn't exist yet).
+- **TaxTemplate attached only to Restaurant.** ERPNext puts the tax template on
+  POSProfile (`taxes_and_charges`); URY puts a `default_tax_template` on the
+  Restaurant. RestPOS uses only the Restaurant-level attachment — simpler for
+  single-site Phase 1 (one restaurant = one tax config). Phase 7 reads
+  `restaurant.default_tax_template` at order time. The POSProfile `taxes_and_charges`
+  and `tax_category` fields are not ported.
 
 - **Printer config lives on ProductionUnit as string fields for Phase 6.** Phase 8 owns `PrinterConfig`
   as a standalone model. To avoid a cross-phase stub, Phase 6 stores `printer_ip` (CharField),
@@ -1803,7 +1804,7 @@ All models extend `apps.utils.models.BaseModel`.
 | disabled | BooleanField, default=False | ERPNext core | |
 | currency | CharField, max_length=3, default="NGN" | ERPNext core | single-currency Phase 1 |
 | selling_price_list | ForeignKey→menu.PriceList, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | Phase 7 resolves from active menu |
-| taxes_and_charges | ForeignKey→TaxTemplate, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | per-profile tax override |
+| taxes_and_charges | — | dropped | tax template lives on Restaurant only, not POSProfile |
 | tax_category | CharField, max_length=100, blank=True | ERPNext core | Phase 9 |
 | cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 9 migrates to FK; FEATURES #40 mandatory deferred |
 | income_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
@@ -2064,7 +2065,7 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 
 | Deviation | Reason |
 |---|---|
-| TaxTemplate attached to both POSProfile and Restaurant | ERPNext = per-profile only; URY = per-restaurant default. RestPOS supports both — profile overrides restaurant. Phase 7 resolves. |
+| TaxTemplate attached to Restaurant only (not POSProfile) | ERPNext = per-profile; URY = per-restaurant. RestPOS uses restaurant-only — simpler for single-site Phase 1. POSProfile `taxes_and_charges` and `tax_category` dropped. |
 | Printer config as string fields on ProductionUnit (not child table) | Phase 8 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 8 migrates. |
 | `POSOpeningEntry.pos_profile` nullable (not required) | Phase 5 entries predate POSProfile. ERPNext requires it; Phase 7 may enforce NOT NULL. |
 | Role-permitted children → M2M to `Group` (not child table to Frappe `Role`) | RestPOS uses Django `Group` with named roles, not Frappe Role. M2M is cleaner than child tables. |
