@@ -42,6 +42,13 @@ class POSOpeningEntry(BaseModel):
         blank=True,
         related_name="opening_entry_ref",
     )
+    pos_profile = models.ForeignKey(
+        "settings.POSProfile",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="opening_entries",
+    )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     remarks = models.TextField(blank=True)
     cancelled_by = models.ForeignKey(

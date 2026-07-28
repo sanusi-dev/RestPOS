@@ -1,8 +1,24 @@
 from django import forms
 
+from apps.inventory.models import Warehouse
+from apps.menu.models import PriceList
+from apps.payments.models import ModeOfPayment
 from apps.users.models import CustomUser
+from apps.utils.forms import active_choices
 
-from .models import Branch, Restaurant, Room, Table, UserRoomAssignment
+from .models import (
+    Branch,
+    POSProfile,
+    POSProfilePayment,
+    POSProfileUser,
+    ProductionUnit,
+    Restaurant,
+    Room,
+    Table,
+    TaxRate,
+    TaxTemplate,
+    UserRoomAssignment,
+)
 
 TAILWIND_INPUT_CLASS = (
     "w-full rounded-xl border border-gray-300 px-4 py-3 text-sm "
@@ -93,3 +109,135 @@ class UserRoomAssignmentForm(SettingsModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["user"].queryset = CustomUser.objects.order_by("username")
+
+
+class TaxTemplateForm(SettingsModelForm):
+    """Form for TaxTemplate. Company defaults from Restaurant.company."""
+
+    class Meta:
+        model = TaxTemplate
+        fields = ["title", "is_default", "disabled", "tax_category"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.company:
+            restaurant = Restaurant.objects.first()
+            if restaurant:
+                self.instance.company = restaurant.company
+
+
+class TaxRateForm(SettingsModelForm):
+    class Meta:
+        model = TaxRate
+        fields = [
+            "charge_type",
+            "rate",
+            "account_head",
+            "description",
+            "cost_center",
+            "included_in_print_rate",
+            "row_id",
+        ]
+
+
+class POSProfileForm(SettingsModelForm):
+    """Form for POSProfile. Branch, restaurant, and company auto-set in save()."""
+
+    class Meta:
+        model = POSProfile
+        fields = [
+            "name",
+            "warehouse",
+            "disabled",
+            "currency",
+            "selling_price_list",
+            "taxes_and_charges",
+            "tax_category",
+            "cost_center",
+            "income_account",
+            "expense_account",
+            "write_off_account",
+            "write_off_cost_center",
+            "write_off_limit",
+            "account_for_change_amount",
+            "set_grand_total_to_default_mop",
+            "allow_partial_payment",
+            "apply_discount_on",
+            "enable_discount",
+            "action_on_new_invoice",
+            "validate_stock_on_save",
+            "hide_images",
+            "hide_unavailable_items",
+            "auto_add_item_to_cart",
+            "allow_rate_change",
+            "allow_discount_change",
+            "allow_warehouse_change",
+            "print_receipt_on_order_complete",
+            "view_all_status",
+            "paid_limit",
+            "edit_order_type",
+            "remove_items",
+            "show_image",
+            "require_daily_pos_close",
+            "table_attention_time",
+            "multiple_cashier",
+            "kot_naming_series",
+            "reset_order_number_daily",
+            "kot_warning_time",
+            "notify_kot_delay",
+            "enable_kot_reprint",
+            "reprint_kot_format",
+            "print_format",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)
+        self.fields["selling_price_list"].queryset = active_choices(PriceList, self.instance.selling_price_list_id)
+        self.fields["taxes_and_charges"].queryset = active_choices(
+            TaxTemplate, self.instance.taxes_and_charges_id, disabled=False
+        )
+
+
+class POSProfileUserForm(SettingsModelForm):
+    class Meta:
+        model = POSProfileUser
+        fields = ["user", "is_default", "is_main_cashier"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["user"].queryset = CustomUser.objects.order_by("username")
+
+
+class POSProfilePaymentForm(SettingsModelForm):
+    class Meta:
+        model = POSProfilePayment
+        fields = ["mode_of_payment", "is_default", "allow_in_returns"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["mode_of_payment"].queryset = active_choices(
+            ModeOfPayment, self.instance.mode_of_payment_id, enabled=True
+        )
+
+
+class ProductionUnitForm(SettingsModelForm):
+    """Form for ProductionUnit. Branch and warehouse auto-set in save()."""
+
+    class Meta:
+        model = ProductionUnit
+        fields = [
+            "name",
+            "pos_profile",
+            "warehouse",
+            "department",
+            "block_takeaway_kot",
+            "printer_ip",
+            "printer_paper_width",
+            "printer_cut_mode",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["pos_profile"].queryset = active_choices(POSProfile, self.instance.pos_profile_id, disabled=False)
+        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id)

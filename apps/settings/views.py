@@ -11,12 +11,24 @@ from apps.users.models import CustomUser
 
 from .forms import (
     BranchForm,
+    POSProfileForm,
+    ProductionUnitForm,
     RestaurantForm,
     RoomForm,
     TableForm,
+    TaxTemplateForm,
     UserRoomAssignmentForm,
 )
-from .models import Branch, Restaurant, Room, Table, UserRoomAssignment
+from .models import (
+    Branch,
+    POSProfile,
+    ProductionUnit,
+    Restaurant,
+    Room,
+    Table,
+    TaxTemplate,
+    UserRoomAssignment,
+)
 
 RESTPOS_GROUP_NAMES = ["RestPOS Admin", "RestPOS Manager", "RestPOS Cashier"]
 
@@ -43,6 +55,9 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
         )
         .distinct()
         .count(),
+        "pos_profile_count": POSProfile.objects.count(),
+        "production_unit_count": ProductionUnit.objects.count(),
+        "tax_template_count": TaxTemplate.objects.count(),
     }
     return render(request, "backoffice/settings/dashboard.html", context)
 
@@ -467,3 +482,241 @@ def _build_staff_entry(user):
     else:
         role = ""
     return {"user": user, "role": role}
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — POS Profile
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def pos_profile_list(request: HttpRequest) -> HttpResponse:
+    pos_profiles = POSProfile.objects.select_related("branch", "warehouse").all()
+    return render(
+        request,
+        "backoffice/settings/pos_profile_list.html",
+        {"pos_profiles": pos_profiles},
+    )
+
+
+@login_required
+def pos_profile_create(request: HttpRequest) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    if request.method == "POST":
+        form = POSProfileForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:pos_profile_list")
+    else:
+        form = POSProfileForm()
+    return render(
+        request,
+        "backoffice/settings/pos_profile_form.html",
+        {"form": form, "title": "POS Profile", "is_create": True},
+    )
+
+
+@login_required
+def pos_profile_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    pos_profile = get_object_or_404(
+        POSProfile.objects.select_related("branch", "warehouse", "restaurant", "taxes_and_charges").prefetch_related(
+            "user_links__user",
+            "payment_links__mode_of_payment",
+            "item_groups",
+            "role_allowed_for_billing",
+            "role_restricted_for_table_order",
+            "transfer_role_permissions",
+            "notification_recipients",
+        ),
+        pk=pk,
+    )
+    return render(
+        request,
+        "backoffice/settings/pos_profile_detail.html",
+        {"pos_profile": pos_profile},
+    )
+
+
+@login_required
+def pos_profile_update(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    pos_profile = get_object_or_404(POSProfile, pk=pk)
+    if request.method == "POST":
+        form = POSProfileForm(request.POST, instance=pos_profile)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:pos_profile_detail", pk=pos_profile.pk)
+    else:
+        form = POSProfileForm(instance=pos_profile)
+    return render(
+        request,
+        "backoffice/settings/pos_profile_form.html",
+        {"form": form, "title": "POS Profile", "is_create": False, "pos_profile": pos_profile},
+    )
+
+
+@login_required
+@require_POST
+def pos_profile_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    pos_profile = get_object_or_404(POSProfile, pk=pk)
+    from apps.staff.models import POSOpeningEntry
+
+    if POSOpeningEntry.objects.filter(pos_profile=pos_profile, status="SUBMITTED", closing_entry__isnull=True).exists():
+        messages.error(request, "Cannot delete a POS profile with open cashier sessions.")
+        return redirect("settings:pos_profile_list")
+    pos_profile.delete()
+    return redirect("settings:pos_profile_list")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Production Unit
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def production_unit_list(request: HttpRequest) -> HttpResponse:
+    department = request.GET.get("department")
+    production_units = ProductionUnit.objects.select_related("branch", "warehouse", "pos_profile").all()
+    if department:
+        production_units = production_units.filter(department=department)
+    return render(
+        request,
+        "backoffice/settings/production_unit_list.html",
+        {"production_units": production_units, "selected_department": department},
+    )
+
+
+@login_required
+def production_unit_create(request: HttpRequest) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    if request.method == "POST":
+        form = ProductionUnitForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:production_unit_list")
+    else:
+        form = ProductionUnitForm()
+    return render(
+        request,
+        "backoffice/settings/production_unit_form.html",
+        {"form": form, "is_create": True},
+    )
+
+
+@login_required
+def production_unit_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    production_unit = get_object_or_404(
+        ProductionUnit.objects.select_related("branch", "warehouse", "pos_profile"),
+        pk=pk,
+    )
+    return render(
+        request,
+        "backoffice/settings/production_unit_detail.html",
+        {"production_unit": production_unit},
+    )
+
+
+@login_required
+def production_unit_update(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    production_unit = get_object_or_404(ProductionUnit, pk=pk)
+    if request.method == "POST":
+        form = ProductionUnitForm(request.POST, instance=production_unit)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:production_unit_detail", pk=production_unit.pk)
+    else:
+        form = ProductionUnitForm(instance=production_unit)
+    return render(
+        request,
+        "backoffice/settings/production_unit_form.html",
+        {"form": form, "is_create": False, "production_unit": production_unit},
+    )
+
+
+@login_required
+@require_POST
+def production_unit_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    production_unit = get_object_or_404(ProductionUnit, pk=pk)
+    production_unit.delete()
+    return redirect("settings:production_unit_list")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Tax Template
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def tax_template_list(request: HttpRequest) -> HttpResponse:
+    tax_templates = TaxTemplate.objects.all().order_by("title")
+    return render(
+        request,
+        "backoffice/settings/tax_template_list.html",
+        {"tax_templates": tax_templates},
+    )
+
+
+@login_required
+def tax_template_create(request: HttpRequest) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    if request.method == "POST":
+        form = TaxTemplateForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:tax_template_list")
+    else:
+        form = TaxTemplateForm()
+    return render(
+        request,
+        "backoffice/settings/tax_template_form.html",
+        {"form": form, "title": "Tax Template", "is_create": True},
+    )
+
+
+@login_required
+def tax_template_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    tax_template = get_object_or_404(TaxTemplate.objects.prefetch_related("rates"), pk=pk)
+    return render(
+        request,
+        "backoffice/settings/tax_template_detail.html",
+        {"tax_template": tax_template},
+    )
+
+
+@login_required
+def tax_template_update(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    tax_template = get_object_or_404(TaxTemplate, pk=pk)
+    if request.method == "POST":
+        form = TaxTemplateForm(request.POST, instance=tax_template)
+        if form.is_valid():
+            form.save()
+            return redirect("settings:tax_template_detail", pk=tax_template.pk)
+    else:
+        form = TaxTemplateForm(instance=tax_template)
+    return render(
+        request,
+        "backoffice/settings/tax_template_form.html",
+        {"form": form, "title": "Tax Template", "is_create": False, "tax_template": tax_template},
+    )
+
+
+@login_required
+@require_POST
+def tax_template_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        return redirect("web:home")
+    tax_template = get_object_or_404(TaxTemplate, pk=pk)
+    tax_template.delete()
+    return redirect("settings:tax_template_list")

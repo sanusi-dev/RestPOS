@@ -1,0 +1,95 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  <nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+      <li class="inline-flex items-center">
+        <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Settings
+        </a>
+      </li>
+      <li aria-current="page">
+        <div class="flex items-center">
+          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">Tax Templates</span>
+        </div>
+      </li>
+    </ol>
+  </nav>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Tax Templates</h1>
+      <p class="text-sm text-gray-500">Reusable tax and charge templates</p>
+    </div>
+    <a href="{% url 'settings:tax_template_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Tax Template
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Title</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Default</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Tax Category</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Company</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for tax_template in tax_templates %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'settings:tax_template_detail' tax_template.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ tax_template.title }}</a>
+              </td>
+              <td class="px-6 py-4">
+                {% if tax_template.is_default %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Default</span>
+                {% else %}
+                  <span class="text-sm text-gray-400">-</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                {% if tax_template.disabled %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
+                {% else %}
+                  <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Active
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ tax_template.tax_category|default:"-" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ tax_template.company|default:"-" }}</td>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'settings:tax_template_update' tax_template.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No tax templates configured yet.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

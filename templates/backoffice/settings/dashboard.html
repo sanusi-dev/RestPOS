@@ -97,6 +97,51 @@
             <p class="mt-3 text-xs font-bold text-teal-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage User Roles →</p>
         </div>
       </a>
-    </div>
+
+      <!-- POS Profiles Card -->
+      <a href="{% url 'settings:pos_profile_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-violet-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+        <div class="flex items-center justify-between mb-4 relative z-10">
+          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">POS Profiles</h3>
+          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-violet-500 ring-1 ring-gray-100">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m2 2v-4m2 2v-6m2 2V9M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+          </div>
+        </div>
+        <div class="relative z-10">
+            <p class="text-3xl font-extrabold text-gray-900">{{ pos_profile_count }}</p>
+            <p class="mt-3 text-xs font-bold text-violet-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage POS Profiles →</p>
+        </div>
+      </a>
+
+      <!-- Production Units Card -->
+      <a href="{% url 'settings:production_unit_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-amber-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+        <div class="flex items-center justify-between mb-4 relative z-10">
+          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Production Units</h3>
+          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-amber-500 ring-1 ring-gray-100">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          </div>
+        </div>
+        <div class="relative z-10">
+            <p class="text-3xl font-extrabold text-gray-900">{{ production_unit_count }}</p>
+            <p class="mt-3 text-xs font-bold text-amber-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Kitchen & Bar Stations →</p>
+        </div>
+      </a>
+
+      <!-- Tax Templates Card -->
+      <a href="{% url 'settings:tax_template_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-lime-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
+        <div class="flex items-center justify-between mb-4 relative z-10">
+          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Tax Templates</h3>
+          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-lime-600 ring-1 ring-gray-100">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /></svg>
+          </div>
+        </div>
+        <div class="relative z-10">
+            <p class="text-3xl font-extrabold text-gray-900">{{ tax_template_count }}</p>
+            <p class="mt-3 text-xs font-bold text-lime-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">VAT & Tax Config →</p>
+        </div>
+      </a>
+     </div>
 </div>
 {% endblock %}
