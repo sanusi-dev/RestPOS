@@ -1,9 +1,10 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -86,21 +87,24 @@ def pos_order_load(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
-    order = get_object_or_404(Order, pk=pk, status="DRAFT")
-    try:
-        item_id = int(request.POST.get("item_id", 0))
-        qty = int(request.POST.get("qty", 1))
-        customer_index = int(request.POST.get("customer_index", 1))
-    except ValueError, TypeError:
-        return _cart_error_html(request, order, "Invalid item or quantity.")
-    comments = request.POST.get("comments", "")
-    item = get_object_or_404(Item, pk=item_id, is_sales_item=True)
-    menu_item = MenuItem.objects.filter(item=item, menu=order.restaurant.active_menu, disabled=False).first()
-    if menu_item is None:
-        return _cart_error_html(request, order, "This item is not on the active menu.")
-    rate = menu_item.rate
-    order.add_item(item, qty=qty, customer_index=customer_index, comments=comments, rate=rate)
-    order.recalculate_totals()
+    with transaction.atomic():
+        order = get_object_or_404(Order.objects.select_for_update(), pk=pk, status="DRAFT")
+        try:
+            item_id = int(request.POST.get("item_id", 0))
+            qty = int(request.POST.get("qty", 1))
+            customer_index = int(request.POST.get("customer_index", 1))
+        except ValueError, TypeError:
+            return _cart_error_html(request, order, "Invalid item or quantity.")
+        if qty <= 0 or customer_index < 1:
+            return _cart_error_html(request, order, "Quantity and customer are invalid.")
+        comments = request.POST.get("comments", "")
+        item = get_object_or_404(Item, pk=item_id, is_sales_item=True, disabled=False)
+        menu_item = MenuItem.objects.filter(item=item, menu=order.restaurant.active_menu, disabled=False).first()
+        if menu_item is None:
+            return _cart_error_html(request, order, "This item is not on the active menu.")
+        rate = menu_item.rate
+        order.add_item(item, qty=qty, customer_index=customer_index, comments=comments, rate=rate)
+        order.recalculate_totals()
     return _cart_html(request, order)
 
 
@@ -115,18 +119,21 @@ def pos_order_remove_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
 @login_required
 @require_POST
 def pos_order_update_qty(request: HttpRequest, pk: int, item_pk: int) -> HttpResponse:
-    order = get_object_or_404(Order, pk=pk, status="DRAFT")
-    try:
-        new_qty = Decimal(request.POST.get("qty", "0"))
-    except ValueError, TypeError:
-        return _cart_error_html(request, order, "Invalid quantity.")
-    oi = get_object_or_404(order.items, pk=item_pk)
-    if new_qty <= 0:
-        oi.delete()
-    else:
-        oi.qty = new_qty
-        oi.save()
-    order.recalculate_totals()
+    with transaction.atomic():
+        order = get_object_or_404(Order.objects.select_for_update(), pk=pk, status="DRAFT")
+        try:
+            new_qty = Decimal(request.POST.get("qty", "0"))
+        except InvalidOperation, ValueError, TypeError:
+            return _cart_error_html(request, order, "Invalid quantity.")
+        if not new_qty.is_finite():
+            return _cart_error_html(request, order, "Invalid quantity.")
+        oi = get_object_or_404(order.items, pk=item_pk)
+        if new_qty <= 0:
+            oi.delete()
+        else:
+            oi.qty = new_qty
+            oi.save()
+        order.recalculate_totals()
     return _cart_html(request, order)
 
 

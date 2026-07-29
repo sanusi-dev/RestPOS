@@ -39,7 +39,7 @@ KOT_TYPE_CHOICES = [
 class Order(BaseModel):
     """A POS order — the single source of truth for items, payments, taxes, and status."""
 
-    invoice_number = models.CharField(max_length=50, unique=True, editable=False)
+    invoice_number = models.CharField(max_length=50, unique=True, null=True, blank=True, editable=False)
     order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default=DINE_IN)
     restaurant = models.ForeignKey("settings.Restaurant", on_delete=models.PROTECT, related_name="orders")
     branch = models.ForeignKey("settings.Branch", on_delete=models.PROTECT, related_name="orders")
