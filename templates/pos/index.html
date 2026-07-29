@@ -1,44 +1,10 @@
 {% extends "web/base.html" %}
-{% load static %}
 
 {% block body %}
-<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeTab: 'dine-in', activeGroup: 'All', guestCount: {{ order.guest_count|default:1 }}, activeCard: 1 }"
-     x-init="window.posOrderId = {{ order.pk|default:'null' }}">
+<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeGroup: 'All' }">
 
-  <!-- CSRF token for JS-driven HTMX POSTs -->
-  {% csrf_token %}
-  <script>
-  function addToCart(itemId, cardIdx, qty) {
-    if (!window.posOrderId) return;
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/pos/order/${window.posOrderId}/add-item/`;
-    form.setAttribute('hx-post', form.action);
-    form.setAttribute('hx-target', '#cart-items');
-    form.setAttribute('hx-swap', 'innerHTML');
-    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (csrf) { const i = csrf.cloneNode(); form.appendChild(i); }
-    for (const [k, v] of [['item_id', itemId], ['customer_index', cardIdx], ['qty', qty]]) {
-      const input = document.createElement('input');
-      input.type = 'hidden'; input.name = k; input.value = v;
-      form.appendChild(input);
-    }
-    document.body.appendChild(form);
-    form.addEventListener('htmx:afterRequest', () => form.remove());
-    htmx.process(form);
-    form.requestSubmit();
-  }
-  </script>
-
-  <!-- Top Bar -->
   <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
-    <div class="flex items-center gap-4">
-      <span class="font-extrabold text-gray-900 text-lg">RestPOS</span>
-      <div class="flex bg-gray-100 rounded-lg p-1">
-        <button @click="activeTab = 'dine-in'" :class="activeTab === 'dine-in' ? 'bg-white shadow text-gray-900' : 'text-gray-500'" class="px-3 py-1 text-sm font-semibold rounded-md transition">Dine In</button>
-        <button @click="activeTab = 'takeaway'" :class="activeTab === 'takeaway' ? 'bg-white shadow text-gray-900' : 'text-gray-500'" class="px-3 py-1 text-sm font-semibold rounded-md transition">Take Away</button>
-      </div>
-    </div>
+    <span class="font-extrabold text-gray-900 text-lg">RestPOS</span>
     <div class="flex items-center gap-3">
       <span class="text-sm text-gray-500">{{ request.user.get_display_name }}</span>
       <a href="{% url 'web:home' %}" class="text-sm font-semibold text-gray-400 hover:text-gray-700 transition">Backoffice</a>
@@ -46,102 +12,117 @@
   </div>
 
   <div class="flex flex-1 overflow-hidden">
-    <!-- Menu Grid (Left) -->
+
+    {% partialdef menu_grid inline %}
     <div class="flex-1 overflow-y-auto p-6">
-      <!-- Category Filter -->
       <div class="flex gap-2 mb-6 flex-wrap">
-        <button @click="activeGroup = 'All'" :class="activeGroup === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">All</button>
-        {% for group_name, items in item_groups.items %}
-          <button @click="activeGroup = '{{ group_name|escapejs }}'" :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
+        <button @click="activeGroup = 'All'"
+                :class="activeGroup === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'"
+                class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">All</button>
+        {% for group_name in item_groups.keys %}
+        <button @click="activeGroup = '{{ group_name|escapejs }}'"
+                :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'"
+                class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
         {% endfor %}
       </div>
-      <!-- Items Grid -->
+
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {% for mi in menu_items %}
-          <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}'"
-               {% if order %}onclick="addToCart({{ mi.item.pk }}, activeCard, 1)"{% endif %}
-               class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm {% if order %}cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95{% endif %} transition-all duration-200 {% if not order %}opacity-50{% endif %}">
-            <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
-              {{ mi.item.item_name|slice:":2"|upper }}
-            </div>
-            <p class="text-sm font-semibold text-gray-900 truncate">{{ mi.item.item_name }}</p>
-            <p class="text-sm font-bold text-gray-900">₦{{ mi.rate }}</p>
+        <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}'"
+             {% if order %}
+             hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
+             hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
+             hx-target="#order-panel"
+             hx-select="#order-panel"
+             hx-swap="outerHTML"
+             {% endif %}
+             class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm
+                    {% if order %}cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95{% endif %}
+                    transition-all duration-200 {% if not order %}opacity-50{% endif %}">
+          <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
+            {{ mi.item.item_name|slice:":2"|upper }}
           </div>
+          <p class="text-sm font-semibold text-gray-900 truncate">{{ mi.item.item_name }}</p>
+          <p class="text-sm font-bold text-gray-900">₦{{ mi.rate }}</p>
+          {% if mi.special_dish %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700 mt-1">★</span>
+          {% endif %}
+        </div>
         {% endfor %}
       </div>
     </div>
+    {% endpartialdef %}
 
-    <!-- Order Panel (Right) -->
-    <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg">
+    {% partialdef order_panel inline %}
+    <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg shrink-0" id="order-panel">
       <div class="p-4 border-b border-gray-100">
         <div class="flex items-center justify-between mb-2">
           <h2 class="text-lg font-extrabold text-gray-900">
             {% if order %}Order #{{ order.pk }}{% else %}New Order{% endif %}
           </h2>
-          <div class="flex gap-2">
-            <form method="post" action="{% url 'pos:pos_order_new' %}">
-              {% csrf_token %}
-              <input type="hidden" name="order_type" :value="activeTab === 'dine-in' ? 'DINE_IN' : 'TAKE_AWAY'">
-              <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow hover:bg-orange-500 transition">+ New Order</button>
-            </form>
-          </div>
+          <form method="post" action="{% url 'pos:pos_order_new' %}">
+            {% csrf_token %}
+            <input type="hidden" name="order_type" value="DINE_IN">
+            <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow hover:bg-orange-500 transition">+ New Order</button>
+          </form>
         </div>
         {% if order and order.table %}
-          <p class="text-sm text-gray-500">Table: {{ order.table.name }}</p>
+        <p class="text-sm text-gray-500">Table: {{ order.table.name }}</p>
         {% endif %}
       </div>
 
-      <!-- Customer Cards -->
-      {% if order and order.guest_count > 1 %}
-        <div class="px-4 py-3 border-b border-gray-100" id="customer-cards">
-          {% include "pos/_partials/customer_cards.html" %}
-        </div>
-      {% endif %}
-
-      <!-- Cart -->
-      <div class="flex-1 overflow-y-auto" id="cart-items">
+      <div class="flex-1 overflow-y-auto">
         {% if order %}
-          {% include "pos/_partials/cart_items.html" %}
-        {% else %}
-          <div class="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
-            Click <strong class="mx-1">+ New Order</strong> to begin. Menu items are dimmed until an order is active.
+        <div class="divide-y divide-gray-100">
+          {% for item in order.items.all %}
+          <div class="px-4 py-3 hover:bg-gray-50/50 transition">
+            <div class="flex items-center justify-between">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-gray-900 truncate">{{ item.item_name }}</p>
+                {% if item.comments %}
+                <p class="text-xs text-gray-400 truncate">{{ item.comments }}</p>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-2 ml-2">
+                <span class="text-sm font-bold text-gray-900">₦{{ item.amount }}</span>
+                <span class="text-sm text-gray-500">x{{ item.qty }}</span>
+              </div>
+            </div>
           </div>
+          {% endfor %}
+        </div>
+        <div class="px-4 py-3 border-t border-gray-100">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold text-gray-500">Subtotal</span>
+            <span class="text-lg font-extrabold text-gray-900">₦{{ order.net_total }}</span>
+          </div>
+        </div>
+        {% else %}
+        <div class="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
+          Click <strong class="mx-1">+ New Order</strong> to begin.
+        </div>
         {% endif %}
       </div>
 
-      <!-- Order Actions -->
       <div class="p-4 border-t border-gray-100 space-y-2">
         {% if order and order.items.exists %}
-          <form method="post" action="{% url 'pos:pos_order_sync' order.pk %}"
-                hx-post="{% url 'pos:pos_order_sync' order.pk %}" hx-target="#cart-items" hx-swap="innerHTML">
-            {% csrf_token %}
-            <button class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">Update Order &amp; Send to Kitchen</button>
-          </form>
-          <button hx-get="{% url 'pos:pos_order_settle' order.pk %}"
-                  hx-target="#payment-modal-inner"
-                  hx-swap="innerHTML"
-                  class="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">Pay ₦{{ order.net_total }}</button>
+        <button hx-post="{% url 'pos:pos_order_sync' order.pk %}"
+                hx-target="#order-panel"
+                hx-select="#order-panel"
+                hx-swap="outerHTML"
+                class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">
+          Sync &amp; Send to Kitchen
+        </button>
+        <a href="{% url 'pos:pos_order_settle' order.pk %}"
+           class="block text-center w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">
+          Pay ₦{{ order.net_total }}
+        </a>
         {% elif order %}
-          <div class="text-center text-sm text-gray-400 py-2">Add items to the order to continue</div>
+        <div class="text-center text-sm text-gray-400 py-2">Add items to continue</div>
         {% endif %}
       </div>
     </div>
+    {% endpartialdef %}
   </div>
-
-  <!-- Payment Modal -->
-  <div id="payment-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm"
-       @click.self="$el.classList.add('hidden'); $el.classList.remove('flex')">
-    <div id="payment-modal-inner" class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4"></div>
-  </div>
-
-  <script>
-  document.body.addEventListener('htmx:afterSettle', function(evt) {
-    if (evt.detail.target.id === 'payment-modal-inner' && evt.detail.target.innerHTML.trim()) {
-      var modal = document.getElementById('payment-modal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-    }
-  });
-  </script>
 </div>
 {% endblock %}
