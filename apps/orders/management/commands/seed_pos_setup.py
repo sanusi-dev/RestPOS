@@ -39,8 +39,6 @@ class Command(BaseCommand):
             TaxRate,
             TaxTemplate,
         )
-        from apps.staff.models import POSOpeningEntry
-        from apps.users.models import CustomUser
 
         force = options["force"]
 
@@ -57,9 +55,7 @@ class Command(BaseCommand):
 
         restaurant = Restaurant.objects.order_by("pk").first()
         if restaurant is None:
-            restaurant = Restaurant.objects.create(
-                company="Saki Restaurant", branch=branch, default_room=room
-            )
+            restaurant = Restaurant.objects.create(company="Saki Restaurant", branch=branch, default_room=room)
             self.stdout.write(self.style.WARNING("Created restaurant: Saki Restaurant"))
         if restaurant.default_room_id != room.pk:
             restaurant.default_room = room
@@ -183,18 +179,10 @@ class Command(BaseCommand):
         for pu in [pu_kitchen, pu_bar]:
             if not pu.pos_profile_id:
                 pu.save()  # triggers auto-assign in save()
-        self.stdout.write(
-            self.style.SUCCESS(
-                "Created Production Units: Kitchen (FOOD), Bar (DRINKS)"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS("Created Production Units: Kitchen (FOOD), Bar (DRINKS)"))
 
         # ── Try running the menu seed if it hasn't been done ──
-        menu_count = (
-            __import__("apps.menu.models", fromlist=["MenuItem"])
-            .MenuItem.objects.filter(menu=menu)
-            .count()
-        )
+        menu_count = __import__("apps.menu.models", fromlist=["MenuItem"]).MenuItem.objects.filter(menu=menu).count()
         if menu_count == 0:
             from apps.menu.management.commands.seed_menu_catalog import Command as MenuSeed
 

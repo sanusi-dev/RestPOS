@@ -52,13 +52,13 @@
       <div class="flex gap-2 mb-6 flex-wrap">
         <button @click="activeGroup = 'All'" :class="activeGroup === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">All</button>
         {% for group_name, items in item_groups.items %}
-          <button @click="activeGroup = '{{ group_name }}'" :class="activeGroup === '{{ group_name }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
+          <button @click="activeGroup = '{{ group_name|escapejs }}'" :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
         {% endfor %}
       </div>
       <!-- Items Grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {% for mi in menu_items %}
-          <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name }}'"
+          <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}'"
                {% if order %}onclick="addToCart({{ mi.item.pk }}, activeCard, 1)"{% endif %}
                class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm {% if order %}cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95{% endif %} transition-all duration-200 {% if not order %}opacity-50{% endif %}">
             <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
@@ -81,7 +81,7 @@
           <div class="flex gap-2">
             <form method="post" action="{% url 'pos:pos_order_new' %}">
               {% csrf_token %}
-              <input type="hidden" name="order_type" value="DINE_IN">
+              <input type="hidden" name="order_type" :value="activeTab === 'dine-in' ? 'DINE_IN' : 'TAKE_AWAY'">
               <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow hover:bg-orange-500 transition">+ New Order</button>
             </form>
           </div>

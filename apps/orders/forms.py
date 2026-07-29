@@ -26,7 +26,7 @@ class OrderForm(StyledModelForm):
         order_type = cleaned.get("order_type")
         table = cleaned.get("table")
         if order_type == "DINE_IN" and not table:
-            raise self.ValidationError({"table": "A table is required for dine-in orders."})
+            self.add_error("table", "A table is required for dine-in orders.")
         return cleaned
 
 

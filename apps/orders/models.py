@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.inventory.models import Item, StockLedgerEntry
@@ -94,19 +94,19 @@ class Order(BaseModel):
             from apps.settings.models import POSProfile
 
             profile = POSProfile.objects.select_related("restaurant", "restaurant__branch").first()
-            if profile:
-                self.restaurant = profile.restaurant
-                self.branch = profile.restaurant.branch
-                self.pos_profile = profile
+            if profile is None:
+                raise ValidationError("No POS Profile configured — cannot create an order.")
+            self.restaurant = profile.restaurant
+            self.branch = profile.restaurant.branch
+            self.pos_profile = profile
         if self.table_id and (is_new or self._table_changed()):
             self.room = self.table.room
-        if self.branch_id and not self.restaurant_id:
-            self.restaurant = self.branch.restaurants.first()
-        super().save(*args, **kwargs)
-        if is_new and not self.invoice_number:
-            prefix = self.restaurant.invoice_series_prefix if self.restaurant_id else "REST-"
-            self.invoice_number = f"{prefix}{self.pk}"
-            super().save(update_fields=["invoice_number"])
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if is_new and not self.invoice_number:
+                prefix = self.restaurant.invoice_series_prefix
+                self.invoice_number = f"{prefix}{self.pk}"
+                super().save(update_fields=["invoice_number"])
 
     def _table_changed(self):
         if not self.pk:
@@ -208,6 +208,7 @@ class Order(BaseModel):
         else:
             self.discount_amount = (self.net_total * percentage / 100).quantize(Decimal("0.01"))
 
+    @transaction.atomic
     def settle(self, payments_data, cashier=None, discount_percentage=None, discount_on="GRAND_TOTAL"):
         if self.status != DRAFT:
             raise ValidationError("Order is already settled or cancelled.")
@@ -228,11 +229,9 @@ class Order(BaseModel):
             OrderPayment.objects.create(order=self, mode_of_payment_id=mode_pk, amount=amount, reference_no=ref)
             total_paid += amount
         self.paid_amount = total_paid
-        if total_paid > self.grand_total:
-            self.change_amount = total_paid - self.grand_total
-        else:
-            self.outstanding_amount = self.grand_total - total_paid
-        self.is_paid = True
+        self.change_amount = max(total_paid - self.grand_total, Decimal("0"))
+        self.outstanding_amount = max(self.grand_total - total_paid, Decimal("0"))
+        self.is_paid = self.outstanding_amount == 0
         self.status = SUBMITTED
         self.save()
         self._deduct_stock()
@@ -439,7 +438,7 @@ class OrderItem(BaseModel):
 class OrderPayment(BaseModel):
     """A payment line within an order."""
 
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="payments")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="payments")
     mode_of_payment = models.ForeignKey(ModeOfPayment, on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reference_no = models.CharField(max_length=100, blank=True)

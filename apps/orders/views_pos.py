@@ -87,16 +87,19 @@ def pos_order_load(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
     order = get_object_or_404(Order, pk=pk, status="DRAFT")
-    item_id = request.POST.get("item_id")
-    qty = int(request.POST.get("qty", 1))
-    customer_index = int(request.POST.get("customer_index", 1))
+    try:
+        item_id = int(request.POST.get("item_id", 0))
+        qty = int(request.POST.get("qty", 1))
+        customer_index = int(request.POST.get("customer_index", 1))
+    except ValueError, TypeError:
+        return _cart_error_html(request, order, "Invalid item or quantity.")
     comments = request.POST.get("comments", "")
     item = get_object_or_404(Item, pk=item_id, is_sales_item=True)
     menu_item = MenuItem.objects.filter(item=item, menu=order.restaurant.active_menu, disabled=False).first()
-    rate = menu_item.rate if menu_item else Decimal("0")
-    order.add_item(item, qty=qty, customer_index=customer_index, comments=comments)
-    if rate and order.items.filter(item=item, customer_index=customer_index, rate=Decimal("0")).exists():
-        order.items.filter(item=item, customer_index=customer_index).update(rate=rate)
+    if menu_item is None:
+        return _cart_error_html(request, order, "This item is not on the active menu.")
+    rate = menu_item.rate
+    order.add_item(item, qty=qty, customer_index=customer_index, comments=comments, rate=rate)
     order.recalculate_totals()
     return _cart_html(request, order)
 
@@ -113,7 +116,10 @@ def pos_order_remove_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
 @require_POST
 def pos_order_update_qty(request: HttpRequest, pk: int, item_pk: int) -> HttpResponse:
     order = get_object_or_404(Order, pk=pk, status="DRAFT")
-    new_qty = Decimal(request.POST.get("qty", "0"))
+    try:
+        new_qty = Decimal(request.POST.get("qty", "0"))
+    except ValueError, TypeError:
+        return _cart_error_html(request, order, "Invalid quantity.")
     oi = get_object_or_404(order.items, pk=item_pk)
     if new_qty <= 0:
         oi.delete()
@@ -185,6 +191,11 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def pos_customer_card_activate(request: HttpRequest, index: int) -> HttpResponse:
     request.session["pos_active_card"] = index
+    order_id = request.session.get("pos_order_id")
+    if order_id:
+        order = Order.objects.filter(pk=order_id, status="DRAFT").first()
+        if order:
+            return _customer_cards_html(request, order)
     return HttpResponse("")
 
 
@@ -202,6 +213,11 @@ def pos_guest_count(request: HttpRequest) -> HttpResponse:
 def _cart_html(request, order):
     order.refresh_from_db()
     return render(request, "pos/_partials/cart_items.html", {"order": order})
+
+
+def _cart_error_html(request, order, message):
+    order.refresh_from_db()
+    return render(request, "pos/_partials/cart_items.html", {"order": order, "error": message})
 
 
 def _customer_cards_html(request, order):

@@ -114,7 +114,7 @@ class OrderSettleTest(OrderTestBase):
         self.order.add_item(self.item, qty=2, rate=Decimal("1500"))
 
     def test_settle_changes_status(self):
-        self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
+        self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3500"}])
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "SUBMITTED")
         self.assertTrue(self.order.is_paid)
