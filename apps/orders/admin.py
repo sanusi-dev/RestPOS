@@ -26,7 +26,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("invoice_number", "order_type", "customer_name", "status", "grand_total", "posting_date")
     list_filter = ("status", "order_type", "posting_date", "branch")
     search_fields = ("invoice_number", "customer_name")
-    inlines = [OrderItemInline, OrderPaymentInline, OrderTaxInline]
+    inlines = (OrderItemInline, OrderPaymentInline, OrderTaxInline)
     ordering = ("-posting_date",)
 
 

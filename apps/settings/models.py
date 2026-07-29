@@ -344,7 +344,12 @@ class POSProfile(BaseModel):
                 raise ValidationError({"branch": "Create a branch in Settings before creating a POS profile."})
             self.branch = default_branch
         if not self.restaurant_id:
-            self.restaurant = self.branch.restaurants.first()
+            restaurant = self.branch.restaurants.first()
+            if restaurant is None:
+                raise ValidationError(
+                    {"restaurant": "Create a restaurant configuration for this branch before creating a POS profile."}
+                )
+            self.restaurant = restaurant
         if not self.company and self.restaurant_id:
             self.company = self.restaurant.company
         super().save(*args, **kwargs)

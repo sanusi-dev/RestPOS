@@ -67,7 +67,7 @@
           {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
         </dd>
       </div>
-      {% if closing.status == "SUBMITTED" and closing.total_short_excess %}
+      {% if closing.status == "SUBMITTED" and closing.total_short_excess is not None %}
         <div>
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Short/Excess</dt>
           <dd class="text-base font-mono font-bold {% if closing.total_short_excess < 0 %}text-red-600{% elif closing.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ closing.total_short_excess }}</dd>

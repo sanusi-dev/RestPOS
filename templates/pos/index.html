@@ -117,12 +117,31 @@
             {% csrf_token %}
             <button class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">Update Order &amp; Send to Kitchen</button>
           </form>
-          <a href="{% url 'pos:pos_order_settle' order.pk %}" class="block text-center w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">Pay ₦{{ order.net_total }}</a>
+          <button hx-get="{% url 'pos:pos_order_settle' order.pk %}"
+                  hx-target="#payment-modal-inner"
+                  hx-swap="innerHTML"
+                  class="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">Pay ₦{{ order.net_total }}</button>
         {% elif order %}
           <div class="text-center text-sm text-gray-400 py-2">Add items to the order to continue</div>
         {% endif %}
       </div>
     </div>
   </div>
+
+  <!-- Payment Modal -->
+  <div id="payment-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm"
+       @click.self="$el.classList.add('hidden'); $el.classList.remove('flex')">
+    <div id="payment-modal-inner" class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4"></div>
+  </div>
+
+  <script>
+  document.body.addEventListener('htmx:afterSettle', function(evt) {
+    if (evt.detail.target.id === 'payment-modal-inner' && evt.detail.target.innerHTML.trim()) {
+      var modal = document.getElementById('payment-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  });
+  </script>
 </div>
 {% endblock %}

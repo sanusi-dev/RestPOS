@@ -18,7 +18,7 @@
     </div>
   </div>
 
-  <form method="post" @submit.prevent="
+  <form method="post" action="{% url 'pos:pos_order_settle' order.pk %}" @submit="
     const payments = [];
     $el.querySelectorAll('[data-mode-pk]').forEach(input => {
       const amount = parseFloat(input.value || 0);
@@ -28,7 +28,6 @@
     });
     const hidden = $el.querySelector('[name=payments]');
     hidden.value = JSON.stringify(payments);
-    $el.submit();
   ">
     {% csrf_token %}
     <input type="hidden" name="payments" value="[]">

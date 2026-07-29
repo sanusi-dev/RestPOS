@@ -17,7 +17,7 @@ class POSOpeningEntryAdmin(admin.ModelAdmin):
     )
     list_filter = ("branch", "status", "posting_date")
     list_select_related = ("branch", "cashier", "closing_entry")
-    search_fields = ("pk", "cashier__username", "remarks")
+    search_fields = ("=pk", "cashier__username", "remarks")
     readonly_fields = (
         "period_start_date",
         "period_end_date",

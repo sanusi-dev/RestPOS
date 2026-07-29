@@ -37,7 +37,7 @@ RestPOS is a restaurant POS and management system for a Nigerian restaurant, bui
 
 ## Workspace Structure
 
-```
+```text
 RestPOS/
 ├── AGENTS.md                         ← this file
 ├── PLAN.md                           ← feature implementation plans
@@ -165,7 +165,7 @@ Group ordering is first-class. On order start, the cashier picks single or group
 
 **Receipts:** One receipt per order, grouping items by customer card with a per-customer subtotal, then the overall total:
 
-```
+```text
 ORDER #0042
 -----------------------------
 Customer 1
@@ -262,7 +262,7 @@ Hard rules: do NOT hand-write `CreateModel`/`AddField`/`AlterField`/`RemoveField
 
 **Inline comments:** Only for non-obvious logic (algorithms, workarounds, intentional quirks). Never restate what code says. Never explain framework behaviour. One line max — if you need two, refactor the code.
 
-```
+```text
 BAD:  # Loop through all payments and add them to the list
 GOOD: # Cash modes first — cashier scans left-to-right at speed
 

@@ -32,7 +32,7 @@ def pos_home(request: HttpRequest) -> HttpResponse:
     rooms = Room.objects.filter(branch=profile.restaurant.branch).order_by("name")
     menu_items = (
         MenuItem.objects.filter(menu=profile.restaurant.active_menu, disabled=False)
-        .select_related("item")
+        .select_related("item__item_group")
         .order_by("item_name")
     )
     production_units = ProductionUnit.objects.filter(branch=profile.restaurant.branch)
