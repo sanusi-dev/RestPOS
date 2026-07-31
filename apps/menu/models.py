@@ -2,30 +2,22 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.inventory.models import UOM, Item
-from apps.settings.models import Branch
 from apps.utils.models import BaseModel
 
 
 class Menu(BaseModel):
     """A named menu for the restaurant. Owns a synced PriceList."""
 
-    name = models.CharField(max_length=100)
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="menus")
+    name = models.CharField(max_length=100, unique=True)
     enabled = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = [("name", "branch")]
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is None:
-                raise ValidationError({"branch": "Create a branch in Settings before creating a menu."})
-            self.branch = default_branch
         super().save(*args, **kwargs)
         self.sync_price_list()
 
@@ -146,8 +138,21 @@ class ItemAddOn(BaseModel):
 
     def clean(self):
         super().clean()
-        if not MenuItem.objects.filter(item=self.add_on_item).exists():
-            raise ValidationError("Add-on item must be a member of at least one menu to have a resolvable POS price.")
+        if not self.add_on_item_id:
+            return
+        add_on = self.add_on_item
+        if add_on.has_variants:
+            raise ValidationError(
+                {"add_on_item": "Template items cannot be used as add-ons — use a sellable size variant."}
+            )
+        if not add_on.is_sales_item:
+            raise ValidationError({"add_on_item": "Only sellable items can be used as add-ons."})
+        if add_on.disabled:
+            raise ValidationError({"add_on_item": "Disabled items cannot be used as add-ons."})
+        if not MenuItem.objects.filter(item=add_on, disabled=False).exists():
+            raise ValidationError(
+                {"add_on_item": "Add-on item must be on an enabled menu line to have a resolvable POS price."}
+            )
 
 
 class ItemVariant(BaseModel):

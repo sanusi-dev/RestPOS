@@ -21,7 +21,6 @@
         <thead class="bg-gray-50/50">
           <tr>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">#</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Branch</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cashier</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Closed</th>
             <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total Short/Excess</th>
@@ -33,7 +32,6 @@
           {% for entry in entries %}
             <tr class="hover:bg-gray-50/50 transition-colors">
               <td class="px-6 py-4 text-sm font-mono text-gray-500">#{{ entry.pk }}</td>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ entry.branch.name }}</td>
               <td class="px-6 py-4 text-sm text-gray-700">{{ entry.cashier.get_display_name }}</td>
               <td class="px-6 py-4 text-sm text-gray-500 font-mono">{{ entry.period_end_date|date:"M j, H:i" }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono {% if entry.total_short_excess < 0 %}text-red-600{% elif entry.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ entry.total_short_excess }}</td>
@@ -52,7 +50,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="px-6 py-16 text-center text-gray-500">
+              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
                 <div class="flex flex-col items-center gap-2">
                   <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>

@@ -3,7 +3,7 @@
 <div class="w-full">
   <div class="mb-8">
     <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Staff &amp; Shifts</h1>
-    <p class="mt-2 text-sm font-medium text-gray-500">POS opening and closing entries — one shared shift per branch</p>
+    <p class="mt-2 text-sm font-medium text-gray-500">POS opening and closing entries — one shared shift</p>
   </div>
 
   <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -45,36 +45,33 @@
         <h3 class="text-base font-bold text-gray-900">Current Shift State</h3>
       </div>
       <ul class="divide-y divide-gray-50 bg-white/30">
-        {% for state in shift_states %}
-          <li class="group transition-colors hover:bg-white p-5">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <p class="text-sm font-bold text-gray-900">{{ state.branch.name }}</p>
-                {% if state.open_entry %}
-                  <p class="text-xs text-gray-500 mt-0.5">
-                    Open since <span class="font-mono">{{ state.open_entry.period_start_date|date:"M j, H:i" }}</span>
-                    by {{ state.open_entry.cashier.get_display_name }}
-                  </p>
-                {% else %}
-                  <p class="text-xs text-gray-400 mt-0.5">No open shift</p>
-                {% endif %}
-              </div>
-              <div>
-                {% if state.open_entry %}
-                  <a href="{% url 'staff:closing_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">
-                    Close shift →
-                  </a>
-                {% else %}
-                  <a href="{% url 'staff:opening_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
-                    Open shift →
-                  </a>
-                {% endif %}
-              </div>
+        <li class="group transition-colors hover:bg-white p-5">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              {% if open_entry %}
+                <p class="text-sm font-bold text-gray-900">Shift open</p>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Open since <span class="font-mono">{{ open_entry.period_start_date|date:"M j, H:i" }}</span>
+                  by {{ open_entry.cashier.get_display_name }}
+                </p>
+              {% else %}
+                <p class="text-sm font-bold text-gray-900">No open shift</p>
+                <p class="text-xs text-gray-400 mt-0.5">Open a shift before taking orders on the POS</p>
+              {% endif %}
             </div>
-          </li>
-        {% empty %}
-          <li class="p-8 text-center text-sm font-medium text-gray-500">No branches configured yet.</li>
-        {% endfor %}
+            <div>
+              {% if open_entry %}
+                <a href="{% url 'staff:closing_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">
+                  Close shift →
+                </a>
+              {% else %}
+                <a href="{% url 'staff:opening_entry_create' %}" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-500 hover:text-emerald-600 transition-colors">
+                  Open shift →
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        </li>
       </ul>
     </div>
 
@@ -91,7 +88,7 @@
             <a href="{% url 'staff:closing_entry_detail' close.pk %}" class="flex items-center justify-between">
               <div>
                 <p class="text-sm font-bold text-gray-900 group-hover:text-orange-500 transition-colors">
-                  {{ close.branch.name }} · {{ close.period_end_date|date:"M j, H:i" }}
+                  Closing #{{ close.pk }} · {{ close.period_end_date|date:"M j, H:i" }}
                 </p>
                 <p class="text-xs text-gray-400 mt-0.5">
                   Opened by {{ close.cashier.get_display_name }} · total short/excess

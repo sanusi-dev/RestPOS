@@ -6,7 +6,6 @@ from django.urls import reverse
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemAddOn, ItemVariant, Menu, MenuItem
-from apps.settings.models import Branch
 from apps.users.models import CustomUser
 
 
@@ -18,7 +17,6 @@ class MenuViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item_food = Item.objects.create(
@@ -37,7 +35,7 @@ class MenuViewTestBase(TestCase):
             department="DRINKS",
             is_sales_item=True,
         )
-        cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
+        cls.menu = Menu.objects.create(name="Lunch Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item_food, rate=Decimal("1500"))
         MenuItem.objects.create(menu=cls.menu, item=cls.item_drink, rate=Decimal("500"))
 
@@ -71,7 +69,7 @@ class TestMenuViews(MenuViewTestBase):
     def test_menu_create_get(self):
         response = self.client.get(reverse("menu:menu_create"))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="branch"')
+        self.assertContains(response, 'name="name"')
 
     def test_menu_create_post(self):
         response = self.client.post(
@@ -80,7 +78,7 @@ class TestMenuViews(MenuViewTestBase):
         )
         self.assertRedirects(response, reverse("menu:menu_list"))
         menu = Menu.objects.get(name="Dinner Menu")
-        self.assertEqual(menu.branch_id, self.branch.pk)
+        self.assertEqual(menu.name, "Dinner Menu")
 
     def test_menu_detail_200(self):
         response = self.client.get(reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
@@ -99,7 +97,7 @@ class TestMenuViews(MenuViewTestBase):
         self.assertRedirects(response, reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
         self.menu.refresh_from_db()
         self.assertEqual(self.menu.name, "Updated Menu")
-        self.assertEqual(self.menu.branch_id, self.branch.pk)
+        self.assertEqual(self.menu.name, "Updated Menu")
 
 
 class TestMenuItemViews(MenuViewTestBase):

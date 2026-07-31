@@ -11,11 +11,10 @@ class MenuItemInline(admin.TabularInline):
 
 @admin.register(Menu)
 class MenuAdmin(admin.ModelAdmin):
-    list_display = ("name", "branch", "enabled", "created_at")
-    list_filter = ("branch", "enabled")
-    list_select_related = ("branch",)
-    search_fields = ("name", "branch__name")
-    ordering = ("branch__name", "name")
+    list_display = ("name", "enabled", "created_at")
+    list_filter = ("enabled",)
+    search_fields = ("name",)
+    ordering = ("name",)
     inlines = [MenuItemInline]
 
 

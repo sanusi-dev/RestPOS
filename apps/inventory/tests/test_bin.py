@@ -3,13 +3,11 @@ from decimal import Decimal
 from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup, Warehouse
-from apps.settings.models import Branch
 
 
 class BinModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item = Item.objects.create(
@@ -18,7 +16,7 @@ class BinModelTest(TestCase):
             stock_uom=cls.uom,
             department="FOOD",
         )
-        cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.warehouse = Warehouse.objects.create(name="Main Store")
 
     def test_get_or_create_creates_bin(self):
         bin_obj = Warehouse  # placeholder to avoid linter

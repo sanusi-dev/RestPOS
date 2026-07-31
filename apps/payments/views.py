@@ -54,11 +54,11 @@ def mode_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def mode_detail(request: HttpRequest, pk: int) -> HttpResponse:
     mode = get_object_or_404(ModeOfPayment, pk=pk)
-    mappings = mode.gl_mappings.all()
+    mapping = getattr(mode, "gl_mapping", None)
     return render(
         request,
         "backoffice/payments/mode_detail.html",
-        {"mode": mode, "mappings": mappings},
+        {"mode": mode, "mapping": mapping},
     )
 
 

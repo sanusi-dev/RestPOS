@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.inventory.models import Item, StockLedgerEntry
@@ -15,13 +16,9 @@ STATUS_CHOICES = [(DRAFT, "Draft"), (SUBMITTED, "Submitted"), (CANCELLED, "Cance
 
 DINE_IN = "DINE_IN"
 TAKE_AWAY = "TAKE_AWAY"
-DELIVERY = "DELIVERY"
-PHONE_IN = "PHONE_IN"
 ORDER_TYPE_CHOICES = [
     (DINE_IN, "Dine In"),
     (TAKE_AWAY, "Take Away"),
-    (DELIVERY, "Delivery"),
-    (PHONE_IN, "Phone In"),
 ]
 
 NEW_ORDER = "New Order"
@@ -35,369 +32,358 @@ KOT_TYPE_CHOICES = [
     (PARTIALLY_CANCELLED, "Partially Cancelled"),
 ]
 
+TWO_PLACES = Decimal("0.01")
+
 
 class Order(BaseModel):
-    """A POS order — the single source of truth for items, payments, taxes, and status."""
+    """A POS order — the single source of truth for items, payments, and status."""
 
     invoice_number = models.CharField(max_length=50, unique=True, null=True, blank=True, editable=False)
+    order_number = models.PositiveIntegerField(null=True, blank=True, editable=False)
     order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default=DINE_IN)
-    restaurant = models.ForeignKey("settings.Restaurant", on_delete=models.PROTECT, related_name="orders")
-    branch = models.ForeignKey("settings.Branch", on_delete=models.PROTECT, related_name="orders")
-    pos_profile = models.ForeignKey("settings.POSProfile", on_delete=models.PROTECT, null=True, blank=True)
-    table = models.ForeignKey("settings.Table", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders")
-    room = models.ForeignKey("settings.Room", on_delete=models.SET_NULL, null=True, blank=True)
     customer_name = models.CharField(max_length=200, default="Walk-in Customer")
-    customer_mobile = models.CharField(max_length=20, blank=True)
     guest_count = models.PositiveIntegerField(default=1)
-    waiter = models.ForeignKey("users.CustomUser", on_delete=models.SET_NULL, null=True, blank=True)
     cashier = models.ForeignKey(
         "users.CustomUser", on_delete=models.SET_NULL, null=True, blank=True, related_name="settled_orders"
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     is_paid = models.BooleanField(default=False)
     invoice_printed = models.BooleanField(default=False)
-    posting_date = models.DateField(default=timezone.now)
-    posting_time = models.TimeField(default=timezone.now)
+    posting_date = models.DateField(default=timezone.localdate)
+    posting_time = models.TimeField(default=timezone.localtime)
     net_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
-    total_taxes = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
-    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     grand_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     rounded_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     paid_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     change_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
-    outstanding_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    comments = models.TextField(blank=True)
     cancel_reason = models.TextField(blank=True)
-    taxes_and_charges_template = models.ForeignKey(
-        "settings.TaxTemplate", on_delete=models.SET_NULL, null=True, blank=True
-    )
-    amended_from = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True)
     opening_entry = models.ForeignKey(
         "staff.POSOpeningEntry", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
     )
-    order_number = models.PositiveIntegerField(null=True, blank=True, editable=False)
+    arrived_time = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-posting_date", "-posting_time"]
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["posting_date"]),
-            models.Index(fields=["branch"]),
         ]
 
     def __str__(self):
-        return f"{self.invoice_number} - {self.customer_name}"
+        return f"{self.invoice_number or f'#{self.pk}'} — {self.customer_name}"
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
-        if not self.restaurant_id:
-            from apps.settings.models import POSProfile
+        if is_new and not self.arrived_time:
+            self.arrived_time = timezone.now()
+        super().save(*args, **kwargs)
+        if is_new and not self.invoice_number:
+            from apps.settings.models import Restaurant
 
-            profile = POSProfile.objects.select_related("restaurant", "restaurant__branch").first()
-            if profile is None:
-                raise ValidationError("No POS Profile configured — cannot create an order.")
-            self.restaurant = profile.restaurant
-            self.branch = profile.restaurant.branch
-            self.pos_profile = profile
-        if self.table_id and (is_new or self._table_changed()):
-            self.room = self.table.room
-        with transaction.atomic():
-            super().save(*args, **kwargs)
-            if is_new and not self.invoice_number:
-                prefix = self.restaurant.invoice_series_prefix
-                self.invoice_number = f"{prefix}{self.pk}"
-                super().save(update_fields=["invoice_number"])
-
-    def _table_changed(self):
-        if not self.pk:
-            return True
-        try:
-            original = Order.objects.only("table_id").get(pk=self.pk)
-        except Order.DoesNotExist:
-            return True
-        return original.table_id != self.table_id
+            settings = Restaurant.load()
+            prefix = settings.invoice_series_prefix if settings else "REST-"
+            self.invoice_number = f"{prefix}{self.pk}"
+            super().save(update_fields=["invoice_number"])
 
     def clean(self):
         super().clean()
-        if self.table_id and self.order_type == DINE_IN:
-            if self.pk:
-                existing = Order.objects.filter(table=self.table, status=DRAFT).exclude(pk=self.pk).exists()
-            else:
-                existing = Order.objects.filter(table=self.table, status=DRAFT).exists()
-            if existing:
-                raise ValidationError({"table": "This table already has an open order."})
         if self.status == CANCELLED and not self.cancel_reason:
             raise ValidationError({"cancel_reason": "A cancel reason is required."})
 
-    def recalculate_totals(self):
-        total = self.items.aggregate(t=models.Sum("amount"))["t"] or Decimal("0")
-        self.net_total = total
-        self.save(update_fields=["net_total", "updated_at"])
+    def assign_order_number(self):
+        """Set a sequential order number, resetting daily when settings say so."""
+        from apps.settings.models import Restaurant
 
-    def add_item(self, item, qty=1, customer_index=1, comments="", rate=None):
+        if self.order_number is not None:
+            return self.order_number
+        settings = Restaurant.load()
+        qs = Order.objects.exclude(pk=self.pk)
+        if settings and settings.reset_order_number_daily:
+            qs = qs.filter(posting_date=self.posting_date)
+        last = qs.aggregate(max_num=models.Max("order_number"))["max_num"]
+        self.order_number = (last or 0) + 1
+        super().save(update_fields=["order_number"])
+        return self.order_number
+
+    def recalculate_totals(self):
+        """Recalculate net_total from items and grand total (no tax)."""
+        total = self.items.aggregate(t=Sum("amount"))["t"] or Decimal("0")
+        self.net_total = total
+        self.grand_total = self.net_total
+        self.rounded_total = self.grand_total.quantize(Decimal("1"), rounding="ROUND_HALF_UP")
+        self.save(
+            update_fields=[
+                "net_total",
+                "grand_total",
+                "rounded_total",
+                "updated_at",
+            ]
+        )
+
+    def add_item(self, item, qty=1, customer_index=1, comments="", rate=None, menu_item=None):
+        """Add an item to the order, or increment qty if same item+customer+comments exists."""
         if self.status != DRAFT:
-            raise ValidationError("Cannot modify a submitted order.")
-        existing = self.items.filter(item=item, customer_index=customer_index).first()
+            raise ValidationError("Cannot modify a submitted or cancelled order.")
+        existing = self.items.filter(item=item, customer_index=customer_index, comments=comments or "").first()
         if existing:
             existing.qty += qty
-            existing.comments = comments or existing.comments
             existing.save()
             return existing
-        order_item = OrderItem.objects.create(
-            order=self, item=item, qty=qty, customer_index=customer_index, comments=comments, rate=rate or Decimal("0")
+        return OrderItem.objects.create(
+            order=self,
+            item=item,
+            qty=qty,
+            customer_index=customer_index,
+            comments=comments,
+            rate=rate or Decimal("0"),
+            menu_item=menu_item,
         )
-        self.recalculate_totals()
-        return order_item
 
     def remove_item(self, order_item_pk):
+        """Remove an item from the order."""
         if self.status != DRAFT:
-            raise ValidationError("Cannot modify a submitted order.")
+            raise ValidationError("Cannot modify a submitted or cancelled order.")
         self.items.filter(pk=order_item_pk).delete()
-        self.recalculate_totals()
-
-    def clear_items(self):
-        if self.status != DRAFT:
-            raise ValidationError("Cannot modify a submitted order.")
-        self.items.all().delete()
-        self.recalculate_totals()
-
-    def calculate_taxes(self):
-        template = self.taxes_and_charges_template
-        if self.restaurant_id and not template:
-            template = self.restaurant.default_tax_template
-        self.taxes.all().delete()
-        if not template:
-            return Decimal("0")
-        from apps.settings.models import TaxRate
-
-        net_total = self.net_total
-        previous_total = Decimal("0")
-        previous_amount = Decimal("0")
-        total_tax = Decimal("0")
-        for rate_row in template.rates.order_by("pk"):
-            tax_amount = Decimal("0")
-            if rate_row.charge_type == TaxRate.ON_NET_TOTAL:
-                tax_amount = (net_total * rate_row.rate / 100).quantize(Decimal("0.01"))
-            elif rate_row.charge_type == TaxRate.ACTUAL:
-                tax_amount = rate_row.rate
-            elif rate_row.charge_type == TaxRate.ON_PREVIOUS_ROW_AMOUNT:
-                tax_amount = (previous_amount * rate_row.rate / 100).quantize(Decimal("0.01"))
-            elif rate_row.charge_type == TaxRate.ON_PREVIOUS_ROW_TOTAL:
-                tax_amount = (previous_total * rate_row.rate / 100).quantize(Decimal("0.01"))
-            if tax_amount > 0:
-                OrderTax.objects.create(
-                    order=self,
-                    description=rate_row.description,
-                    charge_type=rate_row.charge_type,
-                    rate=rate_row.rate,
-                    tax_amount=tax_amount,
-                    account_head=rate_row.account_head,
-                )
-                total_tax += tax_amount
-                previous_amount = tax_amount
-                previous_total = net_total + total_tax
-        self.total_taxes = total_tax
-        return total_tax
-
-    def apply_discount(self, discount_percentage, discount_on):
-        if not discount_percentage:
-            return
-        percentage = Decimal(str(discount_percentage))
-        if discount_on == "GRAND_TOTAL":
-            self.discount_amount = (self.grand_total * percentage / 100).quantize(Decimal("0.01"))
-        else:
-            self.discount_amount = (self.net_total * percentage / 100).quantize(Decimal("0.01"))
 
     @transaction.atomic
-    def settle(self, payments_data, cashier=None, discount_percentage=None, discount_on="GRAND_TOTAL"):
+    def settle(self, payments_data, cashier=None):
+        """Process payment and submit the order. Totals → tax → rounding → payments →
+        change → outstanding → submit → stock."""
         if self.status != DRAFT:
             raise ValidationError("Order is already settled or cancelled.")
+        if self.order_type == DINE_IN and not self.invoice_printed:
+            raise ValidationError("Invoice must be printed before settling a dine-in order.")
         if cashier:
             self.cashier = cashier
-        total_tax = self.calculate_taxes()
-        self.grand_total = self.net_total + total_tax
-        if discount_percentage:
-            self.apply_discount(discount_percentage, discount_on)
-        self.rounded_total = (round(self.grand_total - self.discount_amount, 0)).quantize(Decimal("1"))
+        self.recalculate_totals()
         self.grand_total = self.rounded_total
         self.payments.all().delete()
         total_paid = Decimal("0")
         for entry in payments_data:
             mode_pk = entry.get("mode_of_payment") or entry.get("mode_of_payment_id")
             amount = Decimal(str(entry.get("amount", 0)))
-            ref = entry.get("reference_no", "")
-            OrderPayment.objects.create(order=self, mode_of_payment_id=mode_pk, amount=amount, reference_no=ref)
+            if amount <= 0:
+                continue
+            OrderPayment.objects.create(
+                order=self, mode_of_payment_id=mode_pk, amount=amount, reference_no=entry.get("reference_no", "")
+            )
             total_paid += amount
+        if total_paid < self.grand_total:
+            raise ValidationError("Payment must cover the full total.")
         self.paid_amount = total_paid
         self.change_amount = max(total_paid - self.grand_total, Decimal("0"))
-        self.outstanding_amount = max(self.grand_total - total_paid, Decimal("0"))
-        self.is_paid = self.outstanding_amount == 0
+        self.is_paid = True
         self.status = SUBMITTED
         self.save()
         self._deduct_stock()
-        if self.table and self.order_type == DINE_IN:
-            self.table.occupied = False
-            self.table.latest_invoice_time = timezone.now()
-            self.table.save(update_fields=["occupied", "latest_invoice_time", "updated_at"])
+        if self.order_number is None:
+            self.assign_order_number()
+
+    def _default_warehouse(self):
+        """Stock deduction warehouse: settings default, falling back to the item's own."""
+        from apps.settings.models import Restaurant
+
+        settings = Restaurant.load()
+        return settings.default_warehouse if settings else None
 
     def _deduct_stock(self):
+        """Create negative stock ledger entries for all stock items in the order."""
         voucher_no = str(self.pk)
-        for item in self.items.select_related("item").all():
-            if not item.item.is_stock_item:
+        warehouse = self._default_warehouse()
+        for oi in self.items.select_related("item").only("item__is_stock_item", "item__default_warehouse", "qty"):
+            if not oi.item.is_stock_item:
                 continue
-            warehouse = self.pos_profile.warehouse if self.pos_profile else item.item.default_warehouse
-            if not warehouse:
+            wh = warehouse or oi.item.default_warehouse
+            if not wh:
                 continue
             StockLedgerEntry.create_entry(
-                item=item.item,
-                warehouse=warehouse,
-                actual_qty=-item.qty,
+                item=oi.item,
+                warehouse=wh,
+                actual_qty=-oi.qty,
                 voucher_type="POS Order",
                 voucher_no=voucher_no,
-                voucher_detail_no=str(item.pk),
+                voucher_detail_no=str(oi.pk),
             )
 
-    def submit(self):
-        if self.status != DRAFT:
-            return
-        self._deduct_stock()
-        if self.table and self.order_type == DINE_IN:
-            self.table.occupied = False
-            self.table.latest_invoice_time = timezone.now()
-            self.table.save(update_fields=["occupied", "latest_invoice_time", "updated_at"])
-        self.status = SUBMITTED
-        self.is_paid = True
-        self.save(update_fields=["status", "is_paid", "updated_at"])
+    def _restore_stock(self):
+        """Create positive stock ledger entries reversing a submitted order's deductions."""
+        voucher_no = str(self.pk)
+        warehouse = self._default_warehouse()
+        for oi in self.items.select_related("item").only("item__is_stock_item", "item__default_warehouse", "qty"):
+            if not oi.item.is_stock_item:
+                continue
+            wh = warehouse or oi.item.default_warehouse
+            if not wh:
+                continue
+            StockLedgerEntry.create_entry(
+                item=oi.item,
+                warehouse=wh,
+                actual_qty=oi.qty,
+                voucher_type="POS Order Cancellation",
+                voucher_no=voucher_no,
+                voucher_detail_no=str(oi.pk),
+            )
 
+    @transaction.atomic
     def cancel(self, reason):
+        """Cancel the order. Reverses stock if submitted, cancels KOTs."""
         if self.status == CANCELLED:
             return
-        self.cancel_reason = reason or self.cancel_reason
+        if not reason or not reason.strip():
+            raise ValidationError("A cancel reason is required.")
+        self.cancel_reason = reason
         if self.status == SUBMITTED:
-            voucher_no = str(self.pk)
-            for item in self.items.select_related("item").all():
-                if not item.item.is_stock_item:
-                    continue
-                warehouse = self.pos_profile.warehouse if self.pos_profile else item.item.default_warehouse
-                if not warehouse:
-                    continue
-                StockLedgerEntry.create_entry(
-                    item=item.item,
-                    warehouse=warehouse,
-                    actual_qty=item.qty,
-                    voucher_type="POS Order Cancellation",
-                    voucher_no=voucher_no,
-                    voucher_detail_no=str(item.pk),
-                )
-        if self.table:
-            self.table.occupied = False
-            self.table.latest_invoice_time = timezone.now()
-            self.table.save(update_fields=["occupied", "latest_invoice_time", "updated_at"])
+            self._restore_stock()
+        self._cancel_kots()
         self.status = CANCELLED
         self.save(update_fields=["status", "cancel_reason", "updated_at"])
 
-    def generate_kots(self, previous_items_state):
-        current = {
-            (oi.item_id, oi.customer_index, oi.comments or ""): oi.qty for oi in self.items.select_related("item").all()
-        }
-        previous = {}
-        for pi in previous_items_state:
+    def _cancel_kots(self):
+        """Set all submitted KOTs to cancelled and create a cancellation KOT."""
+        from apps.settings.models import ProductionUnit
+
+        active_kots = self.kots.filter(status=SUBMITTED).exclude(type__in=[KOT_CANCELLED, PARTIALLY_CANCELLED])
+        if not active_kots.exists():
+            return
+        active_kots.update(status=CANCELLED)
+        items_by_dept = {}
+        for oi in self.items.select_related("item").only("item__department", "item_name", "qty", "comments"):
+            items_by_dept.setdefault(oi.item.department, []).append(oi)
+        production_units = {pu.department: pu for pu in ProductionUnit.objects.all()}
+        for dept, order_items in items_by_dept.items():
+            pu = production_units.get(dept)
+            if not pu:
+                continue
+            original_names = active_kots.filter(production_unit=pu).values_list("kot_number", flat=True)
+            kot = KOT.objects.create(
+                order=self,
+                production_unit=pu,
+                type=KOT_CANCELLED,
+                order_number=self.order_number,
+                original_kots=",".join(original_names),
+            )
+            kot.kot_number = f"CNCL-KOT-{kot.pk:04d}"
+            kot.save(update_fields=["kot_number"])
+            kot_items = [
+                KOTItem(
+                    kot=kot,
+                    item=oi.item,
+                    item_name=oi.item_name,
+                    qty=Decimal("0"),
+                    cancelled_qty=oi.qty,
+                    comments=oi.comments,
+                    customer_index=oi.customer_index,
+                )
+                for oi in order_items
+            ]
+            KOTItem.objects.bulk_create(kot_items)
+
+    def generate_kots(self, previous_items):
+        """Diff current items vs previous and generate KOTs per production unit.
+
+        Args:
+            previous_items: list of dicts with keys item_id, qty, customer_index, comments.
+        """
+        current_map = {}
+        for oi in self.items.select_related("item").only(
+            "item_id", "item__department", "item__item_name", "qty", "customer_index", "comments"
+        ):
+            key = (oi.item_id, oi.customer_index, oi.comments or "")
+            current_map[key] = current_map.get(key, Decimal("0")) + oi.qty
+
+        previous_map = {}
+        for pi in previous_items:
             key = (pi["item_id"], pi.get("customer_index", 1), pi.get("comments", ""))
-            previous[key] = Decimal(str(pi["qty"]))
+            previous_map[key] = previous_map.get(key, Decimal("0")) + Decimal(str(pi["qty"]))
 
         new_or_increased = {}
         removed_or_decreased = {}
-
-        for key, new_qty in current.items():
-            old_qty = previous.get(key, Decimal("0"))
+        for key, new_qty in current_map.items():
+            old_qty = previous_map.get(key, Decimal("0"))
             if new_qty > old_qty:
                 new_or_increased[key] = new_qty - old_qty
             elif new_qty < old_qty:
                 removed_or_decreased[key] = old_qty - new_qty
-        for key, old_qty in previous.items():
-            if key not in current:
+        for key, old_qty in previous_map.items():
+            if key not in current_map:
                 removed_or_decreased[key] = old_qty
 
-        kot_name = self.pos_profile.kot_naming_series if self.pos_profile else "KOT-####"
-        branch = self.branch
-        production_units = {}
+        if not new_or_increased and not removed_or_decreased:
+            return []
+
         from apps.settings.models import ProductionUnit
 
-        for pu in ProductionUnit.objects.filter(branch=branch).select_related("pos_profile"):
-            production_units[pu.department] = pu
+        item_ids = {k[0] for k in list(new_or_increased) + list(removed_or_decreased)}
+        items_cache = {i.pk: i for i in Item.objects.filter(pk__in=item_ids).only("department", "item_name")}
+        production_units = {pu.department: pu for pu in ProductionUnit.objects.all()}
 
+        created_kots = []
         if new_or_increased:
-            for pu_department, pu in production_units.items():
-                items_for_unit = []
-                for (item_id, customer_index, comments), qty in new_or_increased.items():
-                    item = Item.objects.only("department").get(pk=item_id)
-                    if item.department == pu_department:
-                        items_for_unit.append((item_id, customer_index, comments, qty))
-                if not items_for_unit:
-                    continue
+            created_kots += self._generate_kot_type(
+                new_or_increased, items_cache, production_units, NEW_ORDER, PARTIALLY_CANCELLED, is_cancel=False
+            )
+        if removed_or_decreased:
+            created_kots += self._generate_kot_type(
+                removed_or_decreased, items_cache, production_units, PARTIALLY_CANCELLED, KOT_CANCELLED, is_cancel=True
+            )
+        return created_kots
+
+    def _generate_kot_type(self, diffs, items_cache, production_units, default_type, cancel_type, is_cancel):
+        """Generate KOTs for a set of item diffs, grouped by production unit department."""
+        by_dept = {}
+        for (item_id, customer_index, comments), qty in diffs.items():
+            item = items_cache.get(item_id)
+            if not item:
+                continue
+            by_dept.setdefault(item.department, []).append((item, customer_index, comments, qty))
+
+        created = []
+        for dept, entries in by_dept.items():
+            pu = production_units.get(dept)
+            if not pu:
+                continue
+            if is_cancel:
+                kot_type = PARTIALLY_CANCELLED
+                existing = self.kots.filter(production_unit=pu, status=SUBMITTED).exclude(
+                    type__in=[KOT_CANCELLED, PARTIALLY_CANCELLED]
+                )
+                original_names = list(existing.values_list("kot_number", flat=True))
+            else:
                 existing_kot = (
                     self.kots.filter(production_unit=pu, status=SUBMITTED)
                     .exclude(type__in=[KOT_CANCELLED, PARTIALLY_CANCELLED])
                     .first()
                 )
                 kot_type = ORDER_MODIFIED if existing_kot else NEW_ORDER
-                kot = KOT.objects.create(
-                    order=self,
-                    production_unit=pu,
-                    type=kot_type,
-                    naming_series=kot_name,
-                    branch=branch,
-                    status=SUBMITTED,
-                )
-                kot.kot_number = f"KOT-{kot.pk:04d}"
-                kot.save(update_fields=["kot_number"])
-                for item_id, customer_index, comments, qty in items_for_unit:
-                    item = Item.objects.only("item_name").get(pk=item_id)
-                    KOTItem.objects.create(
-                        kot=kot,
-                        item_id=item_id,
-                        item_name=item.item_name,
-                        qty=qty,
-                        comments=comments,
-                        customer_index=customer_index,
-                    )
+                original_names = []
 
-        if removed_or_decreased:
-            for pu_department, pu in production_units.items():
-                items_for_unit = []
-                for (item_id, customer_index, comments), qty in removed_or_decreased.items():
-                    item = Item.objects.only("department").get(pk=item_id)
-                    if item.department == pu_department:
-                        items_for_unit.append((item_id, customer_index, comments, qty))
-                if not items_for_unit:
-                    continue
-                original_kot_names = (
-                    self.kots.filter(production_unit=pu, status=SUBMITTED)
-                    .exclude(type__in=[KOT_CANCELLED, PARTIALLY_CANCELLED])
-                    .values_list("kot_number", flat=True)
-                )
-                kot = KOT.objects.create(
-                    order=self,
-                    production_unit=pu,
-                    type=PARTIALLY_CANCELLED,
-                    naming_series=f"CNCL-{kot_name}",
-                    branch=branch,
-                    status=SUBMITTED,
-                    original_kots=",".join(original_kot_names),
-                )
-                kot.kot_number = f"CNCL-KOT-{kot.pk:04d}"
-                kot.save(update_fields=["kot_number"])
-                for item_id, customer_index, comments, qty in items_for_unit:
-                    item = Item.objects.only("item_name").get(pk=item_id)
-                    KOTItem.objects.create(
+            kot = KOT.objects.create(
+                order=self,
+                production_unit=pu,
+                type=kot_type,
+                order_number=self.order_number,
+                original_kots=",".join(original_names),
+            )
+            prefix = "CNCL-KOT-" if is_cancel else "KOT-"
+            kot.kot_number = f"{prefix}{kot.pk:04d}"
+            kot.save(update_fields=["kot_number"])
+
+            kot_items = []
+            for item, customer_index, comments, qty in entries:
+                kot_items.append(
+                    KOTItem(
                         kot=kot,
-                        item_id=item_id,
+                        item=item,
                         item_name=item.item_name,
-                        qty=Decimal("0"),
-                        cancelled_qty=qty,
+                        qty=Decimal("0") if is_cancel else qty,
+                        cancelled_qty=qty if is_cancel else Decimal("0"),
                         comments=comments,
                         customer_index=customer_index,
                     )
+                )
+            KOTItem.objects.bulk_create(kot_items)
+            created.append(kot)
+        return created
 
 
 class OrderItem(BaseModel):
@@ -411,10 +397,8 @@ class OrderItem(BaseModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
     customer_index = models.PositiveIntegerField(default=1)
     comments = models.CharField(max_length=200, blank=True)
-    department = models.CharField(max_length=10, choices=[("FOOD", "Food"), ("DRINKS", "Drinks")])
-    uom = models.ForeignKey("inventory.UOM", on_delete=models.PROTECT)
-    price_list = models.ForeignKey("menu.PriceList", on_delete=models.SET_NULL, null=True, blank=True)
     menu_item = models.ForeignKey("menu.MenuItem", on_delete=models.SET_NULL, null=True, blank=True)
+    synced = models.BooleanField(default=False, editable=False)
 
     class Meta:
         ordering = ["pk"]
@@ -425,13 +409,9 @@ class OrderItem(BaseModel):
     def save(self, *args, **kwargs):
         if not self.item_name and self.item_id:
             self.item_name = self.item.item_name
-        if not self.department and self.item_id:
-            self.department = self.item.department
-        if not self.uom_id and self.item_id:
-            self.uom = self.item.stock_uom
         if self.rate is None:
             self.rate = Decimal("0")
-        self.amount = (self.qty * self.rate).quantize(Decimal("0.01"))
+        self.amount = (self.qty * self.rate).quantize(TWO_PLACES)
         super().save(*args, **kwargs)
 
 
@@ -450,38 +430,18 @@ class OrderPayment(BaseModel):
         return f"{self.mode_of_payment.name}: {self.amount}"
 
 
-class OrderTax(BaseModel):
-    """A computed tax line on an order."""
-
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="taxes")
-    description = models.CharField(max_length=255)
-    charge_type = models.CharField(max_length=30)
-    rate = models.DecimalField(max_digits=8, decimal_places=4)
-    tax_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    account_head = models.CharField(max_length=200)
-
-    class Meta:
-        ordering = ["pk"]
-
-    def __str__(self):
-        return f"{self.description}: {self.tax_amount}"
-
-
 class KOT(BaseModel):
     """Kitchen Order Ticket — immutable once generated."""
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="kots")
     production_unit = models.ForeignKey("settings.ProductionUnit", on_delete=models.PROTECT, related_name="kots")
     type = models.CharField(max_length=25, choices=KOT_TYPE_CHOICES)
-    naming_series = models.CharField(max_length=50)
     kot_number = models.CharField(max_length=50, unique=True)
     status = models.CharField(
-        max_length=15,
-        choices=[(SUBMITTED, "Submitted"), (CANCELLED, "Cancelled")],
-        default=SUBMITTED,
+        max_length=15, choices=[(SUBMITTED, "Submitted"), (CANCELLED, "Cancelled")], default=SUBMITTED
     )
     posting_datetime = models.DateTimeField(auto_now_add=True)
-    branch = models.ForeignKey("settings.Branch", on_delete=models.PROTECT)
+    order_number = models.PositiveIntegerField(null=True, blank=True)
     original_kots = models.TextField(blank=True)
 
     class Meta:

@@ -36,6 +36,7 @@ DJANGO_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "django.contrib.humanize",
     "django.contrib.postgres",
     "django.contrib.staticfiles",
     "django.contrib.sites",
@@ -319,11 +320,10 @@ PROJECT_METADATA = {
     "NAME": gettext_lazy("RestPOS"),
     "URL": "http://localhost:8000",
     "DESCRIPTION": gettext_lazy(
-        "RestPOS is a light weight and easy to use web-based application designed "
-        "for streamlined order management. It serves as an efficient tool for both "
-        "cashiers and captains, facilitating order management and processing with "
-        "ease and efficiency."
-    ),  # noqa: E501
+        "RestPOS is a lightweight POS for restaurant order management. Cashiers "
+        "enter all orders and payments; waiters use physical dockets and do not "
+        "access the system."
+    ),
     "IMAGE": "https://upload.wikimedia.org/wikipedia/commons/2/20/PEO-pegasus_black.svg",
     "KEYWORDS": "SaaS, django",
     "CONTACT_EMAIL": "sanusio293@gmail.com",

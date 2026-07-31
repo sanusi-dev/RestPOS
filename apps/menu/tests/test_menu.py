@@ -5,13 +5,11 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import Menu, MenuItem
-from apps.settings.models import Branch
 
 
 class MenuModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item1 = Item.objects.create(
@@ -30,7 +28,7 @@ class MenuModelTest(TestCase):
             department="DRINKS",
             is_sales_item=True,
         )
-        cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
+        cls.menu = Menu.objects.create(name="Lunch Menu")
 
     def test_str_returns_name(self):
         self.assertEqual(str(self.menu), "Lunch Menu")
@@ -38,19 +36,9 @@ class MenuModelTest(TestCase):
     def test_default_enabled(self):
         self.assertTrue(self.menu.enabled)
 
-    def test_auto_assigns_default_branch(self):
-        menu = Menu.objects.create(name="Dinner Menu")
-        self.assertEqual(menu.branch_id, self.branch.pk)
-
-    def test_name_branch_unique(self):
+    def test_name_unique(self):
         with self.assertRaises(IntegrityError):
-            Menu.objects.create(name="Lunch Menu", branch=self.branch)
-
-    def test_same_name_different_branch(self):
-        branch2 = Branch.objects.create(name="Branch 2")
-        menu2 = Menu.objects.create(name="Lunch Menu", branch=branch2)
-        self.assertEqual(menu2.name, "Lunch Menu")
-        self.assertNotEqual(menu2.price_lists.first().pk, self.menu.price_lists.first().pk)
+            Menu.objects.create(name="Lunch Menu")
 
     def test_sync_price_list_creates_price_list(self):
         price_lists = self.menu.price_lists.all()
@@ -101,8 +89,7 @@ class MenuModelTest(TestCase):
         self.assertEqual(pl.prices.count(), 1)
         self.assertEqual(pl.prices.first().price_list_rate, Decimal("2000"))
 
-    def test_ordering(self):
-        branch2 = Branch.objects.create(name="Other Branch")
-        Menu.objects.create(name="Z Menu", branch=branch2)
+    def test_ordering_name(self):
+        Menu.objects.create(name="Z Menu")
         menus = list(Menu.objects.values_list("name", flat=True))
         self.assertEqual(menus, ["Lunch Menu", "Z Menu"])

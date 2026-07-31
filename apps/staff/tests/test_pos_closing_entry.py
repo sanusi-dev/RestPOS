@@ -5,7 +5,6 @@ from django.db.utils import IntegrityError
 from django.test import TestCase
 
 from apps.payments.models import ModeOfPayment
-from apps.settings.models import Branch
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 from apps.users.models import CustomUser
 
@@ -13,14 +12,12 @@ from apps.users.models import CustomUser
 class POSClosingEntryTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.user = CustomUser.objects.create_user(
             username="cashier@test.com", password="testpass123", email="cashier@test.com"
         )
         cls.cash_mode = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank_mode = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
         cls.opening = POSOpeningEntry.objects.create(
-            branch=cls.branch,
             cashier=cls.user,
             posting_date="2026-07-24",
         )
@@ -36,7 +33,6 @@ class POSClosingEntryTestBase(TestCase):
         )
         cls.opening.submit()
         cls.closing = POSClosingEntry.objects.create(
-            branch=cls.branch,
             opening_entry=cls.opening,
             cashier=cls.user,
         )
@@ -54,14 +50,13 @@ class POSClosingEntryTestBase(TestCase):
 
 class POSClosingEntryModelTest(POSClosingEntryTestBase):
     def test_str(self):
-        self.assertIn("Main Branch", str(self.closing))
+        self.assertIn(f"Closing #{self.closing.pk}", str(self.closing))
 
     def test_save_auto_fills_from_opening(self):
-        """Auto-fill branch, period_start, and cashier from the linked opening."""
-        # Create a fresh opening on a *different* branch so we don't violate
-        # the (now-enforced) "one Open shift per branch" rule.
-        other_branch = Branch.objects.create(name="Other Branch")
-        new_opening = POSOpeningEntry.objects.create(branch=other_branch, cashier=self.user, posting_date="2026-07-24")
+        """Auto-fill period_start and cashier from the linked opening."""
+        # Close the first shift so the global one-open-shift rule allows a second opening.
+        self.closing.submit()
+        new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         OpeningPayment.objects.create(
             opening_entry=new_opening,
             mode_of_payment=self.cash_mode,
@@ -70,29 +65,18 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         new_opening.submit()
         new_closing = POSClosingEntry(opening_entry=new_opening)
         new_closing.save()
-        self.assertEqual(new_closing.branch, other_branch)
         self.assertEqual(new_closing.cashier, self.user)
         self.assertIsNotNone(new_closing.period_start_date)
         self.assertEqual(new_closing.period_start_date, new_opening.period_start_date)
 
     def test_clean_rejects_draft_opening(self):
         """Reject if the linked opening is not open."""
-        new_opening = POSOpeningEntry.objects.create(branch=self.branch, cashier=self.user, posting_date="2026-07-24")
+        self.closing.submit()
+        new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         new_closing = POSClosingEntry(opening_entry=new_opening)
         with self.assertRaises(ValidationError) as ctx:
             new_closing.full_clean()
         self.assertIn("opening_entry", ctx.exception.message_dict)
-
-    def test_clean_rejects_branch_mismatch(self):
-        other_branch = Branch.objects.create(name="Other")
-        bad = POSClosingEntry(
-            branch=other_branch,
-            opening_entry=self.opening,
-            cashier=self.user,
-        )
-        with self.assertRaises(ValidationError) as ctx:
-            bad.full_clean()
-        self.assertIn("branch", ctx.exception.message_dict)
 
     def test_submit_computes_expected_and_difference(self):
         # Set the cash closing_amount to 49800 (200 short)
@@ -133,22 +117,21 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertEqual(self.closing.status, prev_status)
 
     def test_cancel_blocks_if_new_open_shift(self):
-        """Block cancel if a new Open shift exists for the same branch."""
+        """Block cancel if a new Open shift exists."""
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
         cash_closing.closing_amount = Decimal("50000")
         cash_closing.save()
         self.closing.submit()
         # Now create a new shift and open it
-        new_opening = POSOpeningEntry.objects.create(branch=self.branch, cashier=self.user, posting_date="2026-07-25")
+        new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         OpeningPayment.objects.create(
             opening_entry=new_opening,
             mode_of_payment=self.cash_mode,
             opening_amount=Decimal("0"),
         )
         new_opening.submit()
-        with self.assertRaises(ValidationError) as ctx:
+        with self.assertRaises(ValidationError):
             self.closing.cancel(by_user=self.user)
-        self.assertIn("branch", ctx.exception.message_dict)
 
     def test_cancel_succeeds_when_no_new_open_shift(self):
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
@@ -163,11 +146,6 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertTrue(self.opening.is_closed)
         # closing_entry still set
         self.assertEqual(self.opening.closing_entry, self.closing)
-
-    def test_ordering(self):
-        # Default ordering is `-period_end_date`
-        names = list(POSClosingEntry.objects.values_list("branch__name", flat=True))
-        self.assertEqual(len(names), 1)
 
 
 class ClosingPaymentModelTest(POSClosingEntryTestBase):

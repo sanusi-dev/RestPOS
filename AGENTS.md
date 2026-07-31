@@ -29,11 +29,9 @@ RestPOS is a restaurant POS and management system for a Nigerian restaurant, bui
 | Thermal printing | Local Python print agent (ESC/POS over LAN) |
 | Auth | django-allauth |
 
-**Phase 1 (current): local network only.** Django runs on the cashier desktop. All operations work on the local network — no internet required. Owner accesses back office from any device on the same WiFi.
+The system runs on the local network only. Django runs on the cashier desktop. All operations work on the local network — no internet required. Owner accesses back office from any device on the same WiFi.
 
-**Explicitly NOT used in Phase 1:** Django REST Framework, Vue, React, Socket.io, QZ Tray, DaisyUI. Do not introduce any of these.
-
-**Phase 2 (future — do not build now):** Django + DRF API + Vue 3 frontend, cloud-hosted with offline mode.
+**Explicitly NOT used:** Django REST Framework, Vue, React, Socket.io, QZ Tray, DaisyUI. Do not introduce any of these.
 
 ## Workspace Structure
 
@@ -57,7 +55,7 @@ RestPOS/
     │   ├── printing/       ← print agent client, ticket formatting, config
     │   ├── reports/        ← daily P&L, sales reports, department split
     │   ├── staff/          ← users, roles, shifts, cashier sessions
-    │   └── settings/      ← restaurant config, branch, room, table setup
+    │   └── settings/      ← restaurant settings (singleton), production units, printer config
     └── templates/
         ├── pos/            ← cashier-facing POS screen
         └── backoffice/     ← manager/owner back office
@@ -200,6 +198,16 @@ Replicate ERPNext's immutable financial workflow in Django:
 - This gives an immutable audit trail.
 - Implement as: `status = models.CharField(choices=[DRAFT, SUBMITTED, CANCELLED])`
 
+### Single-location settings
+
+The app is designed for one restaurant, one location, one settings surface. The
+`Restaurant` model is a singleton — one row ever, accessed via `Restaurant.load()`.
+There is no `Branch` or `POSProfile` model; all terminal config (identity, active
+menu, default warehouse, order-number behaviour) lives on `Restaurant`. Multi-branch
+is deferred as separate paid work and is not half-supported now. Payment methods are
+managed via `ModeOfPayment.enabled` + `is_default` (exactly one default);
+`POSProfilePayment` no longer exists.
+
 ## Coding Preferences
 
 - Only make changes that are requested or confidently understood as related to the request.
@@ -281,7 +289,7 @@ GOOD: (no comment — standard Django pattern)
 - Modify anything inside `references/`
 - Use `pip install` instead of `uv add`
 - Import from `references/` into the Django project
-- Use Django REST Framework, Vue, React, or Socket.io in Phase 1
+- Use Django REST Framework, Vue, React, or Socket.io
 - Use DaisyUI — Tailwind CSS only
 - Use `FloatField` for money
 - Use `CASCADE` delete on orders, payments, or stock ledger entries
@@ -294,10 +302,10 @@ GOOD: (no comment — standard Django pattern)
 Load the relevant skill at the start of matching tasks (see `available_skills` in the system prompt):
 
 - Django form or validation logic → `django-forms` (use `{% partialdef %}` not separate `_form.html` files)
-- Django view, model, or ORM query → `django-patterns` (ignore its DRF/REST sections — Phase 1 is HTMX only)
+- Django view, model, or ORM query → `django-patterns` (ignore its DRF/REST sections — the project is HTMX only)
 - Any HTMX interaction → `htmx` (its `/api/` URL examples don't apply — RestPOS uses Django view URLs)
 - Any UI component, page, or interface → `frontend-design` (Tailwind only, no DaisyUI)
-- Auth, permissions, or security review → `django-security` (its HTTPS/SSL settings are Phase 2 — Phase 1 is local network)
+- Auth, permissions, or security review → `django-security` (its HTTPS/SSL settings don't apply — the project runs on the local network)
 - mypy type errors → `fix-types`
 - Dependency upgrades → `upgrade-python-deps` or `upgrade-js-deps`
 

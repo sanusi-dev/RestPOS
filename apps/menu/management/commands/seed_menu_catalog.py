@@ -14,7 +14,7 @@ from django.db import transaction
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemVariant, Menu, MenuItem
-from apps.settings.models import Branch, Restaurant
+from apps.settings.models import Restaurant
 
 # (item_name, group, uom, department, last_purchase_rate_or_None)
 # Raw materials — inventory only, not sold on POS.
@@ -212,10 +212,6 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         force = options["force"]
-        branch = Branch.objects.order_by("pk").first()
-        if branch is None:
-            branch = Branch.objects.create(name="Main Branch")
-            self.stdout.write(self.style.WARNING("Created default branch: Main Branch"))
 
         self._ensure_groups_and_uoms()
 
@@ -223,10 +219,7 @@ class Command(BaseCommand):
         simple_items = self._seed_simple_items()
         variant_data = self._seed_variant_families()
 
-        menu, _ = Menu.objects.get_or_create(name="Main Menu", defaults={"branch": branch, "enabled": True})
-        if menu.branch_id != branch.pk:
-            menu.branch = branch
-            menu.save()
+        menu, _ = Menu.objects.get_or_create(name="Main Menu", defaults={"enabled": True})
 
         menu_count = self._seed_menu(menu, simple_items, variant_data, force=force)
         self._link_variants(variant_data, force=force)

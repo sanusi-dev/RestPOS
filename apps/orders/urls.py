@@ -9,4 +9,5 @@ urlpatterns = [
     path("<int:pk>/", view=views.order_detail, name="order_detail"),
     path("<int:pk>/cancel/", view=views.order_cancel, name="order_cancel"),
     path("kots/", view=views.kot_list, name="kot_list"),
+    path("kots/<int:pk>/", view=views.kot_detail, name="kot_detail"),
 ]

@@ -1,34 +1,85 @@
 {% extends "web/app/app_base.html" %}
+{% load humanize %}
 {% block app %}
 <div class="w-full">
-  {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:order_list" current_label="KOTs" %}
-  <div class="mb-8">
-    <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">KOTs</h1>
-    <p class="text-sm text-gray-500">Kitchen Order Tickets</p>
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:order_list" section_label="KOTs" section_url="orders:kot_list" current_label="All KOTs" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Kitchen Tickets</h1>
+      <p class="text-sm text-gray-500">All kitchen and bar order tickets</p>
+    </div>
   </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex flex-col gap-1 min-w-[10rem]">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Type</label>
+        <select name="type" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50" onchange="this.form.submit()">
+          <option value="">All types</option>
+          <option value="New Order" {% if type_filter == "New Order" %}selected{% endif %}>New Order</option>
+          <option value="Order Modified" {% if type_filter == "Order Modified" %}selected{% endif %}>Order Modified</option>
+          <option value="Cancelled" {% if type_filter == "Cancelled" %}selected{% endif %}>Cancelled</option>
+          <option value="Partially Cancelled" {% if type_filter == "Partially Cancelled" %}selected{% endif %}>Partially Cancelled</option>
+        </select>
+      </div>
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Apply</button>
+    </form>
+  </div>
+
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-100">
-      <thead class="bg-gray-50/50"><tr>
-        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">KOT #</th>
-        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
-        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Unit</th>
-        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Order</th>
-        <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
-      </tr></thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for kot in kots %}
-          <tr class="hover:bg-gray-50/50">
-            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ kot.kot_number }}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.type }}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.production_unit.name }}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.order.invoice_number }}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.posting_datetime }}</td>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">KOT #</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Order</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Station</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Items</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="5" class="px-6 py-16 text-center text-gray-500">No KOTs yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for kot in kots %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'orders:kot_detail' kot.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ kot.kot_number }}</a>
+              </td>
+              <td class="px-6 py-4">
+                <a href="{% url 'orders:order_detail' kot.order.pk %}" class="text-sm font-semibold text-gray-700 hover:text-orange-500 transition-colors">{{ kot.order.invoice_number|default:kot.order.pk }}</a>
+              </td>
+              <td class="px-6 py-4">
+                {% if kot.type == "New Order" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">New Order</span>
+                {% elif kot.type == "Order Modified" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">Modified</span>
+                {% elif kot.type == "Cancelled" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Partial Cancel</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ kot.production_unit.name }}</td>
+              <td class="px-6 py-4">
+                {% if kot.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ kot.items.count }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ kot.posting_datetime|date:"M j, H:i" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No tickets found.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

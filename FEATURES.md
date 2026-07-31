@@ -1,14 +1,41 @@
-# RestPOS — Feature Specification (Implementation Version)
+# RestPOS — Feature Specification
 
-> This is the definitive feature list for RestPOS Phase 1. It is derived from URY and ERPNext
-> reference codebases, with any feature that contradicts a RestPOS-specific requirement replaced
-> by the RestPOS version. Every feature listed here will have an implementation plan in PLAN.md.
+> Derived from URY and ERPNext reference codebases. Not every row applies to RestPOS in its
+> current scope — sections marked as out-of-scope or deferred are listed for reference only.
+
+## RestPOS product scope (current)
+
+RestPOS is designed for a single restaurant location:
+
+- **One site, one settings surface** — a `Restaurant` singleton holds identity, active menu,
+  default warehouse, and POS behaviour. No `Branch`, `POSProfile`, or multi-site configuration.
+- **Cashier-only POS** — cashiers enter all orders and payments on the POS screen. Roles:
+  Admin, Manager, Cashier. No waiter/captain roles and no system access for waiters (physical
+  dockets offline).
+- **No tables, rooms, or floor plans** — orders are started by type (Dine-In / Take-Away) and
+  guest count, not assigned to a physical table.
+- **No tax system** — totals come from item lines plus rounding; no TaxTemplate / TaxRate.
+- **No free-form cashier discount** — coupons later if ever; no open discount path.
+- **Departmental split** — menu items belong to `FOOD` or `DRINKS`; revenue is split in reports.
+  The bar is a separate business entity sharing the same cashier but tracked independently.
+- **Local network** — Django runs on the cashier desktop; back office reachable from any device
+  on the same WiFi. Hosting later mainly for remote back-office visibility.
+- **Multi-branch** — out of scope and deferred. Separate paid work. The product does not
+  half-support it today.
+
+Sections marked **Out of scope** are URY/ERPNext features the product intentionally does not
+include. Sections marked **Deferred** are planned but not yet implemented.
 
 ---
 
 ## A. BACK OFFICE FEATURES
 
 ### A1. Restaurant Configuration
+
+> RestPOS scope: the restaurant config is a singleton (`Restaurant` model).
+> Rooms (#2), tables (#3), layout editor (#4), multi-room cashier assignment (#5),
+> and branch association (#6) are **out of scope**. Items referencing branches or
+> multi-site are deferred.
 
 | # | Feature | What it does |
 |---|---|---|
@@ -41,6 +68,10 @@
 | 16 | Production printer assignment | Each production unit is assigned a specific thermal printer. In RestPOS, the kitchen production unit is assigned the kitchen printer's static IP address, and the bar production unit is assigned the bar printer's static IP address. When a ticket is generated, the print agent sends it to the printer assigned to the relevant production unit. This is how the system knows where to send each ticket. |
 
 ### A4. POS Profile / Terminal Configuration
+
+> RestPOS scope: **out of scope as a separate document**. The POS behaviour knobs
+> (warehouse, reset_order_number_daily, payment methods) live on the `Restaurant`
+> singleton. Multi-profile, role gates, and accounting fields are intentionally omitted.
 
 | # | Feature | What it does |
 |---|---|---|
@@ -262,6 +293,9 @@
 
 ### B2. Table Management Screen
 
+> **Out of scope.** RestPOS has no table/room/floor-plan concept. Orders start
+> by type (Dine-In / Take-Away) and guest count from the POS home screen.
+
 | # | Feature | What it does |
 |---|---|---|
 | 182 | Room selection | A row of tab buttons at the top of the table screen, one for each room the user is assigned to. Clicking a room tab loads the tables for that room. The selected room is remembered across page navigation (stored in the session). Each room tab shows the total number of tables in that room as a badge. |
@@ -387,6 +421,9 @@
 
 ### D2. Branch / Location Management
 
+> **Out of scope — deferred.** Multi-branch is separate paid work. The product
+> is single-location and does not half-support branching today.
+
 | # | Feature | What it does |
 |---|---|---|
 | 269 | Multi-branch | The system supports multiple restaurant branches, each with its own rooms, tables, menu, printers, staff, and configuration. All branch data is isolated — a cashier at Branch A cannot see Branch B's orders, tables, or reports. This is essential for restaurant groups that operate multiple locations. |
@@ -406,11 +443,11 @@
 
 | # | Feature | What it does |
 |---|---|---|
-| 275 | Local network only (Phase 1) | The entire system runs on the cashier desktop and the local network. Django serves the POS and back office on the local WiFi. All operations — ordering, printing, inventory, reports — work without any internet connection. The owner can access the back office from any device (phone, laptop, tablet) connected to the same WiFi network inside the restaurant. No cloud, no external servers, no internet dependency. |
+| 275 | Local network only | The entire system runs on the cashier desktop and the local network. Django serves the POS and back office on the local WiFi. All operations — ordering, printing, inventory, reports — work without any internet connection. The owner can access the back office from any device (phone, laptop, tablet) connected to the same WiFi network inside the restaurant. No cloud, no external servers, no internet dependency. |
 | 276 | Django + HTMX + Tailwind + Alpine.js | The frontend is built entirely with Django templates enhanced by HTMX (for partial page updates without full reloads), Tailwind CSS (for styling), and Alpine.js (for lightweight client-side interactions like dropdowns and modals). No React, no Vue, no Django REST Framework, no Socket.io. This keeps the stack simple, fast, and maintainable by a single developer. |
 | 277 | PostgreSQL | The database is PostgreSQL, not SQLite. PostgreSQL handles concurrent access better (important when multiple cashiers are using the system simultaneously), supports advanced queries for reporting, and is more robust for financial data. |
 | 278 | DecimalField for all money | All monetary values (prices, totals, discounts, payments, balances) are stored as `DecimalField` in the database, never `FloatField`. Floating-point numbers can introduce rounding errors (e.g. 0.1 + 0.2 = 0.30000000000000004), which is unacceptable for financial data. DecimalField stores exact decimal values, ensuring naira amounts are always precise. |
 | 279 | No CASCADE on financial records | Orders, payments, and stock ledger entries never use `CASCADE` delete on their foreign keys. If a referenced record (e.g. a customer or an item) is deleted, the financial record is preserved (the foreign key is set to NULL or the deletion is blocked). This ensures the financial audit trail can never be broken by a cascading delete. |
-| 285 | Celery + Redis for scheduled tasks | The duplicate-ticket detection job (#72) runs every minute via Celery beat. Redis is the message broker. This is the only scheduled task in Phase 1 — Celery and Redis are already part of the stack for future background job needs. |
+| 285 | Celery + Redis for scheduled tasks | The duplicate-ticket detection job (#72) runs every minute via Celery beat. Redis is the message broker. Celery and Redis are already part of the stack for future background job needs. |
 
 > **Note:** The submit/cancel immutability principle is described in #166 (A16 — Document Workflow & Audit). All financial documents — orders, payments, stock entries, refund entries, and reversal stock ledger entries — follow this workflow.

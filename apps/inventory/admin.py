@@ -32,11 +32,10 @@ class ItemGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):
-    list_display = ("name", "branch", "disabled", "created_at")
-    list_filter = ("branch", "disabled")
-    list_select_related = ("branch",)
-    search_fields = ("name", "branch__name")
-    ordering = ("branch__name", "name")
+    list_display = ("name", "disabled", "created_at")
+    list_filter = ("disabled",)
+    search_fields = ("name",)
+    ordering = ("name",)
 
 
 @admin.register(Item)

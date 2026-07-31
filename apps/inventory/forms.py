@@ -33,7 +33,7 @@ class ItemGroupForm(InventoryModelForm):
 
 
 class WarehouseForm(InventoryModelForm):
-    """Form for Warehouse. Branch is auto-assigned on save."""
+    """Form for Warehouse."""
 
     class Meta:
         model = Warehouse

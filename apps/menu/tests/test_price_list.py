@@ -5,13 +5,11 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemPrice, Menu, MenuItem, PriceList
-from apps.settings.models import Branch
 
 
 class PriceListModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item = Item.objects.create(
@@ -22,7 +20,7 @@ class PriceListModelTest(TestCase):
             department="FOOD",
             is_sales_item=True,
         )
-        cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
+        cls.menu = Menu.objects.create(name="Lunch Menu")
 
     def test_str_returns_name(self):
         pl = self.menu.price_lists.first()

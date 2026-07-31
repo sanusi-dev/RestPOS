@@ -5,7 +5,6 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.payments.models import ModeOfPayment
-from apps.settings.models import Branch
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 from apps.users.models import CustomUser
 
@@ -18,11 +17,9 @@ class StaffViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.cash_mode = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank_mode = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
         cls.entry = POSOpeningEntry.objects.create(
-            branch=cls.branch,
             cashier=cls.user,
             posting_date="2026-07-24",
         )
@@ -59,7 +56,7 @@ class TestStaffDashboard(StaffViewTestBase):
     def test_dashboard_200(self):
         response = self.client.get(reverse("staff:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Branch")
+        self.assertContains(response, "Current Shift State")
 
     def test_dashboard_shows_no_open_shift_state(self):
         response = self.client.get(reverse("staff:dashboard"))
@@ -70,7 +67,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
     def test_list_200(self):
         response = self.client.get(reverse("staff:opening_entry_list"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Branch")
+        self.assertContains(response, f"#{self.entry.pk}")
 
     def test_create_get(self):
         response = self.client.get(reverse("staff:opening_entry_create"))
@@ -408,10 +405,9 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
             cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
         closing.submit()
-        # Open a new shift for the same branch — closing-cancellation must NOT
-        # reopen the older shift when a newer one is already live.
+        # Open a new shift — closing-cancellation must NOT reopen the older
+        # shift when a newer one is already live.
         new_entry = POSOpeningEntry.objects.create(
-            branch=self.branch,
             cashier=self.user,
             posting_date="2026-07-25",
         )

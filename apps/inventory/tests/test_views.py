@@ -14,7 +14,6 @@ from apps.inventory.models import (
     StockEntryDetail,
     Warehouse,
 )
-from apps.settings.models import Branch
 from apps.users.models import CustomUser
 
 
@@ -26,10 +25,9 @@ class InventoryViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.warehouse = Warehouse.objects.create(name="Main Store")
         cls.item = Item.objects.create(
             item_name="Jollof Rice",
             item_group=cls.group,
@@ -128,7 +126,7 @@ class TestWarehouseViews(InventoryViewTestBase):
     def test_warehouse_create_get(self):
         response = self.client.get(reverse("inventory:warehouse_create"))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="branch"')
+        self.assertContains(response, 'name="name"')
 
     def test_warehouse_create_post(self):
         response = self.client.post(
@@ -140,7 +138,7 @@ class TestWarehouseViews(InventoryViewTestBase):
         )
         self.assertRedirects(response, reverse("inventory:warehouse_list"))
         wh = Warehouse.objects.get(name="Bar Store")
-        self.assertEqual(wh.branch_id, self.branch.pk)
+        self.assertEqual(wh.name, "Bar Store")
 
     def test_warehouse_detail_200(self):
         response = self.client.get(reverse("inventory:warehouse_detail", kwargs={"pk": self.warehouse.pk}))

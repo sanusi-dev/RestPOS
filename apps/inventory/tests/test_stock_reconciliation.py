@@ -12,16 +12,14 @@ from apps.inventory.models import (
     StockReconciliationItem,
     Warehouse,
 )
-from apps.settings.models import Branch
 
 
 class ReconciliationTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.warehouse = Warehouse.objects.create(name="Main Store")
         cls.item = Item.objects.create(
             item_name="Jollof Rice",
             item_group=cls.group,

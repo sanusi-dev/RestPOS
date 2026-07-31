@@ -1,6 +1,6 @@
 # RestPOS — Implementation Plan
 
-> This document is the implementation plan for RestPOS Phase 1. It has two tiers:
+> This document is the implementation plan for RestPOS. It has two tiers:
 >
 > 1. **High-level roadmap (Sections 1–5)** — written once, covers all 8 apps at a strategic
 >    level. Read this to understand the full project scope and build sequence.
@@ -18,7 +18,7 @@
 Django + HTMX + Tailwind CSS + Alpine.js. It covers table management, ordering, kitchen/bar
 ticket printing, payments, inventory, daily P&L, and departmental sales split (food vs drinks).
 
-**Phase 1 scope:** local network only. Django runs on the cashier desktop. All operations work
+**Scope:** local network only. Django runs on the cashier desktop. All operations work
 without internet. The owner accesses the back office from any device on the same WiFi.
 
 **Tech stack:**
@@ -29,10 +29,10 @@ without internet. The owner accesses the back office from any device on the same
 | Frontend | Django templates + HTMX + Tailwind CSS v4 + Alpine.js + SweetAlerts |
 | Database | PostgreSQL |
 | Package manager | uv (Python), npm (JavaScript) |
-| Task queue | Celery + Redis (scheduled tasks only in Phase 1) |
+| Task queue | Celery + Redis (scheduled tasks only) |
 | Printing | Local Python print agent (ESC/POS over LAN/USB) |
 
-**What is NOT used in Phase 1:** Django REST Framework (installed from boilerplate but unused),
+**What is NOT used:** Django REST Framework (installed from boilerplate but unused),
 Vue, React, Socket.io, DaisyUI (exists in boilerplate templates but not used in new code).
 
 **Reference codebases:** `references/erpnext-develop/` (ERPNext) and `references/ury-develop/`
@@ -49,7 +49,7 @@ The project is organised into 8 Django apps under `restpos/apps/`:
 
 | App | Responsibility | FEATURES.md sections |
 |---|---|---|
-| `settings` | Restaurant config, branches, rooms, tables, POS profiles, production units | A1, A3, A4, D2 |
+| `settings` | Restaurant settings (singleton), production units, user roles | A1, A3, A4 |
 | `inventory` | Item master, item groups, warehouses, stock ledger, stock entries, valuation | A12 |
 | `menu` | Menu definition, menu items, variants, add-ons, bundles, pricing | A2 |
 | `staff` | Roles, POS opening/closing entries, cashier shifts, session management | A9, A17 |
@@ -67,11 +67,11 @@ settings R1 → inventory → menu → staff ↘
 ```
 
 **Build order reasoning:**
-- `settings R1` first — every other app references branches, rooms, and tables
+- `settings` first — every other app references the `Restaurant` singleton
 - `inventory` before `menu` — menu items reference the Item master
 - `menu` before `orders` — orders contain menu items
 - `payments core` is standalone (no deps); built before `staff` because `OpeningPayment.mode_of_payment` is a FK to `ModeOfPayment`
-- `staff` needs `settings R1` (Branch) and `payments core` (ModeOfPayment); is built before `orders` because the order-app validate path enforces "exactly one Open shift per branch"
+- `staff` needs `settings` (Restaurant) and `payments core` (ModeOfPayment); is built before `orders` because the order-app validate path enforces "one Open shift"
 - `settings R2` needs menu (ItemGroup), inventory (Warehouse), payments (ModeOfPayment), and staff (POSProfile.applicable_users; the `pos_profile` FK is backfilled onto `POSOpeningEntry` here)
 - `orders` is the central app — needs settings (R1+R2), menu, staff, and payments
 - `printing` needs orders (ticket data to format and print)
@@ -99,13 +99,13 @@ settings R1 → inventory → menu → staff ↘
 
 | Phase | App | FEATURES.md sections | Key models | Dependencies | Status |
 |---|---|---|---|---|---|
-| 1 | settings R1 | A1, D2 (partial) | Branch, Room, Table, Restaurant, UserRoomAssignment | None | complete |
+| 1 | settings | A1, A3 | Restaurant, ProductionUnit | None | complete (cleanup: Branch/POSProfile removed, settings merged into Restaurant singleton — see §6.11) |
 | 2 | inventory | A12 | Item, ItemGroup, Warehouse, StockLedgerEntry, StockEntry, UOM, Bin, ProductBundle, StockReconciliation | settings R1 | complete |
 | 3 | menu | A2 | Menu, MenuItem, PriceList, ItemPrice, ItemAddOn, ItemVariant | inventory | complete (MenuCourse removed) |
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (43 tests passing, migrations applied) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings R1, payments core | complete (58 tests passing, 472 total) |
 | 6 | settings R2 | A3, A4, A5 (partial) | POSProfile, POSProfileUser, POSProfilePayment, ProductionUnit, TaxTemplate, TaxRate | menu, inventory, payments, staff | complete |
-| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, OrderTax, KOT, KOTItem | settings (R1+R2), menu, staff, payments | in progress (18 tests, models/views/forms/templates built) |
+| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, OrderTax, KOT, KOTItem | settings (R1+R2), menu, staff, payments | in progress (82 tests, Phase 7a core flow complete, 7b deferred) |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
 | 10 | refunds | A18 | Refund flow completion (reversal entries, stock restoration) | orders, payments, inventory | not started |
@@ -114,7 +114,11 @@ settings R1 → inventory → menu → staff ↘
 > is a FK to `payments.ModeOfPayment`. Payments Core is standalone (no dependencies), so promoting it
 > ahead of Staff removes the only forward dependency and keeps Staff free of stub models. Staff's
 > original Phase 4 designation becomes Phase 5. POSProfile FK on `POSOpeningEntry` is **deferred to
-> Phase 6** via a migration (Phase 5 identifies shifts by branch alone for single-site Phase 1).
+> Phase 6** via a migration (Phase 5 identifies shifts by branch alone for the single-site restaurant).
+
+> **Single-location settings cleanup (complete):** see §6.11. Branch removed, POSProfile
+> merged into the Restaurant singleton, payment-mode selection folded onto ModeOfPayment,
+> and branch/profile FKs stripped from orders, KOTs, and shift entries.
 
 ### Status values
 
@@ -192,21 +196,20 @@ shift-management views.
 **Key reference doctypes:** ERPNext POS Opening Entry, POS Closing Entry, URY User, Role
 Permitted, URY hooks for opening/closing validation
 
-**Phase 1 simplifications (documented in §6.5 Deviations):** no multi-cashier / Sub POS Closing,
+**Simplifications (documented in §6.5 Deviations):** no multi-cashier / Sub POS Closing,
 no async / Queued/Failed consolidation, no daily-close "5 AM day boundary" check, no Order FK
 on the closing entry totals, no `pos_profile` FK on the opening entry (deferred to Phase 6).
 
 ### orders (Phase 7)
 
-**Scope:** The central app. Order sync (create/update draft invoices), table order loading, order
-type detection, table restriction, price list resolution, invoice print before submit, item
-modification lock, sequential order numbering, table transfer, captain transfer, cancel order,
-cancel KOT, settle order, concurrent modification check, billing role check, customer favourite
-items, KOT generation and diffing, ticket routing by department, ticket type detection, cancel
-ticket creation, ticket reprint, duplicate ticket detection (Celery beat), ticket delay
-notification, ticket status types, ticket grouping by customer card, customer cards / group
-ordering (guest count, active card state, customer index on items), refund flow (full/partial
-refunds, reversal payment entries, stock restoration, refund permission).
+**Scope:** The central app. Order sync (create/update draft invoices), price list resolution,
+invoice print before submit, item modification lock, sequential order numbering, cancel order,
+cancel KOT, settle order, concurrent modification check, customer favourite items, KOT generation
+and diffing, ticket routing by department, ticket type detection, cancel ticket creation, ticket
+reprint, duplicate ticket detection (Celery beat), ticket status types, ticket grouping by
+customer card, customer cards / group ordering (guest count, active card state, customer index on
+items), refund flow (full/partial refunds, reversal payment entries, stock restoration, refund
+permission). Table-order loading/transfer and billing-role / KOT-delay gates are out of scope.
 
 **Key models:** Order, OrderItem, KOT, KOTItem, RefundEntry, RefundPaymentEntry, RefundStockEntry
 
@@ -300,7 +303,7 @@ When starting a new session to continue RestPOS implementation:
 > `/backoffice/operations-dashboard/` page in Phase 7+ once orders and reports exist.
 >
 > **ERPNect vs RestPOS deviation:** ERPNext puts Mode of Payment in the Accounts Setup workspace
-> (configuration), not in the POS section. RestPOS Phase 1 groups it under POS because that's
+> (configuration), not in the POS section. RestPOS groups it under POS because that's
 > the only place it's used (shift floats) and there's no separate Accounts app. Documented
 > in `apps/web/views.py` and `templates/web/app/app_base.html` code comments.
 
@@ -389,7 +392,7 @@ a single Restaurant per branch (singleton), and the branch is already reachable 
 
 | Field | Type | Source | Notes |
 |---|---|---|---|
-| company | CharField, max_length=200 | URY Restaurant.company | no Company model in Phase 1 — just a name |
+| company | CharField, max_length=200 | URY Restaurant.company | no Company model — just a name |
 | branch | ForeignKey→Branch, on_delete=PROTECT | URY Restaurant.branch | required |
 | invoice_series_prefix | CharField, max_length=20, default="REST-" | URY Restaurant.invoice_series_prefix | #1 |
 | address | TextField, blank=True | URY Restaurant.address | simplified to text (no Address model) |
@@ -405,8 +408,8 @@ a single Restaurant per branch (singleton), and the branch is already reachable 
 **Deviations from URY:**
 - `room_wise_menu` and `order_type_wise_menu` omitted — FEATURES.md #7 says "There is a single
   menu for the restaurant; every room and order type uses the same menu."
-- `company` is a CharField, not a Link→Company — no Company model in Phase 1
-- `address` is a TextField, not a Link→Address — no Address model in Phase 1
+- `company` is a CharField, not a Link→Company — no Company model
+- `address` is a TextField, not a Link→Address — no Address model
 
 ##### UserRoomAssignment (`settings.UserRoomAssignment`)
 
@@ -517,12 +520,12 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 |---|---|
 | `room_wise_menu` and `order_type_wise_menu` omitted | FEATURES.md #7: single menu for all rooms/order types |
 | `UserRoomAssignment` is standalone, not child table on Branch | Django ORM pattern — cleaner queries |
-| `address` is TextField, not Link→Address | No Address model in Phase 1 |
-| `company` is CharField, not Link→Company | No Company model in Phase 1 |
+| `address` is TextField, not Link→Address | No Address model |
+| `company` is CharField, not Link→Company | No Company model |
 | `occupied` and `latest_invoice_time` are `editable=False` | System-managed, prevents manual override |
 | Printer settings NOT on Room | RestPOS routes by department flag (#68), printer config on ProductionUnit (#16) |
 | Table links to Room (not Restaurant) | Branch reachable via room.branch; single Restaurant per branch |
-| Branch kept in DB but hidden in Phase 1 UI; auto-set via `Branch.get_default()` (or derived from room) on Menu, Room, Warehouse, Restaurant; Table/UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
+| Branch kept in DB but hidden in the UI; auto-set via `Branch.get_default()` (or derived from room) on Menu, Room, Warehouse, Restaurant; Table/UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
 
 #### Implementation steps
 
@@ -817,7 +820,7 @@ Per FEATURES.md #123. Records goods received from a supplier. On submit, increas
 
 | Field | Type | Notes |
 |---|---|---|
-| supplier_name | CharField, max_length=200 | Supplier name (no Supplier model in Phase 1) |
+| supplier_name | CharField, max_length=200 | Supplier name (no Supplier model) |
 | supplier_delivery_note | CharField, max_length=100, blank=True | Supplier's delivery note reference |
 | posting_date | DateField, default=today | Date of receipt |
 | warehouse | ForeignKey→Warehouse, on_delete=PROTECT, related_name="purchase_receipts" | Store room that receives the entire delivery |
@@ -884,13 +887,13 @@ No per-line warehouse — the whole receipt posts to `PurchaseReceipt.warehouse`
 | ItemAttribute/ItemVariantAttribute excluded | Variants handled via simple parent FK on Item; menu app handles selection |
 | No tree library (mptt/treebeard) | Flat models — restaurant categories and warehouses are simple enough not to need deep nesting |
 | Accounting fields dropped (expense_account, income_account, cost_center, etc.) | Accounting handled at POS Profile / restaurant config level |
-| Purchase Receipt rejected_warehouse / rejected_qty / accepted_qty dropped | Phase 1: only book what enters sellable stock. Damaged goods at receipt are omitted from the PR; later write-offs use Stock Reconciliation or Material Issue. ERPNext dual accepted/rejected path is overkill for a single-branch restaurant. |
+| Purchase Receipt rejected_warehouse / rejected_qty / accepted_qty dropped | Only book what enters sellable stock. Damaged goods at receipt are omitted from the PR; later write-offs use Stock Reconciliation or Material Issue. ERPNext dual accepted/rejected path is overkill for a single-branch restaurant. |
 | Purchase Receipt warehouse only on parent (no item warehouse); renamed accepted_warehouse → warehouse | Restaurant receives into one store room per delivery; item-level override is an ERPNext footgun. Internal moves use Stock Entry (Material Transfer / Issue). |
 | Manufacturing fields dropped (BOM, work_order, subcontract) | Not applicable to a restaurant |
 | Fixed asset fields dropped | Not applicable |
 | UOM Conversion dropped | Items use a single stock_uom — the practical unit used in the kitchen (Mudu, Kg, Pieces). No conversions needed |
 | Batches, barcodes, product bundles, reorder levels dropped | Removed as unnecessary for restaurant operations — kitchen manager tracks consumption manually |
-| Bin simplified (no ordered_qty, indented_qty, planned_qty) | Restaurant doesn't use purchase orders or work orders in Phase 1 |
+| Bin simplified (no ordered_qty, indented_qty, planned_qty) | Restaurant doesn't use purchase orders or work orders |
 | `department` field added to Item | RestPOS-specific: FOOD/DRINKS classification (#260) — not in ERPNext |
 | `last_purchase_rate` auto-updated on Purchase Receipt | ERPNext naming: standard_rate = selling price; last_purchase_rate = auto-updated cost from buying transactions |
 | 3-tier roles (Admin/Manager/Cashier) | Only superusers can assign roles. Admin → Manager → Cashier hierarchy |
@@ -929,7 +932,7 @@ All models extend `apps.utils.models.BaseModel`.
 | Field | Type | Notes |
 |---|---|---|
 | name | CharField, max_length=100 | e.g. "Main Menu", "Lunch Menu" |
-| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="menus" | Required in DB; Phase 1 UI hides it and auto-assigns via `Branch.get_default()` |
+| branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="menus" | Required in DB; the UI hides it and auto-assigns via `Branch.get_default()` |
 | enabled | BooleanField, default=True | Disabled menus hide all items from POS |
 
 **Methods:**
@@ -1066,7 +1069,7 @@ class Migration(migrations.Migration):
 | PriceList/ItemPrice kept but POS reads from MenuItem.rate | Matches URY pattern |
 | `department` not on MenuItem | Already on inventory.Item — inherited via FK |
 | ItemAddOn/ItemVariant are standalone models, not child tables on Item | Django ORM pattern — cleaner queries than child tables |
-| Branch kept in DB but hidden in Phase 1 UI across Menu/Room/Warehouse/Restaurant (auto `Branch.get_default()`); Table & UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
+| Branch kept in DB but hidden in the UI across Menu/Room/Warehouse/Restaurant (auto `Branch.get_default()`); Table & UserRoomAssignment derive branch from room | Single-site restaurant; multi-branch isolation remains available without cashier-facing branch pickers |
 
 ---
 
@@ -1092,11 +1095,11 @@ is a FK to `ModeOfPayment`.
 #### Decisions
 
 - **Flat master, no tree.** Modes are categorised by a `type` field, not nested under a parent mode.
-- **`PaymentGLMapping.default_account` is a CharField, not a Link→Account.** Phase 1 has no
+- **`PaymentGLMapping.default_account` is a CharField, not a Link→Account.** There is no
   `LedgerAccount` model — that lives in Phase 9 (reports). We store the account name as a string
   here and migrate to a FK when the chart of accounts is introduced.
-- **`company` is a CharField** read from `Restaurant.company` (single-company Phase 1). No
-  per-company switcher in Phase 1; refactor in Phase 2.
+- **`company` is a CharField** read from `Restaurant.company` (single-company). No per-company
+  switcher.
 - **No `is_change` flag.** A mode of payment's ability to dispense physical change is inferred
   from `type == "CASH"`. The Order app (Phase 7) handles change calculation, not here.
 - **Simple `enabled` toggle.** Disabled modes are hidden from the opening-balance form on the
@@ -1128,7 +1131,7 @@ The manager can add specific providers (Opay, Moniepoint, FirstBank POS) or disa
 | Field | Type | Notes |
 |---|---|---|
 | `mode_of_payment` | ForeignKey→`payments.ModeOfPayment`, on_delete=PROTECT, related_name="gl_mappings" | required |
-| `company` | CharField, max_length=200 | defaults from `Restaurant.company`; Phase 1 has one company |
+| `company` | CharField, max_length=200 | defaults from `Restaurant.company`; single-company |
 | `default_account` | CharField, max_length=200 | account name as string — Phase 9 will FK to a real `LedgerAccount` |
 
 **Methods:**
@@ -1205,9 +1208,9 @@ class PaymentGLMappingAdmin(admin.ModelAdmin):
 
 | Deviation | Reason |
 |---|---|
-| `default_account` is CharField, not Link→Account | No `LedgerAccount` model in Phase 1; Phase 9 introduces one and migrates to FK |
-| `company` is CharField, not Link→Company | No Company model in Phase 1 — single `Restaurant` singleton per branch with a company name string |
-| No per-warehouse or per-branch isolation on modes | Phase 1 is single-branch; modes are shared restaurant-wide |
+| `default_account` is CharField, not Link→Account | No `LedgerAccount` model; Phase 9 introduces one and migrates to FK |
+| `company` is CharField, not Link→Company | No Company model — single `Restaurant` singleton per branch with a company name string |
+| No per-warehouse or per-branch isolation on modes | The project is single-branch; modes are shared restaurant-wide |
 | No `is_change` flag | Change capability inferred from `type == "CASH"`; only cash modes dispense physical notes |
 | Simple `enabled` toggle on mode | ERPNext hides modes via POS Profile's `payments` child table. RestPOS has no POS Profile yet, so the toggle lives on the master. |
 | Seed includes "USSD / Mobile Money" (PHONE) | Common in Nigerian restaurant context; matches #94 ("Phone (mobile money / USSD)") |
@@ -1289,7 +1292,7 @@ Taxes, URY User, Role Permitted, URY hooks for opening/closing validation
 - **Manager + Cashier can both open/close.** Whoever is logged in with `has_staff_role` can act.
   Admin can always act. `cashier` field is the user who opened (audit), not a single permitted user.
 - **GL-account check on opening balance deferred.** ERPNext requires every `mode_of_payment` in
-  the opening balance to have a GL account mapped. RestPOS has no `LedgerAccount` in Phase 1, so
+  the opening balance to have a GL account mapped. RestPOS has no `LedgerAccount`, so
   this check is deferred — the manager ensures each enabled mode has a `PaymentGLMapping` row via
   the payments core CRUD before opening a shift.
 - **Round two-decimal precision only.** `opening_amount`, `expected_amount`, `closing_amount`,
@@ -1617,8 +1620,8 @@ class ClosingPaymentAdmin(admin.ModelAdmin):
 
 | Deviation | Reason |
 |---|---|
-| No `pos_profile` FK on `POSOpeningEntry` | `POSProfile` is Phase 6 (settings R2). Phase 5 identifies shifts by branch alone for single-site Phase 1. Phase 6 migration adds the nullable FK. |
-| No multi-cashier mode, no `Sub POS Closing` | FEATURES.md #85: one shared session per branch, shared across users. URY's main+sub hierarchy is overkill for Phase 1. |
+| No `pos_profile` FK on `POSOpeningEntry` | `POSProfile` is Phase 6 (settings R2). Phase 5 identifies shifts by branch alone for the single-site restaurant. Phase 6 migration adds the nullable FK. |
+| No multi-cashier mode, no `Sub POS Closing` | FEATURES.md #85: one shared session per branch, shared across users. URY's main+sub hierarchy is overkill for a single shared session. |
 | No `QUEUED`/`FAILED` statuses, no async consolidation, no Celery task, no `error_message`, no Retry button | Phase 5's close-time work is a SQL `SUM` across `OpeningPayment` rows + a cashier-entered `closing_amount` — milliseconds even for 1,000+ orders. Add async only when a future phase introduces heavy close-time write work. |
 | No daily-close "outdated shift" / "5 AM day boundary" check | Lives in the Order-app `validate` path (Phase 7), not on the opening entry. Mirrors ERPNext's placement in `sales_invoice/services/pos.py` and avoids coupling Phase 5 to order-creation concerns. |
 | No `pos_invoices` / `sales_invoices` child table on `POSClosingEntry` | `Order` is Phase 7. Phase 5's closing entry has the `total_*` summary fields defaulting to 0; Phase 7 backfills them via computation on close. |
@@ -1626,13 +1629,13 @@ class ClosingPaymentAdmin(admin.ModelAdmin):
 | Cancel of opening entry allowed iff no `closing_entry` exists (simpler than ERPNext's "no unconsolidated invoices" check) | No invoices exist before Phase 7. |
 | `cashier` = creating user (audit), not a single permitted user | Single-session per branch means whoever's logged in with a staff role can act; `cashier` is who opened the shift, recorded for audit. |
 | Manager + Cashier roles can both open/close | Single-session model — whoever is logged in with `has_staff_role` acts. Admin can always act. |
-| GL account validation on opening balance deferred | No `LedgerAccount` model in Phase 1; the manager ensures each enabled `ModeOfPayment` has a `PaymentGLMapping` row via the payments core CRUD before opening a shift. |
+| GL account validation on opening balance deferred | No `LedgerAccount` model; the manager ensures each enabled `ModeOfPayment` has a `PaymentGLMapping` row via the payments core CRUD before opening a shift. |
 | `expected_amount` in Phase 5 = `opening_amount` only | Phase 7 extends `POSClosingEntry.submit()` to add Σ order payments in the same mode. The Phase 5 plan explicitly notes the extension point. |
 | `period_start_date` defaults to `timezone.now()` on creation, not on submit | The cashier expects the shift to start when they hit "Open", not when they finished typing the form. Matches ERPNext's `pos_opening_entry.js` `period_start_date: now_datetime()` on form load. |
 | **Opening-float form: all-methods with 0 default.** `OpeningFloatForm` renders one `DecimalField` per active `ModeOfPayment` (CASH-type sorted first), every field pre-filled with `0.00` and `required=False`. This is a faithful carbon-copy of ERPNext's Desk JS pre-population (`pos_opening_entry.js` lines 42-54, which adds one row per configured payment method with `opening_amount=0`) and the Frappe docs ("Opening balances for other payment methods (e.g., Card, UPI, Wallet) can be entered if applicable"). The cashier typically only fills the cash drawer count; electronic fields are left at 0 when the bank/POS balance is not accessible at shift-open time, and can be overridden with the actual opening balance when it is. The ERPNext data model is preserved exactly — `OpeningPayment` has one row per configured `ModeOfPayment` so `POSClosingEntry.submit()` (which iterates `entry.opening_payments.all()`) works unchanged. `posting_date` (defaults to today on the model) and `remarks` (blank by default) are no longer exposed in the cashier-facing form. If no active `ModeOfPayment` exists at all, the form renders a no-modes error card and blocks shift open. | (1) Cashier friction: the original ERPNext Desk UI shows an editable table with a mode-of-payment dropdown per row, requiring the cashier to add/remove rows manually. A pre-populated grid with one numeric input per active mode is faster and eliminates the duplicate-mode / missing-mode risk of free-form rows. (2) Field validation (`min_value=0`, `step=0.01`, `inputmode=decimal`) gives mobile-friendly numeric input without needing the custom `OpeningPaymentForm`+`OpeningPaymentFormSet` machinery — the per-row mode is rendered as a display label, not a FK dropdown, because the cashier is filling amounts for pre-determined modes, not choosing which modes to declare. (3) All fields default to 0 and are `required=False` so a POST with no entered amounts doesn't fail form validation but creates fully-reconcilable rows — matches ERPNext's `reqd: 1 + default: "0"` semantics (a row must exist, 0 is a valid amount). |
-| **Closing flow: auto-create-or-reuse draft, inline-edit detail page, no manual shift selection.** Both ERPNext Desk (`pos_closing_entry.js` lines 5-9 — `frm.set_query("pos_opening_entry", ...)` filtered to `status="Open", docstatus=1`) and URY's `sub_pos_closing.js` (lines 37-39, same filter + `user=session.user`) make the cashier manually pick which open shift to close from a filtered Link dropdown. RestPOS Phase 1 **does not** — `closing_entry_create` is now a GET-only endpoint that immediately auto-creates (or reuses an existing) DRAFT `POSClosingEntry` for the single Open shift and redirects to its detail page. `select_for_update()` on the open shift serialises concurrent double-clicks on the "Close Shift" button so they cannot create duplicate drafts; a second GET when a DRAFT already exists just redirects to it. The detail page then renders the reconciliation table as an **inline-editable form** (POSTs back to the same detail URL — PRG pattern) for DRAFT entries, and a read-only `Difference` column for SUBMITTED/CANCELLED entries. The "Submit & Close Shift" button is wired to a SweetAlert confirmation dialog (`data-confirm-title` / `data-confirm-body` / `data-confirm-button` attributes — existing pattern used in `opening_entry_detail.html`, `gl_mapping_list.html`, `staff_list.html`) so the cashier must explicitly confirm before the close finalises. The separate `closing_entry_update` view + URL are removed; `closing_entry_form.html` and `closing_entry_reconcile.html` templates are deleted. The "Close Shift" action is available from the staff dashboard (existing), the opening-entry list (new `Close shift` link on `is_open` rows), and the closing-entry list (detail view). | (1) RestPOS Phase 1 enforces "one Open shift per branch" (see `POSOpeningEntry.clean()` + `submit()` re-check inside `select_for_update`), so a dropdown of open shifts is a list-of-one and pure friction. ERPNext/URY require manual selection only because their architecture permits multi-open-shifts per user and multi-cashier per profile — neither applies to Phase 1. (2) Industry consensus for single-shift-per-register POS systems (Lightspeed S-Series, Dynamics 365 Commerce `Tender declaration`→`Close shift`, StoreHub, ConnectPOS) is one-click close against the current shift, no selection step. (3) The auto-reuse-existing-draft guard prevents the double-click-on-`Close-Shift` race and the page-refresh-after-creating-draft race from leaking orphan drafts. (4) Folding the edit form into the detail page (one page instead of two) halves click count and matches the existing `opening_entry_form.html` symmetry. (5) The SweetAlert confirmation on submit honours ERPNext's submit-then-immutable pattern (the closing entry cannot be edited after submit, only cancelled) — the cashier explicitly agrees before the irreversibility kicks in. |
+| **Closing flow: auto-create-or-reuse draft, inline-edit detail page, no manual shift selection.** Both ERPNext Desk (`pos_closing_entry.js` lines 5-9 — `frm.set_query("pos_opening_entry", ...)` filtered to `status="Open", docstatus=1`) and URY's `sub_pos_closing.js` (lines 37-39, same filter + `user=session.user`) make the cashier manually pick which open shift to close from a filtered Link dropdown. RestPOS **does not** — `closing_entry_create` is now a GET-only endpoint that immediately auto-creates (or reuses an existing) DRAFT `POSClosingEntry` for the single Open shift and redirects to its detail page. `select_for_update()` on the open shift serialises concurrent double-clicks on the "Close Shift" button so they cannot create duplicate drafts; a second GET when a DRAFT already exists just redirects to it. The detail page then renders the reconciliation table as an **inline-editable form** (POSTs back to the same detail URL — PRG pattern) for DRAFT entries, and a read-only `Difference` column for SUBMITTED/CANCELLED entries. The "Submit & Close Shift" button is wired to a SweetAlert confirmation dialog (`data-confirm-title` / `data-confirm-body` / `data-confirm-button` attributes — existing pattern used in `opening_entry_detail.html`, `gl_mapping_list.html`, `staff_list.html`) so the cashier must explicitly confirm before the close finalises. The separate `closing_entry_update` view + URL are removed; `closing_entry_form.html` and `closing_entry_reconcile.html` templates are deleted. The "Close Shift" action is available from the staff dashboard (existing), the opening-entry list (new `Close shift` link on `is_open` rows), and the closing-entry list (detail view). | (1) RestPOS enforces "one Open shift per branch" (see `POSOpeningEntry.clean()` + `submit()` re-check inside `select_for_update`), so a dropdown of open shifts is a list-of-one and pure friction. ERPNext/URY require manual selection only because their architecture permits multi-open-shifts per user and multi-cashier per profile — neither applies here. (2) Industry consensus for single-shift-per-register POS systems (Lightspeed S-Series, Dynamics 365 Commerce `Tender declaration`→`Close shift`, StoreHub, ConnectPOS) is one-click close against the current shift, no selection step. (3) The auto-reuse-existing-draft guard prevents the double-click-on-`Close-Shift` race and the page-refresh-after-creating-draft race from leaking orphan drafts. (4) Folding the edit form into the detail page (one page instead of two) halves click count and matches the existing `opening_entry_form.html` symmetry. (5) The SweetAlert confirmation on submit honours ERPNext's submit-then-immutable pattern (the closing entry cannot be edited after submit, only cancelled) — the cashier explicitly agrees before the irreversibility kicks in. |
 | **Opening flow: inline-edit detail page for DRAFT, no separate edit form.** Symmetric with the closing-flow change. `opening_entry_detail` now accepts POST for DRAFT entries (re-uses `_save_opening_entry` to persist the edited amounts via the same `OpeningFloatForm`), renders the float table as an inline-editable form for DRAFT entries (POST back to the same detail URL — PRG), and a read-only two-column table for SUBMITTED/CANCELLED/Open entries. The separate `opening_entry_update` view + URL are removed; `opening_entry_form.html` is kept ONLY for `opening_entry_create` (the "Open Shift" action on the dashboard creates the initial draft, then redirects to the detail page for editing — same pattern as `closing_entry_create`). The "Submit & Open Shift" button is now wired to a SweetAlert confirmation dialog (symmetry with "Submit & Close Shift"). The legacy `confirm_empty` branch in `opening_entry_submit` is removed because `_save_opening_entry` now always seeds one row per active `ModeOfPayment` — a draft with no rows only exists if no modes are configured, in which case the create form blocks it at the form level. | (1) Symmetry: closing detail already had inline editing; opening detail now matches — both draft pages edit in place, both submitted pages are read-only. (2) Cuts one navigation hop per draft edit (no separate Edit button + form page). (3) SweetAlert confirmation on submit mirrors the closing submit — the cashier explicitly confirms before the irreversible shift-open. (4) The `confirm_empty` path was dead code — removing it eliminates an untestable branch. |
-| **Closing reconciliation: clarify `expected_amount` column to the cashier.** A tooltip is rendered on both the closing-detail page and the opening-detail page's closing-reconciliation table explaining that `Expected = Opening + collected sales during the shift (Phase 1 has no order tracking yet, so expected equals opening)`, and `Difference = closing − expected` (negative = short, positive = excess). | Without this, Phase 1 cashiers see `expected = opening` and assume it's a bug (it's not — it's correct for Phase 5's scope; Phase 7's `POSClosingEntry.submit()` extension adds Σ collected sales per method, making `expected ≠ opening` and `difference ≈ 0` for honest shifts). The tooltip makes the Phase 5 / Phase 7 expansion point visible to the user, not just an internal PLAN.md note. |
+| **Closing reconciliation: clarify `expected_amount` column to the cashier.** A tooltip is rendered on both the closing-detail page and the opening-detail page's closing-reconciliation table explaining that `Expected = Opening + collected sales during the shift (there is no order tracking yet, so expected equals opening)`, and `Difference = closing − expected` (negative = short, positive = excess). | Without this, cashiers see `expected = opening` and assume it's a bug (it's not — it's correct for Phase 5's scope; Phase 7's `POSClosingEntry.submit()` extension adds Σ collected sales per method, making `expected ≠ opening` and `difference ≈ 0` for honest shifts). The tooltip makes the Phase 5 / Phase 7 expansion point visible to the user, not just an internal PLAN.md note. |
 
 #### Implementation steps
 
@@ -1672,7 +1675,7 @@ migration in this phase)
 | `references/erpnext-develop/erpnext/selling/doctype/pos_profile_user/pos_profile_user.json` | Applicable-users child: `user` (Link→User), `default` (Check) |
 | `references/erpnext-develop/erpnext/selling/doctype/pos_payment_method/pos_payment_method.json` | Payment-methods child: `mode_of_payment` (Link), `default` (Check), `allow_in_returns` (Check) |
 | `references/erpnext-develop/erpnext/selling/doctype/pos_item_group/pos_item_group.json` | Item-group filter child: `item_group` (Link) |
-| `references/erpnext-develop/erpnext/selling/doctype/pos_customer_group/pos_customer_group.json` | Customer-group filter child (studied and dropped — no Customer model in Phase 1) |
+| `references/erpnext-develop/erpnext/selling/doctype/pos_customer_group/pos_customer_group.json` | Customer-group filter child (studied and dropped — no Customer model) |
 | `references/ury-develop/ury/fixtures/custom_field.json` | 38 URY custom fields on POS Profile (verified); 1 on POS Profile User (`custom_main_cashier`); 3 on URY Printer Settings (`custom_kot_print`, `custom_kot_print_format`, `custom_block_takeaway_kot`); 5 on Branch (aggregator block — dropped) |
 | `references/ury-develop/ury/ury/doctype/ury_production_unit/ury_production_unit.json` | Production Unit fields: `production` (autoname), `pos_profile`, `branch` (fetch_from), `warehouse` (fetch_from), `item_groups` child, `printer_settings` child, KDS fields (dropped) |
 | `references/ury-develop/ury/ury/doctype/ury_production_unit/ury_production_unit.py` | Empty — no validation logic |
@@ -1682,15 +1685,15 @@ migration in this phase)
 | `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.py` | Validation: default exclusivity per company, disabled-not-default, tax_category uniqueness, per-row account/cost_center validation; `autoname` = `f"{title} - {company_abbr}"` |
 | `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json` | TaxRate row: `charge_type`, `rate`, `account_head`, `description`, `cost_center`, `included_in_print_rate`, `row_id` + computed `*_base_*` fields (deferred to Phase 9) |
 | `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json` | `pos_profile` is a required Link on POS Opening Entry (Phase 6 adds nullable FK to RestPOS POSOpeningEntry) |
-| `references/ury-develop/ury/ury_pos/api.py` | Fields the POS frontend consumes from POSProfile (§G of research): `branch`, `warehouse`, `company`, `table_attention_time`, `paid_limit`, `custom_enable_discount`, `custom_enable_multiple_cashier`, `custom_edit_order_type`, `custom_enable_kot_reprint`, `printer_settings`, `role_allowed_for_billing`, `payments`, `applicable_for_users`, `custom_daily_pos_close` |
-| `references/ury-develop/ury/ury/doctype/aggregator_settings/aggregator_settings.json` | Reviewed and dropped — third-party food-delivery aggregator integration is out of Phase 1 scope |
+| `references/ury-develop/ury/ury_pos/api.py` | Fields the POS frontend consumes from POSProfile (§G of research): `branch`, `warehouse`, `company`, `paid_limit`, `custom_edit_order_type`, `custom_enable_kot_reprint`, `printer_settings`, `payments`, `applicable_for_users`, `custom_daily_pos_close`. Discount / table-attention / warehouse-switch / role-billing / KOT-delay / multi-cashier fields reviewed and **dropped** — see deviations. |
+| `references/ury-develop/ury/ury/doctype/aggregator_settings/aggregator_settings.json` | Reviewed and dropped — third-party food-delivery aggregator integration is out of scope |
 
 #### Decisions
 
 - **TaxTemplate attached only to Restaurant.** ERPNext puts the tax template on
   POSProfile (`taxes_and_charges`); URY puts a `default_tax_template` on the
   Restaurant. RestPOS uses only the Restaurant-level attachment — simpler for
-  single-site Phase 1 (one restaurant = one tax config). Phase 7 reads
+  single-site (one restaurant = one tax config). Phase 7 reads
   `restaurant.default_tax_template` at order time. The POSProfile `taxes_and_charges`
   and `tax_category` fields are not ported.
 
@@ -1705,12 +1708,9 @@ migration in this phase)
   enforced as NOT NULL until Phase 7 (orders) requires it for order creation. Additive migration —
   no data backfill needed since Phase 5 entries predate POSProfile.
 
-- **Role-permitted children → M2M to `django.contrib.auth.models.Group`.** URY uses Frappe's `Role`
-  via `Role Permitted` child tables. RestPOS uses Django's `Group` with named roles ("RestPOS Admin",
-  "RestPOS Manager", "RestPOS Cashier" — Phase 5 staff app). The four role-multiselect fields
-  (`role_allowed_for_billing`, `role_restricted_for_table_order`, `transfer_role_permissions`,
-  `notification_recipients`) become plain M2M to `Group` with no through model (the through adds no
-  data beyond the role ref).
+- **Role-permission M2Ms dropped.** URY's `role_allowed_for_billing`, `role_restricted_for_table_order`,
+  `transfer_role_permissions`, and `notification_recipients` are not ported. Cashier-only POS (no
+  waiter login), no table-order role split, no captain/table transfer, no KOT delay notifications.
 
 - **`POSProfile.applicable_users` uses a through model `POSProfileUser`.** Preserves the per-user
   `is_default` flag (ERPNext enforces one default per user per company) and `is_main_cashier`
@@ -1720,21 +1720,21 @@ migration in this phase)
   (exactly one default per profile — ERPNext validation) and `allow_in_returns`.
 
 - **`ProductionUnit.branch` and `warehouse` are stored, auto-set from `pos_profile` in `save()`.**
-  Matches the RestPOS denormalization pattern (see `Table.branch`, `UserRoomAssignment.branch`).
+  Matches the RestPOS denormalization pattern (see `Table.branch`).
   Avoids stale data by re-setting on every save. Deviates from URY which uses `fetch_from` display
   fields.
 
 - **`ProductionUnit.item_groups` child table dropped.** FEATURES.md A3 #14 explicitly states RestPOS
   routes tickets by the `department` flag on each item, not by item-group mappings. The URY
-  `item_groups` child is redundant for Phase 1.
+  `item_groups` child is redundant.
 
-- **Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert — all dropped.** Out of Phase 1
-  scope per AGENTS.md.
+- **Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert — all dropped.** Out of scope
+  per AGENTS.md.
 
 - **KOT-related config fields modeled on POSProfile now, enforced in Phase 7/8.** `kot_naming_series`,
-  `reset_order_number_daily`, `kot_warning_time`, `notify_kot_delay`, `enable_kot_reprint`,
-  `reprint_kot_format` — config toggles consumed by the orders/printing apps. Modeling them now
-  keeps POSProfile complete; enforcement is deferred to the consuming phase.
+  `reset_order_number_daily`, `enable_kot_reprint`, `reprint_kot_format` — config toggles consumed by
+  the orders/printing apps. KOT delay trio (`kot_warning_time`, `notify_kot_delay`,
+  `notification_recipients`) dropped — no delay notification feature.
 
 - **Accounting fields kept as CharField, enforcement deferred to Phase 9.** `cost_center`,
   `income_account`, `expense_account`, `write_off_account`, `write_off_cost_center`,
@@ -1742,11 +1742,11 @@ migration in this phase)
   and migrates to FK. FEATURES #40 says cost center is mandatory — Phase 6 keeps the field optional
   with a documented deviation (no model to FK to yet); Phase 9 enforces mandatory.
 
-- **`currency` defaults to "NGN".** Single-currency Phase 1. `selling_price_list` kept as nullable
+- **`currency` defaults to "NGN".** Single-currency. `selling_price_list` kept as nullable
   FK to `menu.PriceList` for ERPNext alignment, but Phase 7 resolves pricing from the active menu
   regardless.
 
-- **`customer` and `customer_groups` dropped.** No Customer model in Phase 1 (walk-in customer is a
+- **`customer` and `customer_groups` dropped.** No Customer model (walk-in customer is a
   default string handled in Phase 7 if needed).
 
 - **`utm_source`, `utm_campaign`, `utm_medium`, `ignore_pricing_rule`, `letter_head`, `tc_name`,
@@ -1765,7 +1765,7 @@ All models extend `apps.utils.models.BaseModel`.
 | title | CharField, max_length=100, required | ERPNext `title` | used in display name |
 | is_default | BooleanField, default=False | ERPNext `is_default` | one default per company enforced in `clean()` |
 | disabled | BooleanField, default=False | ERPNext `disabled` | disabled templates can't be assigned |
-| company | CharField, max_length=200, required | ERPNext `company` | defaults from `Restaurant.company` in `clean()`; no Company model in Phase 1 |
+| company | CharField, max_length=200, required | ERPNext `company` | defaults from `Restaurant.company` in `clean()`; no Company model |
 | tax_category | CharField, max_length=100, blank=True | ERPNext `tax_category` | Phase 9 migrates to FK; uniqueness enforced in `clean()` |
 
 **Methods:**
@@ -1802,7 +1802,7 @@ All models extend `apps.utils.models.BaseModel`.
 | restaurant | ForeignKey→settings.Restaurant, on_delete=PROTECT, null=True, blank=True, related_name="pos_profiles" | URY custom | auto-set from `branch.restaurants.first()` in `save()` if blank |
 | warehouse | ForeignKey→inventory.Warehouse, on_delete=PROTECT, related_name="pos_profiles" | ERPNext core | required — default stock deduction warehouse |
 | disabled | BooleanField, default=False | ERPNext core | |
-| currency | CharField, max_length=3, default="NGN" | ERPNext core | single-currency Phase 1 |
+| currency | CharField, max_length=3, default="NGN" | ERPNext core | single-currency |
 | selling_price_list | ForeignKey→menu.PriceList, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | Phase 7 resolves from active menu |
 | taxes_and_charges | — | dropped | tax template lives on Restaurant only, not POSProfile |
 | tax_category | CharField, max_length=100, blank=True | ERPNext core | Phase 9 |
@@ -1814,17 +1814,11 @@ All models extend `apps.utils.models.BaseModel`.
 | write_off_limit | DecimalField, max_digits=12, decimal_places=2, default=Decimal("1.00") | ERPNext core | FEATURES #23 |
 | account_for_change_amount | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
 | set_grand_total_to_default_mop | BooleanField, default=True | ERPNext core | FEATURES #25 |
-| allow_partial_payment | BooleanField, default=False | ERPNext core | |
-| apply_discount_on | CharField, max_length=15, choices: GRAND_TOTAL / NET_TOTAL, default=GRAND_TOTAL | ERPNext core | FEATURES #99 |
-| enable_discount | BooleanField, default=False | URY `custom_enable_discount` | FEATURES #18 |
 | action_on_new_invoice | CharField, max_length=40, choices: ALWAYS_ASK / SAVE_AND_LOAD_NEW / DISCARD_AND_LOAD_NEW, default=ALWAYS_ASK | ERPNext core | FEATURES #24 |
 | validate_stock_on_save | BooleanField, default=False | ERPNext core | |
 | hide_images | BooleanField, default=False | ERPNext core | FEATURES #22 |
 | hide_unavailable_items | BooleanField, default=False | ERPNext core | FEATURES #22 |
 | auto_add_item_to_cart | BooleanField, default=False | ERPNext core | FEATURES #21 |
-| allow_rate_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
-| allow_discount_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
-| allow_warehouse_change | BooleanField, default=False | ERPNext core | FEATURES #18 |
 | print_receipt_on_order_complete | BooleanField, default=False | ERPNext core | FEATURES #20 |
 | view_all_status | BooleanField, default=False | URY `view_all_status` | FEATURES #32 |
 | paid_limit | IntegerField, default=20 | URY `paid_limit` | FEATURES #33 |
@@ -1832,22 +1826,14 @@ All models extend `apps.utils.models.BaseModel`.
 | remove_items | BooleanField, default=False | URY `remove_items` | FEATURES #35 |
 | show_image | BooleanField, default=True | URY `show_image` | POS item cards |
 | require_daily_pos_close | BooleanField, default=False | URY `custom_daily_pos_close` | FEATURES #29 |
-| table_attention_time | IntegerField, default=0 | URY `table_attention_time` | FEATURES #74 — minutes |
-| multiple_cashier | BooleanField, default=False | URY `custom_enable_multiple_cashier` | |
 | kot_naming_series | CharField, max_length=50, default="KOT-####" | URY `custom_kot_naming_series` | FEATURES #27; consumed in Phase 7 |
 | reset_order_number_daily | BooleanField, default=False | URY `custom_reset_order_number_daily` | FEATURES #30 |
-| kot_warning_time | IntegerField, default=15 | URY `custom_kot_warning_time` | FEATURES #74 — minutes |
-| notify_kot_delay | BooleanField, default=False | URY `custom_notify_kot_delay` | FEATURES #38 |
 | enable_kot_reprint | BooleanField, default=False | URY `custom_enable_kot_reprint` | FEATURES #28 |
 | reprint_kot_format | CharField, max_length=100, blank=True | URY `custom_reprint_kot_format` | Phase 8 defines print formats |
 | print_format | CharField, max_length=100, blank=True | ERPNext core | Phase 8 defines |
 | applicable_users | ManyToManyField→CustomUser, through=POSProfileUser, related_name="pos_profiles", blank=True | ERPNext core child | |
 | payments | ManyToManyField→payments.ModeOfPayment, through=POSProfilePayment, related_name="pos_profiles", blank=True | ERPNext core child | |
 | item_groups | ManyToManyField→inventory.ItemGroup, related_name="pos_profiles", blank=True | ERPNext core child | empty = all groups visible |
-| role_allowed_for_billing | ManyToManyField→Group, related_name="billing_profiles", blank=True | URY `role_allowed_for_billing` | FEATURES #36 |
-| role_restricted_for_table_order | ManyToManyField→Group, related_name="table_order_restricted_profiles", blank=True | URY `role_restricted_for_table_order` | FEATURES #37 |
-| transfer_role_permissions | ManyToManyField→Group, related_name="transfer_profiles", blank=True | URY `transfer_role_permissions` | FEATURES #59 |
-| notification_recipients | ManyToManyField→Group, related_name="delay_notification_profiles", blank=True | URY `custom_recipients` | FEATURES #38 |
 
 **Methods:**
 - `__str__` returns `name`
@@ -1900,7 +1886,7 @@ All models extend `apps.utils.models.BaseModel`.
 | Field | Type | Source | Notes |
 |---|---|---|---|
 | name | CharField, max_length=100, required | URY `production` (autoname source) | e.g. "Kitchen", "Bar" |
-| pos_profile | ForeignKey→POSProfile, on_delete=PROTECT, null=True, blank=True, related_name="production_units" | URY core | nullable for RestPOS flexibility (unit can exist without a profile in Phase 1) |
+| pos_profile | ForeignKey→POSProfile, on_delete=PROTECT, null=True, blank=True, related_name="production_units" | URY core | nullable for RestPOS flexibility (unit can exist without a profile) |
 | branch | ForeignKey→settings.Branch, on_delete=PROTECT, related_name="production_units" | URY `fetch_from pos_profile.branch` | stored (denormalized); auto-set from `pos_profile.branch` or `Branch.get_default()` in `save()` |
 | warehouse | ForeignKey→inventory.Warehouse, on_delete=PROTECT, related_name="production_units" | URY `fetch_from pos_profile.warehouse` | stored (denormalized); auto-set from `pos_profile.warehouse` in `save()` if blank |
 | department | CharField, max_length=10, choices: FOOD / DRINKS, required | RestPOS-specific | drives ticket routing per FEATURES #14 |
@@ -2065,18 +2051,19 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 
 | Deviation | Reason |
 |---|---|
-| TaxTemplate attached to Restaurant only (not POSProfile) | ERPNext = per-profile; URY = per-restaurant. RestPOS uses restaurant-only — simpler for single-site Phase 1. POSProfile `taxes_and_charges` and `tax_category` dropped. |
+| TaxTemplate attached to Restaurant only (not POSProfile) | ERPNext = per-profile; URY = per-restaurant. RestPOS uses restaurant-only — simpler for a single-site restaurant. POSProfile `taxes_and_charges` and `tax_category` dropped. |
 | Printer config as string fields on ProductionUnit (not child table) | Phase 8 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 8 migrates. |
 | `POSOpeningEntry.pos_profile` nullable (not required) | Phase 5 entries predate POSProfile. ERPNext requires it; Phase 7 may enforce NOT NULL. |
-| Role-permitted children → M2M to `Group` (not child table to Frappe `Role`) | RestPOS uses Django `Group` with named roles, not Frappe Role. M2M is cleaner than child tables. |
-| `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). `POSProfileUser` dropped in single-profile refactor — Phase 2 re-introduces when multi-profile/club operations are needed. |
-| POSProfile limited to one per Restaurant | ERPNext/URY allow multiple profiles per branch (multi-terminal configs). RestPOS Phase 1 is single-site — one POS terminal = one profile. Singleton enforced via `unique_together`. POS profile UI is a settings page, not a list/create/detail CRUD. |
+| Role-permission M2Ms and KOT delay trio dropped from POSProfile | Cashier-only POS; no waiter/table-order role split, no transfer roles, no KOT delay alerts (#36–#38, #59, #74). |
+| `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). `POSProfileUser` dropped in single-profile refactor. |
+| `multiple_cashier` field not ported onto `POSProfile` | URY `custom_enable_multiple_cashier` drives a main/sub-cashier shift hierarchy (separate shifts, sub-cashier sub-closings, main-shown reconciliation). The project has one shared session per branch (§6.5), so the field carried no behaviour and was removed to avoid dead schema. The supporting `POSProfileUser.is_main_cashier` flag is gone with `POSProfileUser` (above). |
+| POSProfile limited to one per Restaurant | ERPNext/URY allow multiple profiles per branch (multi-terminal configs). RestPOS is single-site — one POS terminal = one profile. Singleton enforced via `unique_together`. POS profile UI is a settings page, not a list/create/detail CRUD. |
 | `ProductionUnit.branch`/`warehouse` stored (not `fetch_from` display) | RestPOS denormalization pattern (matches `Table.branch`); auto-set in `save()`. |
 | `item_groups` child on ProductionUnit dropped | RestPOS routes by department flag, not item-group mappings (FEATURES #14). |
-| Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert dropped | Out of Phase 1 scope per AGENTS.md. |
-| `customer`, `customer_groups`, `utm_*`, `ignore_pricing_rule`, `letter_head`, `tc_name`, `select_print_heading` dropped | No Customer model in Phase 1 / irrelevant to local restaurant POS / ERPNext print cosmetics. |
+| Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert dropped | Out of scope per AGENTS.md. |
+| `customer`, `customer_groups`, `utm_*`, `ignore_pricing_rule`, `letter_head`, `tc_name`, `select_print_heading` dropped | No Customer model / irrelevant to local restaurant POS / ERPNext print cosmetics. |
 | Accounting fields (`cost_center`, `income_account`, etc.) as CharField, optional | Phase 9 introduces `LedgerAccount` and migrates to FK; FEATURES #40 mandatory deferred. |
-| `currency` hardcoded to "NGN" default | Single-currency Phase 1. |
+| `currency` hardcoded to "NGN" default | Single-currency. |
 | `selling_price_list` kept but Phase 7 ignores it | ERPNext alignment; RestPOS resolves pricing from active menu. |
 | `restaurant` field on POSProfile auto-set from branch | URY has it as user-selected; RestPOS single-site auto-derives. |
 | KOT config fields modeled now, enforced in Phase 7/8 | Config toggles consumed by orders/printing apps; modeling now keeps POSProfile complete. |
@@ -2105,13 +2092,11 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 
 ### 6.7 Orders App (Phase 7)
 
-**Status:** not started — detailed plan to be written after settings R2 is complete.
-
-**FEATURES.md sections:** A6, A7, A18
-**Dependencies:** settings (R1+R2), menu, staff, payments (ModeOfPayment on each payment row)
-**Key models:** Order, OrderItem, KOT, KOTItem, RefundEntry, RefundPaymentEntry, RefundStockEntry
-**Reference doctypes to consult:** ERPNext POS Invoice, POS Invoice Item, URY Order, URY Order
-Item, URY KOT, URY KOT Items, URY hooks for order/KOT/invoice events, URY POS API
+**Status:** in progress (Phase 7a — core flow)
+**FEATURES.md sections:** A6, A7, A18 (core order lifecycle, KOT, settle, cancel)
+**Dependencies:** settings (R1+R2), menu, staff, payments
+**Split:** 7a (core flow — this plan) + 7b (table transfer, KOT reprint,
+duplicate ticket detection — deferred; captain/waiter transfer and KOT delay out of scope)
 
 > **POS-screen shift UI is a Phase 7 deliverable.** Per user decision (Phase 5 follow-up),
 > Phase 7 builds the actual POS screen, which checks for an open shift on load and shows
@@ -2120,6 +2105,333 @@ Item, URY KOT, URY KOT Items, URY hooks for order/KOT/invoice events, URY POS AP
 > backoffice Staff app (Phase 5) remains the manager audit/reconciliation surface.
 > This is a documented deviation from URY, which puts shift open/close entirely in the
 > backoffice and gates the POS screen with a "Switch to Desk" blocker.
+
+#### Reference files consulted
+
+| Reference file | What was extracted |
+|---|---|
+| `references/ury-develop/ury/ury/doctype/ury_order/ury_order.py` | Whitelisted order endpoints: get_order_invoice, sync_order, make_invoice, cancel_order, table_transfer, captain_transfer, pos_opening_check |
+| `references/ury-develop/ury/ury/doctype/ury_order/ury_order.json` | URY Order single doctype fields (UI shell — not persisted per-row) |
+| `references/ury-develop/ury/ury/doctype/ury_order_item/ury_order_item.json` | Order item child table fields (item, qty, rate, comments) |
+| `references/ury-develop/ury/ury/doctype/ury_kot/ury_kot.json` | KOT fields (type, production, order_no, restaurant_table, original_kot, status) |
+| `references/ury-develop/ury/ury/doctype/ury_kot/ury_kot.py` | KOT submit logic, printer routing cascade |
+| `references/ury-develop/ury/ury/doctype/ury_kot_items/ury_kot_items.json` | KOT item fields (item, item_name, quantity, cancelled_qty, comments, course) |
+| `references/ury-develop/ury/ury/api/ury_kot_generate.py` | KOT diffing engine: compare_two_array, process_items_for_kot, process_items_for_cancel_kot, production-unit grouping |
+| `references/ury-develop/ury/ury/hooks/ury_pos_invoice.py` | POS Invoice event hooks: before_insert, validate, before_submit, on_cancel — invoice print enforcement, item modification lock, table status |
+| `references/ury-develop/ury/ury/hooks/ury_kot_order_number.py` | Sequential order number logic (session-based in URY; RestPOS implements daily reset) |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice/pos_invoice.json` | POS Invoice fields: totals, discount, rounding, payments, outstanding, write-off, status |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice/pos_invoice.py` | validate, validate_change_amount, set_outstanding_amount, set_status, before_submit, on_cancel |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice_item/pos_invoice_item.json` | Invoice item fields: qty, rate, amount, warehouse, item_group |
+| `references/ury-develop/pos/src/components/OrderPanel.tsx` | Cart UI structure, sync flow |
+| `references/ury-develop/pos/src/components/PaymentDialog.tsx` | Split payment dialog, discount, rounding, auto-fill remaining |
+| `references/ury-develop/pos/src/components/MenuList.tsx` | Menu grid, category filtering |
+
+#### Phase 7a scope
+
+**In scope:** Order model + items, customer cards (group ordering), KOT generation with
+diffing, departmental ticket routing, settle (split payment, tax, rounding, change,
+stock deduction), cancel (with reversal), sequential order numbering, concurrent modification
+check, invoice print enforcement, POS shift check, full POS screen UI, backoffice order/KOT
+views. Cashier free-form discount is out of scope (coupon system later).
+
+**Deferred to 7b:** Table transfer (#58), KOT reprint (#71),
+duplicate ticket detection (#72, Celery), ticket error log
+(#73), customer favourite items (#63), customer search/create from POS (#104/#105).
+
+**Out of scope (no waiter system access):** Captain/waiter transfer (#59), waiter assignment
+on orders, waiter POS roles, and any UI that assumes waiters log in. Waiters relay orders via
+physical docket; the cashier enters everything.
+
+**Out of scope (POSProfile):** KOT delay notifications (#74 / #38 — `kot_warning_time`,
+`notify_kot_delay`, `notification_recipients`); role gates for billing / table orders / transfer
+(#36, #37, #59).
+
+#### Models
+
+All models extend `apps.utils.models.BaseModel`.
+
+##### Order (`orders.Order`)
+
+| Field | Type | Source | Notes |
+|---|---|---|---|
+| invoice_number | CharField, max_length=50, unique, null=True, blank=True, editable=False | ERPNext naming_series | Auto-generated on first save: `{prefix}{pk}` |
+| order_number | PositiveIntegerField, null=True, blank=True, editable=False | URY custom_ury_order_number | Sequential per branch per day; resets if `pos_profile.reset_order_number_daily` |
+| order_type | CharField, max_length=20, choices: DINE_IN, TAKE_AWAY, DELIVERY, PHONE_IN, default=DINE_IN | URY order_type | Auto-detected from table.is_take_away |
+| restaurant | FK→settings.Restaurant, PROTECT, related_name="orders" | ERPNext POS Invoice | required |
+| branch | FK→settings.Branch, PROTECT, related_name="orders" | ERPNext POS Invoice | denormalized from restaurant |
+| pos_profile | FK→settings.POSProfile, PROTECT, null=True, blank=True | ERPNext POS Invoice | |
+| table | FK→settings.Table, SET_NULL, null=True, blank=True, related_name="orders" | URY restaurant_table | |
+| room | FK→settings.Room, SET_NULL, null=True, blank=True | URY room | denormalized from table |
+| customer_name | CharField, max_length=200, default="Walk-in Customer" | ERPNext customer_name | |
+| customer_mobile | CharField, max_length=20, blank=True | ERPNext customer | |
+| guest_count | PositiveIntegerField, default=1 | RestPOS-specific (URY no_of_pax) | 1 = single customer, >1 = group ordering |
+| cashier | FK→users.CustomUser, SET_NULL, null=True, blank=True, related_name="settled_orders" | URY cashier | set on settle; only staff role that operates the POS |
+| status | CharField, max_length=10, choices: DRAFT/SUBMITTED/CANCELLED, default=DRAFT | ERPNext docstatus | |
+| is_paid | BooleanField, default=False | ERPNet set_status | true when outstanding=0 |
+| invoice_printed | BooleanField, default=False | URY invoice_printed | blocks settle for dine-in (#53) |
+| posting_date | DateField, default=timezone.localdate | ERPNext posting_date | |
+| posting_time | TimeField, default=timezone.localtime | ERPNext posting_time | |
+| net_total | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | ERPNext net_total | sum of item amounts |
+| total_taxes | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | ERPNext total_taxes_and_charges | |
+| grand_total | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | ERPNext grand_total | net_total + taxes (no cashier discount; coupons later) |
+| rounded_total | DecimalField, max_digits=14, decimal_places=2, default=0 | ERPNext rounded_total | |
+| paid_amount | DecimalField, max_digits=14, decimal_places=2, default=0, editable=False | ERPNext paid_amount | |
+| change_amount | DecimalField, max_digits=12, decimal_places=2, default=0 | ERPNext change_amount | |
+| outstanding_amount | DecimalField, max_digits=14, decimal_places=2, default=0 | ERPNext outstanding_amount | |
+| comments | TextField, blank=True | URY comments | order-level notes |
+| cancel_reason | TextField, blank=True | RestPOS | required when status=CANCELLED |
+| taxes_and_charges_template | FK→settings.TaxTemplate, SET_NULL, null=True, blank=True | ERPNext taxes_and_charges | |
+| amended_from | FK→self, SET_NULL, null=True, blank=True | ERPNext amended_from | |
+| opening_entry | FK→staff.POSOpeningEntry, SET_NULL, null=True, blank=True, related_name="orders" | Phase 5 deferred FK | |
+| arrived_time | DateTimeField, null=True, blank=True, editable=False | URY arrived_time | set on creation |
+| total_spend_time | CharField, max_length=20, blank=True, editable=False | URY total_spend_time | set on settle |
+
+**Methods:**
+- `save()`: generate invoice_number on first save (`{prefix}{pk}`), denormalize room from
+  table. No business logic, no ValidationError raising.
+- `clean()`: validate no duplicate draft order for same table; cancel_reason required when
+  CANCELLED.
+- `recalculate_totals()`: net_total = sum(items.amount); then calculate_taxes(); then
+  grand_total = net_total + taxes; rounded_total = round(grand_total).
+- `calculate_taxes()`: from template (or restaurant.default_tax_template), create OrderTax
+  lines, return total tax.
+- `settle(payments_data, cashier)`: full chain — recalculate → taxes → rounding → payments →
+  change → outstanding → submit → stock deduction → free table. Sets is_paid, cashier,
+  total_spend_time. No order-level discount (coupon system planned later).
+- `cancel(reason)`: set CANCELLED, cancel_reason, create cancel KOT, reverse stock if
+  SUBMITTED, free table.
+- `generate_kots(previous_items)`: diffing engine — compare current items vs previous,
+  generate New Order / Order Modified / Partially Cancelled KOTs per production unit
+  department, group by customer_index. No N+1 queries.
+- `assign_order_number()`: sequential per branch per day (or continuous if
+  reset_order_number_daily=False).
+
+##### OrderItem (`orders.OrderItem`)
+
+| Field | Type | Notes |
+|---|---|---|
+| order | FK→Order, CASCADE, related_name="items" | |
+| item | FK→inventory.Item, PROTECT, related_name="order_items" | |
+| item_name | CharField, max_length=200 | auto-filled from item.item_name |
+| qty | DecimalField, max_digits=10, decimal_places=2 | |
+| rate | DecimalField, max_digits=10, decimal_places=2 | from MenuItem.rate (price list) |
+| amount | DecimalField, max_digits=12, decimal_places=2, default=0, editable=False | qty * rate |
+| customer_index | PositiveIntegerField, default=1 | 1-based; groups items by customer card |
+| comments | CharField, max_length=200, blank=True | per-item notes |
+| department | CharField, max_length=10, choices: FOOD/DRINKS | auto-filled from item.department |
+| uom | FK→inventory.UOM, PROTECT | auto-filled from item.stock_uom |
+| menu_item | FK→menu.MenuItem, SET_NULL, null=True, blank=True | traceability to menu rate source |
+
+**Methods:**
+- `save()`: auto-fill item_name, department, uom from item; compute amount = qty * rate.
+  No business logic beyond auto-fill.
+
+##### OrderPayment (`orders.OrderPayment`)
+
+| Field | Type | Notes |
+|---|---|---|
+| order | FK→Order, PROTECT, related_name="payments" | PROTECT per AGENTS.md hard rule |
+| mode_of_payment | FK→payments.ModeOfPayment, PROTECT | |
+| amount | DecimalField, max_digits=12, decimal_places=2 | |
+| reference_no | CharField, max_length=100, blank=True | for bank transfers, card auth codes |
+
+##### OrderTax (`orders.OrderTax`)
+
+| Field | Type | Notes |
+|---|---|---|
+| order | FK→Order, CASCADE, related_name="taxes" | |
+| description | CharField, max_length=255 | |
+| charge_type | CharField, max_length=30 | from TaxRate.charge_type |
+| rate | DecimalField, max_digits=8, decimal_places=4 | |
+| tax_amount | DecimalField, max_digits=12, decimal_places=2 | |
+| account_head | CharField, max_length=200 | |
+
+##### KOT (`orders.KOT`)
+
+| Field | Type | Notes |
+|---|---|---|
+| order | FK→Order, CASCADE, related_name="kots" | |
+| production_unit | FK→settings.ProductionUnit, PROTECT, related_name="kots" | routes kitchen vs bar |
+| type | CharField, max_length=25, choices: New Order/Order Modified/Cancelled/Partially Cancelled | from URY KOT.type |
+| kot_number | CharField, max_length=50, unique | auto-generated: KOT-{pk:04d} or CNCL-KOT-{pk:04d} |
+| status | CharField, max_length=15, choices: SUBMITTED/CANCELLED, default=SUBMITTED | |
+| posting_datetime | DateTimeField, auto_now_add=True | |
+| branch | FK→settings.Branch, PROTECT | |
+| order_number | PositiveIntegerField, null=True, blank=True | copied from Order for ticket display |
+| original_kots | TextField, blank=True | comma-joined kot_numbers of source KOTs (for cancel KOTs) |
+
+##### KOTItem (`orders.KOTItem`)
+
+| Field | Type | Notes |
+|---|---|---|
+| kot | FK→KOT, CASCADE, related_name="items" | |
+| item | FK→inventory.Item, PROTECT | |
+| item_name | CharField, max_length=200 | |
+| qty | DecimalField, max_digits=10, decimal_places=2 | delta qty (for new/modified) or 0 (for cancelled) |
+| cancelled_qty | DecimalField, max_digits=10, decimal_places=2, default=0 | qty removed (for cancel KOTs) |
+| comments | CharField, max_length=200, blank=True | |
+| customer_index | PositiveIntegerField, default=1 | groups items by customer card on ticket |
+
+#### Business logic — key flows
+
+**Order creation flow:**
+1. Cashier selects a table from the table grid.
+2. View creates Order with `order_type` auto-detected from `table.is_take_away`.
+3. `Order.save()` generates `invoice_number` and denormalizes `room` from `table`.
+4. `Order.assign_order_number()` sets the sequential daily number.
+5. `order_id` stored in session for the POS screen.
+
+**Add item flow (HTMX):**
+1. Cashier clicks a menu card → HTMX POST to `pos_order_add_item`.
+2. View resolves the MenuItem from the active menu, gets the rate.
+3. `order.add_item(item, qty, customer_index, comments, rate)` — creates OrderItem or
+   increments qty if same (item, customer_index, comments) already exists.
+4. `order.recalculate_totals()` — updates net_total, taxes, grand_total.
+5. View returns only the cart fragment (not the full page).
+
+**Sync / KOT generation flow:**
+1. Cashier clicks "Send to Kitchen" → HTMX POST to `pos_order_sync`.
+2. View snapshots current items from DB (the "previous" state).
+3. `order.generate_kots(previous_items)` — diffs current vs previous:
+   - New/increased items → per production unit (department): "New Order" or "Order Modified"
+     KOT (Modified if a KOT already exists for that order+production_unit).
+   - Removed/decreased items → "Partially Cancelled" KOT with original_kots reference.
+4. Each KOT groups items by `customer_index`.
+5. Table marked `occupied=True`.
+
+**Settle flow:**
+1. Cashier clicks "Pay" → payment dialog opens (inline, not separate page).
+2. Dialog shows: subtotal, taxes, discount input (if enabled), grand total, payment fields
+   per mode, auto-fill remaining on click.
+3. On submit → `order.settle(payments_data, cashier)`.
+4. `settle()` chain: recalculate_totals → taxes → rounded_total → create OrderPayment rows →
+   paid_amount → change_amount → outstanding_amount → is_paid → status=SUBMITTED →
+   stock deduction → free table.
+5. Session cleared, POS returns to table selection.
+
+**Cancel flow:**
+1. Cashier/manager enters cancel reason.
+2. `order.cancel(reason)` — if SUBMITTED: reverse stock, create cancel KOT, free table.
+   If DRAFT: free table, no stock reversal needed.
+3. All existing New/Modified KOTs set to CANCELLED.
+
+**Invoice print enforcement (#53):**
+- Dine-in orders: `order.invoice_printed` must be True before `settle()` is allowed.
+- Takeaway orders: no print requirement (auto-print is Phase 8).
+
+**Concurrent modification check (#64):**
+- POS sends `last_updated` timestamp with each sync.
+- View compares with `order.updated_at` from DB. If mismatch → reject with error message.
+
+#### Views & URLs — POS
+
+Dedicated full-screen POS layout (no backoffice sidebar). All require login + open shift.
+
+| URL pattern | View function | Purpose |
+|---|---|---|
+| `/pos/` | `pos_home` | Table selection grid or active order screen |
+| `/pos/table/<int:pk>/order/` | `pos_table_start` | Create/get draft order for a table |
+| `/pos/order/<int:pk>/` | `pos_order_screen` | Main POS screen for an active order |
+| `/pos/order/<int:pk>/add-item/` | `pos_order_add_item` | HTMX — add item to active customer card |
+| `/pos/order/<int:pk>/update-item/<int:item_pk>/` | `pos_order_update_item` | HTMX — update qty or remove item |
+| `/pos/order/<int:pk>/customer-card/<int:idx>/` | `pos_customer_card_activate` | HTMX — set active customer card |
+| `/pos/order/<int:pk>/sync/` | `pos_order_sync` | HTMX — generate KOTs, mark table occupied |
+| `/pos/order/<int:pk>/settle/` | `pos_order_settle` | HTMX — payment dialog + process payment |
+| `/pos/order/<int:pk>/cancel/` | `pos_order_cancel` | HTMX — cancel order with reason |
+
+#### Views & URLs — Backoffice
+
+| URL pattern | View function | Purpose |
+|---|---|---|
+| `/backoffice/orders/` | `order_list` | List orders with filters |
+| `/backoffice/orders/<int:pk>/` | `order_detail` | Order detail with items, payments, taxes, KOTs |
+| `/backoffice/orders/<int:pk>/cancel/` | `order_cancel` | Cancel order (manager only) |
+| `/backoffice/orders/kots/` | `kot_list` | List KOTs with filters |
+| `/backoffice/orders/kots/<int:pk>/` | `kot_detail` | KOT detail with items |
+
+#### Templates — POS
+
+Dedicated `pos/base.html` — full-screen, no backoffice nav. Orange accent, project's
+`rounded-[1.5rem]` cards, `shadow-[0_4px_20px_rgb(0,0,0,0.05)]` pattern.
+
+| Template | Purpose |
+|---|---|
+| `templates/pos/base.html` | Full-screen POS base (header bar with user + backoffice link) |
+| `templates/pos/index.html` | Table selection grid (rooms as tabs, tables as cards) |
+| `templates/pos/order_screen.html` | Main POS screen: menu grid (left) + cart panel (right) |
+| Inline partials in `order_screen.html`: `menu_grid`, `cart`, `customer_cards`, `payment_dialog` |
+
+#### Templates — Backoffice
+
+Match the established inventory/menu template patterns exactly: breadcrumbs, page header
+with title + subtitle, white `rounded-[1.5rem]` cards with `shadow-[0_4px_20px_rgb(0,0,0,0.05)]`,
+status badges, empty states.
+
+| Template | Purpose |
+|---|---|
+| `templates/backoffice/orders/order_list.html` | Order list with filters + table |
+| `templates/backoffice/orders/order_detail.html` | Order detail with items/payments/taxes/KOTs |
+| `templates/backoffice/orders/kot_list.html` | KOT list with filters |
+| `templates/backoffice/orders/kot_detail.html` | KOT detail with items |
+
+#### Tests
+
+| Test file | What it covers |
+|---|---|
+| `tests/test_order_model.py` | Creation, invoice_number generation, order_number, totals, tax calculation, rounding, settle (status, payments, change, outstanding, stock deduction, table free), cancel (status, reversal, table free), invoice_printed enforcement |
+| `tests/test_order_item.py` | Add item, increment existing (same item+customer+comments), different comments creates separate line, customer_index, auto-fill fields, amount calculation |
+| `tests/test_kot.py` | Generation (New Order), diffing (Modified when KOT exists), partially cancelled, department routing (food→kitchen, drinks→bar), customer_index grouping, no KOT when unchanged |
+| `tests/test_pos_views.py` | Shift check (blocked without open shift), table start, add item (HTMX), update item, customer card activation, sync (KOT generation), settle (split payment, change), cancel, invoice_printed enforcement for dine-in |
+| `tests/test_backoffice_views.py` | Order list (filters, search), order detail, order cancel (manager only), KOT list, KOT detail |
+
+#### Deviations from reference — summary
+
+| Deviation | Reason |
+|---|---|
+| Dedicated `Order` model instead of extending POS Invoice | Django has no Frappe doctype system; a dedicated model is cleaner in Django ORM |
+| `customer_index` on OrderItem and KOTItem | RestPOS-specific group ordering feature — no URY reference exists (URY hardcodes no_of_pax=1) |
+| Daily-reset order_number instead of URY's session-based arithmetic | URY's implementation is session-based and buggy; daily reset is what FEATURES.md #30 specifies |
+| KOT routing by `Item.department` (FOOD/DRINKS) not by item_group | RestPOS uses a department flag on Item, not production-unit item_group mappings (#68, #260) |
+| `order_number` on KOT (copied from Order) | URY stores it on KOT directly; RestPOS copies from Order for consistency |
+| POS screen is full-screen with inline shift open | URY gates POS with backoffice "Switch to Desk"; RestPOS puts shift open inline (Phase 5 decision) |
+| Payment dialog is inline (HTMX partial) not a separate page | Better POS UX — cashier never leaves the order screen |
+| No `Order.waiter` field; no captain/waiter transfer; no waiter login | Waiters use physical dockets only. Cashier enters all orders and runs all POS activities. URY models waiters as system users (#59, #180, #189) — RestPOS does not. |
+| Phase 7a defers table transfer, KOT reprint, duplicate detection | Core flow first; secondary features in 7b |
+| No KOT delay config or role-permission M2Ms on POSProfile | Cashier-only POS; delay alerts and waiter/table role gates not used |
+| No cashier % discount; no `Order.discount_amount`; no `enable_discount` / `apply_discount_on` / `allow_discount_change` | URY cashier discount dropped. Future coupon system will re-introduce discounts with fixed % codes, not free-form cashier entry. |
+| No `table_attention_time`, no `allow_warehouse_change` | Table-attention badge is table-floor UX; warehouse is fixed on POSProfile (stock always from profile warehouse). |
+| No `allow_partial_payment` / `allow_rate_change` | Settle requires full payment (underpay rejected). Item rate always from menu — cashier cannot override. |
+| No `UserRoomAssignment` | URY multi-room cashier isolation (#5) not used — single cashier, no room-scoped POS. |
+| No `Room` / `Table` models; no table-based POS start | Single hall, docket-to-cashier workflow. POS starts an order directly (order type + guest count); no floor grid. |
+| No `Order.table` / `Order.room` | Orders are counter-built, not bound to a table. |
+| No tax system (`TaxTemplate`, `TaxRate`, `OrderTax`, `total_taxes`) | Prices are tax-inclusive / no VAT calculation. Grand total = item net total (rounded). |
+
+#### Implementation steps
+
+1. Create feature branch `feat/phase7-orders-rewrite`
+2. Delete existing orders migrations (0001–0003) and untracked slop scripts
+3. Rewrite `apps/orders/models.py` — all 6 models with proper logic
+4. Run `make migrations` — generate single fresh `0001_initial.py`
+5. Review migration, run `make migrate`
+6. Rewrite `apps/orders/views_pos.py` — all POS views with shift check, HTMX fragments
+7. Rewrite `apps/orders/pos_urls.py` — full URL set
+8. Create `templates/pos/base.html` — dedicated full-screen POS base
+9. Rewrite `templates/pos/index.html` — table selection grid
+10. Create `templates/pos/order_screen.html` — main POS screen with inline partials
+11. Delete old `templates/pos/settle.html` and `templates/pos/_partials/` (slop)
+12. Rewrite `apps/orders/views.py` — backoffice views
+13. Rewrite `apps/orders/urls.py` — backoffice URLs
+14. Rewrite `templates/backoffice/orders/order_list.html` — match inventory pattern
+15. Rewrite `templates/backoffice/orders/order_detail.html` — match inventory detail pattern
+16. Rewrite `templates/backoffice/orders/kot_list.html`
+17. Create `templates/backoffice/orders/kot_detail.html`
+18. Rewrite `apps/orders/forms.py` — settle form, cancel form
+19. Rewrite `apps/orders/admin.py` — register all models
+20. Write `apps/orders/tests/` — all 5 test files
+21. Run `make ruff` — lint + format
+22. Run `make test ARGS='apps.orders'` — verify all tests pass
+23. Run `make test` — verify no regressions in other apps
+24. Update PLAN.md §3 status table
 
 ---
 
@@ -2154,3 +2466,161 @@ Stock Ledger reports
 **Dependencies:** orders, payments, inventory
 **Key models:** RefundEntry, RefundPaymentEntry, RefundStockEntry (may be part of orders app)
 **Reference doctypes to consult:** ERPNext Payment Entry (reversal), Stock Ledger Entry (positive)
+
+---
+
+### 6.11 Single-Location Settings Cleanup
+
+**Status:** complete — implemented 2026-07-30.
+**Depends on:** nothing (orders core flow is complete enough; do this before printing/reports so they
+build on the clean settings surface).
+**FEATURES.md sections touched:** A1, A3, A4, A9, D2 (scope annotations — see "Docs" below).
+
+#### Locked decisions (owner-approved)
+
+1. **Keep the `Restaurant` model as the single settings record** (no rename to `SiteSettings`).
+   Fold the four live `POSProfile` concerns into it. UI label: "Restaurant Settings".
+2. **Prune all dead `POSProfile` fields now** — including `enable_kot_reprint`, `reprint_kot_format`,
+   `print_format`. The printing/reports work re-adds the 2–3 knobs it needs when it lands;
+   FEATURES.md preserves the intent rows.
+3. **Delete `Branch` entirely.** No hidden row, no `get_default()`, no Location abstraction "for later".
+4. **Payment-mode truth lives on `ModeOfPayment`**: `enabled` (accept this mode) + new `is_default`
+   (exactly one). `POSProfilePayment` through model deleted.
+5. **Multi-branch is deferred** — separate paid work. The clean single-site domain is the intended
+   base; no schema hooks kept for it.
+
+#### Why (verified findings)
+
+- Every `Branch` FK is `PROTECT` and required, yet every row in every DB is one "Main Branch".
+  `Branch.get_default()` has 7 call sites (`settings/models.py` ×4, `inventory/models.py:56`,
+  `menu/models.py:25`, `staff/models.py:71`) all auto-assigning the same row.
+- `POSProfile.Meta.unique_together = [("restaurant",)]` already enforces one profile per restaurant —
+  it is a singleton with an identity crisis. Only 4 things on it are consumed at runtime: `warehouse`
+  (`Order._deduct_stock`), `reset_order_number_daily`, `payments` M2M + `is_default`
+  (`views_pos._get_payment_modes`), and `branch` (shift lookup + FK stamping). The other 25+ fields
+  are write-only (verified: zero reads outside model/form/admin/tests).
+- Live defects caused by the split:
+  - `pos_profile_settings` form excludes `payments`, but `POSProfile.clean()` requires payment links —
+    the settings page can become unsaveable with no UI path to fix it (only seed/admin can link modes).
+  - `_get_pos_profile()` = `POSProfile.objects.first()` under `ordering=["name"]` — arbitrary if the
+    singleton invariant is ever broken.
+  - Payment-mode truth is split: POS reads profile links, the shift-float form reads
+    `ModeOfPayment.enabled` (`staff/forms.py:35`). A mode can be visible at shift-open but not checkout.
+  - `POSOpeningEntry.pos_profile` is set only by the POS-side shift open (`views_pos.py:154`), never by
+    the backoffice path — the profile disable-guard is evadable.
+  - `kot_naming_series` survives on `POSProfile` though `KOT.naming_series` was deleted (`orders/0006`).
+- Already removed earlier (do not redo): Room, Table, UserRoomAssignment, TaxTemplate/TaxRate, OrderTax,
+  `Order.waiter`, `Order.discount_amount`, `POSProfileUser`, multi-cashier/KOT-delay/discount toggles.
+  PLAN.md §3/§6.1/§6.6/§6.7 still describe some of these as present — fix in the docs step.
+
+#### Target model shape
+
+```
+Restaurant (singleton — one row ever; clean() rejects a second; Restaurant.load() classmethod)
+  company, address, invoice_series_prefix          (unchanged)
+  active_menu                FK → menu.Menu        (unchanged)
+  currency                   CharField default "NGN"
+  default_warehouse          FK → inventory.Warehouse, null, SET_NULL
+  reset_order_number_daily   BooleanField default False
+  # dropped: branch FK
+
+ModeOfPayment
+  name, type, enabled        (unchanged)
+  is_default                 BooleanField — exactly one True, enforced in clean()
+
+PaymentGLMapping
+  mode_of_payment FK (now unique alone), default_account
+  # dropped: company CharField + (mode, company) unique_together
+
+ProductionUnit               # real single-site rows: Kitchen (FOOD), Bar (DRINKS)
+  name (unique alone), department, warehouse (user-chosen FK, no longer auto-copied),
+  block_takeaway_kot, printer_ip, printer_paper_width, printer_cut_mode
+  # dropped: pos_profile FK, branch FK
+
+Warehouse  name (unique alone), disabled          # branch FK dropped
+Menu       name (unique alone), enabled           # branch FK dropped
+
+Order      # dropped: branch, restaurant, pos_profile FKs (+ branch Meta index)
+KOT        # dropped: branch FK
+POSOpeningEntry / POSClosingEntry
+           # dropped: branch, pos_profile FKs; "one Open shift" becomes a global invariant
+```
+
+Tradeoffs accepted: (a) no historical "which profile/branch" on old orders — profile was terminal
+config, not financial data; `invoice_number` strings are frozen at creation. (b) Singleton enforced at
+application level (`clean()` + `.load()`), matching codebase style — no DB CHECK constraint. (c) After
+the merge, POS payment modes = all `enabled` modes; seeded-but-unwanted modes must be disabled by the
+manager (note in seed output + docs).
+
+#### Migration plan and risks
+
+1. Schema migration A (settings/payments): add `Restaurant.currency/default_warehouse/
+   reset_order_number_daily`, `ModeOfPayment.is_default`; drop `PaymentGLMapping.company`.
+2. Data migration (settings, hand-written `RunPython`, separate file, backwards raises
+   `IrreversibleError`): assert `Branch.objects.count() <= 1` and `POSProfile.objects.count() <= 1`
+   (abort loudly otherwise); assert no name collisions that would violate the new name-only uniques
+   (Warehouse/Menu/ProductionUnit across branches); copy profile `warehouse` →
+   `restaurant.default_warehouse`, `reset_order_number_daily` → restaurant, `POSProfilePayment.
+   is_default` → `ModeOfPayment.is_default`.
+3. Rewire code to the singleton (no schema change): `views_pos` helpers
+   (`_get_pos_profile` → `Restaurant.load()`; `_get_open_shift()` global; `_get_payment_modes` →
+   `enabled=True` ordered `-is_default, name`; `_get_menu_data` → `active_menu`),
+   `Order.assign_order_number` (global per-day/continuous), `_deduct_stock`/`_restore_stock`
+   (`default_warehouse` → `item.default_warehouse` fallback preserved), KOT queries drop branch filter,
+   staff `clean()`/`submit()`/`cancel()` drop the branch predicate, `staff_dashboard` single-shift card.
+4. Schema migration B (per app, `makemigrations`, review each): orders (drop 3 FKs on Order, branch on
+   KOT, branch index), staff (branch ×2, pos_profile), inventory (Warehouse.branch; unique name), menu
+   (Menu.branch; unique name), settings (ProductionUnit.pos_profile/branch, Restaurant.branch, then
+   `DeleteModel` POSProfile/POSProfilePayment/Branch).
+   - All branch FKs are `PROTECT` — RemoveField must land before `DeleteModel(Branch)`; verify the
+     generated settings migration's `dependencies` include every other app's RemoveField migration.
+   - `Order.Meta` branch index drops implicitly with the field — confirm in the generated file.
+   - Do not squash migrations; history stays append-only.
+
+#### Implementation steps
+
+1. `make test` — freeze baseline (~490 tests); note the files expected to be deleted/rewritten.
+2. `git checkout -b feat/single-location-settings` (per git workflow rules; do not commit to main).
+3. Migration A + data migration (above). Verify copy on a seeded dev DB.
+4. Rewire consumers (step 3 above). POS/backoffice tests should still pass against the old FK columns.
+5. Migration B per app, in dependency order: orders → staff → inventory → menu → settings.
+6. UI cleanup: delete branch views/urls/forms/templates + Branch/POSProfile/POSProfilePayment admins;
+   merge `pos_profile_form` into one manager-guarded Restaurant Settings page (also fixes the
+   GET-unguarded asymmetry at `settings/views.py:265` and the duplicate `restaurant_detail`/
+   `restaurant_update` POST handling); settings dashboard cards → Restaurant Settings / Production
+   Units / User Roles; drop Branch columns (staff lists, production-unit templates); drop the Branches
+   link in `templates/backoffice/dashboard.html`; fix the `pos/index.html` "No POS profile" error copy.
+7. Tests: delete `settings/tests/test_branch.py`, `test_pos_profile.py`, `test_pos_profile_payment.py`,
+   `test_pos_opening_entry_pos_profile_fk.py`; strip `branch=` kwargs everywhere via a shared
+   `make_settings()` fixture helper; convert multi-branch tests to name-uniqueness / global-one-shift
+   tests (`menu/test_menu.py` branch2, `inventory/test_warehouse.py`, staff "Other Branch" cases);
+   add singleton-guard and exactly-one-default-mode tests.
+8. Seeds + scripts: rewrite `seed_pos_setup.py` (settings singleton, 3 warehouses, modes + default,
+   2 production units, active menu), `seed_menu_catalog.py:215–218`, `scripts/inspect_db.py`.
+9. Docs: FEATURES.md scope preamble + per-row scope tags (out-of-scope: #2–6, #36–39, #49–51, #56,
+   #58–59, #65, #128–129, #170/#173 clauses, B2 #182–192, D2 #269/#271/#272, branch clauses in #1/#7/
+   #14/#57/#84/#85/#92/#94/#121/#145/#146/#164/#274; waiter mentions in #48/#152/#180/#231/#235);
+   PLAN.md §2 app table, §3 status table, §4 summaries, and stale model lists in §6.1/§6.6/§6.7;
+   AGENTS.md workspace line for `settings` + a "Single-location settings" architecture note.
+   Describe everything as current product fact — no project-era language.
+10. Gate: `make ruff`, `make test`, `make manage ARGS='check'`, then manual smoke: seed → open shift
+    from POS → order → sync KOTs → mark printed → settle → close shift.
+
+#### Deviations from reference (to record)
+
+| Deviation | Reason |
+|---|---|
+| `Branch` removed; all branch FKs dropped | Single location; ERPNext Branch exists for multi-location isolation the client does not have |
+| `POSProfile` merged into the `Restaurant` singleton; 25+ unconsumed fields pruned | One till, one settings surface; ERPNext POS Profile is multi-terminal config. Fields re-added only when a feature consumes them |
+| Payment-mode selection folded onto `ModeOfPayment` (`enabled` + `is_default`); `POSProfilePayment` deleted | Two switches drove one concept and could disagree (shift-open vs checkout) |
+| Orders/KOTs/shift entries carry no branch/profile FKs | One world — documents follow the single settings record |
+| `PaymentGLMapping.company` dropped | Pseudo-company key; only ever held `Restaurant.company` |
+| Multi-branch deferred (paid add-on); no schema hooks kept | Clean single-site domain is a better extension base than a fake multi-branch skeleton |
+
+#### Non-goals
+
+- Do not delete Warehouse, ProductionUnit, ModeOfPayment, PaymentGLMapping, OpeningPayment/
+  ClosingPayment, the department split, customer cards, or the submit/cancel workflow.
+- Do not rename `Restaurant` or introduce a Location abstraction.
+- Do not touch the PEP 758 `except ValueError, TypeError:` forms in `views_pos.py` (valid Python 3.14).
+- Do not squash or rewrite migration history.

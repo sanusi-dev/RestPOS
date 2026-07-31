@@ -19,7 +19,6 @@ class PaymentsViewTestBase(TestCase):
         cls.bank = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
         cls.mapping = PaymentGLMapping.objects.create(
             mode_of_payment=cls.cash,
-            company="Test Co",
             default_account="Cash in Hand",
         )
 
@@ -120,14 +119,13 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
             reverse("payments:gl_mapping_create"),
             data={
                 "mode_of_payment": self.bank.pk,
-                "company": "Test Co",
                 "default_account": "Bank Clearing",
             },
         )
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
         self.assertTrue(PaymentGLMapping.objects.filter(default_account="Bank Clearing").exists())
 
-    def test_gl_mapping_company_auto_filled_on_create_post(self):
+    def test_gl_mapping_create_post_no_company(self):
         response = self.client.post(
             reverse("payments:gl_mapping_create"),
             data={
@@ -142,7 +140,6 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
             reverse("payments:gl_mapping_create"),
             data={
                 "mode_of_payment": self.bank.pk,
-                "company": "Test Co",
                 "default_account": "",
             },
         )
@@ -159,7 +156,6 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
             reverse("payments:gl_mapping_update", kwargs={"pk": self.mapping.pk}),
             data={
                 "mode_of_payment": self.cash.pk,
-                "company": "Test Co",
                 "default_account": "Cash in Drawer",
             },
         )

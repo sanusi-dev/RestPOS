@@ -1,0 +1,33 @@
+{% extends "web/base.html" %}
+{% block body_wrapper %}
+<div class="h-screen flex flex-col bg-gray-50 overflow-hidden">
+  <header class="bg-white border-b border-gray-100 px-6 py-3 flex items-center shadow-sm shrink-0">
+    <nav class="flex items-center gap-4 flex-1">
+      <a href="{% url 'pos:pos_home' %}" class="text-sm font-semibold text-gray-900 border-b-2 border-gray-900 pb-1">
+        Orders
+      </a>
+      <a href="{% url 'orders:order_list' %}" class="text-sm font-semibold text-gray-400 hover:text-gray-700 transition-colors pb-1">
+        Order History
+      </a>
+    </nav>
+    <a href="{% url 'pos:pos_home' %}" class="font-extrabold text-gray-900 text-lg tracking-tight">
+      {{ project_meta.NAME }}
+    </a>
+    <div class="flex items-center gap-4 flex-1 justify-end">
+      <span class="text-sm font-semibold text-gray-500">{{ request.user.get_display_name }}</span>
+      <a href="{% url 'web:dashboard' %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">
+        Backoffice
+      </a>
+      <a href="{% url 'account_logout' %}" data-logout-link class="text-sm font-semibold text-red-400 hover:text-red-600 transition-colors">
+        Sign out
+      </a>
+    </div>
+  </header>
+  {% if messages %}
+  <script id="django-messages" type="application/json">[{% for message in messages %}{"message": "{{ message.message|escapejs }}", "level": "{{ message.level_tag }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+  {% endif %}
+  <div class="flex-1 overflow-hidden">
+    {% block pos_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

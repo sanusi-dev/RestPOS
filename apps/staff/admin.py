@@ -7,7 +7,6 @@ from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningE
 class POSOpeningEntryAdmin(admin.ModelAdmin):
     list_display = (
         "pk",
-        "branch",
         "cashier",
         "posting_date",
         "period_start_date",
@@ -15,8 +14,8 @@ class POSOpeningEntryAdmin(admin.ModelAdmin):
         "status",
         "closing_entry",
     )
-    list_filter = ("branch", "status", "posting_date")
-    list_select_related = ("branch", "cashier", "closing_entry")
+    list_filter = ("status", "posting_date")
+    list_select_related = ("cashier", "closing_entry")
     search_fields = ("=pk", "cashier__username", "remarks")
     readonly_fields = (
         "period_start_date",
@@ -42,7 +41,6 @@ class OpeningPaymentAdmin(admin.ModelAdmin):
 class POSClosingEntryAdmin(admin.ModelAdmin):
     list_display = (
         "pk",
-        "branch",
         "cashier",
         "opening_entry",
         "period_end_date",
@@ -50,14 +48,13 @@ class POSClosingEntryAdmin(admin.ModelAdmin):
         "total_short_excess",
         "grand_total",
     )
-    list_filter = ("branch", "status", "posting_date")
-    list_select_related = ("branch", "cashier", "opening_entry")
+    list_filter = ("status", "posting_date")
+    list_select_related = ("cashier", "opening_entry")
     search_fields = ("pk", "opening_entry__pk", "remarks")
     readonly_fields = (
         "period_start_date",
         "total_quantity",
         "net_total",
-        "total_taxes",
         "grand_total",
         "total_short_excess",
         "cancelled_at",

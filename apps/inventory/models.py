@@ -5,7 +5,6 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
 
-from apps.settings.models import Branch
 from apps.utils.models import BaseModel
 
 
@@ -35,29 +34,16 @@ class ItemGroup(BaseModel):
 
 
 class Warehouse(BaseModel):
-    """A stock location (e.g. Main Store, Kitchen Store, Bar Store).
+    """A stock location (e.g. Main Store, Kitchen Store, Bar Store)."""
 
-    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
-    """
-
-    name = models.CharField(max_length=100)
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="warehouses")
+    name = models.CharField(max_length=100, unique=True)
     disabled = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = [("name", "branch")]
         ordering = ["name"]
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is None:
-                raise ValidationError({"branch": "Create a branch in Settings before creating a warehouse."})
-            self.branch = default_branch
-        super().save(*args, **kwargs)
 
 
 class Item(BaseModel):
@@ -121,6 +107,11 @@ class Item(BaseModel):
             super().save(*args, **kwargs)
         else:
             super().save(*args, **kwargs)
+        # Non-sellable items cannot remain POS add-ons (price/sales path is invalid).
+        if not self.is_sales_item and self.pk:
+            from apps.menu.models import ItemAddOn
+
+            ItemAddOn.objects.filter(add_on_item_id=self.pk).delete()
 
     def clean(self):
         super().clean()

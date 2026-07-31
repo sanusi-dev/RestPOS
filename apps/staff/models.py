@@ -5,13 +5,12 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from apps.payments.models import ModeOfPayment
-from apps.settings.models import Branch
 from apps.users.models import CustomUser
 from apps.utils.models import BaseModel
 
 
 class POSOpeningEntry(BaseModel):
-    """Start-of-shift document. One OPEN entry per branch."""
+    """Start-of-shift document. One OPEN shift at a time."""
 
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
@@ -22,11 +21,6 @@ class POSOpeningEntry(BaseModel):
         (CANCELLED, "Cancelled"),
     ]
 
-    branch = models.ForeignKey(
-        Branch,
-        on_delete=models.PROTECT,
-        related_name="pos_opening_entries",
-    )
     period_start_date = models.DateTimeField(default=timezone.now, editable=False)
     period_end_date = models.DateTimeField(null=True, blank=True, editable=False)
     posting_date = models.DateField(default=timezone.localdate)
@@ -41,13 +35,6 @@ class POSOpeningEntry(BaseModel):
         null=True,
         blank=True,
         related_name="opening_entry_ref",
-    )
-    pos_profile = models.ForeignKey(
-        "settings.POSProfile",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="opening_entries",
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     remarks = models.TextField(blank=True)
@@ -64,30 +51,19 @@ class POSOpeningEntry(BaseModel):
         ordering = ["-period_start_date"]
 
     def __str__(self):
-        return f"Opening #{self.pk} — {self.branch.name} {self.posting_date}"
-
-    def save(self, *args, **kwargs):
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is None:
-                raise ValidationError({"branch": "Create a branch in Settings before opening a shift."})
-            self.branch = default_branch
-        super().save(*args, **kwargs)
+        return f"Opening #{self.pk} — {self.posting_date}"
 
     def clean(self):
         super().clean()
-        # Enforce "one Open shift per branch". The check must fire whenever
-        # this entry is on the way to becoming Open — i.e. either it is
-        # already SUBMITTED (cleanup/edit), or it is DRAFT but about to be
-        # submitted (the view calls `full_clean()` before `submit()` flips
-        # the status, so guarding on `status == SUBMITTED` alone misses the
-        # submit path entirely — that was the bug: two DRAFTs both passed
-        # `full_clean()`, then both `submit()`-ed, both became Open).
+        # Enforce "one Open shift". The check must fire whenever this entry is
+        # on the way to becoming Open — i.e. either it is already SUBMITTED
+        # (cleanup/edit), or it is DRAFT but about to be submitted (the view
+        # calls `full_clean()` before `submit()` flips the status, so guarding
+        # on `status == SUBMITTED` alone misses the submit path entirely).
         is_open_or_will_open = self.status == self.SUBMITTED and self.closing_entry_id is None
         is_being_submitted = self.status == self.DRAFT
         if is_open_or_will_open or is_being_submitted:
             qs = POSOpeningEntry.objects.filter(
-                branch_id=self.branch_id,
                 status=self.SUBMITTED,
                 closing_entry__isnull=True,
             )
@@ -95,12 +71,7 @@ class POSOpeningEntry(BaseModel):
                 qs = qs.exclude(pk=self.pk)
             if qs.exists():
                 raise ValidationError(
-                    {
-                        "branch": (
-                            f"An open shift already exists for {self.branch.name}. "
-                            "Close the existing shift before opening a new one."
-                        )
-                    }
+                    "An open shift already exists. Close the existing shift before opening a new one."
                 )
 
     @property
@@ -114,20 +85,17 @@ class POSOpeningEntry(BaseModel):
     def submit(self):
         """Transition from DRAFT to SUBMITTED. Idempotent.
 
-        Also re-runs the "one Open shift per branch" check inside a
-        `select_for_update` transaction — closes the race between two
-        concurrent POSTs that both pass `full_clean()` before either flips
-        to SUBMITTED. The view calls `full_clean()` first; this is the
-        last line of defense.
+        Also re-runs the "one Open shift" check inside a `select_for_update`
+        transaction — closes the race between two concurrent POSTs that both
+        pass `full_clean()` before either flips to SUBMITTED. The view calls
+        `full_clean()` first; this is the last line of defense.
         """
         if self.status != self.DRAFT:
             return
         with transaction.atomic():
-            # Lock the row's branch siblings to serialise concurrent submits.
             open_exists = (
                 POSOpeningEntry.objects.select_for_update()
                 .filter(
-                    branch_id=self.branch_id,
                     status=self.SUBMITTED,
                     closing_entry__isnull=True,
                 )
@@ -136,12 +104,7 @@ class POSOpeningEntry(BaseModel):
             )
             if open_exists:
                 raise ValidationError(
-                    {
-                        "branch": (
-                            f"An open shift already exists for {self.branch.name}. "
-                            "Close the existing shift before opening a new one."
-                        )
-                    }
+                    "An open shift already exists. Close the existing shift before opening a new one."
                 )
             self.status = self.SUBMITTED
             self.save(update_fields=["status", "updated_at"])
@@ -152,7 +115,7 @@ class POSOpeningEntry(BaseModel):
             return
         if self.closing_entry_id is not None:
             raise ValidationError(
-                {"branch": ("Cannot cancel a shift that has already been closed. Cancel the closing entry instead.")}
+                "Cannot cancel a shift that has already been closed. Cancel the closing entry instead."
             )
         self.status = self.CANCELLED
         self.cancelled_at = timezone.now()
@@ -196,7 +159,6 @@ class POSClosingEntry(BaseModel):
         (CANCELLED, "Cancelled"),
     ]
 
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="pos_closing_entries")
     opening_entry = models.OneToOneField(
         POSOpeningEntry,
         on_delete=models.PROTECT,
@@ -212,7 +174,6 @@ class POSClosingEntry(BaseModel):
     )
     total_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
     net_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
-    total_taxes = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     grand_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     total_short_excess = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
@@ -230,13 +191,11 @@ class POSClosingEntry(BaseModel):
         ordering = ["-period_end_date"]
 
     def __str__(self):
-        return f"Closing #{self.pk} — {self.branch.name} {self.posting_date}"
+        return f"Closing #{self.pk} — {self.posting_date}"
 
     def save(self, *args, **kwargs):
-        # Auto-fill branch / period_start / posting_date / cashier from the linked
+        # Auto-fill period_start / posting_date / cashier from the linked
         # opening on the first save. Skipped if explicitly overridden.
-        if self.opening_entry_id and not self.branch_id:
-            self.branch_id = self.opening_entry.branch_id
         if self.opening_entry_id and self.period_start_date is None:
             self.period_start_date = self.opening_entry.period_start_date
         if self.opening_entry_id and not self.cashier_id:
@@ -245,17 +204,14 @@ class POSClosingEntry(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.opening_entry_id:
-            if not self.opening_entry.is_open:
-                raise ValidationError(
-                    {
-                        "opening_entry": (
-                            "This opening entry is not open — it is already closed, cancelled, or still in draft."
-                        )
-                    }
-                )
-            if self.branch_id and self.branch_id != self.opening_entry.branch_id:
-                raise ValidationError({"branch": ("Branch must match the opening entry's branch.")})
+        if self.opening_entry_id and not self.opening_entry.is_open:
+            raise ValidationError(
+                {
+                    "opening_entry": (
+                        "This opening entry is not open — it is already closed, cancelled, or still in draft."
+                    )
+                }
+            )
 
     def submit(self):
         """Compute expected amounts, validate, and close the opening entry."""
@@ -301,7 +257,6 @@ class POSClosingEntry(BaseModel):
             return
         new_open_exists = (
             POSOpeningEntry.objects.filter(
-                branch_id=self.branch_id,
                 status=self.SUBMITTED,
                 closing_entry__isnull=True,
             )
@@ -310,12 +265,7 @@ class POSClosingEntry(BaseModel):
         )
         if new_open_exists:
             raise ValidationError(
-                {
-                    "branch": (
-                        f"Cannot cancel this closing entry — a new shift is open for "
-                        f"{self.branch.name}. Close or cancel the new shift first."
-                    )
-                }
+                "Cannot cancel this closing entry — a new shift is open. Close or cancel the new shift first."
             )
         self.status = self.CANCELLED
         self.cancelled_at = timezone.now()

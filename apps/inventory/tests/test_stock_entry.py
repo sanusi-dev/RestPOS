@@ -12,16 +12,14 @@ from apps.inventory.models import (
     StockLedgerEntry,
     Warehouse,
 )
-from apps.settings.models import Branch
 
 
 class StockEntryTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.wh1 = Warehouse.objects.create(name="Main Store", branch=cls.branch)
-        cls.wh2 = Warehouse.objects.create(name="Kitchen Store", branch=cls.branch)
+        cls.wh1 = Warehouse.objects.create(name="Main Store")
+        cls.wh2 = Warehouse.objects.create(name="Kitchen Store")
         from apps.inventory.models import UOM
 
         cls.uom, _ = UOM.objects.get_or_create(name="Nos")

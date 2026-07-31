@@ -1,128 +1,358 @@
-{% extends "web/base.html" %}
+{% extends "pos/base.html" %}
+{% load humanize %}
+{% block pos_content %}
 
-{% block body %}
-<div class="h-screen flex flex-col bg-gray-50" x-data="{ activeGroup: 'All' }">
-
-  <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
-    <span class="font-extrabold text-gray-900 text-lg">RestPOS</span>
-    <div class="flex items-center gap-3">
-      <span class="text-sm text-gray-500">{{ request.user.get_display_name }}</span>
-      <a href="{% url 'web:home' %}" class="text-sm font-semibold text-gray-400 hover:text-gray-700 transition">Backoffice</a>
+{% if error %}
+<div class="h-full flex items-center justify-center p-8">
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 max-w-md text-center">
+    <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-500 ring-1 ring-red-100 mx-auto mb-4">
+      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
     </div>
-  </div>
-
-  <div class="flex flex-1 overflow-hidden">
-
-    {% partialdef menu_grid inline %}
-    <div class="flex-1 overflow-y-auto p-6">
-      <div class="flex gap-2 mb-6 flex-wrap">
-        <button @click="activeGroup = 'All'"
-                :class="activeGroup === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">All</button>
-        {% for group_name in item_groups.keys %}
-        <button @click="activeGroup = '{{ group_name|escapejs }}'"
-                :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition hover:-translate-y-0.5">{{ group_name }}</button>
-        {% endfor %}
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {% for mi in menu_items %}
-        <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}'"
-             {% if order %}
-             hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
-             hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
-             hx-target="#order-panel"
-             hx-select="#order-panel"
-             hx-swap="outerHTML"
-             {% endif %}
-             class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm
-                    {% if order %}cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95{% endif %}
-                    transition-all duration-200 {% if not order %}opacity-50{% endif %}">
-          <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
-            {{ mi.item.item_name|slice:":2"|upper }}
-          </div>
-          <p class="text-sm font-semibold text-gray-900 truncate">{{ mi.item.item_name }}</p>
-          <p class="text-sm font-bold text-gray-900">₦{{ mi.rate }}</p>
-          {% if mi.special_dish %}
-          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700 mt-1">★</span>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endpartialdef %}
-
-    {% partialdef order_panel inline %}
-    <div class="w-96 bg-white border-l border-gray-200 flex flex-col shadow-lg shrink-0" id="order-panel">
-      <div class="p-4 border-b border-gray-100">
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-lg font-extrabold text-gray-900">
-            {% if order %}Order #{{ order.pk }}{% else %}New Order{% endif %}
-          </h2>
-          <form method="post" action="{% url 'pos:pos_order_new' %}">
-            {% csrf_token %}
-            <input type="hidden" name="order_type" value="DINE_IN">
-            <button class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow hover:bg-orange-500 transition">+ New Order</button>
-          </form>
-        </div>
-        {% if order and order.table %}
-        <p class="text-sm text-gray-500">Table: {{ order.table.name }}</p>
-        {% endif %}
-      </div>
-
-      <div class="flex-1 overflow-y-auto">
-        {% if order %}
-        <div class="divide-y divide-gray-100">
-          {% for item in order.items.all %}
-          <div class="px-4 py-3 hover:bg-gray-50/50 transition">
-            <div class="flex items-center justify-between">
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-gray-900 truncate">{{ item.item_name }}</p>
-                {% if item.comments %}
-                <p class="text-xs text-gray-400 truncate">{{ item.comments }}</p>
-                {% endif %}
-              </div>
-              <div class="flex items-center gap-2 ml-2">
-                <span class="text-sm font-bold text-gray-900">₦{{ item.amount }}</span>
-                <span class="text-sm text-gray-500">x{{ item.qty }}</span>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        <div class="px-4 py-3 border-t border-gray-100">
-          <div class="flex justify-between items-center">
-            <span class="text-sm font-semibold text-gray-500">Subtotal</span>
-            <span class="text-lg font-extrabold text-gray-900">₦{{ order.net_total }}</span>
-          </div>
-        </div>
-        {% else %}
-        <div class="flex items-center justify-center h-full text-gray-400 text-sm px-4 text-center">
-          Click <strong class="mx-1">+ New Order</strong> to begin.
-        </div>
-        {% endif %}
-      </div>
-
-      <div class="p-4 border-t border-gray-100 space-y-2">
-        {% if order and order.items.exists %}
-        <button hx-post="{% url 'pos:pos_order_sync' order.pk %}"
-                hx-target="#order-panel"
-                hx-select="#order-panel"
-                hx-swap="outerHTML"
-                class="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm shadow hover:bg-orange-500 transition">
-          Sync &amp; Send to Kitchen
-        </button>
-        <a href="{% url 'pos:pos_order_settle' order.pk %}"
-           class="block text-center w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold text-sm shadow hover:bg-emerald-700 transition">
-          Pay ₦{{ order.net_total }}
-        </a>
-        {% elif order %}
-        <div class="text-center text-sm text-gray-400 py-2">Add items to continue</div>
-        {% endif %}
-      </div>
-    </div>
-    {% endpartialdef %}
+    <p class="text-sm font-semibold text-gray-900">{{ error }}</p>
+    <a href="{% url 'web:dashboard' %}" class="mt-4 inline-block text-sm font-semibold text-orange-500 hover:text-orange-600">Go to Backoffice →</a>
   </div>
 </div>
+{% elif no_shift %}
+<div class="h-full flex items-center justify-center p-8" x-data="{ showForm: false }">
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 w-full max-w-md">
+    <div class="text-center mb-6">
+      <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 ring-1 ring-orange-100 mx-auto mb-4">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">No Open Shift</h2>
+      <p class="text-sm text-gray-500 mt-1">Open a shift to start taking orders.</p>
+    </div>
+    <form method="post" action="{% url 'pos:pos_open_shift' %}" class="space-y-3" x-show="showForm" x-cloak>
+      {% csrf_token %}
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Opening Float</p>
+      {% for mode in payment_modes %}
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-semibold text-gray-700 w-28 shrink-0">{{ mode.name }}</label>
+        <input type="number" step="0.01" name="opening_{{ mode.pk }}" placeholder="0.00"
+               class="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+      </div>
+      {% endfor %}
+      <button type="submit" class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+        Open Shift
+      </button>
+    </form>
+    <button @click="showForm = true" x-show="!showForm"
+            class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      Open Shift
+    </button>
+  </div>
+</div>
+
+{% elif order %}
+<div class="h-full flex" x-data="{ activeGroup: 'All' }">
+
+  {% comment %}========== MENU GRID (LEFT) =========={% endcomment %}
+  <div class="flex-1 overflow-y-auto p-6">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Order #{{ order.order_number|default:order.pk }}</h1>
+        <p class="text-sm text-gray-500">{{ order.get_order_type_display }} · {{ order.guest_count }} guest{{ order.guest_count|pluralize }}</p>
+      </div>
+      <a href="{% url 'pos:pos_home' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        New Order
+      </a>
+    </div>
+
+    <div class="flex gap-2 mb-6 flex-wrap">
+      <button @click="activeGroup = 'All'"
+              :class="activeGroup === 'All' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+              class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
+        All
+      </button>
+      {% for group_name in item_groups.keys %}
+      <button @click="activeGroup = '{{ group_name|escapejs }}'"
+              :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+              class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
+        {{ group_name }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {% for mi in menu_items %}
+      <div x-show="activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}'"
+           x-transition:enter="transition ease-out duration-100"
+           x-transition:enter-start="opacity-0"
+           x-transition:enter-end="opacity-100"
+           hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
+           hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
+           hx-target="#cart-panel"
+           hx-swap="outerHTML"
+           class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-1 active:scale-95 transition-all duration-200">
+        <div class="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 font-bold mb-3 text-lg">
+          {{ mi.item.item_name|slice:":2"|upper }}
+        </div>
+        <p class="text-sm font-semibold text-gray-900 truncate">{{ mi.item.item_name }}</p>
+        <p class="text-sm font-bold text-gray-900 mt-0.5">₦{{ mi.rate|intcomma }}</p>
+        {% if mi.special_dish %}
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10 mt-1.5">★ Special</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% comment %}========== CART PANEL (RIGHT) =========={% endcomment %}
+  {% partialdef cart inline %}
+  <div id="cart-panel" class="w-96 bg-white border-l border-gray-100 flex flex-col shadow-lg shrink-0">
+
+    {% comment %}---- Customer Cards ----{% endcomment %}
+    {% if order.guest_count > 1 %}
+    <div class="p-4 border-b border-gray-100">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Customer Cards</p>
+      <div class="flex gap-2 overflow-x-auto">
+        {% for idx in customer_range %}
+        <button hx-post="{% url 'pos:pos_customer_card_activate' order.pk idx %}"
+                hx-target="#cart-panel"
+                hx-swap="outerHTML"
+                class="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all border
+                       {% if idx == active_card %}bg-gray-900 text-white border-gray-900 shadow-sm{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+          Customer {{ idx }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% comment %}---- Cart Items ----{% endcomment %}
+    <div class="flex-1 overflow-y-auto">
+      {% if order.items.exists %}
+      <div class="divide-y divide-gray-50">
+        {% for item in order.items.all %}
+        <div class="px-4 py-3 hover:bg-gray-50/50 transition-colors">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-gray-900 truncate">{{ item.item_name }}</p>
+              {% if order.guest_count > 1 %}
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500 mt-0.5">Customer {{ item.customer_index }}</span>
+              {% endif %}
+              {% if item.comments %}
+              <p class="text-xs text-gray-400 truncate mt-0.5">{{ item.comments }}</p>
+              {% endif %}
+              <div class="flex items-center gap-2 mt-1.5">
+                <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                      hx-target="#cart-panel" hx-swap="outerHTML"
+                      class="inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="qty" value="{{ item.qty|add:"-1" }}">
+                  <button type="submit" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 text-sm font-bold flex items-center justify-center transition-colors">−</button>
+                </form>
+                <span class="text-sm font-bold text-gray-900 min-w-[1.5rem] text-center">{{ item.qty }}</span>
+                <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                      hx-target="#cart-panel" hx-swap="outerHTML"
+                      class="inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="qty" value="{{ item.qty|add:"1" }}">
+                  <button type="submit" class="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 text-sm font-bold flex items-center justify-center transition-colors">+</button>
+                </form>
+                <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                      hx-target="#cart-panel" hx-swap="outerHTML"
+                      class="inline ml-auto">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="remove">
+                  <button type="submit" class="text-xs font-semibold text-red-400 hover:text-red-600 transition-colors">Remove</button>
+                </form>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="text-sm font-bold text-gray-900">₦{{ item.amount|intcomma }}</p>
+              <p class="text-xs text-gray-400">₦{{ item.rate|intcomma }} each</p>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="h-full flex items-center justify-center p-8 text-center">
+        <div>
+          <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+          <p class="text-sm font-medium text-gray-400">Click a menu item to add it</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% comment %}---- Totals + Actions ----{% endcomment %}
+    <div class="border-t border-gray-100 p-4 space-y-3">
+      {% if sync_success %}
+      <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+        ✓ Sent {{ kot_count }} ticket{{ kot_count|pluralize }} to kitchen
+      </div>
+      {% endif %}
+      {% if print_success %}
+      <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+        ✓ Invoice printed
+      </div>
+      {% endif %}
+
+      <div class="space-y-1.5">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-500">Subtotal</span>
+          <span class="font-bold text-gray-900">₦{{ order.net_total|intcomma }}</span>
+        </div>
+        <div class="flex justify-between items-center pt-2 border-t border-gray-100">
+          <span class="text-base font-extrabold text-gray-900">Total</span>
+          <span class="text-xl font-extrabold text-gray-900">₦{{ order.grand_total|intcomma }}</span>
+        </div>
+      </div>
+
+      {% if order.items.exists %}
+      <button hx-post="{% url 'pos:pos_order_sync' order.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="w-full py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all">
+        Send to Kitchen
+      </button>
+      {% if order.order_type == "DINE_IN" and not order.invoice_printed %}
+      <button hx-post="{% url 'pos:pos_order_print' order.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="w-full py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all">
+        Print Bill
+      </button>
+      {% endif %}
+      <div class="flex gap-2">
+        <a href="{% url 'pos:pos_order_settle' order.pk %}"
+           hx-get="{% url 'pos:pos_order_settle' order.pk %}"
+           hx-target="#payment-dialog-container"
+           hx-swap="innerHTML"
+           class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all text-center">
+          Pay ₦{{ order.grand_total|intcomma }}
+        </a>
+        <button onclick="Swal.fire({ title: 'Cancel Order?', text: 'This cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc2626', cancelButtonColor: '#6b7280', confirmButtonText: 'Yes, cancel' }).then((result) => { if (result.isConfirmed) { document.getElementById('cancel-form').submit(); } })"
+                class="px-4 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-all">
+          Cancel
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endpartialdef %}
+
+  {% comment %}========== PAYMENT DIALOG (HTMX-loaded) =========={% endcomment %}
+  {% partialdef payment_dialog %}
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4" x-data="{ show: true }" x-show="show"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+       @keydown.escape.window="show = false; window.location.href = '{% url 'pos:pos_order_screen' order.pk %}'">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="show = false; window.location.href = '{% url 'pos:pos_order_screen' order.pk %}'"></div>
+    <div class="relative bg-white rounded-[1.5rem] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Payment</h2>
+          <a href="{% url 'pos:pos_order_screen' order.pk %}" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </a>
+        </div>
+
+        <div class="bg-gray-50 rounded-2xl p-4 mb-6 space-y-1.5">
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-500">Subtotal</span>
+            <span class="font-bold text-gray-900">₦{{ order.net_total|intcomma }}</span>
+          </div>
+          <div class="flex justify-between text-lg font-extrabold text-gray-900 pt-2 border-t border-gray-200">
+            <span>Total</span>
+            <span>₦{{ order.grand_total|intcomma }}</span>
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'pos:pos_order_settle' order.pk %}" class="space-y-4">
+          {% csrf_token %}
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Payment Methods</p>
+          <div class="space-y-3">
+            {% for mode in payment_modes %}
+            <div class="flex items-center gap-3">
+              <label class="text-sm font-semibold text-gray-700 w-28 shrink-0">{{ mode.name }}</label>
+              <input type="number" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00"
+                     class="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+                     onclick="if(!this.value && {{ order.grand_total }}) this.value = {{ order.grand_total }};">
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="flex gap-3 pt-4 border-t border-gray-100">
+            <a href="{% url 'pos:pos_order_screen' order.pk %}" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 text-sm font-semibold text-center hover:bg-gray-50 transition-all">
+              Back
+            </a>
+            <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all">
+              Process Payment
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endpartialdef %}
+
+  <div id="payment-dialog-container"></div>
+
+  <form id="cancel-form" method="post" action="{% url 'pos:pos_order_cancel' order.pk %}" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="reason" value="Cashier cancellation from POS">
+  </form>
+</div>
+
+{% elif show_start %}
+{% comment %}========== START ORDER =========={% endcomment %}
+<div class="h-full overflow-y-auto p-6">
+  <div class="max-w-lg mx-auto">
+    <div class="mb-8 text-center">
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">New Order</h1>
+      <p class="text-sm text-gray-500 mt-1">Choose type and guests, then start taking items</p>
+    </div>
+
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
+      <form method="post" action="{% url 'pos:pos_order_start' %}" class="space-y-5">
+        {% csrf_token %}
+        <div>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Order Type</label>
+          <select name="order_type"
+                  class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+            {% for value, label in order_type_choices %}
+            <option value="{{ value }}" {% if value == "DINE_IN" %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Guests</label>
+          <input type="number" name="guest_count" value="1" min="1" max="50"
+                 class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm font-semibold focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+          <p class="text-xs text-gray-400 mt-1.5">More than 1 enables customer cards for group ordering</p>
+        </div>
+        <button type="submit"
+                class="w-full py-3.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+          Start Order
+        </button>
+      </form>
+    </div>
+
+    {% if open_drafts %}
+    <div>
+      <h2 class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">Open drafts</h2>
+      <div class="space-y-2">
+        {% for draft in open_drafts %}
+        <a href="{% url 'pos:pos_order_screen' draft.pk %}"
+           class="flex items-center justify-between bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-orange-200 transition-all">
+          <div>
+            <p class="text-sm font-bold text-gray-900">#{{ draft.order_number|default:draft.pk }} · {{ draft.get_order_type_display }}</p>
+            <p class="text-xs text-gray-500">{{ draft.guest_count }} guest{{ draft.guest_count|pluralize }} · ₦{{ draft.grand_total|intcomma }}</p>
+          </div>
+          <svg class="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

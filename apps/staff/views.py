@@ -7,8 +7,6 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.settings.models import Branch
-
 from .forms import (
     ClosingPaymentForm,
     OpeningFloatForm,
@@ -22,28 +20,21 @@ from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningE
 
 @login_required
 def staff_dashboard(request: HttpRequest) -> HttpResponse:
-    """Current shift state per branch and recent closes."""
-    branches = Branch.objects.all()
-    shift_states = []
-    for branch in branches:
-        open_entry = (
-            POSOpeningEntry.objects.filter(
-                branch=branch,
-                status=POSOpeningEntry.SUBMITTED,
-                closing_entry__isnull=True,
-            )
-            .select_related("cashier")
-            .order_by("-period_start_date")
-            .first()
+    """Current shift state and recent closes."""
+    open_entry = (
+        POSOpeningEntry.objects.filter(
+            status=POSOpeningEntry.SUBMITTED,
+            closing_entry__isnull=True,
         )
-        shift_states.append({"branch": branch, "open_entry": open_entry})
-    recent_closes = POSClosingEntry.objects.select_related("branch", "cashier", "opening_entry").order_by(
-        "-period_end_date"
-    )[:5]
+        .select_related("cashier")
+        .order_by("-period_start_date")
+        .first()
+    )
+    recent_closes = POSClosingEntry.objects.select_related("cashier", "opening_entry").order_by("-period_end_date")[:5]
     return render(
         request,
         "backoffice/staff/dashboard.html",
-        {"shift_states": shift_states, "recent_closes": recent_closes},
+        {"open_entry": open_entry, "recent_closes": recent_closes},
     )
 
 
@@ -54,9 +45,7 @@ def staff_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def opening_entry_list(request: HttpRequest) -> HttpResponse:
-    entries = POSOpeningEntry.objects.select_related("branch", "cashier", "closing_entry").order_by(
-        "-period_start_date"
-    )
+    entries = POSOpeningEntry.objects.select_related("cashier", "closing_entry").order_by("-period_start_date")
     return render(request, "backoffice/staff/opening_entry_list.html", {"entries": entries})
 
 
@@ -92,7 +81,7 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
       DRAFT entries only, then redirect back here (PRG pattern).
     """
     entry = get_object_or_404(
-        POSOpeningEntry.objects.select_related("branch", "cashier", "closing_entry"),
+        POSOpeningEntry.objects.select_related("cashier", "closing_entry"),
         pk=pk,
     )
     opening_payments = list(entry.opening_payments.select_related("mode_of_payment"))
@@ -192,7 +181,7 @@ def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     if entry.status != POSOpeningEntry.DRAFT:
         messages.error(request, "This opening entry is no longer in draft.")
         return redirect("staff:opening_entry_detail", pk=entry.pk)
-    # `clean()` enforces "one Open per branch" and `submit()` re-checks inside
+    # `clean()` enforces "one Open shift" and `submit()` re-checks inside
     # `select_for_update` (race-safe). The legacy "confirm_empty" branch was
     # removed because `_save_opening_entry` now always seeds one row per
     # active `ModeOfPayment` — a draft with no rows only exists if no modes
@@ -234,7 +223,7 @@ def opening_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def closing_entry_list(request: HttpRequest) -> HttpResponse:
-    entries = POSClosingEntry.objects.select_related("branch", "cashier", "opening_entry").order_by("-period_end_date")
+    entries = POSClosingEntry.objects.select_related("cashier", "opening_entry").order_by("-period_end_date")
     return render(request, "backoffice/staff/closing_entry_list.html", {"entries": entries})
 
 
@@ -242,17 +231,15 @@ def closing_entry_list(request: HttpRequest) -> HttpResponse:
 def closing_entry_create(request: HttpRequest) -> HttpResponse:
     """Auto-create (or reuse) a DRAFT closing entry for the single Open shift.
 
-    RestPOS Phase 1 enforces "one Open shift per branch" (see
-    `POSOpeningEntry.clean()`). With that constraint, a dropdown of open
-    shifts to close is pure friction — there is at most one. This endpoint
-    implements the Lightspeed / Dynamics 365 / StoreHub pattern: clicking
-    "Close Shift" immediately starts the close flow against *the* Open
-    shift, no selection step.
+    RestPOS enforces a single Open shift (see `POSOpeningEntry.clean()`).
+    With that constraint, a dropdown of open shifts to close is pure
+    friction — there is at most one. This endpoint implements the
+    Lightspeed / Dynamics 365 / StoreHub pattern: clicking "Close Shift"
+    immediately starts the close flow against *the* Open shift, no
+    selection step.
 
     Flow:
-    1. Find the single Open shift for the default branch (Phase 1 is
-       single-branch in practice; the loop falls back to the first
-       available open shift if more than one branch is somehow open).
+    1. Find the single Open shift.
     2. If none exists → message + redirect back to dashboard (the dashboard
        "Close shift" button is hidden in this case, so this path is the
        defensive fallback).
@@ -271,7 +258,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
     # Find the single Open shift first (no transaction needed for a read).
     open_entry = (
         POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
-        .select_related("branch", "cashier")
+        .select_related("cashier")
         .order_by("period_start_date")
         .first()
     )
@@ -283,15 +270,12 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         # Lock the open shift row so two concurrent "Close Shift" clicks
         # cannot both pass the duplicate-draft check below. PostgreSQL's
         # `select_for_update` holds the lock until COMMIT.
-        open_entry = (
-            POSOpeningEntry.objects.select_for_update().select_related("branch", "cashier").get(pk=open_entry.pk)
-        )
+        open_entry = POSOpeningEntry.objects.select_for_update().select_related("cashier").get(pk=open_entry.pk)
         existing_draft = POSClosingEntry.objects.filter(opening_entry=open_entry, status=POSClosingEntry.DRAFT).first()
         if existing_draft is not None:
             return redirect("staff:closing_entry_detail", pk=existing_draft.pk)
 
         closing = POSClosingEntry.objects.create(
-            branch=open_entry.branch,
             opening_entry=open_entry,
             cashier=request.user,
         )
@@ -326,7 +310,7 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
       redirect back to this page (PRG pattern).
     """
     closing = get_object_or_404(
-        POSClosingEntry.objects.select_related("branch", "cashier", "opening_entry"),
+        POSClosingEntry.objects.select_related("cashier", "opening_entry"),
         pk=pk,
     )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))

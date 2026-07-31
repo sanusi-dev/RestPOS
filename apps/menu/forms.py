@@ -11,7 +11,7 @@ class MenuModelForm(StyledModelForm):
 
 
 class MenuForm(MenuModelForm):
-    """Form for Menu. Branch is auto-assigned on save."""
+    """Form for Menu."""
 
     class Meta:
         model = Menu
@@ -46,11 +46,18 @@ class ItemAddOnForm(MenuModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Share one queryset instance across the two sibling FK dropdowns so the
-        # _result_cache is populated once and reused on the second <select> render.
-        items = Item.objects.order_by("item_name")
-        self.fields["parent_item"].queryset = items
-        self.fields["add_on_item"].queryset = items
+        # Parent: sellable leaf items that can carry add-ons on the POS.
+        # Add-on: same — only sellable, non-template, active items (must also be on a menu; model.clean).
+        sellable = Item.objects.filter(is_sales_item=True, has_variants=False, disabled=False).order_by("item_name")
+        parent_qs = sellable
+        add_on_qs = sellable
+        if self.instance and self.instance.pk:
+            if self.instance.parent_item_id:
+                parent_qs = (parent_qs | Item.objects.filter(pk=self.instance.parent_item_id)).distinct()
+            if self.instance.add_on_item_id:
+                add_on_qs = (add_on_qs | Item.objects.filter(pk=self.instance.add_on_item_id)).distinct()
+        self.fields["parent_item"].queryset = parent_qs.order_by("item_name")
+        self.fields["add_on_item"].queryset = add_on_qs.order_by("item_name")
 
 
 class ItemVariantForm(MenuModelForm):

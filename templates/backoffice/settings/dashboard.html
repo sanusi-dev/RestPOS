@@ -7,79 +7,19 @@
   </div>
 
   <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      
-      <!-- Branch Card -->
-      <a href="{% url 'settings:branch_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-orange-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Branches</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-orange-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ branch_count }}</p>
-            <p class="mt-3 text-xs font-bold text-orange-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage Branches →</p>
-        </div>
-      </a>
 
-      <!-- Room Card -->
-      <a href="{% url 'settings:room_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Rooms</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ room_count }}</p>
-            <p class="mt-3 text-xs font-bold text-emerald-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage Rooms →</p>
-        </div>
-      </a>
-
-      <!-- Tables Card -->
-      <a href="{% url 'settings:table_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Tables</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ table_count }}</p>
-            <p class="mt-3 text-xs font-bold text-indigo-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage Tables →</p>
-        </div>
-      </a>
-
-      <!-- Restaurant Card -->
-      <a href="{% url 'settings:restaurant_detail' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
+      <!-- Restaurant Settings Card -->
+      <a href="{% url 'settings:restaurant_settings' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
         <div class="absolute top-0 right-0 w-24 h-24 bg-rose-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
         <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Restaurant</h3>
+          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Restaurant Settings</h3>
           <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-rose-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4 2 2 0 00-4 0 2 2 0 11-4 0 2 2 0 014 0z" /></svg>
           </div>
         </div>
         <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ restaurant_count }}</p>
-            <p class="mt-3 text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Config →</p>
-        </div>
-      </a>
-
-      <!-- Assignments Card -->
-      <a href="{% url 'settings:user_room_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-sky-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Assignments</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-sky-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ assignment_count }}</p>
-            <p class="mt-3 text-xs font-bold text-sky-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage Assignments →</p>
+            <p class="text-lg font-extrabold text-gray-900">{% if settings_configured %}Configured{% else %}Not Configured{% endif %}</p>
+            <p class="mt-3 text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Identity, menu, stock &amp; POS behaviour →</p>
         </div>
       </a>
 
@@ -98,48 +38,18 @@
         </div>
       </a>
 
-      <!-- POS Profile Card -->
-      <a href="{% url 'settings:pos_profile_settings' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-violet-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">POS Profile</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-violet-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m2 2v-4m2 2v-6m2 2V9M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ pos_profile_count }}</p>
-            <p class="mt-3 text-xs font-bold text-violet-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">{% if pos_profile_count %}Configured{% else %}Not Configured{% endif %} →</p>
-        </div>
-      </a>
-
       <!-- Production Units Card -->
       <a href="{% url 'settings:production_unit_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
         <div class="absolute top-0 right-0 w-24 h-24 bg-amber-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
         <div class="flex items-center justify-between mb-4 relative z-10">
           <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Production Units</h3>
           <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-amber-500 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 00-2-2v-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
           </div>
         </div>
         <div class="relative z-10">
             <p class="text-3xl font-extrabold text-gray-900">{{ production_unit_count }}</p>
-            <p class="mt-3 text-xs font-bold text-amber-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Kitchen & Bar Stations →</p>
-        </div>
-      </a>
-
-      <!-- Tax Templates Card -->
-      <a href="{% url 'settings:tax_template_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-24 h-24 bg-lime-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center justify-between mb-4 relative z-10">
-          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Tax Templates</h3>
-          <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-lime-600 ring-1 ring-gray-100">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" /></svg>
-          </div>
-        </div>
-        <div class="relative z-10">
-            <p class="text-3xl font-extrabold text-gray-900">{{ tax_template_count }}</p>
-            <p class="mt-3 text-xs font-bold text-lime-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">VAT & Tax Config →</p>
+            <p class="mt-3 text-xs font-bold text-amber-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Kitchen &amp; Bar Stations →</p>
         </div>
       </a>
      </div>

@@ -48,9 +48,7 @@
           <tr>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Department</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Branch</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">POS Profile</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Printer IP</th>
             <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
           </tr>
@@ -68,9 +66,7 @@
                   <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">Drinks</span>
                 {% endif %}
               </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ production_unit.branch.name }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ production_unit.warehouse.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ production_unit.pos_profile.name|default:"-" }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ production_unit.printer_ip|default:"-" }}</td>
               <td class="px-6 py-4 text-right">
                 <a href="{% url 'settings:production_unit_update' production_unit.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
@@ -78,7 +74,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="px-6 py-16 text-center text-gray-500">
+              <td colspan="5" class="px-6 py-16 text-center text-gray-500">
                 <div class="flex flex-col items-center gap-2">
                   <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import KOT, KOTItem, Order, OrderItem, OrderPayment, OrderTax
+from .models import KOT, KOTItem, Order, OrderItem, OrderPayment
 
 
 class OrderItemInline(admin.TabularInline):
@@ -15,18 +15,12 @@ class OrderPaymentInline(admin.TabularInline):
     extra = 0
 
 
-class OrderTaxInline(admin.TabularInline):
-    model = OrderTax
-    extra = 0
-    fields = ("description", "charge_type", "rate", "tax_amount")
-
-
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = ("invoice_number", "order_type", "customer_name", "status", "grand_total", "posting_date")
-    list_filter = ("status", "order_type", "posting_date", "branch")
+    list_filter = ("status", "order_type", "posting_date")
     search_fields = ("invoice_number", "customer_name")
-    inlines = (OrderItemInline, OrderPaymentInline, OrderTaxInline)
+    inlines = (OrderItemInline, OrderPaymentInline)
     ordering = ("-posting_date",)
 
 

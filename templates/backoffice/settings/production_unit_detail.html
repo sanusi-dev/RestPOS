@@ -73,22 +73,6 @@
           </dd>
         </div>
         <div class="sm:col-span-1">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">POS Profile</dt>
-          <dd class="text-base font-bold text-gray-900">
-            {% if production_unit.pos_profile %}
-              <a href="{% url 'settings:pos_profile_settings' %}" class="hover:text-orange-500 transition-colors">{{ production_unit.pos_profile.name }}</a>
-            {% else %}
-              -
-            {% endif %}
-          </dd>
-        </div>
-        <div class="sm:col-span-1">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Branch</dt>
-          <dd class="text-base font-bold text-gray-900">
-            <a href="{% url 'settings:branch_detail' production_unit.branch.pk %}" class="hover:text-orange-500 transition-colors">{{ production_unit.branch.name }}</a>
-          </dd>
-        </div>
-        <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Warehouse</dt>
           <dd class="text-base font-bold text-gray-900">{{ production_unit.warehouse.name }}</dd>
         </div>

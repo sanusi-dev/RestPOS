@@ -6,13 +6,11 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemVariant, Menu, MenuItem
-from apps.settings.models import Branch
 
 
 class ItemVariantModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Drinks")
         cls.parent_item = Item.objects.create(
@@ -39,7 +37,7 @@ class ItemVariantModelTest(TestCase):
             department="DRINKS",
             is_sales_item=True,
         )
-        cls.menu = Menu.objects.create(name="Drink Menu", branch=cls.branch)
+        cls.menu = Menu.objects.create(name="Drink Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.variant_item, rate=Decimal("800"))
 
     def test_str(self):
