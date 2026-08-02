@@ -154,12 +154,16 @@ A lightweight Python print agent runs as a background service on the cashier des
 
 ### Customer card / group ordering
 
-Group ordering is first-class. On order start, the cashier picks single or group; if group, specifies customer count. The POS renders one **customer card** per customer (Customer 1, Customer 2, …). The cashier clicks a card to make it active, then adds items — items go to the active card. Switching cards switches whose items are being built.
+Group ordering is first-class. The cashier raises the guest count with the **Guests stepper** in the cart header (always visible) — flipping the cart between flat (single) and grouped (split) presentation at any time. In grouped view the cart renders one **customer group** per customer (Customer 1, Customer 2, …): a tappable header (tap to make it the active guest) listing that guest's items with a per-guest subtotal, then the order grand total once at the bottom. Menu taps always add to the active guest.
 
 **Data model:**
 - `Order.guest_count` (Integer, default 1)
 - `OrderItem.customer_index` (Integer, 1-based, default 1) — replaces any "seat tag" concept
-- When `guest_count` is 1, `customer_index` is always 1 and the card UI is hidden
+- When `guest_count` is 1, `customer_index` is always 1 and the grouped UI is hidden
+
+**Backend is one order, one total.** The split is presentation-only: the order settles as one document with one grand total and one payment event. `customer_index` is retained for per-customer analytics and ticket/receipt grouping. Items are never shared between customers — each line belongs to exactly one guest.
+
+**Guests stepper guard:** Lowering the guest count below a guest who still has items is blocked (`Order.change_guest_count` raises; the cart shows an error banner "Remove Customer N's items first"). Raising is always allowed. This keeps per-customer analytics honest — no silent re-tagging of who ordered what.
 
 **Receipts:** One receipt per order, grouping items by customer card with a per-customer subtotal, then the overall total:
 
@@ -182,9 +186,9 @@ TOTAL                    5,500
 **Kitchen and bar tickets** also group by `customer_index` so the kitchen knows which items plate together.
 
 **Implementation notes:**
-- The card UI is an HTMX-driven panel: clicking a card sets the active card in the session; subsequent item additions carry that index.
+- The grouped UI is HTMX-driven: tapping a guest header sets the active card in the session (`pos_customer_card_activate`); subsequent item additions carry that index. The guest stepper posts `guest_delta` to `pos_order_update_meta`.
 - Never use the word "seat" in the UI — use "Customer 1", "Customer 2", etc.
-- Cards are ephemeral; only `customer_index` on each `OrderItem` is persisted.
+- Cards/groupings are ephemeral presentation; only `customer_index` on each `OrderItem` is persisted.
 
 ### Departmental split
 

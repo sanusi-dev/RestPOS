@@ -108,7 +108,7 @@ settings R1 → inventory → menu → staff ↘
 | 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, OrderTax, KOT, KOTItem | settings (R1+R2), menu, staff, payments | in progress (82 tests, Phase 7a core flow complete, 7b deferred) |
 | 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started |
 | 9 | reports | A14, A15, A16 | DailyP&L, SalesReport, StockReport, DepartmentalReport | all apps | not started |
-| 10 | refunds | A18 | Refund flow completion (reversal entries, stock restoration) | orders, payments, inventory | not started |
+| 10 | refunds | A18 | Refund GL entries, partial returns, wastage posting | orders, payments, inventory | not started — core return data model done in Phase 7 |
 
 > **Phase 4/5 reordering note:** Payments Core is built before Staff because `OpeningPayment.mode_of_payment`
 > is a FK to `payments.ModeOfPayment`. Payments Core is standalone (no dependencies), so promoting it
@@ -208,8 +208,22 @@ cancel KOT, settle order, concurrent modification check, customer favourite item
 and diffing, ticket routing by department, ticket type detection, cancel ticket creation, ticket
 reprint, duplicate ticket detection (Celery beat), ticket status types, ticket grouping by
 customer card, customer cards / group ordering (guest count, active card state, customer index on
-items), refund flow (full/partial refunds, reversal payment entries, stock restoration, refund
-permission). Table-order loading/transfer and billing-role / KOT-delay gates are out of scope.
+items), cancel order (full reversal: reverses stock, clears payments, cancels KOTs), return order
+(is_return + return_against FK, negative items/payments, stock restoration on submit). Full refund
+flow with refund payment entries and explicit stock restoration deferred to Phase 10.
+Table-order loading/transfer and billing-role / KOT-delay gates are out of scope.
+
+**Key models:** Order, OrderItem, KOT, KOTItem
+
+**Phase 7 completion checklist — shift close integration:**
+When `POSClosingEntry.submit()` is enhanced in Phase 7 to sum `OrderPayment.amount` per
+`mode_of_payment` (line 225-231 in `apps/staff/models.py`), filter the order queryset to:
+- `status=SUBMITTED` — excludes CANCELLED and DRAFT orders automatically
+- `is_return=False` — return orders refund cash and should not add to expected drawer totals
+- Only orders within the shift's `period_start_date`..`period_end_date` window
+
+Cancelled orders retain all original payment rows for audit — cancel flips status without
+mutating any payment data.
 
 **Key models:** Order, OrderItem, KOT, KOTItem, RefundEntry, RefundPaymentEntry, RefundStockEntry
 
@@ -243,12 +257,13 @@ Sales Invoice reports, Stock Ledger reports
 
 ### refunds (Phase 10)
 
-**Scope:** Completing the refund flow from A18. Refund order (full/partial), refund payment entry
-(reversal GL posting), refund stock restoration (positive stock ledger entries or wastage
-posting), refund permission (Manager only by default). Cross-app: touches orders, payments,
-inventory.
+**Scope:** Completing the refund flow from A18. Return order (is_return + return_against) already
+implemented in Phase 7 — creates draft return with negative items/payments, stock restoration on
+submit. Phase 10 adds: explicit refund payment entries (reversal GL posting), wastage posting
+option, partial return support (adjust qty in return draft before submit), refund permission
+(Manager only, already enforced). Cross-app: touches orders, payments, inventory.
 
-**Key models:** RefundEntry, RefundPaymentEntry, RefundStockEntry (may be part of orders app)
+**Key models:** Order, OrderItem, OrderPayment, StockLedgerEntry — Phase 7 return orders already handle the core data model; Phase 10 layers in standalone refund entries if needed.
 
 **Key reference doctypes:** ERPNext Payment Entry (reversal), Stock Ledger Entry (positive entry)
 
@@ -2155,7 +2170,7 @@ All models extend `apps.utils.models.BaseModel`.
 | Field | Type | Source | Notes |
 |---|---|---|---|
 | invoice_number | CharField, max_length=50, unique, null=True, blank=True, editable=False | ERPNext naming_series | Auto-generated on first save: `{prefix}{pk}` |
-| order_number | PositiveIntegerField, null=True, blank=True, editable=False | URY custom_ury_order_number | Sequential per branch per day; resets if `pos_profile.reset_order_number_daily` |
+| order_number | PositiveIntegerField, db_index, null=True, blank=True, editable=False | URY custom_ury_order_number | From the `OrderSequence` counter — always increments by 1, no daily reset (§6.12) |
 | order_type | CharField, max_length=20, choices: DINE_IN, TAKE_AWAY, DELIVERY, PHONE_IN, default=DINE_IN | URY order_type | Auto-detected from table.is_take_away |
 | restaurant | FK→settings.Restaurant, PROTECT, related_name="orders" | ERPNext POS Invoice | required |
 | branch | FK→settings.Branch, PROTECT, related_name="orders" | ERPNext POS Invoice | denormalized from restaurant |
@@ -2203,8 +2218,8 @@ All models extend `apps.utils.models.BaseModel`.
 - `generate_kots(previous_items)`: diffing engine — compare current items vs previous,
   generate New Order / Order Modified / Partially Cancelled KOTs per production unit
   department, group by customer_index. No N+1 queries.
-- `assign_order_number()`: sequential per branch per day (or continuous if
-  reset_order_number_daily=False).
+- `assign_order_number()`: atomically increments the `OrderSequence` counter
+  (`SELECT … FOR UPDATE`, ERPNext Series pattern) — always +1, no daily reset (§6.12).
 
 ##### OrderItem (`orders.OrderItem`)
 
@@ -2298,6 +2313,15 @@ All models extend `apps.utils.models.BaseModel`.
    - Removed/decreased items → "Partially Cancelled" KOT with original_kots reference.
 4. Each KOT groups items by `customer_index`.
 5. Table marked `occupied=True`.
+
+**Grouped cart UI (guest stepper + split presentation):**
+- **References:** AGENTS.md "Customer card / group ordering"; FEATURES.md #214–#218; URY `OrderPanel.tsx` cart structure (RestPOS-specific group ordering — no URY reference exists, URY hardcodes `no_of_pax=1`).
+- **Model:** no schema change — reuses `Order.guest_count` + `OrderItem.customer_index`.
+- **New logic:** `Order.change_guest_count(new_count)` — raises `ValidationError` when lowering below the highest `customer_index` that still has items (error message "Remove Customer N's items first"); otherwise saves the new count. `pos_order_update_meta` accepts either an absolute `guest_count` or a signed `guest_delta` (from the stepper), clamps to 1–50, and surfaces guard errors as a cart error banner.
+- **View context:** `_group_items_by_guest(order)` builds `guest_groups` (per-index items + subtotal) for the cart template; `active_card` stays the session-driven active guest.
+- **Frontend:** cart header "Guests − n +" stepper (always visible, disabled − at 1). With `guest_count > 1` the item list renders grouped: a tappable header per guest (HTMX POST to `pos_customer_card_activate`, visually highlights the active guest) followed by that guest's items and a "Customer N subtotal" row; the order grand total shows once above Pay. With `guest_count = 1` the flat list renders as before. Menu taps always add to the active guest.
+- **Scope boundary (explicit):** presentation-only. The order still settles as one document with one grand total and one payment event (`settle()` untouched). Per-customer partial payment is out of scope — the cashier can accept partial sums but the system records one payment occurrence for bank reconciliation.
+- **Deviations:** none — this implements the AGENTS.md group-ordering spec as originally designed (stepper-based toggle, no silent re-tagging, grouped receipts deferred to the printing app).
 
 **Settle flow:**
 1. Cashier clicks "Pay" → payment dialog opens (inline, not separate page).
@@ -2613,6 +2637,7 @@ manager (note in seed output + docs).
 | `Branch` removed; all branch FKs dropped | Single location; ERPNext Branch exists for multi-location isolation the client does not have |
 | `POSProfile` merged into the `Restaurant` singleton; 25+ unconsumed fields pruned | One till, one settings surface; ERPNext POS Profile is multi-terminal config. Fields re-added only when a feature consumes them |
 | Payment-mode selection folded onto `ModeOfPayment` (`enabled` + `is_default`); `POSProfilePayment` deleted | Two switches drove one concept and could disagree (shift-open vs checkout) |
+| `Restaurant.reset_order_number_daily` removed; numbering is one continuous counter | Client decision — every order increments the last by one, always (§6.12) |
 | Orders/KOTs/shift entries carry no branch/profile FKs | One world — documents follow the single settings record |
 | `PaymentGLMapping.company` dropped | Pseudo-company key; only ever held `Restaurant.company` |
 | Multi-branch deferred (paid add-on); no schema hooks kept | Clean single-site domain is a better extension base than a fake multi-branch skeleton |
@@ -2624,3 +2649,139 @@ manager (note in seed output + docs).
 - Do not rename `Restaurant` or introduce a Location abstraction.
 - Do not touch the PEP 758 `except ValueError, TypeError:` forms in `views_pos.py` (valid Python 3.14).
 - Do not squash or rewrite migration history.
+
+### 6.12 Order Numbering — Continuous Sequence (deviation)
+
+**Reference:** ERPNext Naming Series (`frappe.core.doctype.series`) — a persistent counter row that
+the controller bumps atomically; URY `custom_reset_order_number_daily` (dropped).
+
+**Client decision:** every new order's number is the previous order's number + 1, forever. No daily
+reset, no per-branch series, no gaps by design.
+
+**Implementation:**
+
+- `OrderSequence` (orders app): `name` unique + `current_value` PositiveInteger. One row, `name="order"`,
+  seeded by `orders/0013_seed_order_sequence` from `MAX(order_number)` over existing orders.
+- `Order.assign_order_number()` runs inside `transaction.atomic()`:
+  `OrderSequence.objects.select_for_update().get(name="order")`, `current_value += 1`, saves the order
+  with the new number — same lock-serialised read-modify-write ERPNext does with `FOR UPDATE` on `Series`.
+  Concurrent settles each get a distinct number (proven by `OrderSequenceConcurrencyTest`).
+- `Order.order_number` now has `db_index=True` so history lookups stay fast.
+- `Restaurant.reset_order_number_daily` field, form entry, and settings-page heading removed
+  (`settings/0020`).
+
+**Notes:** drafts consume a number at creation (`pos_order_new` calls `assign_order_number()`), so
+deleted drafts leave gaps — same as ERPNext, where the Series counter never rewinds.
+
+### 6.13 POS Template Fragmentation (deviation)
+
+**Client decision:** break `templates/pos/index.html` (was ~410 lines) into fragment files under
+`templates/pos/partials/{gates,cart,catalog,payment}/`, joined back together with `{% include %}`.
+
+**Deviation from AGENTS.md:** the documented convention says partials stay inline in the template
+where used and `{% include %}` is reserved for components shared across 3+ templates. Both are
+overridden here for readability; each fragment is used by exactly one parent template.
+
+**Preserved invariant:** the HTMX endpoints still render `pos/index.html#cart` and
+`#payment_dialog` — `index.html` keeps thin `{% partialdef %}` wrappers whose bodies are a single
+`{% include %}`. Views are untouched. Each fragment that uses template filters declares its own
+`{% load humanize %}` (included templates do not inherit loads from the parent).
+
+**Layout:**
+
+- `partials/gates/error.html`, `no_shift.html` — pre-order gates (full-screen cards)
+- `partials/cart/panel.html` — the `#cart-panel` HTMX target, includes the three cart regions
+- `partials/cart/guests.html` — guest stepper
+- `partials/cart/items.html` — item rows (grouped by customer, flat, or empty state)
+- `partials/cart/totals.html` — success banners, grand total, actions dropdown, Pay button
+  (always visible, including on an empty cart; Pay is disabled when the cart has no items)
+- `partials/catalog/panel.html` — search + group chips, includes the grid
+- `partials/catalog/grid.html` — menu item cards
+- `partials/payment/dialog.html` — settle dialog
+
+### 6.14 Send to Kitchen & Bar — Ticket Print State and POS Cancellation (deviation)
+
+**References consulted:**
+
+- URY `ury_kot/ury_kot.json` and `ury_kot.py` — one ticket doctype routed by production unit;
+  printing occurs on submit but has no persisted print result or retry state.
+- URY `ury_kot_generate.py` — existing departmental routing and ticket item snapshots.
+- URY `ury_order.py` and `ury_pos_invoice.py` — cancellation and invoice lifecycle rules.
+- RestPOS `apps/orders/models.py`, `views_pos.py`, and `templates/pos/partials/cart/` — existing
+  KOT diffing, clear, print, and action-bar implementation.
+
+**Client decision:** after the first kitchen/bar ticket is created, a draft order is immutable.
+The cashier cancels it and creates a new order instead of generating `Order Modified` or
+`Partially Cancelled` tickets in place. This supersedes the diff-sync behavior documented in
+§6.7 for the POS workflow.
+
+**Model changes:**
+
+- `Order.cancelled_by`, `cancelled_at`, `cancel_reason`, and `cancel_reason_note` record the
+  lightweight unpaid POS cancellation. The reason choices are wrong order, customer changed mind,
+  cashier error, and other.
+- Existing `KOT` remains the shared KOT/BOT document; no separate BOT model is introduced, matching
+  URY. `ticket_type` snapshots `kitchen` or `bar`, while `production_unit` remains the routing FK.
+- Existing KOT document `status` (`SUBMITTED`/`CANCELLED`) is preserved. `print_status` separately
+  tracks `PENDING`, `PRINTED`, or `CANCELLED`; this separation is a deliberate deviation from the
+  requested single status field and avoids mixing document lifecycle with printer state.
+- Existing `KOTItem` is the immutable item snapshot. `BaseModel.created_at` supplies ticket creation
+  time, and `created_by` records the cashier who sent the ticket.
+
+**Business logic:**
+
+- Initial send creates at most one ticket per department, with a KOT number for kitchen and BOT
+  number for bar. Missing production-unit configuration rejects the send rather than silently
+  claiming the order was dispatched; mixed orders are never partially dispatched. Existing
+  `block_takeaway_kot` production settings are respected.
+- The print interface is `apps/orders/printing.py`; its stub returns `PrintResult(success, ticket_type)`
+  and currently succeeds. Kitchen and bar calls are independent.
+- Failed attempts leave `print_status=PENDING`, exposing separate retry actions. Successful tickets
+  expose separate reprint actions; reprint never creates a new record.
+- Clear deletes items only before any ticket exists. After a ticket exists, POS cancellation marks
+  the order and its existing tickets cancelled without creating a second cancellation ticket.
+  The existing full cancellation method remains available to the backoffice lifecycle.
+- Order and ticket snapshot model methods reject post-send edits; admin ticket records are exposed
+  as audit data rather than an edit path.
+
+**HTMX/UI behavior:**
+
+- The action row is `[Action] [Receipt] [Pay]` with 25%/25%/50% widths. Receipt is available for
+  any draft order with items and changes to Reprint Receipt after a successful print.
+- The Action dropup shows Send before tickets, independent kitchen/bar retry or reprint actions
+  afterward, and Clear versus Cancel Order based on ticket state.
+- Item quantity controls, menu additions, and guest changes are hidden/blocked after send. The
+  entire `#cart-panel` remains the swap target, so totals and ticket state update without OOB swaps.
+- Cancel opens an inline confirmation form with the structured reason dropdown and optional note;
+  successful cancellation redirects to the POS order list without creating a replacement draft.
+
+**Confirmed receipt-printing deviation:** Receipt printing is optional for both Dine In and Take
+Away draft orders. Payment does not depend on printing; the current draft screen offers print and
+reprint actions, while the in-process stub remains until Phase 8.
+
+### 6.15 Orders Backoffice Control Room
+
+**Client decision:** the backoffice Orders navigation has its own dashboard, order register, and
+Kitchen & Bar ticket register. The dashboard is a query-based overview; no reporting model or
+stored aggregates are introduced.
+
+**View/query behavior:**
+
+- `orders:dashboard` shows today’s paid revenue, order counts, open drafts, cancelled orders,
+  ticket volume, and the current pending-print queue, plus recent orders and pending tickets.
+- The order register annotates item count, ticket count, and pending-print count in one query and
+  supports invoice/customer/order search plus status and order-type filters.
+- The ticket register supports search, ticket type, ticket kind, document status, and print-status
+  filters. It uses `created_at`, `created_by`, `ticket_type`, and `print_status` from the current
+  ticket model rather than the former KOT-only display.
+
+**Templates/navigation:**
+
+- `templates/backoffice/orders/dashboard.html` is the Orders control-room landing page.
+- Order and ticket tables link directly to their own detail records and to each other.
+- Order detail now shows customer/department item data, payment/totals state, ticket document and
+  print badges, ticket creator/timestamps, and structured cancellation audit information.
+- Ticket detail now shows KOT/BOT type, production unit, document status, print status, creator,
+  timestamps, source order, and immutable item snapshot lines.
+- The shared backoffice navigation exposes Dashboard, Order Register, and Kitchen & Bar Tickets
+  under Orders on desktop and mobile.

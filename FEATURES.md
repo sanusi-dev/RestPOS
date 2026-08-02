@@ -70,8 +70,9 @@ include. Sections marked **Deferred** are planned but not yet implemented.
 ### A4. POS Profile / Terminal Configuration
 
 > RestPOS scope: **out of scope as a separate document**. The POS behaviour knobs
-> (warehouse, reset_order_number_daily, payment methods) live on the `Restaurant`
-> singleton. Multi-profile, role gates, and accounting fields are intentionally omitted.
+> (warehouse, payment methods) live on the `Restaurant` singleton; order numbers are a
+> continuous counter with no daily reset (§6.12). Multi-profile, role gates, and
+> accounting fields are intentionally omitted.
 
 | # | Feature | What it does |
 |---|---|---|
