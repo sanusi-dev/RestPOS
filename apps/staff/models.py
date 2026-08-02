@@ -224,6 +224,10 @@ class POSClosingEntry(BaseModel):
             cp.opening_amount = opening_modes[cp.mode_of_payment_id].opening_amount
             # Phase 5: expected_amount = opening_amount only. Phase 7 will add
             # + sum(OrderPayment) for the same method.
+            # TODO(Phase 7): filter to orders within this shift's window where
+            # status=SUBMITTED and is_return=False. Cancelled orders already have
+            # status=CANCELLED and won't match status=SUBMITTED. Return orders
+            # refund cash and must not add to expected drawer amounts.
             cp.expected_amount = cp.opening_amount
             cp.difference = cp.closing_amount - cp.expected_amount
             cp.save(

@@ -58,7 +58,6 @@ class RestaurantForm(SettingsModelForm):
             "address",
             "active_menu",
             "default_warehouse",
-            "reset_order_number_daily",
         ]
 
     def __init__(self, *args, **kwargs):

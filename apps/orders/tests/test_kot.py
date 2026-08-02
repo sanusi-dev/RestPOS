@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup, Warehouse
@@ -46,25 +47,23 @@ class KOTGenerationTest(KOTTestBase):
         self.assertEqual(len(kots), 1)
         kot = kots[0]
         self.assertEqual(kot.type, "New Order")
+        self.assertEqual(kot.ticket_type, "kitchen")
+        self.assertEqual(kot.print_status, "PENDING")
         self.assertEqual(kot.production_unit, self.kitchen)
         self.assertEqual(kot.items.count(), 1)
         self.assertEqual(kot.items.first().qty, Decimal("2"))
 
-    def test_generate_kot_modified_order(self):
+    def test_sent_order_cannot_be_modified(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         self.order.generate_kots([])
-        self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        prev = [{"item_id": self.food_item.pk, "qty": "1", "customer_index": 1, "comments": ""}]
-        kots = self.order.generate_kots(prev)
-        self.assertEqual(len(kots), 1)
-        self.assertEqual(kots[0].type, "Order Modified")
-        self.assertEqual(kots[0].items.first().qty, Decimal("1"))
+        with self.assertRaises(ValidationError):
+            self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
 
-    def test_no_kot_when_unchanged(self):
+    def test_second_send_is_rejected(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        prev = [{"item_id": self.food_item.pk, "qty": "2", "customer_index": 1, "comments": ""}]
-        kots = self.order.generate_kots(prev)
-        self.assertEqual(len(kots), 0)
+        self.order.generate_kots([])
+        with self.assertRaises(ValidationError):
+            self.order.generate_kots([])
 
     def test_department_routing_food_to_kitchen(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
@@ -76,6 +75,8 @@ class KOTGenerationTest(KOTTestBase):
         self.order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
         kots = self.order.generate_kots([])
         self.assertEqual(len(kots), 1)
+        self.assertEqual(kots[0].ticket_type, "bar")
+        self.assertTrue(kots[0].kot_number.startswith("BOT-"))
         self.assertEqual(kots[0].production_unit, self.bar)
 
     def test_department_routing_both_creates_two_kots(self):
@@ -85,21 +86,32 @@ class KOTGenerationTest(KOTTestBase):
         self.assertEqual(len(kots), 2)
         pu_names = {k.production_unit.name for k in kots}
         self.assertEqual(pu_names, {"Kitchen", "Bar"})
+        self.assertEqual({k.ticket_type for k in kots}, {"kitchen", "bar"})
 
-    def test_partially_cancelled_kot(self):
+    def test_mixed_order_requires_all_production_units(self):
+        self.bar.delete()
+        self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        self.order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
+        with self.assertRaises(ValidationError):
+            self.order.generate_kots([])
+        self.assertEqual(self.order.kots.count(), 0)
+
+    def test_takeaway_blocked_department_is_not_ticketed(self):
+        self.bar.block_takeaway_kot = True
+        self.bar.save(update_fields=["block_takeaway_kot"])
+        order = Order.objects.create(order_type="TAKE_AWAY")
+        order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
+        kots = order.generate_kots([])
+        self.assertEqual(len(kots), 1)
+        self.assertEqual(kots[0].ticket_type, "kitchen")
+
+    def test_sent_order_cannot_reduce_item_quantity(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
         self.order.generate_kots([])
         oi = self.order.items.first()
-        oi.qty = Decimal("1")
-        oi.save()
-        prev = [{"item_id": self.food_item.pk, "qty": "2", "customer_index": 1, "comments": ""}]
-        kots = self.order.generate_kots(prev)
-        self.assertEqual(len(kots), 1)
-        kot = kots[0]
-        self.assertEqual(kot.type, "Partially Cancelled")
-        self.assertTrue(kot.original_kots)
-        ki = kot.items.first()
-        self.assertEqual(ki.cancelled_qty, Decimal("1"))
+        with self.assertRaises(ValidationError):
+            self.order.remove_item(oi.pk)
 
     def test_customer_index_grouping(self):
         order = Order.objects.create(guest_count=2)
@@ -120,26 +132,19 @@ class KOTGenerationTest(KOTTestBase):
     def test_cancel_kot_number_format(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
         self.order.generate_kots([])
-        oi = self.order.items.first()
-        oi.qty = Decimal("1")
-        oi.save()
-        prev = [{"item_id": self.food_item.pk, "qty": "2", "customer_index": 1, "comments": ""}]
-        kots = self.order.generate_kots(prev)
-        cancel_kot = kots[0]
+        self.order.cancel("Test reason")
+        cancel_kot = self.order.kots.filter(type="Cancelled").first()
         self.assertTrue(cancel_kot.kot_number.startswith("CNCL-KOT-"))
 
     def test_generate_kots_no_production_unit_skips(self):
         self.kitchen.delete()
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        kots = self.order.generate_kots([])
-        self.assertEqual(len(kots), 0)
+        with self.assertRaises(ValidationError):
+            self.order.generate_kots([])
 
-    def test_removed_item_generates_cancel_kot(self):
+    def test_sent_order_cannot_remove_item(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
         self.order.generate_kots([])
         oi = self.order.items.first()
-        oi.delete()
-        prev = [{"item_id": self.food_item.pk, "qty": "2", "customer_index": 1, "comments": ""}]
-        kots = self.order.generate_kots(prev)
-        self.assertEqual(len(kots), 1)
-        self.assertEqual(kots[0].type, "Partially Cancelled")
+        with self.assertRaises(ValidationError):
+            self.order.remove_item(oi.pk)

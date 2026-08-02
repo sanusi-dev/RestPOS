@@ -1,14 +1,16 @@
+import threading
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import connection, connections, transaction
+from django.test import TestCase, TransactionTestCase
 
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, StockLedgerEntry, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 
-from ..models import Order
+from ..models import DINE_IN, Order, OrderSequence
 
 CustomUser = get_user_model()
 
@@ -55,6 +57,7 @@ class OrderModelTest(OrderTestBase):
     def test_create_order(self):
         order = self._create_order()
         self.assertEqual(order.status, "DRAFT")
+        self.assertEqual(order.order_type, DINE_IN)
         self.assertTrue(order.invoice_number.startswith("REST-"))
 
     def test_order_number_assignment(self):
@@ -177,13 +180,12 @@ class OrderSettleTest(OrderTestBase):
         sles = StockLedgerEntry.objects.filter(voucher_type="POS Order", voucher_no=str(self.order.pk))
         self.assertEqual(sles.count(), 1)
 
-    def test_settle_dine_in_requires_print(self):
-        from django.core.exceptions import ValidationError
-
+    def test_settle_dine_in_without_print(self):
         order = self._create_order()
         order.add_item(self.item, qty=1, rate=Decimal("1500"))
-        with self.assertRaises(ValidationError):
-            order.settle([{"mode_of_payment": self.cash.pk, "amount": "1500"}])
+        order.settle([{"mode_of_payment": self.cash.pk, "amount": "1500"}])
+        self.assertEqual(order.status, "SUBMITTED")
+        self.assertFalse(order.invoice_printed)
 
     def test_settle_takeaway_no_print_required(self):
         order = self._create_order(order_type="TAKE_AWAY")
@@ -201,6 +203,7 @@ class OrderCancelTest(OrderTestBase):
     def setUp(self):
         self.order = self._create_and_print_order()
         self.order.add_item(self.item, qty=2, rate=Decimal("1500"))
+        self.order.generate_kots([])
         self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
 
     def test_cancel_creates_reversal_sle(self):
@@ -213,7 +216,8 @@ class OrderCancelTest(OrderTestBase):
         self.order.cancel("Test reason")
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "CANCELLED")
-        self.assertEqual(self.order.cancel_reason, "Test reason")
+        self.assertEqual(self.order.cancel_reason, "other")
+        self.assertEqual(self.order.cancel_reason_note, "Test reason")
 
     def test_cancel_requires_reason(self):
         from django.core.exceptions import ValidationError
@@ -222,13 +226,113 @@ class OrderCancelTest(OrderTestBase):
             self.order.cancel("")
 
     def test_cancel_creates_cancel_kot(self):
-        from apps.settings.models import ProductionUnit
-
-        ProductionUnit.objects.create(name="Kitchen2", warehouse=self.warehouse, department="FOOD")
-        self.order.generate_kots([])
         self.order.cancel("Test reason")
         cancel_kots = self.order.kots.filter(type="Cancelled")
         self.assertTrue(cancel_kots.exists())
+
+    def test_cancel_preserves_payment_audit_trail(self):
+        """Cancelling a submitted order must keep payment rows — audit trail."""
+        self.assertGreater(self.order.payments.count(), 0)
+        original_paid = self.order.paid_amount
+        original_change = self.order.change_amount
+        self.order.cancel("Test reason")
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.payments.count(), 1)
+        self.assertEqual(self.order.paid_amount, original_paid)
+        self.assertEqual(self.order.change_amount, original_change)
+
+    def test_cancel_draft_can_cancel(self):
+        draft = self._create_order()
+        draft.add_item(self.item, qty=1, rate=Decimal("1500"))
+        draft.cancel("Changed mind")
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "CANCELLED")
+
+
+class OrderReturnTest(OrderTestBase):
+    """Model-level tests for Order.make_return() and return validation."""
+
+    def setUp(self):
+        self.order = self._create_and_print_order()
+        self.order.add_item(self.item, qty=2, rate=Decimal("1500"))
+        self.order.add_item(self.item2, qty=1, rate=Decimal("500"))
+        self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3500"}])
+
+    def test_make_return_creates_is_return_true(self):
+        return_order = self.order.make_return()
+        self.assertTrue(return_order.is_return)
+        self.assertEqual(return_order.return_against, self.order)
+
+    def test_make_return_status_is_draft(self):
+        return_order = self.order.make_return()
+        self.assertEqual(return_order.status, "DRAFT")
+        self.assertFalse(return_order.is_paid)
+
+    def test_make_return_item_qty_negative(self):
+        return_order = self.order.make_return()
+        for item in return_order.items.all():
+            self.assertLess(item.qty, 0)
+            self.assertLess(item.amount, 0)
+
+    def test_make_return_item_count_matches(self):
+        return_order = self.order.make_return()
+        self.assertEqual(self.order.items.count(), return_order.items.count())
+
+    def test_make_return_payment_amount_negative(self):
+        return_order = self.order.make_return()
+        for payment in return_order.payments.all():
+            self.assertLess(payment.amount, 0)
+
+    def test_make_return_total_negative(self):
+        return_order = self.order.make_return()
+        self.assertLess(return_order.grand_total, 0)
+        self.assertEqual(abs(return_order.grand_total), self.order.grand_total)
+
+    def test_make_return_preserves_original_status(self):
+        self.order.make_return()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+
+    def test_cannot_return_draft_order(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.add_item(self.item, qty=1, rate=Decimal("1500"))
+        with self.assertRaises(ValidationError):
+            draft.make_return()
+
+    def test_cannot_return_return_order(self):
+        from django.core.exceptions import ValidationError
+
+        return_order = self.order.make_return()
+        with self.assertRaises(ValidationError):
+            return_order.make_return()
+
+    def test_clean_requires_return_against_when_is_return(self):
+        from django.core.exceptions import ValidationError
+
+        order = Order(is_return=True)
+        with self.assertRaises(ValidationError):
+            order.clean()
+
+    def test_clean_blocks_chain_return(self):
+        from django.core.exceptions import ValidationError
+
+        return_order = self.order.make_return()
+        chain = Order(is_return=True, return_against=return_order)
+        with self.assertRaises(ValidationError):
+            chain.clean()
+
+    def test_settle_return_produces_positive_stock(self):
+        Bin.objects.get_or_create(item=self.item, warehouse=self.warehouse, defaults={"actual_qty": Decimal("5")})
+        return_order = self.order.make_return()
+        return_order.invoice_printed = True
+        return_order.save(update_fields=["invoice_printed"])
+        return_order.assign_order_number()
+        return_order.settle([{"mode_of_payment": self.cash.pk, "amount": str(abs(return_order.grand_total))}])
+        sles = StockLedgerEntry.objects.filter(voucher_type="POS Order", voucher_no=str(return_order.pk))
+        self.assertTrue(sles.exists())
+        self.assertGreater(sles.first().actual_qty, 0)
 
 
 class OrderRecalculateTest(OrderTestBase):
@@ -243,3 +347,35 @@ class OrderRecalculateTest(OrderTestBase):
         order.add_item(self.item, qty=2, rate=Decimal("1500"))
         order.recalculate_totals()
         self.assertEqual(order.grand_total, Decimal("3000.00"))
+
+
+class OrderSequenceConcurrencyTest(TransactionTestCase):
+    def setUp(self):
+        OrderSequence.objects.get_or_create(name="order", defaults={"current_value": 0})
+
+    def test_concurrent_assignment_yields_unique_consecutive_numbers(self):
+        n_threads = 8
+        results = []
+        lock = threading.Lock()
+        barrier = threading.Barrier(n_threads)
+
+        def assign():
+            try:
+                barrier.wait()
+                with transaction.atomic():
+                    order = Order.objects.create()
+                    number = order.assign_order_number()
+                with lock:
+                    results.append(number)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=assign) for _ in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        connections.close_all()
+
+        self.assertEqual(len(results), n_threads)
+        self.assertEqual(sorted(results), list(range(1, n_threads + 1)))

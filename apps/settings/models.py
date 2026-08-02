@@ -24,7 +24,6 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="default_for_restaurants",
     )
-    reset_order_number_daily = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["company"]
@@ -32,10 +31,17 @@ class Restaurant(BaseModel):
     def __str__(self):
         return self.company
 
+
     @classmethod
     def load(cls):
-        """Return the singleton settings record with menu and warehouse prefetched, or None."""
-        return cls.objects.select_related("active_menu", "default_warehouse").order_by("pk").first()
+        """Return the singleton settings record with menu, menu items, and warehouse prefetched, or None."""
+        return (
+            cls.objects
+            .select_related("active_menu", "default_warehouse")
+            .prefetch_related("active_menu__items__item__item_group")
+            .order_by("pk")
+            .first()
+        )
 
     def clean(self):
         super().clean()
