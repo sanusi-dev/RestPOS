@@ -73,6 +73,15 @@ class OrderListTest(BackofficeViewTestBase):
         self.assertEqual(response.status_code, 302)
 
 
+class OrdersDashboardTest(BackofficeViewTestBase):
+    def test_dashboard_shows_order_and_ticket_navigation(self):
+        response = self.client.get(reverse("orders:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Order control room")
+        self.assertContains(response, "Order register")
+        self.assertContains(response, "Kitchen &amp; Bar tickets")
+
+
 class OrderDetailTest(BackofficeViewTestBase):
     def test_order_detail(self):
         order = self._create_order()
@@ -89,14 +98,20 @@ class OrderDetailTest(BackofficeViewTestBase):
 class OrderCancelTest(BackofficeViewTestBase):
     def test_cancel_order_manager(self):
         order = self._create_order()
-        response = self.client.post(reverse("orders:order_cancel", kwargs={"pk": order.pk}), {"reason": "Test cancel"})
+        response = self.client.post(
+            reverse("orders:order_cancel", kwargs={"pk": order.pk}),
+            {"cancel_reason": "wrong_order", "cancel_reason_note": "Test cancel"},
+        )
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
 
     def test_cancel_order_no_reason(self):
         order = self._create_order()
-        response = self.client.post(reverse("orders:order_cancel", kwargs={"pk": order.pk}), {"reason": ""})
+        response = self.client.post(
+            reverse("orders:order_cancel", kwargs={"pk": order.pk}),
+            {"cancel_reason": "", "cancel_reason_note": ""},
+        )
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.status, "DRAFT")
@@ -105,17 +120,55 @@ class OrderCancelTest(BackofficeViewTestBase):
         self.client.logout()
         self.client.force_login(self.cashier_user)
         order = self._create_order()
-        response = self.client.post(reverse("orders:order_cancel", kwargs={"pk": order.pk}), {"reason": "Test"})
+        response = self.client.post(
+            reverse("orders:order_cancel", kwargs={"pk": order.pk}),
+            {"cancel_reason": "wrong_order", "cancel_reason_note": "Test"},
+        )
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.status, "DRAFT")
+
+
+class OrderReturnTest(BackofficeViewTestBase):
+    def _settle_order(self, order):
+        order.invoice_printed = True
+        order.save()
+        order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
+        order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
+        order.refresh_from_db()
+
+    def test_return_creates_draft_for_manager(self):
+        order = self._create_order()
+        self._settle_order(order)
+        response = self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        self.assertEqual(response.status_code, 302)
+        return_order = Order.objects.filter(is_return=True).first()
+        self.assertIsNotNone(return_order)
+        self.assertEqual(return_order.status, "DRAFT")
+        self.assertEqual(return_order.return_against, order)
+
+    def test_cashier_cannot_return(self):
+        self.client.logout()
+        self.client.force_login(self.cashier_user)
+        order = self._create_order()
+        self._settle_order(order)
+        response = self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Order.objects.filter(is_return=True).exists())
+
+    def test_return_requires_login(self):
+        self.client.logout()
+        order = self._create_order()
+        self._settle_order(order)
+        response = self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        self.assertEqual(response.status_code, 302)
 
 
 class KOTListTest(BackofficeViewTestBase):
     def test_kot_list(self):
         response = self.client.get(reverse("orders:kot_list"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Kitchen Tickets")
+        self.assertContains(response, "Kitchen &amp; Bar Tickets")
 
     def test_kot_list_with_data(self):
         order = self._create_order()
