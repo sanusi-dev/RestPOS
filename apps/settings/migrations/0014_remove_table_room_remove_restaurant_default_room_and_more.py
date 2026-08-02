@@ -7,6 +7,9 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("settings", "0013_delete_userroomassignment"),
+        # Order.room FK created in orders/0001 and removed in orders/0005 must both
+        # run before Room is deleted — otherwise fresh test-DB replays fail.
+        ("orders", "0005_remove_order_room_remove_order_table"),
     ]
 
     operations = [
