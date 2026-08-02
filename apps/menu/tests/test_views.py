@@ -142,6 +142,7 @@ class TestMenuItemViews(MenuViewTestBase):
         response = self.client.post(
             reverse("menu:menu_item_update", kwargs={"pk": self.menu_item.pk}),
             {
+                "menu": self.menu.pk,
                 "item": self.item_food.pk,
                 "item_name": "Jollof Rice",
                 "rate": "1800",
@@ -303,22 +304,3 @@ class TestItemVariantViews(MenuViewTestBase):
     def test_variant_delete_requires_post(self):
         response = self.client.get(reverse("menu:variant_delete", kwargs={"pk": self.variant.pk}))
         self.assertEqual(response.status_code, 405)
-
-
-class TestPriceListViews(MenuViewTestBase):
-    def test_price_list_list_200(self):
-        response = self.client.get(reverse("menu:price_list_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Lunch Menu")
-
-    def test_price_list_detail_200(self):
-        from apps.menu.models import PriceList
-
-        pl = PriceList.objects.get(menu=self.menu)
-        response = self.client.get(reverse("menu:price_list_detail", kwargs={"pk": pl.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_price_list_detail_404(self):
-        response = self.client.get(reverse("menu:price_list_detail", kwargs={"pk": 9999}))
-        self.assertEqual(response.status_code, 404)

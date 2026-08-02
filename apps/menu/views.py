@@ -12,7 +12,7 @@ from .forms import (
     MenuForm,
     MenuItemForm,
 )
-from .models import ItemAddOn, ItemVariant, Menu, MenuItem, PriceList
+from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 
 @login_required
@@ -20,7 +20,6 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "menu_count": Menu.objects.count(),
         "menu_item_count": MenuItem.objects.count(),
-        "price_list_count": PriceList.objects.count(),
         "add_on_count": ItemAddOn.objects.count(),
         "variant_count": ItemVariant.objects.count(),
     }
@@ -102,16 +101,14 @@ def menu_item_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def menu_item_create(request: HttpRequest) -> HttpResponse:
-    menu_id = request.POST.get("menu") or request.GET.get("menu")
+    menu_id = request.GET.get("menu")
     if request.method == "POST":
         form = MenuItemForm(request.POST)
         if form.is_valid():
-            if menu_id:
-                form.instance.menu_id = menu_id
             menu_item = form.save()
             return redirect("menu:menu_detail", pk=menu_item.menu_id)
     else:
-        form = MenuItemForm()
+        form = MenuItemForm(initial={"menu": menu_id} if menu_id else None)
     return render(
         request,
         "backoffice/menu/menu_item_form.html",
@@ -255,26 +252,3 @@ def variant_delete(request: HttpRequest, pk: int) -> HttpResponse:
     variant = get_object_or_404(ItemVariant, pk=pk)
     variant.delete()
     return redirect("menu:variant_list")
-
-
-# ---------------------------------------------------------------------------
-# PriceList
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def price_list_list(request: HttpRequest) -> HttpResponse:
-    # select_related avoids per-row FK fetch of pl.menu; annotate avoids per-row COUNT.
-    price_lists = PriceList.objects.select_related("menu").annotate(price_count=Count("prices"))
-    return render(request, "backoffice/menu/price_list_list.html", {"price_lists": price_lists})
-
-
-@login_required
-def price_list_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    price_list = get_object_or_404(PriceList.objects.select_related("menu"), pk=pk)
-    item_prices = price_list.prices.select_related("item", "uom").all()
-    return render(
-        request,
-        "backoffice/menu/price_list_detail.html",
-        {"price_list": price_list, "item_prices": item_prices},
-    )

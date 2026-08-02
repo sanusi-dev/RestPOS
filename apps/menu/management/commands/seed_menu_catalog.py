@@ -372,7 +372,6 @@ class Command(BaseCommand):
                 special = fam["special"] and i == 0
                 count += self._upsert_menu_item(menu, vitem, rate, special, force)
 
-        menu.sync_price_list()
         return MenuItem.objects.filter(menu=menu).count()
 
     def _upsert_menu_item(self, menu: Menu, item: Item, rate: Decimal, special: bool, force: bool) -> int:

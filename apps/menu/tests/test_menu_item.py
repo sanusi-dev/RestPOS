@@ -91,15 +91,6 @@ class MenuItemModelTest(TestCase):
         mi2 = MenuItem.objects.create(menu=menu2, item=self.item_food, rate=Decimal("2000"))
         self.assertEqual(mi2.rate, Decimal("2000"))
 
-    def test_disabled_item_excluded_from_price_list(self):
-        mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))
-        pl = self.menu.price_lists.first()
-        self.assertEqual(pl.prices.count(), 1)
-        mi.disabled = True
-        mi.save()
-        pl.refresh_from_db()
-        self.assertEqual(pl.prices.count(), 0)
-
     def test_special_dish_flag(self):
         mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"), special_dish=True)
         mi.refresh_from_db()

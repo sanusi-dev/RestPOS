@@ -3,7 +3,7 @@ from django import forms
 from apps.inventory.models import Item
 from apps.utils.forms import StyledModelForm
 
-from .models import ItemAddOn, ItemVariant, Menu, MenuItem, PriceList
+from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 
 class MenuModelForm(StyledModelForm):
@@ -21,22 +21,22 @@ class MenuForm(MenuModelForm):
 class MenuItemForm(MenuModelForm):
     class Meta:
         model = MenuItem
-        fields = ["item", "item_name", "rate", "special_dish", "disabled"]
+        fields = ["menu", "item", "item_name", "rate", "special_dish", "disabled"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Model save() fills it from the item when blank.
+        self.fields["item_name"].required = False
         self.fields["item_name"].widget = forms.HiddenInput()
+        menu_qs = Menu.objects.filter(enabled=True).order_by("name")
+        if self.instance and self.instance.menu_id:
+            menu_qs = menu_qs | Menu.objects.filter(pk=self.instance.menu_id)
+        self.fields["menu"].queryset = menu_qs.distinct().order_by("name")
         # ERPNext-aligned: sellable, non-template, active only (keep current selection if any).
         qs = Item.objects.filter(is_sales_item=True, has_variants=False, disabled=False).order_by("item_name")
         if self.instance and self.instance.item_id:
             qs = qs | Item.objects.filter(pk=self.instance.item_id)
         self.fields["item"].queryset = qs.distinct().order_by("item_name")
-
-
-class PriceListForm(MenuModelForm):
-    class Meta:
-        model = PriceList
-        fields = ["name", "enabled", "selling", "buying"]
 
 
 class ItemAddOnForm(MenuModelForm):
