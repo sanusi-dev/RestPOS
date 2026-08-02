@@ -1,0 +1,30 @@
+{% comment %}========== NO-SHIFT GATE =========={% endcomment %}
+<div class="h-full flex items-center justify-center p-8" x-data="{ showForm: false }">
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 w-full max-w-md">
+    <div class="text-center mb-6">
+      <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 ring-1 ring-orange-100 mx-auto mb-4">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">No Open Shift</h2>
+      <p class="text-sm text-gray-500 mt-1">Open a shift to start taking orders.</p>
+    </div>
+    <form method="post" action="{% url 'pos:pos_open_shift' %}" class="space-y-3" x-show="showForm" x-cloak>
+      {% csrf_token %}
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Opening Float</p>
+      {% for mode in payment_modes %}
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-semibold text-gray-700 w-28 shrink-0">{{ mode.name }}</label>
+        <input type="number" step="0.01" name="opening_{{ mode.pk }}" placeholder="0.00"
+               class="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
+      </div>
+      {% endfor %}
+      <button type="submit" class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+        Open Shift
+      </button>
+    </form>
+    <button @click="showForm = true" x-show="!showForm"
+            class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      Open Shift
+    </button>
+  </div>
+</div>

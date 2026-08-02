@@ -1,0 +1,190 @@
+{% load humanize %}
+{% comment %}---- Success banners, grand total, action dropup, receipt, Pay ----{% endcomment %}
+<div class="border-t border-gray-100 p-4 space-y-3">
+  {% if sync_success and not print_failures %}
+  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+    ✓ Sent {{ kot_count }} ticket{{ kot_count|pluralize }} to kitchen &amp; bar
+  </div>
+  {% endif %}
+  {% if sync_success and print_failures %}
+  <div class="bg-amber-50 text-amber-800 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-amber-600/10">
+    Ticket{{ print_failures|pluralize }} created, but {{ print_failures|join:", " }} printing failed. Retry from Actions.
+  </div>
+  {% endif %}
+  {% if ticket_print_success %}
+  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+    ✓ {{ ticket_print_success|title }} ticket {% if ticket_print_action == "retry" %}retried{% else %}reprinted{% endif %}
+  </div>
+  {% endif %}
+  {% if ticket_print_error %}
+  <div class="bg-amber-50 text-amber-800 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-amber-600/10">
+    {{ ticket_print_error|title }} printing failed. Retry from Actions.
+  </div>
+  {% endif %}
+  {% if clear_success %}
+  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+    ✓ Order cleared
+  </div>
+  {% endif %}
+  {% if receipt_print_success %}
+  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
+    Receipt {% if receipt_print_action == "reprint" %}reprinted{% else %}printed{% endif %} successfully.
+  </div>
+  {% endif %}
+  {% if receipt_print_error %}
+  <div class="bg-amber-50 text-amber-800 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-amber-600/10">
+    Receipt {% if receipt_print_action == "reprint" %}reprint{% else %}printing{% endif %} failed. Try again.
+  </div>
+  {% endif %}
+
+  <div class="flex items-center justify-between pt-2">
+    <span class="text-base font-extrabold text-gray-900">Total</span>
+    <span class="text-xl font-extrabold text-gray-900">₦{{ order.grand_total|intcomma }}</span>
+  </div>
+
+  <div class="flex gap-2 items-stretch">
+    <div class="relative flex-1" x-data="{ open: false, cancelOpen: false }"
+         @click.outside="if (!cancelOpen) open = false" @keydown.escape.window="open = false; cancelOpen = false">
+      <button type="button" @click="open = !open"
+              class="w-full h-full min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
+        Action
+        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 9 7 7 7-7"/></svg>
+      </button>
+
+      <div x-show="open" x-cloak
+           x-transition:enter="transition ease-out duration-100"
+           x-transition:enter-start="opacity-0 translate-y-1"
+           x-transition:enter-end="opacity-100 translate-y-0"
+           x-transition:leave="transition ease-in duration-75"
+           x-transition:leave-start="opacity-100 translate-y-0"
+           x-transition:leave-end="opacity-0 translate-y-1"
+           class="absolute bottom-full mb-2 left-0 w-full min-w-[15rem] bg-white rounded-xl shadow-lg ring-1 ring-gray-200 py-1.5 z-20">
+
+        {% if not order_sent and order.items.exists %}
+        <button type="button" @click="open = false"
+                hx-post="{% url 'pos:pos_order_sync' order.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
+          <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
+          Send to Kitchen &amp; Bar
+        </button>
+        {% endif %}
+
+        {% if kitchen_ticket_pending %}
+        <button type="button" @click="open = false"
+                hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'retry' %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors">
+          Retry Kitchen Printing
+        </button>
+        {% endif %}
+        {% if bar_ticket_pending %}
+        <button type="button" @click="open = false"
+                hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'retry' %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors">
+          Retry Bar Printing
+        </button>
+        {% endif %}
+        {% if kitchen_ticket_printed %}
+        <button type="button" @click="open = false"
+                hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'reprint' %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
+          Reprint Kitchen
+        </button>
+        {% endif %}
+        {% if bar_ticket_printed %}
+        <button type="button" @click="open = false"
+                hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'reprint' %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
+          Reprint Bar
+        </button>
+        {% endif %}
+
+        <div class="my-1 border-t border-gray-100"></div>
+
+        {% if order_sent %}
+        <button type="button" @click="open = false; cancelOpen = true"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 inline-flex items-center gap-2.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 6 12 12M18 6 6 18"/></svg>
+          Cancel Order
+        </button>
+        {% else %}
+        <button type="button"
+                @click="open = false"
+                onclick="Swal.fire({title:'Clear order?',text:'Remove all items from this order.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Clear Order'}).then((r)=>{if(r.isConfirmed){htmx.trigger('#clear-order-btn','click')}})"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-2.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+          Clear
+        </button>
+        <button id="clear-order-btn" type="button" class="hidden"
+                hx-post="{% url 'pos:pos_order_clear' order.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"></button>
+        {% endif %}
+      </div>
+
+      <div x-show="cancelOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="cancelOpen = false"></div>
+        <div class="relative bg-white rounded-[1.5rem] shadow-2xl w-full max-w-md p-6" @click.stop>
+          <div class="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Cancel sent order?</h2>
+              <p class="text-sm text-gray-500 mt-1">The kitchen and bar will stop preparing this order.</p>
+            </div>
+            <button type="button" @click="cancelOpen = false" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <form method="post" action="{% url 'pos:pos_order_cancel' order.pk %}" class="space-y-4" x-data="{ cancelReason: 'wrong_order' }">
+            {% csrf_token %}
+            <div>
+              <label for="{{ cancel_form.cancel_reason.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
+              {{ cancel_form.cancel_reason }}
+            </div>
+            <div x-show="cancelReason === 'other'" x-cloak>
+              <label for="{{ cancel_form.cancel_reason_note.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
+              {{ cancel_form.cancel_reason_note }}
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button type="button" @click="cancelOpen = false" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-all">
+                Keep Order
+              </button>
+              <button type="submit" class="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold shadow hover:bg-orange-700 transition-all">
+                Cancel Order
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {% if receipt_printable %}
+    <button type="button"
+            hx-post="{% url 'pos:pos_order_print' order.pk %}"
+            hx-target="#cart-panel" hx-swap="outerHTML"
+            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
+       {% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}
+    </button>
+    {% else %}
+    <button type="button" disabled aria-disabled="true"
+            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-400 text-sm font-semibold cursor-not-allowed inline-flex items-center justify-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
+       {% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}
+    </button>
+    {% endif %}
+
+    <a href="{% url 'pos:pos_order_settle' order.pk %}"
+       hx-get="{% url 'pos:pos_order_settle' order.pk %}"
+       hx-target="#payment-dialog-container"
+       hx-swap="innerHTML"
+       class="flex-[2] min-h-[2.75rem] py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all text-center inline-flex items-center justify-center
+              {% if not order.items.exists %}pointer-events-none opacity-40 shadow-none{% endif %}"
+       {% if not order.items.exists %}aria-disabled="true"{% endif %}>
+      Pay
+    </a>
+  </div>
+</div>

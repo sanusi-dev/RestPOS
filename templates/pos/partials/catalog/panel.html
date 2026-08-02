@@ -1,0 +1,33 @@
+{% comment %}========== CATALOG (RIGHT) =========={% endcomment %}
+<div class="flex-1 overflow-y-auto p-6">
+  <div x-data="{ showSearch: false }" class="mb-4 h-10 flex items-center justify-end">
+    <button @click="showSearch = !showSearch; if(showSearch) { $nextTick(() => { $refs.searchInput.focus(); search = '' }) }"
+            x-show="!showSearch"
+            class="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            aria-label="Search">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+    </button>
+    <input type="search" x-model="search" x-show="showSearch" x-ref="searchInput"
+           @click.outside="showSearch = false; search = ''"
+           @keydown.escape="showSearch = false; search = ''"
+           placeholder="Search menu..."
+           class="w-48 rounded-xl border border-gray-300 px-4 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+  </div>
+
+  <div class="flex gap-2 mb-6 flex-wrap">
+    <button @click="activeGroup = 'All'"
+            :class="activeGroup === 'All' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+            class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
+      All
+    </button>
+    {% for group_name in item_groups.keys %}
+    <button @click="activeGroup = '{{ group_name|escapejs }}'"
+            :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+            class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
+      {{ group_name }}
+    </button>
+    {% endfor %}
+  </div>
+
+  {% include "pos/partials/catalog/grid.html" %}
+</div>

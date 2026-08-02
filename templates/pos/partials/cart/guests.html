@@ -1,0 +1,40 @@
+{% comment %}---- Guests stepper ----{% endcomment %}
+<div class="p-4 border-b border-gray-100">
+  <div class="flex items-center justify-between">
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Guests</p>
+    <div class="flex items-center gap-2">
+      <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+              hx-vals='{"guest_delta": "-1"}'
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="w-8 h-8 rounded-xl border border-gray-200 text-gray-600 text-lg font-bold hover:bg-gray-50 disabled:opacity-30 transition-colors
+                     {% if order.guest_count <= 1 %}disabled{% endif %}"
+              {% if order.guest_count <= 1 %}disabled{% endif %}>−</button>
+      <span class="min-w-[2rem] text-center text-base font-extrabold text-gray-900">{{ order.guest_count }}</span>
+      <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+              hx-vals='{"guest_delta": "1"}'
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="w-8 h-8 rounded-xl border border-gray-200 text-gray-600 text-lg font-bold hover:bg-gray-50 transition-colors">+</button>
+    </div>
+  </div>
+  <div class="mt-4">
+    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Order type</p>
+    <div class="grid grid-cols-2 gap-2 mt-2">
+      {% for value, label in order_type_choices %}
+      <button type="button"
+              hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+              hx-vals='{"order_type": "{{ value }}"}'
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              aria-pressed="{% if order.order_type == value %}true{% else %}false{% endif %}"
+              class="rounded-xl border px-3 py-2 text-xs font-bold transition-colors
+                     {% if order.order_type == value %}bg-gray-900 border-gray-900 text-white{% else %}bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100{% endif %}
+                     {% if order_sent %}cursor-not-allowed opacity-50{% endif %}"
+              {% if order_sent %}disabled{% endif %}>
+        {{ label }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% if order.guest_count > 1 %}
+  <p class="text-xs text-gray-400 mt-2">Items go to the active guest. Tap a guest header to switch.</p>
+  {% endif %}
+</div>

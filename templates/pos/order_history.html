@@ -1,0 +1,89 @@
+{% extends "pos/base.html" %}
+{% load humanize %}
+{% block pos_content %}
+<div class="h-full overflow-y-auto">
+  <div class="bg-white border-b border-gray-100 px-6 py-2.5 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+        <a href="?" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+           {% if not payment_filter %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+          All Orders
+        </a>
+        <a href="?payment=cash" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+           {% if payment_filter == 'cash' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+          Cash
+        </a>
+        <a href="?payment=electronic" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+           {% if payment_filter == 'electronic' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+          Electronic
+        </a>
+        <a href="?payment=refunds" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+           {% if payment_filter == 'refunds' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+          Refunds
+        </a>
+      </div>
+      <div>
+        <button type="button" onclick="this.nextElementSibling.showPicker()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 shadow-sm text-gray-600 bg-white hover:bg-gray-50 transition-all">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>
+          {{ date_filter }}
+        </button>
+        <input type="date" value="{{ date_filter }}" class="opacity-0 absolute w-0 h-0"
+               onchange="window.location.href='?date='+this.value{% if payment_filter %}+'&payment={{ payment_filter }}'{% endif %}">
+      </div>
+    </div>
+  </div>
+
+  <div class="p-6">
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+      <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Order #</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Payment</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for order in orders %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-bold text-gray-900">{{ order.order_number|default:"—" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ order.invoice_number|default:"—" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ order.get_order_type_display }}</td>
+              <td class="px-6 py-4">
+                {% if order.is_return %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Refund</span>
+                {% elif order.is_paid %}
+                  {% with mode=order.payments.first.mode_of_payment %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">{{ mode.name }}</span>
+                  {% endwith %}
+                {% elif order.status == "SUBMITTED" %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Unpaid</span>
+                {% else %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-500 ring-1 ring-gray-200">Draft</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right text-sm font-semibold text-gray-900">₦{{ order.grand_total|intcomma }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ order.posting_date }} {{ order.posting_time }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No orders found.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

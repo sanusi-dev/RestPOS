@@ -1,0 +1,58 @@
+{% extends "pos/base.html" %}
+{% load humanize %}
+{% block pos_content %}
+<div class="h-full flex flex-col bg-white">
+
+  <div class="sticky top-0 bg-gray-900 text-gray-300 px-6 h-10 flex items-center gap-8 text-xs shrink-0 z-10">
+    <span class="w-24">Opened at</span>
+    <span>Order</span>
+    <span class="ml-auto">Total</span>
+    <form method="post" action="{% url 'pos:pos_order_new' %}" class="shrink-0">
+      {% csrf_token %}
+      <button type="submit" class="px-3 py-1.5 rounded-md bg-white text-gray-900 text-xs font-bold hover:bg-gray-100 transition-colors">
+        + New Order
+      </button>
+    </form>
+  </div>
+
+  <div class="flex-1 overflow-y-auto">
+    {% for order in draft_orders %}
+    <div class="group px-6 py-5 border-b border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors flex items-center gap-8">
+      <div class="w-24 shrink-0">
+        <p class="text-xl font-bold text-[#111827]">{{ order.updated_at|date:"H:i" }}</p>
+        <p class="text-xs text-[#9CA3AF]">{{ order.updated_at|timesince }}</p>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2C8 2 4 4 4 8c0 3 2 5 4 6v8h8v-8c2-1 4-3 4-6 0-4-4-6-8-6Z"/></svg>
+          <span class="text-blue-600 font-semibold text-sm">#{{ order.order_number|default:order.pk }}</span>
+          <span class="text-sm font-bold text-[#111827] tracking-wide">{{ order.get_order_type_display|upper }}</span>
+        </div>
+        {% if order.items.exists %}
+        <p class="text-sm text-gray-400 truncate mt-0.5">{{ order.items.all|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div class="shrink-0 flex items-center gap-3">
+        <a href="{% url 'pos:pos_order_screen' order.pk %}"
+           class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+          Proceed to payment
+        </a>
+        <a href="{% url 'pos:pos_order_screen' order.pk %}" class="flex items-center gap-1.5 text-[#111827] font-bold">
+          <span>{{ order.grand_total|intcomma }} ₦</span>
+          <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+    {% empty %}
+    <div class="h-full flex items-center justify-center">
+      <div class="text-center">
+        <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto mb-3">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        </div>
+        <p class="text-sm font-medium text-gray-400">No open orders</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

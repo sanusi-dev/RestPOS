@@ -1,0 +1,19 @@
+{% comment %}---- Cart panel wrapper (HTMX outerHTML target #cart-panel) ----{% endcomment %}
+<div id="cart-panel" class="w-[30%] min-w-[300px] bg-white border-r border-gray-100 flex flex-col shadow-lg shrink-0">
+
+  {% include "pos/partials/cart/guests.html" %}
+
+  {% if error %}
+  <div class="mx-4 mt-3 bg-red-50 text-red-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-red-600/10">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% comment %}---- Cart Items ----{% endcomment %}
+  <div class="flex-1 overflow-y-auto">
+    {% include "pos/partials/cart/items.html" %}
+  </div>
+
+  {% comment %}---- Totals + Actions ----{% endcomment %}
+  {% include "pos/partials/cart/totals.html" %}
+</div>
