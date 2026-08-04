@@ -8,8 +8,8 @@ from .models import (
 
 @admin.register(Restaurant)
 class RestaurantAdmin(admin.ModelAdmin):
-    list_display = ("company", "invoice_series_prefix", "active_menu", "default_warehouse")
-    list_select_related = ("active_menu", "default_warehouse")
+    list_display = ("company", "invoice_series_prefix", "active_menu", "store_warehouse", "default_warehouse")
+    list_select_related = ("active_menu", "store_warehouse", "default_warehouse")
     search_fields = ("company",)
 
 

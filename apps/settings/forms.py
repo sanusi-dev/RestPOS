@@ -57,6 +57,7 @@ class RestaurantForm(SettingsModelForm):
             "invoice_series_prefix",
             "address",
             "active_menu",
+            "store_warehouse",
             "default_warehouse",
             "max_open_drafts",
         ]
@@ -67,6 +68,9 @@ class RestaurantForm(SettingsModelForm):
         self.fields["active_menu"].queryset = active_choices(Menu, self.instance.active_menu_id, enabled=True)
         self.fields["default_warehouse"].queryset = active_choices(
             Warehouse, self.instance.default_warehouse_id, disabled=False
+        )
+        self.fields["store_warehouse"].queryset = active_choices(
+            Warehouse, self.instance.store_warehouse_id, disabled=False
         )
 
 
@@ -86,3 +90,4 @@ class ProductionUnitForm(SettingsModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
+        self.fields["warehouse"].help_text = "FOOD uses Kitchen; DRINKS uses the Bar / POS sales warehouse."

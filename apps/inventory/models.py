@@ -45,6 +45,23 @@ class Warehouse(BaseModel):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        super().clean()
+        if not self.disabled or not self.pk:
+            return
+
+        from apps.settings.models import ProductionUnit, Restaurant
+
+        configured_as = []
+        if Restaurant.objects.filter(default_warehouse_id=self.pk).exists():
+            configured_as.append("Bar / POS sales warehouse")
+        if Restaurant.objects.filter(store_warehouse_id=self.pk).exists():
+            configured_as.append("central Store warehouse")
+        if ProductionUnit.objects.filter(warehouse_id=self.pk).exists():
+            configured_as.append("production unit warehouse")
+        if configured_as:
+            raise ValidationError({"disabled": f"Cannot disable a configured {', '.join(configured_as)}."})
+
 
 class Item(BaseModel):
     """A product or material tracked in inventory and sold via POS."""
@@ -225,6 +242,7 @@ class StockLedgerEntry(BaseModel):
         voucher_no,
         rate=Decimal("0"),
         voucher_detail_no="",
+        prevent_negative=False,
     ):
         """Create a ledger entry and update the corresponding Bin.
 
@@ -232,10 +250,40 @@ class StockLedgerEntry(BaseModel):
         ``rate`` is the incoming rate (ignored for outgoing moves where FIFO
         or moving-average valuation supplies the outgoing rate).
         """
-        bin_obj = Bin.get_or_create_bin(item, warehouse)
+        with transaction.atomic():
+            bin_obj = Bin.get_or_create_bin(item, warehouse)
+            bin_obj = Bin.objects.select_for_update().get(pk=bin_obj.pk)
+            return cls._create_entry_locked(
+                item=item,
+                warehouse=warehouse,
+                actual_qty=actual_qty,
+                voucher_type=voucher_type,
+                voucher_no=voucher_no,
+                rate=rate,
+                voucher_detail_no=voucher_detail_no,
+                prevent_negative=prevent_negative,
+                bin_obj=bin_obj,
+            )
+
+    @classmethod
+    def _create_entry_locked(
+        cls,
+        *,
+        item,
+        warehouse,
+        actual_qty,
+        voucher_type,
+        voucher_no,
+        rate,
+        voucher_detail_no,
+        prevent_negative,
+        bin_obj,
+    ):
         current_qty = bin_obj.actual_qty or Decimal("0")
         current_rate = bin_obj.valuation_rate or Decimal("0")
         new_qty = current_qty + actual_qty
+        if prevent_negative and new_qty < 0:
+            raise ValidationError(f"Insufficient stock for {item.item_name} in {warehouse.name}.")
 
         incoming_rate = Decimal("0")
         outgoing_rate = Decimal("0")
@@ -318,13 +366,12 @@ class StockLedgerEntry(BaseModel):
 
 
 class StockEntry(BaseModel):
-    """A stock movement document (receipt, issue, transfer, or repack)."""
+    """A stock receipt or Store-to-production-unit transfer."""
 
     purpose = models.CharField(
         max_length=30,
         choices=[
             ("MATERIAL_RECEIPT", "Material Receipt"),
-            ("MATERIAL_ISSUE", "Material Issue"),
             ("MATERIAL_TRANSFER", "Material Transfer"),
         ],
     )
@@ -344,80 +391,172 @@ class StockEntry(BaseModel):
 
     def submit(self):
         """Post the stock entry: create SLEs for every detail line and mark submitted."""
-        if self.status != "DRAFT":
-            return
-        voucher_no = str(self.pk)
-        updated_items = set()
-        for detail in self.items.select_related("item", "source_warehouse", "target_warehouse").all():
-            source = detail.source_warehouse
-            target = detail.target_warehouse
-            rate = detail.basic_rate
+        from apps.settings.models import ProductionUnit, Restaurant
 
-            if self.purpose == "MATERIAL_RECEIPT":
-                StockLedgerEntry.create_entry(
-                    item=detail.item,
-                    warehouse=target,
-                    actual_qty=detail.qty,
-                    voucher_type="Stock Entry",
-                    voucher_no=voucher_no,
-                    rate=rate,
-                    voucher_detail_no=str(detail.pk),
+        with transaction.atomic():
+            entry = StockEntry.objects.select_for_update().get(pk=self.pk)
+            if entry.status != "DRAFT":
+                self.status = entry.status
+                return
+            restaurant = Restaurant.load()
+            if not restaurant or not restaurant.store_warehouse_id or restaurant.store_warehouse.disabled:
+                raise ValidationError("Configure an enabled central Store warehouse before submitting.")
+            if entry.purpose not in {"MATERIAL_RECEIPT", "MATERIAL_TRANSFER"}:
+                raise ValidationError("Unsupported stock entry purpose.")
+
+            targets = {}
+            if entry.purpose == "MATERIAL_TRANSFER":
+                if not restaurant.default_warehouse_id or restaurant.default_warehouse.disabled:
+                    raise ValidationError("Configure an enabled Bar / POS sales warehouse before transferring stock.")
+                units = {
+                    unit.department: unit
+                    for unit in ProductionUnit.objects.select_related("warehouse").filter(
+                        department__in=[ProductionUnit.FOOD, ProductionUnit.DRINKS]
+                    )
+                }
+                food_unit = units.get(ProductionUnit.FOOD)
+                drinks_unit = units.get(ProductionUnit.DRINKS)
+                if not food_unit or food_unit.warehouse.disabled:
+                    raise ValidationError(
+                        "Configure an enabled Kitchen production unit warehouse before transferring stock."
+                    )
+                if (
+                    not drinks_unit
+                    or drinks_unit.warehouse.disabled
+                    or drinks_unit.warehouse_id != restaurant.default_warehouse_id
+                ):
+                    raise ValidationError(
+                        "Configure the Drinks production unit to use the enabled Bar / POS sales warehouse."
+                    )
+                if (
+                    restaurant.store_warehouse_id
+                    in {
+                        restaurant.default_warehouse_id,
+                        food_unit.warehouse_id,
+                    }
+                    or restaurant.default_warehouse_id == food_unit.warehouse_id
+                ):
+                    raise ValidationError("Store, Kitchen, and Bar warehouses must be distinct.")
+                targets = {"FOOD": food_unit.warehouse, "DRINKS": restaurant.default_warehouse}
+
+            details = list(entry.items.select_related("item", "source_warehouse", "target_warehouse"))
+            if not details:
+                raise ValidationError("Add at least one item before submitting.")
+            for detail in details:
+                detail.validate_for_submission(restaurant=restaurant, targets=targets)
+
+            bin_keys = {
+                (detail.item_id, warehouse_id)
+                for detail in details
+                for warehouse_id in (
+                    [restaurant.store_warehouse_id]
+                    if entry.purpose == "MATERIAL_RECEIPT"
+                    else [restaurant.store_warehouse_id, targets[detail.item.department].pk]
                 )
-                detail.item.last_purchase_rate = rate
-                updated_items.add(detail.item)
-            elif self.purpose == "MATERIAL_ISSUE":
-                StockLedgerEntry.create_entry(
-                    item=detail.item,
-                    warehouse=source,
-                    actual_qty=-detail.qty,
-                    voucher_type="Stock Entry",
-                    voucher_no=voucher_no,
-                    voucher_detail_no=str(detail.pk),
+            }
+            for item_id, warehouse_id in sorted(bin_keys):
+                Bin.get_or_create_bin_id(item_id, warehouse_id)
+            locked_bins = {
+                (bin_obj.item_id, bin_obj.warehouse_id): bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(
+                    item_id__in=[item_id for item_id, _ in bin_keys],
+                    warehouse_id__in=[warehouse_id for _, warehouse_id in bin_keys],
                 )
-            elif self.purpose == "MATERIAL_TRANSFER":
-                StockLedgerEntry.create_entry(
-                    item=detail.item,
-                    warehouse=source,
-                    actual_qty=-detail.qty,
-                    voucher_type="Stock Entry",
-                    voucher_no=voucher_no,
-                    rate=Decimal("0"),
-                    voucher_detail_no=str(detail.pk),
-                )
-                StockLedgerEntry.create_entry(
-                    item=detail.item,
-                    warehouse=target,
-                    actual_qty=detail.qty,
-                    voucher_type="Stock Entry",
-                    voucher_no=voucher_no,
-                    rate=rate,
-                    voucher_detail_no=str(detail.pk),
-                )
-        if updated_items:
-            Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
-        self.status = "SUBMITTED"
-        self.save(update_fields=["status", "updated_at"])
+                .order_by("item_id", "warehouse_id")
+            }
+
+            voucher_no = str(entry.pk)
+            updated_items = set()
+            for detail in details:
+                store_bin = locked_bins[(detail.item_id, restaurant.store_warehouse_id)]
+                if entry.purpose == "MATERIAL_RECEIPT":
+                    detail.source_warehouse = None
+                    detail.target_warehouse = restaurant.store_warehouse
+                    StockLedgerEntry._create_entry_locked(
+                        item=detail.item,
+                        warehouse=restaurant.store_warehouse,
+                        actual_qty=detail.qty,
+                        voucher_type="Stock Entry",
+                        voucher_no=voucher_no,
+                        rate=detail.basic_rate,
+                        voucher_detail_no=str(detail.pk),
+                        prevent_negative=False,
+                        bin_obj=store_bin,
+                    )
+                    detail.item.last_purchase_rate = detail.basic_rate
+                    updated_items.add(detail.item)
+                else:
+                    target = targets[detail.item.department]
+                    detail.source_warehouse = restaurant.store_warehouse
+                    detail.target_warehouse = target
+                    outgoing = StockLedgerEntry._create_entry_locked(
+                        item=detail.item,
+                        warehouse=restaurant.store_warehouse,
+                        actual_qty=-detail.qty,
+                        voucher_type="Stock Entry",
+                        voucher_no=voucher_no,
+                        rate=Decimal("0"),
+                        voucher_detail_no=str(detail.pk),
+                        prevent_negative=True,
+                        bin_obj=store_bin,
+                    )
+                    StockLedgerEntry._create_entry_locked(
+                        item=detail.item,
+                        warehouse=target,
+                        actual_qty=detail.qty,
+                        voucher_type="Stock Entry",
+                        voucher_no=voucher_no,
+                        rate=outgoing.outgoing_rate,
+                        voucher_detail_no=str(detail.pk),
+                        prevent_negative=False,
+                        bin_obj=locked_bins[(detail.item_id, target.pk)],
+                    )
+                detail.save(update_fields=["source_warehouse", "target_warehouse", "updated_at"])
+            if updated_items:
+                Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
+            entry.status = "SUBMITTED"
+            entry.save(update_fields=["status", "updated_at"])
+            self.status = entry.status
 
     def cancel(self):
         """Reverse every SLE created by this entry and mark cancelled."""
-        if self.status != "SUBMITTED":
-            return
-        voucher_no = str(self.pk)
-        # Exclude already-cancelled rows upfront so the loop body runs once per real SLE.
-        for sle in self.stock_ledger_entries_for_voucher(voucher_no).exclude(is_cancelled=True):
-            StockLedgerEntry.create_entry(
-                item=sle.item,
-                warehouse=sle.warehouse,
-                actual_qty=-sle.actual_qty,
-                voucher_type="Stock Entry Cancellation",
-                voucher_no=voucher_no,
-                rate=sle.incoming_rate if sle.actual_qty > 0 else Decimal("0"),
-                voucher_detail_no=sle.voucher_detail_no,
+        with transaction.atomic():
+            entry = StockEntry.objects.select_for_update().get(pk=self.pk)
+            if entry.status != "SUBMITTED":
+                self.status = entry.status
+                return
+            voucher_no = str(entry.pk)
+            sles = list(
+                self.stock_ledger_entries_for_voucher(voucher_no).select_for_update().exclude(is_cancelled=True)
             )
-            sle.is_cancelled = True
-            sle.save(update_fields=["is_cancelled", "updated_at"])
-        self.status = "CANCELLED"
-        self.save(update_fields=["status", "updated_at"])
+            bin_keys = {(sle.item_id, sle.warehouse_id) for sle in sles}
+            locked_bins = {
+                (bin_obj.item_id, bin_obj.warehouse_id): bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(
+                    item_id__in=[item_id for item_id, _ in bin_keys],
+                    warehouse_id__in=[warehouse_id for _, warehouse_id in bin_keys],
+                )
+                .order_by("item_id", "warehouse_id")
+            }
+            for sle in sles:
+                StockLedgerEntry._create_entry_locked(
+                    item=sle.item,
+                    warehouse=sle.warehouse,
+                    actual_qty=-sle.actual_qty,
+                    voucher_type="Stock Entry Cancellation",
+                    voucher_no=voucher_no,
+                    rate=sle.outgoing_rate if sle.actual_qty < 0 else Decimal("0"),
+                    voucher_detail_no=sle.voucher_detail_no,
+                    prevent_negative=sle.actual_qty > 0,
+                    bin_obj=locked_bins[(sle.item_id, sle.warehouse_id)],
+                )
+                sle.is_cancelled = True
+                sle.save(update_fields=["is_cancelled", "updated_at"])
+            entry.status = "CANCELLED"
+            entry.save(update_fields=["status", "updated_at"])
+            self.status = entry.status
 
     @staticmethod
     def stock_ledger_entries_for_voucher(voucher_no):
@@ -457,20 +596,33 @@ class StockEntryDetail(BaseModel):
             return
         purpose = self.stock_entry.purpose
         if purpose == "MATERIAL_RECEIPT":
-            if not self.target_warehouse_id:
-                raise ValidationError({"target_warehouse": "Material Receipt requires a target warehouse."})
             if self.source_warehouse_id:
                 raise ValidationError({"source_warehouse": "Material Receipt should not have a source warehouse."})
-        elif purpose == "MATERIAL_ISSUE":
-            if not self.source_warehouse_id:
-                raise ValidationError({"source_warehouse": "Material Issue requires a source warehouse."})
-            if self.target_warehouse_id:
-                raise ValidationError({"target_warehouse": "Material Issue should not have a target warehouse."})
-        elif purpose == "MATERIAL_TRANSFER":
-            if not self.source_warehouse_id:
-                raise ValidationError({"source_warehouse": "Material Transfer requires a source warehouse."})
-            if not self.target_warehouse_id:
-                raise ValidationError({"target_warehouse": "Material Transfer requires a target warehouse."})
+        elif (
+            purpose == "MATERIAL_TRANSFER"
+            and self.source_warehouse_id == self.target_warehouse_id
+            and self.source_warehouse_id
+        ):
+            raise ValidationError("Source and target warehouses must differ.")
+
+    def validate_for_submission(self, *, restaurant, targets):
+        if self.qty <= 0:
+            raise ValidationError(f"Quantity for {self.item.item_name} must be greater than zero.")
+        if self.item.disabled or not self.item.is_stock_item or self.item.has_variants:
+            raise ValidationError(f"{self.item.item_name} is not an enabled stock item.")
+        if self.stock_entry.purpose == "MATERIAL_RECEIPT":
+            if not self.item.is_purchase_item:
+                raise ValidationError(f"{self.item.item_name} is not purchasable.")
+            if self.source_warehouse_id:
+                raise ValidationError("Material Receipt cannot have a source warehouse.")
+            if self.target_warehouse_id and self.target_warehouse_id != restaurant.store_warehouse_id:
+                raise ValidationError("Material Receipt target must be the configured central Store.")
+        else:
+            target = targets[self.item.department]
+            if self.source_warehouse_id and self.source_warehouse_id != restaurant.store_warehouse_id:
+                raise ValidationError("Material Transfer source must be the configured central Store.")
+            if self.target_warehouse_id and self.target_warehouse_id != target.pk:
+                raise ValidationError(f"{self.item.item_name} must transfer to {target.name}.")
 
 
 class StockReconciliation(BaseModel):
@@ -480,6 +632,15 @@ class StockReconciliation(BaseModel):
         max_length=20,
         choices=[("OPENING_STOCK", "Opening Stock"), ("RECONCILIATION", "Stock Reconciliation")],
         default="RECONCILIATION",
+    )
+    reason = models.CharField(
+        max_length=20,
+        choices=[
+            ("PHYSICAL_COUNT", "Physical Count"),
+            ("CONSUMPTION", "Consumption"),
+            ("WASTE_DAMAGE", "Waste / Damage"),
+            ("CORRECTION", "Correction"),
+        ],
     )
     posting_date = models.DateField(default=timezone.now)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="reconciliations")
@@ -498,51 +659,117 @@ class StockReconciliation(BaseModel):
 
     def submit(self):
         """Post adjustment SLEs so each item's Bin matches the counted qty."""
-        if self.status != "DRAFT":
-            return
-        voucher_no = str(self.pk)
-        for line in self.items.select_related("item").all():
-            current_qty = line.current_qty
-            difference = line.qty - current_qty
-            if difference == 0:
-                continue
-            rate = line.valuation_rate if self.purpose == "OPENING_STOCK" else Decimal("0")
-            StockLedgerEntry.create_entry(
-                item=line.item,
-                warehouse=self.warehouse,
-                actual_qty=difference,
-                voucher_type="Stock Reconciliation",
-                voucher_no=voucher_no,
-                rate=rate,
-                voucher_detail_no=str(line.pk),
-            )
-        self.status = "SUBMITTED"
-        self.save(update_fields=["status", "updated_at"])
+        from apps.settings.models import ProductionUnit
+
+        with transaction.atomic():
+            reconciliation = StockReconciliation.objects.select_for_update().select_related("warehouse").get(pk=self.pk)
+            if reconciliation.status != "DRAFT":
+                self.status = reconciliation.status
+                return
+            if reconciliation.warehouse.disabled:
+                raise ValidationError("The reconciliation warehouse must be enabled.")
+            valid_reasons = {value for value, _label in reconciliation._meta.get_field("reason").choices}
+            if reconciliation.reason not in valid_reasons:
+                raise ValidationError("A reconciliation reason is required.")
+
+            lines = list(reconciliation.items.select_related("item"))
+            if not lines:
+                raise ValidationError("Add at least one item before submitting.")
+            for line in lines:
+                if line.item.disabled or not line.item.is_stock_item or line.item.has_variants:
+                    raise ValidationError(f"{line.item.item_name} is not an enabled stock item.")
+                if line.qty < 0:
+                    raise ValidationError(f"Counted quantity for {line.item.item_name} cannot be negative.")
+            if reconciliation.reason == "CONSUMPTION":
+                kitchen = (
+                    ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
+                )
+                if not kitchen or kitchen.warehouse_id != reconciliation.warehouse_id:
+                    raise ValidationError(
+                        "Consumption reconciliation is only allowed for the configured Kitchen warehouse."
+                    )
+                if any(line.item.department != "FOOD" for line in lines):
+                    raise ValidationError("Consumption reconciliation accepts FOOD stock items only.")
+
+            for line in lines:
+                Bin.get_or_create_bin_id(line.item_id, reconciliation.warehouse_id)
+            locked_bins = {
+                bin_obj.item_id: bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(item_id__in=[line.item_id for line in lines], warehouse_id=reconciliation.warehouse_id)
+                .order_by("item_id")
+            }
+            voucher_no = str(reconciliation.pk)
+            for line in lines:
+                bin_obj = locked_bins[line.item_id]
+                current_qty = bin_obj.actual_qty
+                if reconciliation.purpose != "OPENING_STOCK" and line.qty < bin_obj.reserved_qty:
+                    raise ValidationError(
+                        f"Counted quantity for {line.item.item_name} cannot be below reserved quantity "
+                        f"({bin_obj.reserved_qty})."
+                    )
+                line.current_qty = current_qty
+                line.save(update_fields=["current_qty", "updated_at"])
+                difference = line.qty - current_qty
+                if difference == 0:
+                    continue
+                rate = line.valuation_rate if reconciliation.purpose == "OPENING_STOCK" else Decimal("0")
+                StockLedgerEntry._create_entry_locked(
+                    item=line.item,
+                    warehouse=reconciliation.warehouse,
+                    actual_qty=difference,
+                    voucher_type="Stock Reconciliation",
+                    voucher_no=voucher_no,
+                    rate=rate or Decimal("0"),
+                    voucher_detail_no=str(line.pk),
+                    prevent_negative=False,
+                    bin_obj=bin_obj,
+                )
+            reconciliation.status = "SUBMITTED"
+            reconciliation.save(update_fields=["status", "updated_at"])
+            self.status = reconciliation.status
 
     def cancel(self):
         """Reverse every SLE created by this reconciliation and mark cancelled."""
-        if self.status != "SUBMITTED":
-            return
-        voucher_no = str(self.pk)
-        sles = (
-            StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=voucher_no)
-            .select_related("item", "warehouse")
-            .exclude(is_cancelled=True)
-        )
-        for sle in sles:
-            StockLedgerEntry.create_entry(
-                item=sle.item,
-                warehouse=sle.warehouse,
-                actual_qty=-sle.actual_qty,
-                voucher_type="Stock Reconciliation Cancellation",
-                voucher_no=voucher_no,
-                rate=sle.incoming_rate if sle.actual_qty > 0 else Decimal("0"),
-                voucher_detail_no=sle.voucher_detail_no,
+        with transaction.atomic():
+            reconciliation = StockReconciliation.objects.select_for_update().get(pk=self.pk)
+            if reconciliation.status != "SUBMITTED":
+                self.status = reconciliation.status
+                return
+            voucher_no = str(reconciliation.pk)
+            sles = list(
+                StockLedgerEntry.objects.select_for_update()
+                .filter(voucher_type="Stock Reconciliation", voucher_no=voucher_no)
+                .select_related("item", "warehouse")
+                .exclude(is_cancelled=True)
             )
-            sle.is_cancelled = True
-            sle.save(update_fields=["is_cancelled", "updated_at"])
-        self.status = "CANCELLED"
-        self.save(update_fields=["status", "updated_at"])
+            bin_keys = {(sle.item_id, sle.warehouse_id) for sle in sles}
+            locked_bins = {
+                (bin_obj.item_id, bin_obj.warehouse_id): bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(
+                    item_id__in=[item_id for item_id, _ in bin_keys],
+                    warehouse_id__in=[warehouse_id for _, warehouse_id in bin_keys],
+                )
+                .order_by("item_id", "warehouse_id")
+            }
+            for sle in sles:
+                StockLedgerEntry._create_entry_locked(
+                    item=sle.item,
+                    warehouse=sle.warehouse,
+                    actual_qty=-sle.actual_qty,
+                    voucher_type="Stock Reconciliation Cancellation",
+                    voucher_no=voucher_no,
+                    rate=sle.outgoing_rate if sle.actual_qty < 0 else Decimal("0"),
+                    voucher_detail_no=sle.voucher_detail_no,
+                    prevent_negative=sle.actual_qty > 0,
+                    bin_obj=locked_bins[(sle.item_id, sle.warehouse_id)],
+                )
+                sle.is_cancelled = True
+                sle.save(update_fields=["is_cancelled", "updated_at"])
+            reconciliation.status = "CANCELLED"
+            reconciliation.save(update_fields=["status", "updated_at"])
+            self.status = reconciliation.status
 
 
 class StockReconciliationItem(BaseModel):
@@ -581,7 +808,7 @@ class PurchaseReceipt(BaseModel):
     warehouse (via Stock Ledger Entries). The whole receipt goes to one store
     room — further movement (e.g. store → kitchen) is done with Stock Entry.
     Only quantities that enter stock are recorded; damaged/refused goods are
-    omitted (or written off later via Stock Reconciliation / Material Issue).
+    omitted (or written off later via Stock Reconciliation).
     """
 
     supplier_name = models.CharField(max_length=200)
@@ -591,6 +818,8 @@ class PurchaseReceipt(BaseModel):
         Warehouse,
         on_delete=models.PROTECT,
         related_name="purchase_receipts",
+        null=True,
+        blank=True,
     )
     status = models.CharField(
         max_length=10,
@@ -608,60 +837,112 @@ class PurchaseReceipt(BaseModel):
 
     def clean(self):
         super().clean()
-        if not self.warehouse_id:
-            raise ValidationError({"warehouse": "Warehouse is required."})
+        from apps.settings.models import Restaurant
+
+        restaurant = Restaurant.load()
+        if (
+            self.warehouse_id
+            and restaurant
+            and restaurant.store_warehouse_id
+            and self.warehouse_id != restaurant.store_warehouse_id
+        ):
+            raise ValidationError({"warehouse": "Purchase Receipt warehouse must be the configured central Store."})
 
     def submit(self):
         """Post the receipt: create SLEs for each line into self.warehouse."""
-        if self.status != "DRAFT":
-            return
-        voucher_no = str(self.pk)
-        total = Decimal("0")
-        updated_items = set()
-        for line in self.items.select_related("item").all():
-            if line.received_qty > 0:
-                StockLedgerEntry.create_entry(
+        from apps.settings.models import Restaurant
+
+        with transaction.atomic():
+            receipt = PurchaseReceipt.objects.select_for_update().get(pk=self.pk)
+            if receipt.status != "DRAFT":
+                self.status = receipt.status
+                return
+            restaurant = Restaurant.load()
+            if not restaurant or not restaurant.store_warehouse_id or restaurant.store_warehouse.disabled:
+                raise ValidationError("Configure an enabled central Store warehouse before submitting.")
+            if receipt.warehouse_id and receipt.warehouse_id != restaurant.store_warehouse_id:
+                raise ValidationError("Purchase Receipt warehouse must be the configured central Store.")
+
+            lines = list(receipt.items.select_related("item"))
+            if not lines:
+                raise ValidationError("Add at least one item before submitting.")
+            for line in lines:
+                line.validate_for_submission()
+                Bin.get_or_create_bin_id(line.item_id, restaurant.store_warehouse_id)
+            locked_bins = {
+                bin_obj.item_id: bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(item_id__in=[line.item_id for line in lines], warehouse_id=restaurant.store_warehouse_id)
+                .order_by("item_id")
+            }
+            total = Decimal("0")
+            updated_items = set()
+            for line in lines:
+                StockLedgerEntry._create_entry_locked(
                     item=line.item,
-                    warehouse=self.warehouse,
+                    warehouse=restaurant.store_warehouse,
                     actual_qty=line.received_qty,
                     voucher_type="Purchase Receipt",
-                    voucher_no=voucher_no,
+                    voucher_no=str(receipt.pk),
                     rate=line.rate,
                     voucher_detail_no=str(line.pk),
+                    prevent_negative=False,
+                    bin_obj=locked_bins[line.item_id],
                 )
-            line.item.last_purchase_rate = line.rate
-            updated_items.add(line.item)
-            total += line.amount
-        Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
-        self.total = total
-        self.status = "SUBMITTED"
-        self.save(update_fields=["status", "total", "updated_at"])
+                line.item.last_purchase_rate = line.rate
+                updated_items.add(line.item)
+                total += line.amount
+            Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
+            receipt.warehouse = restaurant.store_warehouse
+            receipt.total = total
+            receipt.status = "SUBMITTED"
+            receipt.save(update_fields=["warehouse", "status", "total", "updated_at"])
+            self.warehouse = receipt.warehouse
+            self.total = receipt.total
+            self.status = receipt.status
 
     def cancel(self):
         """Reverse every SLE created by this receipt and mark cancelled."""
-        if self.status != "SUBMITTED":
-            return
-        voucher_no = str(self.pk)
-        sles = (
-            StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt", voucher_no=voucher_no)
-            .select_related("item", "warehouse")
-            .exclude(is_cancelled=True)
-        )
-        for sle in sles:
-            StockLedgerEntry.create_entry(
-                item=sle.item,
-                warehouse=sle.warehouse,
-                actual_qty=-sle.actual_qty,
-                voucher_type="Purchase Receipt Cancellation",
-                voucher_no=voucher_no,
-                rate=sle.incoming_rate if sle.actual_qty > 0 else Decimal("0"),
-                voucher_detail_no=sle.voucher_detail_no,
+        with transaction.atomic():
+            receipt = PurchaseReceipt.objects.select_for_update().get(pk=self.pk)
+            if receipt.status != "SUBMITTED":
+                self.status = receipt.status
+                return
+            voucher_no = str(receipt.pk)
+            sles = list(
+                StockLedgerEntry.objects.select_for_update()
+                .filter(voucher_type="Purchase Receipt", voucher_no=voucher_no, is_cancelled=False)
+                .select_related("item", "warehouse")
+                .order_by("item_id", "warehouse_id", "pk")
             )
-            sle.is_cancelled = True
-            sle.save(update_fields=["is_cancelled", "updated_at"])
-        self._revert_last_purchase_rates()
-        self.status = "CANCELLED"
-        self.save(update_fields=["status", "updated_at"])
+            bin_keys = {(sle.item_id, sle.warehouse_id) for sle in sles}
+            locked_bins = {
+                (bin_obj.item_id, bin_obj.warehouse_id): bin_obj
+                for bin_obj in Bin.objects.select_for_update()
+                .filter(
+                    item_id__in=[item_id for item_id, _ in bin_keys],
+                    warehouse_id__in=[warehouse_id for _, warehouse_id in bin_keys],
+                )
+                .order_by("item_id", "warehouse_id")
+            }
+            for sle in sles:
+                StockLedgerEntry._create_entry_locked(
+                    item=sle.item,
+                    warehouse=sle.warehouse,
+                    actual_qty=-sle.actual_qty,
+                    voucher_type="Purchase Receipt Cancellation",
+                    voucher_no=voucher_no,
+                    rate=Decimal("0"),
+                    voucher_detail_no=sle.voucher_detail_no,
+                    prevent_negative=sle.actual_qty > 0,
+                    bin_obj=locked_bins[(sle.item_id, sle.warehouse_id)],
+                )
+                sle.is_cancelled = True
+                sle.save(update_fields=["is_cancelled", "updated_at"])
+            receipt._revert_last_purchase_rates()
+            receipt.status = "CANCELLED"
+            receipt.save(update_fields=["status", "updated_at"])
+            self.status = receipt.status
 
     def _revert_last_purchase_rates(self):
         # select_related("item") avoids per-line FK fetch. We keep the per-line prior-rate
@@ -709,3 +990,16 @@ class PurchaseReceiptItem(BaseModel):
     def save(self, *args, **kwargs):
         self.amount = self.received_qty * self.rate
         super().save(*args, **kwargs)
+
+    def validate_for_submission(self):
+        if self.received_qty <= 0:
+            raise ValidationError(f"Received quantity for {self.item.item_name} must be greater than zero.")
+        if self.rate < 0:
+            raise ValidationError(f"Rate for {self.item.item_name} cannot be negative.")
+        if (
+            self.item.disabled
+            or self.item.has_variants
+            or not self.item.is_stock_item
+            or not self.item.is_purchase_item
+        ):
+            raise ValidationError(f"{self.item.item_name} is not an enabled stock and purchase item.")

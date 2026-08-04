@@ -7,7 +7,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Stock Entries</h1>
-      <p class="text-sm text-gray-500">Material receipts, issues, and transfers</p>
+      <p class="text-sm text-gray-500">Material receipts and Store-to-Kitchen/Bar transfers</p>
     </div>
     <a href="{% url 'inventory:stock_entry_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
@@ -32,7 +32,6 @@
               x-on:change="$el.form.submit()">
         <option value="">All</option>
         <option value="MATERIAL_RECEIPT" {% if selected_purpose == "MATERIAL_RECEIPT" %}selected{% endif %}>Material Receipt</option>
-        <option value="MATERIAL_ISSUE" {% if selected_purpose == "MATERIAL_ISSUE" %}selected{% endif %}>Material Issue</option>
         <option value="MATERIAL_TRANSFER" {% if selected_purpose == "MATERIAL_TRANSFER" %}selected{% endif %}>Material Transfer</option>
       </select>
     </form>

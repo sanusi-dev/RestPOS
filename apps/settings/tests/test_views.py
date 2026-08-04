@@ -48,6 +48,7 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
             "invoice_series_prefix": "REST-",
             "address": "123 Street",
             "active_menu": "",
+            "store_warehouse": "",
             "default_warehouse": "",
             "max_open_drafts": "50",
         }
@@ -86,6 +87,20 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
         )
         self.assertRedirects(response, reverse("settings:restaurant_settings"))
         self.assertEqual(Restaurant.objects.get().default_warehouse_id, warehouse.pk)
+
+    def test_post_sets_store_warehouse_and_uses_clear_labels(self):
+        store = Warehouse.objects.create(name="Store")
+        bar = Warehouse.objects.create(name="Bar")
+        response = self.client.post(
+            reverse("settings:restaurant_settings"),
+            self._post_data(store_warehouse=store.pk, default_warehouse=bar.pk),
+        )
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        restaurant = Restaurant.objects.get()
+        self.assertEqual((restaurant.store_warehouse, restaurant.default_warehouse), (store, bar))
+        response = self.client.get(reverse("settings:restaurant_settings"))
+        self.assertContains(response, "Central Store warehouse")
+        self.assertContains(response, "Bar / POS sales warehouse")
 
     def test_cashier_cannot_post(self):
         cashier = CustomUser.objects.create_user(username="cashier@test.com", password="testpass123")

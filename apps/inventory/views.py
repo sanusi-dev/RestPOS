@@ -1,7 +1,9 @@
 import urllib.parse
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.http import HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -366,15 +368,18 @@ def stock_entry_list(request: HttpRequest) -> HttpResponse:
 def stock_entry_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StockEntryForm(request.POST)
-        detail_fs = StockEntryDetailFormSet(request.POST, instance=StockEntry(), prefix="items")
+        detail_fs = StockEntryDetailFormSet(
+            request.POST, instance=StockEntry(purpose=request.POST.get("purpose", "")), prefix="items"
+        )
         if form.is_valid() and detail_fs.is_valid():
-            entry = form.save()
-            detail_fs.instance = entry
-            detail_fs.save()
+            with transaction.atomic():
+                entry = form.save()
+                detail_fs.instance = entry
+                detail_fs.save()
             return redirect("inventory:stock_entry_detail", pk=entry.pk)
     else:
         form = StockEntryForm()
-        detail_fs = StockEntryDetailFormSet(instance=StockEntry(), prefix="items")
+        detail_fs = StockEntryDetailFormSet(instance=StockEntry(purpose="MATERIAL_RECEIPT"), prefix="items")
     return render(
         request,
         "backoffice/inventory/stock_entry_form.html",
@@ -460,7 +465,10 @@ def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "DRAFT":
-        entry.submit()
+        try:
+            entry.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -469,7 +477,10 @@ def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "SUBMITTED":
-        entry.cancel()
+        try:
+            entry.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -481,13 +492,34 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def reconciliation_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
+    reason = request.GET.get("reason")
+    warehouse_id = request.GET.get("warehouse")
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
     reconciliations = StockReconciliation.objects.select_related("warehouse").all()
     if status:
         reconciliations = reconciliations.filter(status=status)
+    if reason:
+        reconciliations = reconciliations.filter(reason=reason)
+    if warehouse_id:
+        reconciliations = reconciliations.filter(warehouse_id=warehouse_id)
+    if date_from:
+        reconciliations = reconciliations.filter(posting_date__gte=date_from)
+    if date_to:
+        reconciliations = reconciliations.filter(posting_date__lte=date_to)
     return render(
         request,
         "backoffice/inventory/reconciliation_list.html",
-        {"reconciliations": reconciliations, "selected_status": status},
+        {
+            "reconciliations": reconciliations,
+            "warehouses": Warehouse.objects.filter(disabled=False),
+            "reason_choices": StockReconciliation._meta.get_field("reason").choices,
+            "selected_status": status,
+            "selected_reason": reason,
+            "selected_warehouse": warehouse_id,
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+        },
     )
 
 
@@ -497,9 +529,10 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
         form = StockReconciliationForm(request.POST)
         item_fs = StockReconciliationItemFormSet(request.POST, instance=StockReconciliation(), prefix="items")
         if form.is_valid() and item_fs.is_valid():
-            reconciliation = form.save()
-            item_fs.instance = reconciliation
-            item_fs.save()
+            with transaction.atomic():
+                reconciliation = form.save()
+                item_fs.instance = reconciliation
+                item_fs.save()
             return redirect("inventory:reconciliation_detail", pk=reconciliation.pk)
     else:
         form = StockReconciliationForm()
@@ -593,7 +626,10 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "DRAFT":
-        reconciliation.submit()
+        try:
+            reconciliation.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -602,7 +638,10 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "SUBMITTED":
-        reconciliation.cancel()
+        try:
+            reconciliation.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -637,9 +676,10 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
         form = PurchaseReceiptForm(request.POST)
         item_fs = PurchaseReceiptItemFormSet(request.POST, instance=PurchaseReceipt(), prefix="items")
         if form.is_valid() and item_fs.is_valid():
-            receipt = form.save()
-            item_fs.instance = receipt
-            item_fs.save()
+            with transaction.atomic():
+                receipt = form.save()
+                item_fs.instance = receipt
+                item_fs.save()
             return redirect("inventory:purchase_receipt_detail", pk=receipt.pk)
     else:
         form = PurchaseReceiptForm()
@@ -730,7 +770,10 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
     # select_related("warehouse") saves one FK fetch inside receipt.submit().
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "DRAFT":
-        receipt.submit()
+        try:
+            receipt.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 
@@ -739,7 +782,10 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "SUBMITTED":
-        receipt.cancel()
+        try:
+            receipt.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 

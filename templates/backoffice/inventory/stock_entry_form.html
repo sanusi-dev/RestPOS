@@ -9,7 +9,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}New Stock Entry{% else %}Edit Stock Entry{% endif %}</h1>
-      <p class="text-sm text-gray-500">Record a material receipt, issue, or transfer</p>
+      <p class="text-sm text-gray-500">Receive stock into Store or transfer Store stock to Kitchen or Bar</p>
     </div>
   </div>
 
@@ -31,6 +31,9 @@
         <h3 class="text-base font-bold text-gray-900">Entry Details</h3>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 relative z-10">
+        <div class="sm:col-span-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          Receipts always enter central Store. Transfers always move from Store to Kitchen or Bar according to item department.
+        </div>
         {% for field in form %}
           {% if field.name == "remarks" %}
             <div class="sm:col-span-2">

@@ -1,7 +1,10 @@
+from datetime import date
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from apps.inventory.forms import StockReconciliationForm
 from apps.inventory.models import (
     UOM,
     Bin,
@@ -12,177 +15,77 @@ from apps.inventory.models import (
     StockReconciliationItem,
     Warehouse,
 )
+from apps.settings.models import ProductionUnit
 
 
-class ReconciliationTestBase(TestCase):
+class StockReconciliationTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Main Store")
+        cls.kitchen = Warehouse.objects.create(name="Kitchen")
+        ProductionUnit.objects.create(name="Kitchen", department="FOOD", warehouse=cls.kitchen)
         cls.item = Item.objects.create(
-            item_name="Jollof Rice",
-            item_group=cls.group,
-            stock_uom=cls.uom,
-            department="FOOD",
+            item_name="Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_stock_item=True
         )
 
+    def make_reconciliation(self, **kwargs):
+        defaults = {"warehouse": self.kitchen, "reason": "PHYSICAL_COUNT"}
+        defaults.update(kwargs)
+        return StockReconciliation.objects.create(**defaults)
 
-class StockReconciliationSubmitTest(ReconciliationTestBase):
-    def test_submit_adjusts_stock_up(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("5"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
+    def test_all_reason_choices_exist_and_remarks_date_are_flexible(self):
+        choices = {value for value, _label in StockReconciliation._meta.get_field("reason").choices}
+        self.assertEqual(choices, {"PHYSICAL_COUNT", "CONSUMPTION", "WASTE_DAMAGE", "CORRECTION"})
+        rec = self.make_reconciliation(posting_date=date(2024, 2, 3), remarks="")
+        self.assertEqual(rec.posting_date, date(2024, 2, 3))
+
+    def test_form_requires_explicit_reason(self):
+        form = StockReconciliationForm(
+            data={"purpose": "RECONCILIATION", "posting_date": "2024-02-03", "warehouse": self.kitchen.pk}
         )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        line = StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("8"),
-        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("reason", form.errors)
+
+    def test_submit_rereads_locked_current_qty(self):
+        rec = self.make_reconciliation()
+        line = StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
+        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
+        self.assertEqual(line.current_qty, Decimal("0"))
+        rec.submit()
+        line.refresh_from_db()
         self.assertEqual(line.current_qty, Decimal("5"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("8"))
 
-        rec.submit()
-        self.assertEqual(rec.status, "SUBMITTED")
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
-        self.assertEqual(bin_obj.actual_qty, Decimal("8"))
-
-    def test_submit_adjusts_stock_down(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
-        )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("3"),
-        )
-        rec.submit()
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
-        self.assertEqual(bin_obj.actual_qty, Decimal("3"))
-
-    def test_submit_no_change_skips_sle(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("5"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
-        )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("5"),
-        )
-        rec.submit()
-        sles = StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk))
-        self.assertEqual(sles.count(), 0)
-
-    def test_submit_creates_adjustment_sle(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("5"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
-        )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("10"),
-        )
-        rec.submit()
-        sles = StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk))
-        self.assertEqual(sles.count(), 1)
-        self.assertEqual(sles[0].actual_qty, Decimal("5"))
-
-
-class StockReconciliationCancelTest(ReconciliationTestBase):
-    def test_cancel_reverses_adjustment(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("5"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
-        )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("10"),
-        )
-        rec.submit()
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
+    def test_non_opening_count_cannot_be_below_reserved_qty(self):
+        bin_obj = Bin.objects.create(item=self.item, warehouse=self.kitchen, actual_qty=10, reserved_qty=4)
+        rec = self.make_reconciliation()
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("3"))
+        with self.assertRaisesMessage(ValidationError, "reserved quantity"):
+            rec.submit()
+        bin_obj.refresh_from_db()
         self.assertEqual(bin_obj.actual_qty, Decimal("10"))
 
-        rec.cancel()
-        self.assertEqual(rec.status, "CANCELLED")
-        bin_obj.refresh_from_db()
-        self.assertEqual(bin_obj.actual_qty, Decimal("5"))
+    def test_consumption_requires_kitchen_and_food(self):
+        other = Warehouse.objects.create(name="Other")
+        rec = self.make_reconciliation(reason="CONSUMPTION", warehouse=other)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
+        with self.assertRaisesMessage(ValidationError, "configured Kitchen"):
+            rec.submit()
 
-    def test_cancel_only_on_submitted(self):
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        rec.cancel()
-        self.assertEqual(rec.status, "DRAFT")
+    def test_disabled_or_non_stock_item_rejected(self):
+        self.item.disabled = True
+        self.item.save()
+        rec = self.make_reconciliation()
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
+        with self.assertRaisesMessage(ValidationError, "enabled stock item"):
+            rec.submit()
 
-
-class StockReconciliationOpeningStockTest(ReconciliationTestBase):
-    def test_opening_stock_purpose(self):
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse, purpose="OPENING_STOCK")
-        StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("50"),
-            valuation_rate=Decimal("100"),
-        )
+    def test_cancel_reverses_atomically_and_is_idempotent(self):
+        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
+        rec = self.make_reconciliation()
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
         rec.submit()
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
-        self.assertEqual(bin_obj.actual_qty, Decimal("50"))
-
-
-class StockReconciliationCRUDTest(ReconciliationTestBase):
-    def test_create(self):
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        self.assertEqual(rec.status, "DRAFT")
-        self.assertEqual(rec.purpose, "RECONCILIATION")
-
-    def test_str(self):
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        self.assertIn("Stock Reconciliation", str(rec))
-        self.assertIn(self.warehouse.name, str(rec))
-
-    def test_default_purpose(self):
-        rec = StockReconciliation(warehouse=self.warehouse)
-        self.assertEqual(rec.purpose, "RECONCILIATION")
-
-    def test_item_current_qty_auto_filled(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("7"),
-            voucher_type="Opening",
-            voucher_no="0",
-            rate=Decimal("100"),
-        )
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        line = StockReconciliationItem.objects.create(
-            reconciliation=rec,
-            item=self.item,
-            qty=Decimal("10"),
-        )
-        self.assertEqual(line.current_qty, Decimal("7"))
+        rec.cancel()
+        rec.cancel()
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("5"))

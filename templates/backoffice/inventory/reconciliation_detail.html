@@ -43,6 +43,10 @@
         <dd class="text-base font-bold text-gray-900">{{ reconciliation.get_purpose_display }}</dd>
       </div>
       <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Reason</dt>
+        <dd class="text-base font-bold text-gray-900">{{ reconciliation.get_reason_display }}</dd>
+      </div>
+      <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
         <dd class="mt-1">
           {% if reconciliation.status == 'DRAFT' %}

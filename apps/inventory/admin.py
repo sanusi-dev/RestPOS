@@ -92,6 +92,7 @@ class StockLedgerEntryAdmin(admin.ModelAdmin):
 class StockEntryDetailInline(admin.TabularInline):
     model = StockEntryDetail
     extra = 1
+    exclude = ("source_warehouse", "target_warehouse")
 
 
 @admin.register(StockEntry)
@@ -111,8 +112,8 @@ class StockReconciliationItemInline(admin.TabularInline):
 
 @admin.register(StockReconciliation)
 class StockReconciliationAdmin(admin.ModelAdmin):
-    list_display = ("id", "purpose", "posting_date", "warehouse", "status")
-    list_filter = ("purpose", "status", "posting_date")
+    list_display = ("id", "purpose", "reason", "posting_date", "warehouse", "status")
+    list_filter = ("purpose", "reason", "status", "posting_date")
     list_select_related = ("warehouse",)
     search_fields = ("remarks", "warehouse__name")
     ordering = ("-posting_date", "-created_at")
@@ -134,3 +135,6 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
     ordering = ("-posting_date", "-created_at")
     inlines = [PurchaseReceiptItemInline]
     readonly_fields = ("total",)
+
+    def get_readonly_fields(self, request, obj=None):
+        return (*self.readonly_fields, "warehouse")
