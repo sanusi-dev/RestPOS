@@ -1,0 +1,40 @@
+{% comment %}========== CATALOG CATEGORY SIDEBAR =========={% endcomment %}
+<aside class="w-52 lg:w-60 shrink-0 border-r border-slate-200 bg-slate-900 px-3 py-4 text-slate-100 overflow-y-auto">
+  <div class="px-3 mb-4">
+    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Menu</p>
+    <h2 class="mt-1 text-base font-bold text-white">Categories</h2>
+  </div>
+
+  <nav aria-label="Menu categories" class="space-y-1">
+    <button type="button"
+            @click="activeGroup = 'All'; specialsOnly = false"
+            :aria-pressed="activeGroup === 'All' && !specialsOnly"
+            :class="activeGroup === 'All' && !specialsOnly ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
+            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between text-left text-sm font-semibold transition-colors">
+      <span>All items</span>
+      <span class="text-xs opacity-70">{{ menu_items|length }}</span>
+    </button>
+
+    <button type="button"
+            @click="specialsOnly = true; activeGroup = 'All'"
+            :aria-pressed="specialsOnly"
+            :class="specialsOnly ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
+            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between text-left text-sm font-semibold transition-colors">
+      <span>Specials</span>
+      <span class="text-xs opacity-70">{{ special_item_count }}</span>
+    </button>
+
+    <div class="my-4 border-t border-slate-700"></div>
+
+    {% for group_name, group_items in item_groups.items %}
+    <button type="button"
+            @click="activeGroup = '{{ group_name|escapejs }}'; specialsOnly = false"
+            :aria-pressed="activeGroup === '{{ group_name|escapejs }}' && !specialsOnly"
+            :class="activeGroup === '{{ group_name|escapejs }}' && !specialsOnly ? 'bg-slate-700 text-white ring-1 ring-slate-500' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
+            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between gap-2 text-left text-sm font-medium transition-colors">
+      <span class="truncate">{{ group_name }}</span>
+      <span class="shrink-0 text-xs text-slate-400">{{ group_items|length }}</span>
+    </button>
+    {% endfor %}
+  </nav>
+</aside>

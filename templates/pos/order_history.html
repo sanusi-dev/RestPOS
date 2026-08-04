@@ -4,32 +4,34 @@
 <div class="h-full overflow-y-auto">
   <div class="bg-white border-b border-gray-100 px-6 py-2.5 flex items-center justify-between">
     <div class="flex items-center gap-2">
-        <a href="?" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+        <a href="?date={{ date_filter }}" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
            {% if not payment_filter %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
           All Orders
         </a>
-        <a href="?payment=cash" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+        <a href="?date={{ date_filter }}&amp;payment=cash" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
            {% if payment_filter == 'cash' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
           Cash
         </a>
-        <a href="?payment=electronic" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+        <a href="?date={{ date_filter }}&amp;payment=electronic" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
            {% if payment_filter == 'electronic' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
           Electronic
         </a>
-        <a href="?payment=refunds" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
+        <a href="?date={{ date_filter }}&amp;payment=refunds" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
            {% if payment_filter == 'refunds' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
           Refunds
         </a>
       </div>
-      <div>
-        <button type="button" onclick="this.nextElementSibling.showPicker()"
+      <form method="get" class="flex items-center gap-2">
+        {% if payment_filter %}<input type="hidden" name="payment" value="{{ payment_filter }}">{% endif %}
+        <label for="history-date" class="sr-only">Order date</label>
+        <input id="history-date" type="date" name="date" value="{{ date_filter }}"
+               class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 bg-white">
+        <button type="submit"
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 shadow-sm text-gray-600 bg-white hover:bg-gray-50 transition-all">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>
-          {{ date_filter }}
+          View date
         </button>
-        <input type="date" value="{{ date_filter }}" class="opacity-0 absolute w-0 h-0"
-               onchange="window.location.href='?date='+this.value{% if payment_filter %}+'&payment={{ payment_filter }}'{% endif %}">
-      </div>
+      </form>
     </div>
   </div>
 
@@ -57,9 +59,9 @@
                 {% if order.is_return %}
                   <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Refund</span>
                 {% elif order.is_paid %}
-                  {% with mode=order.payments.first.mode_of_payment %}
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">{{ mode.name }}</span>
-                  {% endwith %}
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">
+                    {% for payment in order.payments.all %}{% if not forloop.first %}, {% endif %}{{ payment.mode_of_payment.name }}{% empty %}Paid{% endfor %}
+                  </span>
                 {% elif order.status == "SUBMITTED" %}
                   <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Unpaid</span>
                 {% else %}

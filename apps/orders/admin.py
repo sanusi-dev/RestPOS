@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import KOT, KOTItem, Order, OrderItem, OrderPayment
+from .models import KOT, KOTItem, Order, OrderAuditEvent, OrderItem, OrderPayment
 
 
 class OrderItemInline(admin.TabularInline):
@@ -46,6 +46,7 @@ class OrderAdmin(admin.ModelAdmin):
         "net_total",
         "grand_total",
         "rounded_total",
+        "rounding_adjustment",
         "paid_amount",
         "change_amount",
         "cancel_reason",
@@ -53,7 +54,11 @@ class OrderAdmin(admin.ModelAdmin):
         "cancelled_by",
         "cancelled_at",
         "opening_entry",
+        "stock_warehouse",
         "arrived_time",
+        "submitted_at",
+        "invoice_printed_at",
+        "invoice_printed_by",
         "is_return",
         "return_against",
         "created_at",
@@ -94,6 +99,8 @@ class KOTAdmin(admin.ModelAdmin):
         "posting_datetime",
         "order_number",
         "original_kots",
+        "cancelled_by",
+        "cancelled_at",
         "created_at",
         "updated_at",
     )
@@ -121,6 +128,23 @@ class KOTItemAdmin(admin.ModelAdmin):
     )
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OrderAuditEvent)
+class OrderAuditEventAdmin(admin.ModelAdmin):
+    list_display = ("order", "event_type", "actor", "created_at")
+    list_filter = ("event_type", "created_at")
+    search_fields = ("order__invoice_number", "event_type", "actor__username")
+    readonly_fields = ("order", "event_type", "actor", "metadata", "created_at", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):

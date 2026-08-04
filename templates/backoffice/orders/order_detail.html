@@ -22,7 +22,7 @@
         <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden">{% csrf_token %}</form>
         {% endif %}
       {% endif %}
-      {% if order.status == "DRAFT" or order.status == "SUBMITTED" and not order.is_return %}
+      {% if order.status == "DRAFT" or order.status == "SUBMITTED" and not order.is_paid and not order.is_return %}
         {% if user.is_manager or user.is_admin or user.is_superuser %}
         <button onclick="document.getElementById('cancel-dialog').classList.toggle('hidden')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
           Cancel order
@@ -106,7 +106,7 @@
           {% for item in order.items.all %}
           <tr class="hover:bg-gray-50/60 transition-colors">
             <td class="px-6 py-4"><p class="text-sm font-semibold text-gray-900">{{ item.item_name }}</p>{% if item.comments %}<p class="text-xs text-gray-400 mt-0.5">{{ item.comments }}</p>{% endif %}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ item.item.get_department_display }}</td>
+            <td class="px-6 py-4 text-sm text-gray-500">{% if item.department %}{{ item.get_department_display }}{% else %}{{ item.item.get_department_display }}{% endif %}</td>
             <td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td>
             <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
             <td class="px-6 py-4 text-right text-sm text-gray-500">₦{{ item.rate|intcomma }}</td>

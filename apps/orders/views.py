@@ -10,11 +10,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from . import printing
 from .forms import POSOrderCancelForm
 from .models import (
     DRAFT,
     KOT,
     KOT_PRINT_STATUS_CHOICES,
+    KOT_PRINTED,
     KOT_TYPE_CHOICES,
     ORDER_TYPE_CHOICES,
     STATUS_CHOICES,
@@ -29,7 +31,12 @@ def orders_dashboard(request: HttpRequest) -> HttpResponse:
     """Render the orders and kitchen/bar ticket backoffice overview."""
     today = timezone.localdate()
     todays_orders = Order.objects.filter(posting_date=today)
-    paid_today = todays_orders.filter(status=SUBMITTED, is_paid=True)
+    today_summary = todays_orders.aggregate(
+        orders=Count("pk"),
+        paid=Count("pk", filter=Q(status=SUBMITTED, is_paid=True)),
+        cancelled=Count("pk", filter=Q(status="CANCELLED")),
+        revenue=Sum("grand_total", filter=Q(status=SUBMITTED, is_paid=True)),
+    )
     recent_orders = (
         Order.objects.select_related("cashier")
         .annotate(
@@ -46,11 +53,11 @@ def orders_dashboard(request: HttpRequest) -> HttpResponse:
     )
     context = {
         "today": today,
-        "orders_today_count": todays_orders.count(),
-        "paid_today_count": paid_today.count(),
+        "orders_today_count": today_summary["orders"],
+        "paid_today_count": today_summary["paid"],
         "draft_count": Order.objects.filter(status=DRAFT).count(),
-        "cancelled_today_count": todays_orders.filter(status="CANCELLED").count(),
-        "today_revenue": paid_today.aggregate(total=Sum("grand_total"))["total"] or 0,
+        "cancelled_today_count": today_summary["cancelled"],
+        "today_revenue": today_summary["revenue"] or 0,
         "tickets_today_count": KOT.objects.filter(created_at__date=today).count(),
         "pending_ticket_count": KOT.objects.filter(status=SUBMITTED, print_status="PENDING").count(),
         "recent_orders": recent_orders,
@@ -75,11 +82,13 @@ def order_list(request: HttpRequest) -> HttpResponse:
         ),
     )
     if search:
-        orders = orders.filter(
-            django_models.Q(invoice_number__icontains=search)
-            | django_models.Q(customer_name__icontains=search)
-            | django_models.Q(order_number__icontains=search)
+        search_query = django_models.Q(invoice_number__icontains=search) | django_models.Q(
+            customer_name__icontains=search
         )
+        order_number = search.removeprefix("#")
+        if order_number.isdigit():
+            search_query |= django_models.Q(order_number=int(order_number))
+        orders = orders.filter(search_query)
     if status_filter:
         orders = orders.filter(status=status_filter)
     if order_type_filter:
@@ -130,7 +139,7 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, "Choose a cancellation reason before cancelling the order.")
         return redirect("orders:order_detail", pk=order.pk)
     try:
-        order.cancel(
+        cancellation_kots = order.cancel(
             form.cleaned_data["cancel_reason"],
             cancelled_by=request.user,
             reason_note=form.cleaned_data["cancel_reason_note"],
@@ -138,6 +147,13 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Cancel failed.")
         return redirect("orders:order_detail", pk=order.pk)
+    for cancellation_kot in cancellation_kots:
+        result = printing.print_ticket(cancellation_kot)
+        if result.success:
+            cancellation_kot.print_status = KOT_PRINTED
+            cancellation_kot.save(update_fields=["print_status", "updated_at"])
+        else:
+            messages.warning(request, f"Cancellation ticket for {result.ticket_type} remains pending.")
     messages.success(request, f"Order {order.invoice_number} cancelled.")
     return redirect("orders:order_detail", pk=order.pk)
 
@@ -161,11 +177,11 @@ def kot_list(request: HttpRequest) -> HttpResponse:
     if print_status_filter:
         kots = kots.filter(print_status=print_status_filter)
     if search:
-        kots = kots.filter(
-            Q(kot_number__icontains=search)
-            | Q(order__invoice_number__icontains=search)
-            | Q(order__order_number__icontains=search)
-        )
+        search_query = Q(kot_number__icontains=search) | Q(order__invoice_number__icontains=search)
+        order_number = search.removeprefix("#")
+        if order_number.isdigit():
+            search_query |= Q(order__order_number=int(order_number))
+        kots = kots.filter(search_query)
     kots = kots[:50]
     return render(
         request,

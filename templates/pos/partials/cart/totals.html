@@ -1,6 +1,6 @@
 {% load humanize %}
 {% comment %}---- Success banners, grand total, action dropup, receipt, Pay ----{% endcomment %}
-<div class="border-t border-gray-100 p-4 space-y-3">
+<div class="border-t border-slate-200 bg-[#FFF9ED] p-4 space-y-3">
   {% if sync_success and not print_failures %}
   <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
     ✓ Sent {{ kot_count }} ticket{{ kot_count|pluralize }} to kitchen &amp; bar
@@ -37,12 +37,25 @@
   </div>
   {% endif %}
 
-  <div class="flex items-center justify-between pt-2">
-    <span class="text-base font-extrabold text-gray-900">Total</span>
-    <span class="text-xl font-extrabold text-gray-900">₦{{ order.grand_total|intcomma }}</span>
+  <div class="flex items-end justify-between border-t border-slate-200 pt-3">
+    <span class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</span>
+    <span class="font-mono text-2xl font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</span>
   </div>
 
   <div class="flex gap-2 items-stretch">
+    {% if not order_sent and order.items.exists %}
+    <button type="button"
+            hx-post="{% url 'pos:pos_order_sync' order.pk %}"
+            hx-target="#cart-panel" hx-swap="outerHTML"
+            hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+            class="flex-1 min-h-[2.75rem] rounded-lg bg-slate-800 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-700 inline-flex items-center justify-center gap-2 disabled:opacity-60">
+      <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span>Send</span>
+    </button>
+    {% endif %}
     <div class="relative flex-1" x-data="{ open: false, cancelOpen: false }"
          @click.outside="if (!cancelOpen) open = false" @keydown.escape.window="open = false; cancelOpen = false">
       <button type="button" @click="open = !open"
@@ -75,7 +88,8 @@
         <button type="button" @click="open = false"
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'retry' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors">
+                hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
           Retry Kitchen Printing
         </button>
         {% endif %}
@@ -83,30 +97,33 @@
         <button type="button" @click="open = false"
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'retry' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors">
+                hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
           Retry Bar Printing
         </button>
         {% endif %}
-        {% if kitchen_ticket_printed %}
+         {% if kitchen_ticket_printed and can_reprint %}
         <button type="button" @click="open = false"
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'reprint' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
+                hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
           Reprint Kitchen
         </button>
         {% endif %}
-        {% if bar_ticket_printed %}
+         {% if bar_ticket_printed and can_reprint %}
         <button type="button" @click="open = false"
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'reprint' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
+                hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
           Reprint Bar
         </button>
         {% endif %}
 
         <div class="my-1 border-t border-gray-100"></div>
 
-        {% if order_sent %}
+        {% if order_sent or order.invoice_printed %}
         <button type="button" @click="open = false; cancelOpen = true"
                 class="w-full text-left px-4 py-2.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 inline-flex items-center gap-2.5 transition-colors">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 6 12 12M18 6 6 18"/></svg>
@@ -131,8 +148,8 @@
         <div class="relative bg-white rounded-[1.5rem] shadow-2xl w-full max-w-md p-6" @click.stop>
           <div class="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Cancel sent order?</h2>
-              <p class="text-sm text-gray-500 mt-1">The kitchen and bar will stop preparing this order.</p>
+              <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Cancel order?</h2>
+              <p class="text-sm text-gray-500 mt-1">This order will be preserved as cancelled. Start a new order for corrections.</p>
             </div>
             <button type="button" @click="cancelOpen = false" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
@@ -165,8 +182,13 @@
     <button type="button"
             hx-post="{% url 'pos:pos_order_print' order.pk %}"
             hx-target="#cart-panel" hx-swap="outerHTML"
-            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
+            hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5 disabled:opacity-60">
+      <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <svg class="w-4 h-4 [.htmx-request_&]:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
        {% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}
     </button>
     {% else %}
@@ -181,10 +203,15 @@
        hx-get="{% url 'pos:pos_order_settle' order.pk %}"
        hx-target="#payment-dialog-container"
        hx-swap="innerHTML"
-       class="flex-[2] min-h-[2.75rem] py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all text-center inline-flex items-center justify-center
+       class="flex-[2] min-h-[2.75rem] py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all text-center inline-flex items-center justify-center gap-2
+              [&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-70
               {% if not order.items.exists %}pointer-events-none opacity-40 shadow-none{% endif %}"
        {% if not order.items.exists %}aria-disabled="true"{% endif %}>
-      Pay
+      <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span>Pay</span>
     </a>
   </div>
 </div>

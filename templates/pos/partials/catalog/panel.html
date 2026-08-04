@@ -1,33 +1,30 @@
-{% comment %}========== CATALOG (RIGHT) =========={% endcomment %}
-<div class="flex-1 overflow-y-auto p-6">
-  <div x-data="{ showSearch: false }" class="mb-4 h-10 flex items-center justify-end">
-    <button @click="showSearch = !showSearch; if(showSearch) { $nextTick(() => { $refs.searchInput.focus(); search = '' }) }"
-            x-show="!showSearch"
-            class="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            aria-label="Search">
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
-    </button>
-    <input type="search" x-model="search" x-show="showSearch" x-ref="searchInput"
-           @click.outside="showSearch = false; search = ''"
-           @keydown.escape="showSearch = false; search = ''"
-           placeholder="Search menu..."
-           class="w-48 rounded-xl border border-gray-300 px-4 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+{% comment %}========== CATALOG (CENTER) =========={% endcomment %}
+<main class="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-4 lg:p-6">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Order menu</p>
+      <h1 class="mt-1 text-xl font-bold text-slate-900">Choose items</h1>
+    </div>
+    <label class="relative block w-full sm:w-72 lg:w-80">
+      <span class="sr-only">Search menu items</span>
+      <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+      </svg>
+      <input type="search" x-model="search" x-ref="catalogSearch" @keydown.escape="search = ''" placeholder="Search menu items... (Ctrl+K)"
+             class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+    </label>
   </div>
 
-  <div class="flex gap-2 mb-6 flex-wrap">
-    <button @click="activeGroup = 'All'"
-            :class="activeGroup === 'All' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
-            class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
-      All
+  <div class="mb-4 flex items-center justify-between gap-3">
+    <p class="text-sm text-slate-500">
+      <span x-text="specialsOnly ? 'Specials' : (activeGroup === 'All' ? 'All items' : activeGroup)"></span>
+    </p>
+    <button type="button" x-show="search !== '' || specialsOnly" x-cloak
+            @click="search = ''; specialsOnly = false; activeGroup = 'All'"
+            class="text-xs font-semibold text-teal-700 hover:text-teal-900">
+      Clear filters
     </button>
-    {% for group_name in item_groups.keys %}
-    <button @click="activeGroup = '{{ group_name|escapejs }}'"
-            :class="activeGroup === '{{ group_name|escapejs }}' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
-            class="px-4 py-2 rounded-xl text-sm font-semibold border shadow-sm transition-all">
-      {{ group_name }}
-    </button>
-    {% endfor %}
   </div>
 
   {% include "pos/partials/catalog/grid.html" %}
-</div>
+</main>

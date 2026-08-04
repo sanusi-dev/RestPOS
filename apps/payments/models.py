@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from apps.utils.models import BaseModel
 
@@ -25,6 +26,13 @@ class ModeOfPayment(BaseModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_default"],
+                condition=Q(is_default=True),
+                name="payments_one_default_mode",
+            ),
+        ]
 
     def __str__(self):
         return self.name

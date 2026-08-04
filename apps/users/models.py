@@ -63,7 +63,7 @@ class CustomUser(AbstractUser):
 
     @cached_property
     def has_backoffice_access(self):
-        return self.is_superuser or self.is_staff or self.is_admin or self.is_manager
+        return self.is_superuser or self.is_admin or self.is_manager
 
     @cached_property
     def has_staff_role(self):

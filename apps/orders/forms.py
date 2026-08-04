@@ -20,6 +20,7 @@ class POSOrderCancelForm(forms.Form):
     cancel_reason_note = forms.CharField(
         label="Note",
         required=False,
+        max_length=500,
         widget=forms.Textarea(
             attrs={
                 "rows": 3,
@@ -29,3 +30,9 @@ class POSOrderCancelForm(forms.Form):
             }
         ),
     )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("cancel_reason") == "other" and not (cleaned_data.get("cancel_reason_note") or "").strip():
+            self.add_error("cancel_reason_note", "Add a note when choosing Other.")
+        return cleaned_data

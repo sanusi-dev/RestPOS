@@ -6,15 +6,19 @@
 {% elif no_shift %}
 {% include "pos/partials/gates/no_shift.html" %}
 {% elif order %}
-<div class="h-full flex" x-data="{ activeGroup: 'All', search: '' }">
+<div class="h-full flex min-w-0" x-data="{ activeGroup: 'All', search: '', specialsOnly: false, noMatches: false }"
+     @keydown.window="if (($event.ctrlKey || $event.metaKey) && $event.key === 'k') { $event.preventDefault(); $refs.catalogSearch?.focus(); }">
 
-  {% comment %}========== CART PANEL (LEFT) =========={% endcomment %}
+  {% comment %}========== CATEGORY SIDEBAR (LEFT) =========={% endcomment %}
+  {% include "pos/partials/catalog/sidebar.html" %}
+
+  {% comment %}========== CATALOG (CENTER) =========={% endcomment %}
+  {% include "pos/partials/catalog/panel.html" %}
+
+  {% comment %}========== CART PANEL (RIGHT) =========={% endcomment %}
   {% partialdef cart inline %}
   {% include "pos/partials/cart/panel.html" %}
   {% endpartialdef %}
-
-  {% comment %}========== CATALOG (RIGHT) =========={% endcomment %}
-  {% include "pos/partials/catalog/panel.html" %}
 
   {% comment %}========== PAYMENT DIALOG (HTMX-loaded) =========={% endcomment %}
   {% partialdef payment_dialog %}
@@ -22,6 +26,7 @@
   {% endpartialdef %}
 
   <div id="payment-dialog-container"></div>
+  <div id="add-on-dialog-container"></div>
 </div>
 {% endif %}
 

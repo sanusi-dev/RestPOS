@@ -10,7 +10,7 @@ class PaymentsModelForm(StyledModelForm):
 class ModeOfPaymentForm(PaymentsModelForm):
     class Meta:
         model = ModeOfPayment
-        fields = ["name", "type", "enabled"]
+        fields = ["name", "type", "enabled", "is_default"]
 
 
 class PaymentGLMappingForm(PaymentsModelForm):

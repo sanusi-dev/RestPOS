@@ -1,0 +1,55 @@
+<div id="add-on-dialog" x-data="{ selected: [], quantity: 1 }" @close-add-on-dialog.window="$el.remove()"
+     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="add-on-dialog-title">
+  <div class="w-full max-w-lg overflow-hidden rounded-xl bg-[#FFF9ED] shadow-2xl ring-1 ring-slate-950/10">
+    <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">Customize item</p>
+        <h2 id="add-on-dialog-title" class="mt-1 text-lg font-bold text-slate-900">{{ menu_item.item_name }}</h2>
+        <p class="mt-1 font-mono text-sm font-semibold text-slate-600">₦{{ menu_item.rate|floatformat:0 }}</p>
+      </div>
+      <button type="button" @click="$el.closest('#add-on-dialog').remove()" class="rounded-lg p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-900" aria-label="Close add-on dialog">
+        <span aria-hidden="true" class="text-xl leading-none">&times;</span>
+      </button>
+    </div>
+
+    <form method="post" action="{% url 'pos:pos_order_add_item' order.pk %}" hx-post="{% url 'pos:pos_order_add_item' order.pk %}" hx-target="#cart-panel" hx-swap="outerHTML" hx-on::before-request="$refs.submitBtn.disabled = true" hx-on::after-request="$refs.submitBtn.disabled = false; if (event.detail.successful) $dispatch('close-add-on-dialog')" class="space-y-5 px-5 py-5">
+      {% csrf_token %}
+      {% if add_ons %}
+      <fieldset>
+        <legend class="mb-2 text-sm font-bold text-slate-900">Add-ons <span class="font-normal text-slate-500">(optional)</span></legend>
+        <div class="space-y-2">
+          {% for add_on in add_ons %}
+          <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-teal-500">
+            <span class="flex items-center gap-3">
+              <input type="checkbox" name="add_on_ids" value="{{ add_on.add_on_item.pk }}" x-model="selected" class="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600">
+              <span class="text-sm font-semibold text-slate-800">{{ add_on.add_on_item.item_name }}</span>
+            </span>
+            <span class="font-mono text-sm text-slate-600">₦{{ add_on.menu_item.rate|floatformat:0 }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% endif %}
+
+      <div>
+        <label for="add-on-quantity" class="mb-2 block text-sm font-bold text-slate-900">Quantity</label>
+        <div class="flex items-center gap-2">
+          <button type="button" @click="quantity = Math.max(1, quantity - 1)" class="min-h-11 min-w-11 rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-700">−</button>
+          <input id="add-on-quantity" name="qty" type="number" min="1" max="99" x-model.number="quantity" class="h-11 w-20 rounded-lg border border-slate-300 bg-white text-center font-mono font-bold focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+          <button type="button" @click="quantity = Math.min(99, quantity + 1)" class="min-h-11 min-w-11 rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-700">+</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="add-on-comments" class="mb-2 block text-sm font-bold text-slate-900">Special instructions <span class="font-normal text-slate-500">(optional)</span></label>
+        <textarea id="add-on-comments" name="comments" maxlength="200" rows="2" placeholder="No onions, extra spicy..." class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"></textarea>
+      </div>
+
+      <input type="hidden" name="item_id" value="{{ menu_item.item.pk }}">
+      <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+        <button type="button" @click="$el.closest('#add-on-dialog').remove()" class="min-h-11 rounded-lg px-4 text-sm font-semibold text-slate-600 hover:bg-slate-200">Cancel</button>
+        <button type="submit" x-ref="submitBtn" class="min-h-11 rounded-lg bg-teal-700 px-5 text-sm font-bold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60 disabled:cursor-not-allowed">Add to order</button>
+      </div>
+    </form>
+  </div>
+</div>

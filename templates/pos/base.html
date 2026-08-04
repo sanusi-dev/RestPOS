@@ -1,34 +1,44 @@
 {% extends "web/base.html" %}
 {% block body_wrapper %}
 <div class="h-screen flex flex-col bg-gray-50 overflow-hidden">
-  <header class="bg-white border-b border-gray-100 px-6 py-3 flex items-center shadow-sm shrink-0">
-    <nav class="flex items-center gap-4 flex-1">
-      <a href="{% url 'pos:pos_home' %}" class="text-sm font-semibold pb-1 transition-colors
-         {% if request.resolver_match.url_name == 'pos_home' %}text-gray-900 border-b-2 border-gray-900{% else %}text-gray-400 hover:text-gray-700{% endif %}">
-        Orders
-      </a>
-      {% if request.resolver_match.url_name == 'pos_order_screen' %}
-      <a href="{% url 'pos:pos_order_screen' order.pk %}" class="text-sm font-semibold pb-1 text-gray-900 border-b-2 border-gray-900">
-        Checkout
-      </a>
-      {% else %}
-      <a href="{% url 'pos:pos_order_history' %}" class="text-sm font-semibold pb-1 transition-colors
-         {% if request.resolver_match.url_name == 'pos_order_history' %}text-gray-900 border-b-2 border-gray-900{% else %}text-gray-400 hover:text-gray-700{% endif %}">
-        Order History
-      </a>
-      {% endif %}
-    </nav>
+  <header class="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm shrink-0">
     <a href="{% url 'pos:pos_home' %}" class="font-extrabold text-gray-900 text-lg tracking-tight">
       {{ project_meta.NAME }}
     </a>
-    <div class="flex items-center gap-4 flex-1 justify-end">
-      <span class="text-sm font-semibold text-gray-500">{{ request.user.get_display_name }}</span>
-      <a href="{% url 'web:dashboard' %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">
-        Backoffice
-      </a>
-      <a href="{% url 'account_logout' %}" data-logout-link class="text-sm font-semibold text-red-400 hover:text-red-600 transition-colors">
-        Sign out
-      </a>
+    <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false">
+      <button type="button" @click="open = !open" :aria-expanded="open"
+              class="flex items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-300">
+        <span class="flex size-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+          {% hgi_stroke name="user-03" size="19" color="currentColor" stroke_width="2" %}
+        </span>
+        <span class="hidden sm:block text-sm font-semibold text-gray-700">{{ request.user.get_display_name }}</span>
+        <span class="flex size-5 items-center justify-center text-gray-400">
+          {% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}
+        </span>
+      </button>
+      <div x-cloak x-show="open" x-transition @click.outside="open = false"
+           class="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white p-2 shadow-xl">
+        <div class="border-b border-gray-100 px-3 py-2">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Cashier</p>
+          <p class="truncate text-sm font-semibold text-gray-800">{{ request.user.get_display_name }}</p>
+        </div>
+        {% if request.user.has_backoffice_access %}
+        <a href="{% url 'web:dashboard' %}" class="mt-2 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-orange-50 hover:text-orange-700">
+          {% hgi_stroke name="dashboard-square-01" size="18" color="currentColor" stroke_width="2" %}
+          Backoffice
+        </a>
+        {% endif %}
+        {% if shift %}
+        <a href="{% url 'pos:pos_close_shift' %}" class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-orange-50 hover:text-orange-700">
+          {% hgi_stroke name="clock-01" size="18" color="currentColor" stroke_width="2" %}
+          Close shift
+        </a>
+        {% endif %}
+        <a href="{% url 'account_logout' %}" data-logout-link class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-50 hover:text-red-700">
+          {% hgi_stroke name="logout-01" size="18" color="currentColor" stroke_width="2" %}
+          Sign out
+        </a>
+      </div>
     </div>
   </header>
   {% if messages %}
@@ -37,5 +47,30 @@
   <div class="flex-1 overflow-hidden">
     {% block pos_content %}{% endblock %}
   </div>
+  <footer class="relative z-20 flex shrink-0 items-center justify-center border-t border-gray-200 bg-white px-4 py-2 shadow-[0_-4px_16px_rgba(15,23,42,0.06)]">
+    <nav aria-label="POS navigation" class="flex items-center justify-center gap-2 sm:gap-8">
+      <a href="{% url 'pos:pos_home' %}" class="flex min-w-20 flex-col items-center gap-1 rounded-xl px-4 py-1 text-[11px] font-bold transition-colors {% if request.resolver_match.url_name == 'pos_home' %}text-orange-600{% else %}text-gray-500 hover:bg-orange-50 hover:text-orange-600{% endif %}">
+        <span class="flex size-6 items-center justify-center">
+          {% hgi_stroke name="home-01" size="21" color="currentColor" stroke_width="2" %}
+        </span>
+        Orders
+      </a>
+      {% if order %}
+      <a href="{% url 'pos:pos_order_screen' order.pk %}" aria-current="page" class="flex min-w-20 flex-col items-center gap-1 rounded-xl bg-orange-50 px-4 py-1 text-[11px] font-bold text-orange-600">
+        <span class="flex size-6 items-center justify-center">
+          {% hgi_stroke name="credit-card" size="21" color="currentColor" stroke_width="2" %}
+        </span>
+        Checkout
+      </a>
+      {% else %}
+      <span aria-disabled="true" class="flex min-w-20 cursor-not-allowed flex-col items-center gap-1 rounded-xl px-4 py-1 text-[11px] font-bold text-gray-300">
+        <span class="flex size-6 items-center justify-center">
+          {% hgi_stroke name="credit-card" size="21" color="currentColor" stroke_width="2" %}
+        </span>
+        Checkout
+      </span>
+      {% endif %}
+    </nav>
+  </footer>
 </div>
 {% endblock %}

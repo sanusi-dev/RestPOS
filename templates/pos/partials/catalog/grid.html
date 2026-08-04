@@ -1,29 +1,64 @@
 {% load humanize %}
 {% comment %}---- Menu item cards ----{% endcomment %}
-<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+<div id="catalog-grid" {% if catalog_oob %}hx-swap-oob="outerHTML"{% endif %}
+     class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4"
+     x-effect="activeGroup; search; specialsOnly; $nextTick(() => { noMatches = Array.from($el.children).every(card => card.style.display === 'none') })">
   {% for mi in menu_items %}
-  <div x-show="(activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}') && (search === '' || '{{ mi.item.item_name|lower|escapejs }}'.includes(search.toLowerCase()))"
+  <button type="button" aria-label="{% if mi.stock_unavailable %}{{ mi.item.item_name }}: {{ mi.stock_message }}{% else %}Add {{ mi.item.item_name }}{% endif %}"
+       {% if mi.stock_unavailable or order_sent or order.invoice_printed %}disabled aria-disabled="true"{% endif %}
+       x-show="(activeGroup === 'All' || activeGroup === '{{ mi.item.item_group.name|escapejs }}') && (!specialsOnly || {{ mi.special_dish|yesno:'true,false' }}) && (search === '' || '{{ mi.item.item_name|lower|escapejs }}'.includes(search.toLowerCase()))"
        x-transition:enter="transition ease-out duration-100"
        x-transition:enter-start="opacity-0"
        x-transition:enter-end="opacity-100"
-       {% if not order_sent %}
+       {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and not mi.item.add_ons.all %}
        hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
        hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
        hx-target="#cart-panel"
        hx-swap="outerHTML"
        {% endif %}
-       class="bg-white rounded-xl overflow-hidden shadow-[0_2px_8px_rgb(0,0,0,0.06)] {% if order_sent %}opacity-50 cursor-not-allowed{% else %}cursor-pointer hover:shadow-[0_8px_24px_rgb(0,0,0,0.09)] hover:-translate-y-0.5 active:scale-95{% endif %} transition-all duration-200">
-     <div class="aspect-[16/9] bg-[#E5E7EB] flex items-center justify-center">
-      <svg class="w-10 h-10 text-[#9CA3AF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="8.5" cy="8.5" r="1.5" />
-        <path d="m21 15-5-5L5 21" />
-      </svg>
+       {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and mi.item.add_ons.all %}
+       hx-get="{% url 'pos:pos_order_add_on_dialog' order.pk mi.item.pk %}"
+       hx-target="#add-on-dialog-container"
+       hx-swap="innerHTML"
+       {% endif %}
+       class="group flex min-h-56 flex-col overflow-hidden rounded-lg bg-white text-left shadow-sm ring-1 ring-slate-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-600 {% if mi.stock_unavailable or order_sent or order.invoice_printed %}cursor-not-allowed grayscale opacity-55{% else %}cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] [&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-70{% endif %}">
+    <div class="flex h-28 items-center justify-center overflow-hidden bg-slate-200">
+      {% if mi.item.image %}
+      <img src="{{ mi.item.image.url }}" alt="{{ mi.item_name }}" class="h-full w-full object-cover saturate-75" loading="lazy">
+      {% else %}
+      <span class="text-3xl font-bold tracking-tight text-slate-400">{{ mi.item_name|slice:':2'|upper }}</span>
+      {% endif %}
     </div>
-    <div class="px-2.5 py-2 flex items-center justify-between gap-2">
-      <p class="text-sm font-medium text-[#111827] truncate">{{ mi.item.item_name }}</p>
-      <p class="text-xs text-[#6B7280] shrink-0">₦{{ mi.rate|intcomma }}</p>
+    <div class="flex flex-1 flex-col p-3">
+      <div class="flex items-start justify-between gap-2">
+        <p class="line-clamp-2 text-sm font-bold leading-5 text-slate-900">{{ mi.item_name }}</p>
+        {% if mi.special_dish %}<span class="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">Special</span>{% endif %}
+      </div>
+      {% if mi.stock_unavailable %}
+      <p class="mt-1 text-[11px] font-bold text-red-700">{{ mi.stock_message }}</p>
+      {% elif mi.item.add_ons.all %}<p class="mt-1 text-[11px] font-medium text-teal-700">Choose add-ons</p>{% endif %}
+      <div class="mt-auto flex items-end justify-between gap-2 pt-3">
+        <p class="font-mono text-sm font-bold tabular-nums text-slate-900">₦{{ mi.rate|intcomma }}</p>
+        {% if mi.stock_unavailable %}
+        <span class="text-xs font-bold text-red-700">Unavailable</span>
+        {% else %}
+        <span class="text-xs font-bold text-teal-700 [.htmx-request_&]:hidden">Add +</span>
+        {% endif %}
+        <svg class="hidden h-4 w-4 animate-spin text-teal-700 [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </div>
     </div>
+  </button>
+  {% empty %}
+  <div class="col-span-full rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+    <p class="font-semibold text-slate-800">Menu unavailable</p>
+    <p class="mt-1 text-sm text-slate-500">No menu items are available right now.</p>
   </div>
   {% endfor %}
+</div>
+<div x-show="noMatches" x-cloak class="mt-4 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+  <p class="font-semibold text-slate-800">No matching items</p>
+  <p class="mt-1 text-sm text-slate-500">Clear search or choose another category.</p>
 </div>

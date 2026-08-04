@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from apps.inventory.models import Item
 from apps.utils.models import BaseModel
@@ -31,6 +32,9 @@ class MenuItem(BaseModel):
     class Meta:
         unique_together = [("menu", "item")]
         ordering = ["item_name"]
+        constraints = [
+            models.CheckConstraint(condition=Q(rate__gte=0), name="menu_item_rate_gte_zero"),
+        ]
 
     def __str__(self):
         return self.item_name or self.item.item_code

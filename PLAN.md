@@ -3068,7 +3068,8 @@ shell navigation into a full-width footer. The navbar uses the `RestPOS` text wo
 the left and a cashier dropdown on the right. The dropdown contains the existing
 permission-aware Backoffice link, cashier Close shift link, and POST-preserving Sign out
 link. The footer is present across POS pages and centers icon-over-label navigation for
-Orders and the active order's Checkout screen, or Order history when no order is active.
+Orders and the active order's Checkout screen. Checkout remains visible but disabled when
+no active order is available.
 
 This is a layout-only change: Checkout continues to link to `pos_order_screen`; payment
 continues to be initiated by the cart's Pay action. Hugeicons are used for new controls,

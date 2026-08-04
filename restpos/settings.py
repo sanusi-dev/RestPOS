@@ -50,6 +50,7 @@ THIRD_PARTY_APPS = [
     "django_htmx",
     "django_vite",
     "django_celery_beat",
+    "django_hugeicons_stroke",
 ]
 
 # Put your project-specific apps here
@@ -111,6 +112,9 @@ TEMPLATES = [
             BASE_DIR / "templates",
         ],
         "OPTIONS": {
+            "builtins": [
+                "django_hugeicons_stroke.templatetags.hugeicons_stroke",
+            ],
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",

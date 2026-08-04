@@ -4,11 +4,12 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.inventory.models import UOM, Item, ItemGroup, Warehouse
+from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
+from apps.staff.models import OpeningPayment, POSOpeningEntry
 
 CustomUser = get_user_model()
 
@@ -25,21 +26,30 @@ class BackofficeViewTestBase(TestCase):
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
-        cls.cash = ModeOfPayment.objects.get(name="Cash")
-        PaymentGLMapping.objects.create(mode_of_payment=cls.cash, default_account="Cash Account")
+        cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
+        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
+        cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.manager = CustomUser.objects.create_user(
             username="manager", password="testpass123", is_staff=True, is_superuser=True
         )
         cls.cashier_user = CustomUser.objects.create_user(username="cashier2", password="testpass123")
+        cls.opening = POSOpeningEntry.objects.create(cashier=cls.manager)
+        OpeningPayment.objects.create(
+            opening_entry=cls.opening,
+            mode_of_payment=cls.cash,
+            opening_amount=Decimal("50000"),
+        )
+        cls.opening.submit()
+        Bin.objects.create(item=cls.food_item, warehouse=cls.warehouse, actual_qty=Decimal("100"))
 
     def setUp(self):
         self.client.force_login(self.manager)
 
     def _create_order(self, **kwargs):
-        defaults = {}
+        defaults = {"opening_entry": self.opening}
         defaults.update(kwargs)
         return Order.objects.create(**defaults)
 
@@ -131,8 +141,6 @@ class OrderCancelTest(BackofficeViewTestBase):
 
 class OrderReturnTest(BackofficeViewTestBase):
     def _settle_order(self, order):
-        order.invoice_printed = True
-        order.save()
         order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
         order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         order.refresh_from_db()
@@ -173,7 +181,7 @@ class KOTListTest(BackofficeViewTestBase):
     def test_kot_list_with_data(self):
         order = self._create_order()
         order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        order.generate_kots([])
+        order.create_tickets()
         response = self.client.get(reverse("orders:kot_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "KOT-")
@@ -187,7 +195,7 @@ class KOTDetailTest(BackofficeViewTestBase):
     def test_kot_detail(self):
         order = self._create_order()
         order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        order.generate_kots([])
+        order.create_tickets()
         kot = order.kots.first()
         response = self.client.get(reverse("orders:kot_detail", kwargs={"pk": kot.pk}))
         self.assertEqual(response.status_code, 200)

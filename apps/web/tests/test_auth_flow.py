@@ -52,10 +52,10 @@ class TestRoleBasedRedirects(TestViewBase):
         response = self._login_and_follow_redirect(user)
         self.assertRedirects(response, reverse("web:dashboard"))
 
-    def test_staff_redirects_to_dashboard(self):
+    def test_django_staff_without_restpos_role_redirects_to_pending(self):
         user = self._make_user(username="test_staff_user", is_staff=True)
         response = self._login_and_follow_redirect(user)
-        self.assertRedirects(response, reverse("web:dashboard"))
+        self.assertRedirects(response, reverse("web:pending_approval"))
 
     def test_user_with_both_roles_is_manager(self):
         user = self._make_user(username="test_both", groups=[self.manager_group, self.cashier_group])
@@ -132,13 +132,13 @@ class TestCustomUserProperties(TestViewBase):
         user = CustomUser.objects.create_superuser(username="su@example.com", email="su@example.com")
         self.assertTrue(user.has_backoffice_access)
 
-    def test_has_backoffice_access_staff(self):
+    def test_has_backoffice_access_staff_without_restpos_role(self):
         from apps.users.models import CustomUser
 
         user = CustomUser.objects.create_user(username="staff2@example.com", email="staff2@example.com")
         user.is_staff = True
         user.save()
-        self.assertTrue(user.has_backoffice_access)
+        self.assertFalse(user.has_backoffice_access)
 
     def test_has_backoffice_access_manager(self):
         from apps.users.models import CustomUser

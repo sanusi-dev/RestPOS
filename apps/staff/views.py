@@ -1,7 +1,9 @@
+import logging
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,6 +14,8 @@ from .forms import (
     OpeningFloatForm,
 )
 from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Dashboard
@@ -189,8 +193,12 @@ def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     # level (no `OpeningPayment` rows can ever be missing on a draft).
     try:
         entry.full_clean()
-    except Exception as e:
-        messages.error(request, f"Cannot submit: {e}")
+    except ValidationError as e:
+        messages.error(request, str(e))
+        return redirect("staff:opening_entry_detail", pk=entry.pk)
+    except Exception:
+        logger.exception("Opening entry submission failed", extra={"opening_entry_id": entry.pk})
+        messages.error(request, "Cannot submit the opening entry.")
         return redirect("staff:opening_entry_detail", pk=entry.pk)
     entry.submit()
     messages.success(request, f"Shift opened. Entry #{entry.pk} is now Open.")
@@ -209,8 +217,12 @@ def opening_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("staff:opening_entry_detail", pk=entry.pk)
     try:
         entry.cancel(by_user=request.user)
-    except Exception as e:
-        messages.error(request, f"Cannot cancel: {e}")
+    except ValidationError as e:
+        messages.error(request, str(e))
+        return redirect("staff:opening_entry_detail", pk=entry.pk)
+    except Exception:
+        logger.exception("Opening entry cancellation failed", extra={"opening_entry_id": entry.pk})
+        messages.error(request, "Cannot cancel the opening entry.")
         return redirect("staff:opening_entry_detail", pk=entry.pk)
     messages.success(request, f"Opening entry #{entry.pk} cancelled.")
     return redirect("staff:opening_entry_list")
@@ -367,8 +379,12 @@ def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         closing.full_clean()
         closing.submit()
-    except Exception as e:
-        messages.error(request, f"Cannot submit: {e}")
+    except ValidationError as e:
+        messages.error(request, str(e))
+        return redirect("staff:closing_entry_detail", pk=closing.pk)
+    except Exception:
+        logger.exception("Closing entry submission failed", extra={"closing_entry_id": closing.pk})
+        messages.error(request, "Cannot submit the closing entry.")
         return redirect("staff:closing_entry_detail", pk=closing.pk)
     messages.success(
         request,
@@ -384,8 +400,12 @@ def closing_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     closing = get_object_or_404(POSClosingEntry, pk=pk)
     try:
         closing.cancel(by_user=request.user)
-    except Exception as e:
-        messages.error(request, f"Cannot cancel: {e}")
+    except ValidationError as e:
+        messages.error(request, str(e))
+        return redirect("staff:closing_entry_detail", pk=closing.pk)
+    except Exception:
+        logger.exception("Closing entry cancellation failed", extra={"closing_entry_id": closing.pk})
+        messages.error(request, "Cannot cancel the closing entry.")
         return redirect("staff:closing_entry_detail", pk=closing.pk)
     messages.success(request, f"Closing entry #{closing.pk} cancelled.")
     return redirect("staff:closing_entry_list")

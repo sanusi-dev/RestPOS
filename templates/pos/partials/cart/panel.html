@@ -1,5 +1,5 @@
 {% comment %}---- Cart panel wrapper (HTMX outerHTML target #cart-panel) ----{% endcomment %}
-<div id="cart-panel" class="w-[30%] min-w-[300px] bg-white border-r border-gray-100 flex flex-col shadow-lg shrink-0">
+<div id="cart-panel" class="w-[360px] xl:w-[390px] 2xl:w-[420px] min-w-[330px] bg-[#FFF9ED] border-l border-slate-200 flex flex-col shadow-[-8px_0_24px_rgb(15,23,42,0.08)] shrink-0">
 
   {% include "pos/partials/cart/guests.html" %}
 
@@ -17,3 +17,4 @@
   {% comment %}---- Totals + Actions ----{% endcomment %}
   {% include "pos/partials/cart/totals.html" %}
 </div>
+{% if catalog_oob %}{% include "pos/partials/catalog/grid.html" %}{% endif %}

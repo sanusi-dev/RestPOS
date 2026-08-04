@@ -8,10 +8,16 @@ urlpatterns = [
     path("", view=views_pos.pos_home, name="pos_home"),
     path("history/", view=views_pos.pos_order_history, name="pos_order_history"),
     path("open-shift/", view=views_pos.pos_open_shift, name="pos_open_shift"),
+    path("close-shift/", view=views_pos.pos_close_shift, name="pos_close_shift"),
     path("order/new/", view=views_pos.pos_order_new, name="pos_order_new"),
     path("order/<int:pk>/", view=views_pos.pos_order_screen, name="pos_order_screen"),
     path("order/<int:pk>/meta/", view=views_pos.pos_order_update_meta, name="pos_order_update_meta"),
     path("order/<int:pk>/add-item/", view=views_pos.pos_order_add_item, name="pos_order_add_item"),
+    path(
+        "order/<int:pk>/add-on-dialog/<int:item_id>/",
+        view=views_pos.pos_order_add_on_dialog,
+        name="pos_order_add_on_dialog",
+    ),
     path(
         "order/<int:pk>/update-item/<int:item_pk>/", view=views_pos.pos_order_update_item, name="pos_order_update_item"
     ),
