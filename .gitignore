@@ -33,6 +33,7 @@ static/.vite/
 references/
 .mypy_cache/
 .claude
+.commandcode
 
 # local scratch / prototype files
 landing-after-optimization.png
