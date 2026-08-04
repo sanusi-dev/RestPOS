@@ -94,6 +94,8 @@ A `Makefile` centralises commands. Run `make` to list them.
 
 App runs at http://localhost:8000
 
+**Vite dev vs build:** while the Vite dev server (`make npm-dev`) is running, it serves assets directly with HMR — no `make npm-build` needed. Only run `make npm-build` when serving without the dev server (django-vite falls back to the built manifest in `static/`), e.g. after a fresh deploy/restart.
+
 ## Reference Codebase Navigation
 
 `references/` is READ ONLY: never write, edit, create, delete, or import from it. Use it only to read and port logic into Django. Always check the reference before implementing any feature.
@@ -211,6 +213,22 @@ menu, default warehouse, order-number behaviour) lives on `Restaurant`. Multi-br
 is deferred as separate paid work and is not half-supported now. Payment methods are
 managed via `ModeOfPayment.enabled` + `is_default` (exactly one default);
 `POSProfilePayment` no longer exists.
+
+### Icons
+
+Icons come from `django-hugeicons-stroke` (pure Python, inline SVG — no npm
+package, no node_modules, nothing to add to Vite or static files). It is already
+installed and registered as a template builtin, so the tag works in every
+template without `{% load %}`:
+
+```
+{% hgi_stroke name="home-01" size="24" color="currentColor" stroke_width="2" %}
+```
+
+- Icon names are kebab-case, same naming as hugeicons.com (e.g. `home-01`, `search-01`, `notification-03`).
+- Available params: `name` (required), `size` (px, default 24), `color` (HEX or CSS color, default `#000000`), `stroke_width` (default 2).
+- There is **no `class` param** — for Tailwind sizing wrap the tag in a sized container, and use `color="currentColor"` so the icon inherits the text color.
+- Never copy SVG markup into templates manually; never introduce a different icon library without flagging it first.
 
 ## Coding Preferences
 

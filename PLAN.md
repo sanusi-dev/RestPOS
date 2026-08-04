@@ -2785,3 +2785,291 @@ stored aggregates are introduced.
   timestamps, source order, and immutable item snapshot lines.
 - The shared backoffice navigation exposes Dashboard, Order Register, and Kitchen & Bar Tickets
   under Orders on desktop and mobile.
+
+### 6.16 Orders POS review decisions
+
+- Receipt printing is optional for Dine In and Take Away and never blocks settlement. A successful
+  receipt print freezes the draft snapshot; corrections require cancellation and a new order or an
+  audited manager override.
+- Payment settlement accepts only enabled methods declared on the active opening entry. Non-cash
+  overpayments are rejected until a refund/credit workflow exists; cash may produce change.
+- Sent-order cancellation creates one cancellation ticket per affected production unit and sends it
+  through that unit's print interface. Original tickets retain their print state and record the
+  cancellation actor.
+- Stock deduction and cancellation restoration rules in this section are superseded by §6.17:
+  only DRINKS use the Restaurant singleton's default warehouse; FOOD POS lines bypass inventory.
+- The POS allows at most 50 open normal drafts per active shift. The manager may change this limit in
+  Restaurant Settings.
+- POS JavaScript is an intentional runtime requirement. Full no-JavaScript fallbacks are not planned.
+- KOT modification/diffing is removed. A sent order is cancelled and replaced with a new order; old
+  persisted dummy data does not require compatibility behavior.
+- Real printer-agent transport, deployment security hardening, and GL/accounting postings remain
+  deferred to their planned phases. Phase 7 still records operational payments and shift totals.
+
+### 6.17 Inventory and POS stock rules (owner-confirmed, superseding)
+
+This section supersedes conflicting stock behavior in §6.2, §6.7, §6.11, and the original §6.16
+stock bullet. Implementation must update those workflows to these rules without introducing BOM,
+recipe, manufacturing, warehouse-role, or legacy-compatibility abstractions.
+
+#### Reference files consulted
+
+| Reference file | What is retained or deliberately changed |
+|---|---|
+| `references/erpnext-develop/erpnext/stock/doctype/item/item.json` and `item.py` | Independent sales, stock, and purchase flags; RestPOS applies the confirmed receipt/POS rules below |
+| `references/erpnext-develop/erpnext/stock/doctype/bin/bin.json` | `actual_qty`, `reserved_qty`, valuation, and item+warehouse cache semantics |
+| `references/erpnext-develop/erpnext/stock/doctype/stock_entry/stock_entry.json` and `stock_entry.py` | Submit/cancel ledger workflow and transfer valuation; RestPOS narrows allowed purposes/routes |
+| `references/erpnext-develop/erpnext/stock/doctype/stock_entry/services/material_transfer.py` | Required source/target warehouses and rejection of same-warehouse transfers |
+| `references/erpnext-develop/erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json` and `stock_reconciliation.py` | Count-to-ledger adjustment and cancellation reversal behavior |
+| `references/erpnext-develop/erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json` | Counted quantity/current quantity/valuation line shape |
+| `references/erpnext-develop/erpnext/stock/doctype/purchase_receipt/purchase_receipt.json` and `purchase_receipt.py` | Purchase receipt posting lifecycle and accepted warehouse concept |
+| `references/erpnext-develop/erpnext/accounts/doctype/pos_invoice/pos_invoice.json` and `pos_invoice.py` | POS item warehouse/update-stock and submit/cancel stock lifecycle used as the comparison point |
+| `references/ury-develop/ury/ury/doctype/ury_order/ury_order.py` | URY sets `update_stock=1` for the whole POS invoice; FOOD bypass below is an explicit deviation |
+| `references/ury-develop/ury/ury_pos/api.py` | URY exposes one POS Profile warehouse to POS; RestPOS retains one configured Bar/POS warehouse on Restaurant |
+| `references/ury-develop/ury/ury/doctype/ury_production_unit/ury_production_unit.json` | Production-unit warehouse linkage; RestPOS reuses it for Kitchen/Bar configuration rather than adding Warehouse roles |
+| `references/ury-develop/pos/src/components/MenuCard.tsx` and `MenuList.tsx` | Disabled-card interaction pattern; RestPOS applies it specifically to unavailable drinks |
+
+#### Model and configuration changes
+
+- Keep `Item.is_sales_item`, `Item.is_stock_item`, and `Item.is_purchase_item` independent.
+  `department` and MenuItem linkage do not imply stock or purchase eligibility. FOOD supports:
+  sellable/non-stock/non-purchase; sellable+stock, optionally purchasable; and internal
+  stock+purchasable. Receipt lines require `is_stock_item=True` and `is_purchase_item=True`.
+- Add nullable `Restaurant.store_warehouse` (`ForeignKey` to `Warehouse`, `SET_NULL`) for central
+  Store. Keep `Restaurant.default_warehouse`, but document and label its real meaning as Bar/POS
+  deduction warehouse. Do not add `Warehouse.role`, `Warehouse.type`, or equivalent flags.
+- Reuse `ProductionUnit.warehouse`: FOOD must identify Kitchen; DRINKS must equal
+  `Restaurant.default_warehouse`. Restaurant settings/production-unit validation rejects disabled,
+  duplicate, or inconsistent Store/Bar/Kitchen configuration. Store must be distinct from both
+  operational targets; Bar and Kitchen must be distinct.
+- Keep `Bin.reserved_qty`; it becomes the authoritative draft DRINKS reservation total for each
+  item+Bar/POS warehouse. `actual_qty - reserved_qty` is available-to-sell stock.
+- Add required `StockReconciliation.reason` choices: `PHYSICAL_COUNT`, `CONSUMPTION`,
+  `WASTE_DAMAGE`, `CORRECTION`. Keep `remarks` optional and `posting_date` user-selectable.
+- Remove `MATERIAL_ISSUE` from `StockEntry.purpose` and all related form, view, validation, template,
+  admin, service, and test branches. No replacement issue model is introduced.
+- Keep the existing order warehouse snapshot only for DRINKS deduction/reversal audit. FOOD lines
+  never use it. Existing `OrderItem.department` and `stock_item` snapshots remain historical item
+  facts, but `stock_item=True` does not make a FOOD line stock-affecting.
+- No BOM, recipe, ProductBundle-as-BOM, ingredient-consumption, production, or repack workflow is
+  introduced. Kitchen consumption is represented only by Stock Reconciliation.
+
+#### Business rules and atomic workflows
+
+**Receiving:**
+
+- Material Receipt and Purchase Receipt always post into `Restaurant.store_warehouse`; users cannot
+  choose or override a different target. Missing/disabled Store configuration blocks draft submit.
+- Both receipt types accept only Items where `is_stock_item` and `is_purchase_item` are true. FOOD,
+  DRINKS, sellability, and menu membership do not otherwise affect receipt eligibility.
+
+**Material Transfer:**
+
+- Preserve ERPNext's paired source-out/target-in ledger semantics and source valuation on the target
+  entry. The source deduction, target receipt, document status change, and cancellation reversals run
+  in one `transaction.atomic()` block with affected Bins locked in deterministic order.
+- Normal source is always `Restaurant.store_warehouse`. Target is derived from item department:
+  DRINKS → `Restaurant.default_warehouse` (configured Bar); FOOD → FOOD ProductionUnit warehouse
+  (configured Kitchen). Every line is validated against its department-derived target.
+- Reject user-overridden targets, Store→Store, Bar/Kitchen→Store, Bar↔Kitchen, Kitchen→Kitchen,
+  Bar→Bar, reverse, and cross-operational routes. Prevent negative Store stock before any line posts.
+- Transfer cancellation reverses both sides atomically and must also prevent an invalid negative
+  balance at the operational warehouse when later stock activity has consumed the transferred qty.
+
+**Stock Reconciliation:**
+
+- Reconciliation is the only one-sided stock adjustment path and supports all configured warehouses.
+  The entered count is compared with the locked current Bin and posts only the signed difference.
+- `CONSUMPTION` is the Kitchen consumption-count workflow and is valid only for the configured FOOD
+  ProductionUnit warehouse and FOOD stock items. It remains a count-to-actual adjustment, not an
+  inferred BOM issue. `PHYSICAL_COUNT`, `WASTE_DAMAGE`, and `CORRECTION` retain their general
+  adjustment meaning.
+- No weekly cadence is enforced. Posting dates are flexible. Submit and cancel each run atomically;
+  cancellation uses reversal SLEs and fails rather than leaving a partially reversed document.
+
+**POS reservation and settlement:**
+
+- FOOD POS lines never validate stock, reserve stock, deduct stock, or restore stock, even when their
+  Item or order snapshot has `is_stock_item=True`. Item/MenuItem disable and sellable/menu checks still
+  apply. FOOD remains inventory-available in catalog responses.
+- Every DRINKS Item exposed for POS sale must have `is_stock_item=True`; invalid menu/configuration is
+  rejected rather than silently bypassing stock. DRINKS use only `Restaurant.default_warehouse`.
+- Adding a DRINKS line or increasing its qty atomically locks its Bin, verifies
+  `actual_qty - reserved_qty >= increase`, and increases `reserved_qty`. Decreasing qty, removing a
+  line, clearing a draft, cancelling a draft, or deleting a draft atomically releases the exact
+  reservation. These paths are idempotent and never permit negative `reserved_qty`.
+- Settlement locks the order and all affected drink Bins, revalidates reservations and actual stock,
+  decreases `reserved_qty`, creates the negative POS SLEs, and submits payment/order in one atomic
+  transaction. A failure rolls back payment, status, reservation, and stock together. This conversion,
+  not an independent release followed by deduction, prevents overselling.
+- Submitted-order stock reversal/refund applies only to the snapshotted DRINKS lines and warehouse.
+  Draft cancellation/deletion releases reservations but creates no SLE. FOOD cancellation/refund
+  creates no stock restoration automatically.
+
+#### HTMX and reporting behavior
+
+- POS catalog queries annotate DRINKS availability from the configured Bar/POS Bin. An unavailable
+  drink remains in the grid with a greyed disabled card, an out-of-stock indication, no add/detail
+  action, and appropriate disabled/ARIA state. FOOD cards do not use Bin availability.
+- Server-side add, increment, detail-dialog submit, decrement, remove, clear, cancel, delete, and pay
+  endpoints enforce the same rules; disabled markup is not the security boundary. Reservation or
+  configuration errors return the existing cart/catalog HTMX fragment with an actionable banner and
+  no partial quantity change.
+- After any drink quantity mutation, affected cart and catalog fragments refresh so availability and
+  disabled state reflect the committed reservation. Concurrent requests cannot both reserve the last
+  unit.
+- Stock Reconciliation create/edit requires the reason dropdown and optional remarks. List/report
+  filters support date range, warehouse, and reason. The Kitchen consumption comparison report shows
+  FOOD sales quantities/revenue beside Kitchen `CONSUMPTION` reconciliation quantities for the same
+  selected date range; it does not claim recipe-level variance.
+
+#### Migrations and data policy
+
+- Generate schema migrations with `makemigrations`: add `Restaurant.store_warehouse`, add required
+  reconciliation reason, and alter StockEntry purpose choices. Review dependencies because settings
+  references inventory while inventory workflows read the Restaurant singleton.
+- Current data is dummy. No legacy compatibility layer or preservation migration is required for
+  Material Issue. Before dropping the choice, delete dummy Material Issue documents and their related
+  dummy SLE/Bin effects using an explicit development data-reset policy; do not reinterpret them as
+  transfers or reconciliations.
+- Existing dummy reconciliation rows may be reset rather than guessed into reasons. New databases
+  require an explicit reason. Warehouse records are reused and assigned through Restaurant and
+  ProductionUnit configuration; do not infer or persist warehouse roles.
+
+#### Test plan
+
+- Item/receipt tests cover every independent flag combination, including internal FOOD stock purchase
+  items, sellable non-stock FOOD, invalid non-purchase receipt lines, and menu eligibility independent
+  of purchase eligibility.
+- Settings tests cover Store/Bar/Kitchen required relationships, disabled warehouses, distinctness,
+  and DRINKS ProductionUnit equality with `Restaurant.default_warehouse`.
+- Stock Entry tests cover Store-only receipts; department-derived Store→Bar/Kitchen transfers; mixed
+  transfers; source valuation preservation; every forbidden reverse/cross route; negative-stock
+  prevention; and all-or-nothing submit/cancel failures.
+- Reconciliation tests cover all four required reasons, optional remarks, arbitrary posting dates,
+  Kitchen-only consumption validation, count differences, report filters, and atomic cancellation.
+- POS model/view tests cover FOOD stock bypass, explicit disable enforcement, DRINKS stock requirement,
+  visible disabled out-of-stock cards, add/increment reservation, decrement/remove/clear/cancel/delete
+  release, atomic settlement conversion, rollback on payment/SLE failure, refund/reversal scope, and
+  two concurrent attempts for the last drink unit.
+- Reporting tests compare Kitchen consumption with FOOD sales over date filters without BOM-derived
+  expectations. Run inventory, settings, orders, reports, full tests, Ruff, Django checks, and the
+  frontend type/build checks after implementation.
+
+#### Deviations from prior plan and references
+
+| Deviation | Reason |
+|---|---|
+| Material Issue is removed completely, superseding §6.2 and ERPNext Stock Entry purposes | One-sided operational reductions belong to structured Stock Reconciliation; current data is dummy and needs no compatibility path |
+| FOOD POS bypasses validation, reservation, deduction, and restoration even when `is_stock_item=True`, unlike URY's invoice-wide `update_stock=1` and the prior §6.7/§6.16 plan | Owner-confirmed separation: food stock represents Store/Kitchen operational counts, not automatic sale consumption |
+| POS reserves/deducts only DRINKS from `Restaurant.default_warehouse` | Bar stock is directly countable and must prevent overselling; the field's semantic is Bar/POS deduction warehouse |
+| `Restaurant.store_warehouse` added; receipts cannot choose a warehouse | All inbound goods first enter central Store before controlled operational transfer |
+| No `Warehouse.role/type`; configured Restaurant and ProductionUnit FKs define Store, Bar, and Kitchen | Avoid duplicate warehouse classification and reuse the existing single-location model |
+| Normal transfers are restricted to Store→department target | The restaurant does not use ERPNext's unrestricted warehouse graph; reverse/cross routes would bypass controlled counts |
+| Stock Reconciliation gains required structured reasons and owns Kitchen consumption counts | Supports auditable adjustment reporting without BOM or Material Issue |
+| Out-of-stock drinks remain visible but disabled instead of using URY/earlier hide-unavailable behavior | Cashier needs catalogue visibility while the server still prevents selection and overselling |
+| Purchase eligibility requires both stock and purchase flags, not department/menu linkage | Item capabilities are independent and internal purchasable FOOD items need not be sellable |
+
+### 6.18 POS Workbench Redesign — Three-Column Layout, Catalogue Search, and Add-On Dialog
+
+**Reference source:** URY POS frontend (`references/ury-develop/pos/src/`) for layout and
+interaction patterns only. No URY source code is reused — the workbench stays server-authoritative
+Django + HTMX + Alpine + Tailwind v4.
+
+#### Layout (agreed design direction)
+
+| Zone | Position | Contents | Source |
+|---|---|---|---|
+| Category sidebar | Left, fixed width `w-52 lg:w-60` | `All items`, `Specials`, one button per `ItemGroup`; counts per group; active state via `aria-pressed`; dark `slate-900` on the otherwise light workbench | URY category rail → replaces the horizontal `ItemGroup` strip |
+| Catalogue | Center, fills remaining width | Persistent search box (Ctrl/Cmd+K focuses, Escape clears), group/scoped filter label, menu-card grid | URY menu list grid |
+| Cart/workbench | Right, fixed `w-[360px]…2xl:w-[420px]` | Guests stepper, order type, grouped/flat items, totals, Send/Action/Receipt/Pay | URY cart panel |
+
+The old horizontal `ItemGroup` strip was removed. Cross-checked against the prior review note that
+formal tabs/pills in the backoffice were not to be reused for the POS catalogue; the sidebar is a
+dedicated POS shell component.
+
+#### Catalogue caching, search, and specials
+
+- `panel.html` search is a persistent input `x-model="search"`; `index.html` keeps the
+  `activeGroup`, `search`, `specialsOnly`, and `noMatches` Alpine state scoped to `pos_content`.
+- `grid.html` filters with `x-show`: `(activeGroup === 'All' || matches group)` AND
+  `(!specialsOnly || special_dish)` AND (`search` empty OR item name contains search).
+- `noMatches` is computed in `x-effect` after every state change with `$nextTick`, counting
+  visible card elements; when the grid is empty the server-side "Menu unavailable" card renders.
+- Beginners/persistence: filter state is purely client-side and resets on any cart-partial swap;
+  catalogue remains static between orders.
+
+#### Menu cards
+
+- Cards are semantic `<button>` elements (attribution: image/initials fallback with `line-clamp-2`,
+  Special badge, rate, `Add +`/`Unavailable` label, HTMX request spinner). Cards with add-ons show a
+  "Choose add-ons" affordance and open the dialog; cards without add-ons post directly to
+  `pos_order_add_item` with `qty=1`.
+- Items with `stock_unavailable`, sent orders, and printed invoices render `disabled` with reduced
+  opacity and no HTMX action — the catalogue is a read-only map of what can still be ordered.
+
+#### Add-On dialog (new)
+
+- New URL `pos_order_add_on_dialog` (`order/pk/add-on-dialog/item_id/`) renders
+  `add_on_dialog.html` — an optional add-on chooser (only enabled, sales-ready add-ons on the
+  active menu), quantity stepper, and optional comments (max 200 chars).
+- The dialog submits a normal `POST` to `pos_order_add_item`; the parent item and each selected
+  add-on become separate cart lines on the active customer card, each with its own resolved
+  `MenuItem` rate, inside one `transaction.atomic()`.
+- Server-side validation in `pos_order_add_item`: add-on IDs must parse; every selected add-on must
+  be a configured `ItemAddOn` of the parent; every add-on must be on the active menu, enabled and
+  sales-ready. Any failure aborts the whole add (including the parent — no partial cart state).
+- Add-ons are priced like menu items: resolved from `MenuItem.rate` on the active menu, never from
+  client input.
+
+#### Cart improvements
+
+- Cart wrapper renders the ticket paper (`#FFF9ED`) and reuses `catalog_oob` to refresh the fetched
+  catalogue grid after quantity-affecting actions.
+- Guests stepper posts `guest_delta` ±1 (blocked when it would strand higher-numbered guests' items);
+  order-type buttons post `order_type`; both go through `pos_order_update_meta` which locks rows
+  `select_for_update` and refuses edits once tickets exist or the receipt was printed.
+- Success/error banners are rendered from context flags (`sync_success`, `print_failures`,
+  `ticket_print_success`, `clear_success`, `receipt_print_*`).
+- Pay anchor href + hx-get double binding opens the settle dialog; disabled while the cart is empty.
+
+#### Payment dialog
+
+- Live Entered/Remaining/Change summary is computed client-side from the payment-mode inputs;
+  `total` is the server-rendered rounded total (authoritative `Order.settle` still validates).
+- Non-cash modes gain an optional reference field; the submit button shows a processing state
+  and disables against double submission.
+- Autofill on focus fills the balance of the total minus other inputs and dispatches an `input`
+  event so the summary updates.
+
+#### Backend additions
+
+- `_build_order_context` prefetches `item__add_ons__add_on_item__menu_items`, passes
+  `item_groups`, `menu_items` (filtered `disabled=False`), `special_item_count`, and marks
+  DRINKS items `stock_unavailable` from the Bar/POS warehouse Bin available quantity.
+- `pos_order_update_item` refuses quantity edits on printed/sent orders via the shared
+  print/send guards; cart rows disable the `±` controls accordingly.
+- `pos_close_shift` view and `close-shift/` route were added alongside the redesign so the POS
+  screen exposes a Close-shift link in the top bar (matching the shift lifecycle in §6.5).
+
+#### Deviations from reference
+
+| Deviation | Reason |
+|---|---|
+| URY POS is React; RestPOS is Django templates + HTMX + Alpine | Project hard rule — no React/Vue/DRF |
+| Add-ons are optional and become separate cart lines, not a bundled line | Keep item snapshots and ledger lines independent; server re-resolves every rate |
+| Parent + add-ons commit in one atomic block after full server validation | Prevents a partial cart write when an add-on is stale or removed from the menu |
+| Variants are templates excluded from the catalogue; sellable variants are standalone cards | User-confirmed scope decision (§6.16 review); avoids a variant-group dialog |
+
+### 6.19 POS Shell Navigation — Cashier Menu and Full-Width Footer
+
+The POS shell keeps the three-column workbench and cart actions unchanged while moving
+shell navigation into a full-width footer. The navbar uses the `RestPOS` text wordmark on
+the left and a cashier dropdown on the right. The dropdown contains the existing
+permission-aware Backoffice link, cashier Close shift link, and POST-preserving Sign out
+link. The footer is present across POS pages and centers icon-over-label navigation for
+Orders and the active order's Checkout screen, or Order history when no order is active.
+
+This is a layout-only change: Checkout continues to link to `pos_order_screen`; payment
+continues to be initiated by the cart's Pay action. Hugeicons are used for new controls,
+and the existing `data-logout-link` behavior is preserved.
