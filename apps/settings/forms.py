@@ -58,10 +58,12 @@ class RestaurantForm(SettingsModelForm):
             "address",
             "active_menu",
             "default_warehouse",
+            "max_open_drafts",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["max_open_drafts"].required = False
         self.fields["active_menu"].queryset = active_choices(Menu, self.instance.active_menu_id, enabled=True)
         self.fields["default_warehouse"].queryset = active_choices(
             Warehouse, self.instance.default_warehouse_id, disabled=False

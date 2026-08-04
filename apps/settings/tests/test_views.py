@@ -49,6 +49,7 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
             "address": "123 Street",
             "active_menu": "",
             "default_warehouse": "",
+            "max_open_drafts": "50",
         }
         data.update(overrides)
         return data

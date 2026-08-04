@@ -8,6 +8,7 @@ class Restaurant(BaseModel):
     """The single settings record for this installation — identity, menu, stock, and POS behaviour."""
 
     company = models.CharField(max_length=200)
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     invoice_series_prefix = models.CharField(max_length=20, default="REST-")
     address = models.TextField(blank=True)
     active_menu = models.ForeignKey(
@@ -23,6 +24,10 @@ class Restaurant(BaseModel):
         null=True,
         blank=True,
         related_name="default_for_restaurants",
+    )
+    max_open_drafts = models.PositiveIntegerField(
+        default=50,
+        help_text="Maximum normal POS drafts allowed on one active shift.",
     )
 
     class Meta:
@@ -47,6 +52,8 @@ class Restaurant(BaseModel):
         super().clean()
         if not self.pk and Restaurant.objects.exists():
             raise ValidationError("Restaurant settings already exist — edit the existing record.")
+        if self.max_open_drafts < 1:
+            raise ValidationError({"max_open_drafts": "The open-draft limit must be at least 1."})
 
 
 class ProductionUnit(BaseModel):
@@ -82,6 +89,9 @@ class ProductionUnit(BaseModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["department"], name="settings_one_production_unit_per_department"),
+        ]
 
     def __str__(self):
         return self.name
