@@ -2,6 +2,8 @@ from copy import copy
 
 from django.conf import settings
 
+from apps.inventory.models import ItemGroup
+
 from .meta import absolute_url, get_server_root
 
 
@@ -24,3 +26,8 @@ def csrf_settings(request):
     return {
         "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
     }
+
+
+def inventory_navigation(request):
+    """Expose the item-group count used by backoffice navigation."""
+    return {"item_group_count": ItemGroup.objects.count()}

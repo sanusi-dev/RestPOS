@@ -122,6 +122,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.web.context_processors.project_meta",
                 "apps.web.context_processors.csrf_settings",
+                "apps.web.context_processors.inventory_navigation",
             ],
             "loaders": _DEFAULT_LOADERS if DEBUG else _CACHED_LOADERS,
         },
