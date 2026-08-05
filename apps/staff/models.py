@@ -230,7 +230,13 @@ class POSClosingEntry(BaseModel):
         opening_modes = {
             op.mode_of_payment_id: op for op in opening.opening_payments.select_related("mode_of_payment").all()
         }
-        from apps.orders.models import Order, OrderPayment, SUBMITTED  # noqa: I001
+        from apps.orders.models import DRAFT, SUBMITTED, Order, OrderPayment  # noqa: I001
+
+        draft_count = Order.objects.filter(opening_entry=opening, status=DRAFT, is_return=False).count()
+        if draft_count:
+            raise ValidationError(
+                f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift."
+            )
 
         submitted_orders = Order.objects.filter(
             opening_entry=opening,

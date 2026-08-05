@@ -22,6 +22,16 @@ class ClosingPaymentForm(StaffModelForm):
         # `closing_entry_create` and the fourth is computed on submit. Only
         # closing_amount is user-editable.
         fields = ["closing_amount"]
+        widgets = {
+            "closing_amount": forms.NumberInput(
+                attrs={
+                    "data-counted": "",
+                    "inputmode": "decimal",
+                    "min": "0",
+                    "step": "0.01",
+                }
+            )
+        }
 
 
 class OpeningFloatForm(forms.Form):

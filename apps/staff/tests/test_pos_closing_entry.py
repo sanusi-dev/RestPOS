@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.test import TestCase
 
+from apps.orders.models import Order
 from apps.payments.models import ModeOfPayment
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 from apps.users.models import CustomUser
@@ -93,6 +94,15 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertTrue(self.opening.is_closed)
         self.assertEqual(self.opening.closing_entry, self.closing)
         self.assertIsNotNone(self.opening.period_end_date)
+
+    def test_submit_rejects_open_draft_orders(self):
+        Order.objects.create(opening_entry=self.opening)
+
+        with self.assertRaisesMessage(ValidationError, "Close or settle 1 open order"):
+            self.closing.submit()
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
 
     def test_submit_raises_if_mode_not_in_opening(self):
         other_mode = ModeOfPayment.objects.create(name="Stranger", type="GENERAL")

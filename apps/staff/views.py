@@ -9,6 +9,8 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.orders.models import DRAFT, Order
+
 from .forms import (
     ClosingPaymentForm,
     OpeningFloatForm,
@@ -278,11 +280,34 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         messages.warning(request, "There is no open shift to close. Open a shift first.")
         return redirect("staff:dashboard")
 
+    draft_count = Order.objects.filter(
+        opening_entry=open_entry,
+        status=DRAFT,
+        is_return=False,
+    ).count()
+    if draft_count:
+        messages.error(
+            request,
+            f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift.",
+        )
+        return redirect("pos:pos_home")
+
     with transaction.atomic():
         # Lock the open shift row so two concurrent "Close Shift" clicks
         # cannot both pass the duplicate-draft check below. PostgreSQL's
         # `select_for_update` holds the lock until COMMIT.
         open_entry = POSOpeningEntry.objects.select_for_update().select_related("cashier").get(pk=open_entry.pk)
+        draft_count = Order.objects.filter(
+            opening_entry=open_entry,
+            status=DRAFT,
+            is_return=False,
+        ).count()
+        if draft_count:
+            messages.error(
+                request,
+                f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift.",
+            )
+            return redirect("pos:pos_home")
         existing_draft = POSClosingEntry.objects.filter(opening_entry=open_entry, status=POSClosingEntry.DRAFT).first()
         if existing_draft is not None:
             return redirect("staff:closing_entry_detail", pk=existing_draft.pk)
@@ -326,6 +351,11 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
     )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
+    draft_count = Order.objects.filter(
+        opening_entry=closing.opening_entry,
+        status=DRAFT,
+        is_return=False,
+    ).count()
 
     if request.method == "POST":
         if closing.status != POSClosingEntry.DRAFT:
@@ -333,6 +363,13 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             return redirect("staff:closing_entry_detail", pk=closing.pk)
         form_data, all_valid = _validate_closing_payment_forms(request, closing_payments)
         if all_valid:
+            if draft_count:
+                messages.error(
+                    request,
+                    f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} "
+                    "before closing the shift.",
+                )
+                return redirect("pos:pos_home")
             with transaction.atomic():
                 for _cp, form in form_data:
                     form.save()
@@ -342,7 +379,12 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
         return render(
             request,
             "backoffice/staff/closing_entry_detail.html",
-            {"closing": closing, "form_data": form_data, "closing_payments": closing_payments},
+            {
+                "closing": closing,
+                "form_data": form_data,
+                "closing_payments": closing_payments,
+                "draft_count": draft_count,
+            },
         )
 
     # GET
@@ -353,7 +395,7 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "backoffice/staff/closing_entry_detail.html",
-        {"closing": closing, "form_data": form_data, "closing_payments": closing_payments},
+        {"closing": closing, "form_data": form_data, "closing_payments": closing_payments, "draft_count": draft_count},
     )
 
 
