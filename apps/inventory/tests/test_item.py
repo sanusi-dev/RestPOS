@@ -46,6 +46,7 @@ class ItemModelTest(ItemTestBase):
         self.assertFalse(self.item.disabled)
         self.assertFalse(self.item.has_variants)
         self.assertEqual(self.item.safety_stock, Decimal("0"))
+        self.assertEqual(self.item.image.name, "items/default-item.png")
 
     def test_item_code_auto_generated(self):
         self.assertTrue(self.item.item_code.startswith("ITEM-"))

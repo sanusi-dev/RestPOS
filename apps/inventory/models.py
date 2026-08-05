@@ -74,7 +74,7 @@ class Item(BaseModel):
         max_length=10,
         choices=[("FOOD", "Food"), ("DRINKS", "Drinks")],
     )
-    image = models.ImageField(upload_to="items/", null=True, blank=True)
+    image = models.ImageField(upload_to="items/", default="items/default-item.png", blank=True)
     description = models.TextField(blank=True)
     disabled = models.BooleanField(default=False)
     is_stock_item = models.BooleanField(default=True)

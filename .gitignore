@@ -18,6 +18,9 @@ node_modules/
 .claude/settings.local.json
 openapitools.json
 media/
+!media/
+!media/items/
+!media/items/default-item.png
 docs/_build
 _dist/
 .env
