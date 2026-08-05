@@ -18,6 +18,7 @@ from apps.menu.models import MenuItem
 from apps.orders.models import (
     CANCELLED,
     DINE_IN,
+    DISCARDED,
     DRAFT,
     KOT,
     KOT_PRINT_PENDING,
@@ -1050,6 +1051,35 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 @require_POST
+def pos_order_discard(request: HttpRequest, pk: int) -> HttpResponse:
+    """Discard an empty draft order that never got items, a receipt, or a ticket."""
+    shift = _get_open_shift()
+    if shift is None:
+        return redirect("pos:pos_home")
+    try:
+        with transaction.atomic():
+            order = get_object_or_404(
+                Order.objects.select_for_update(),
+                pk=pk,
+                status=DRAFT,
+                is_return=False,
+                opening_entry=shift,
+            )
+            order.discard(discarded_by=request.user)
+    except ValidationError as e:
+        messages.error(request, str(e.messages[0]) if e.messages else "Discard failed.")
+        return redirect("pos:pos_order_screen", pk=pk)
+    request.session.pop(SESSION_ORDER_KEY, None)
+    cards = request.session.get(SESSION_CARD_KEY, {})
+    if isinstance(cards, dict):
+        cards.pop(str(order.pk), None)
+        request.session[SESSION_CARD_KEY] = cards
+    messages.success(request, f"Order {order.invoice_number} discarded.")
+    return redirect("pos:pos_home")
+
+
+@login_required
+@require_POST
 def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
     """Print or reprint the receipt for the current draft order."""
     error = None
@@ -1172,6 +1202,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
             Q(status=SUBMITTED, is_return=False, is_paid=True)
             | Q(status=SUBMITTED, is_return=True)
             | Q(status=CANCELLED, is_return=False)
+            | Q(status=DISCARDED, is_return=False)
         )
     elif status_filter == "returns":
         orders = orders.filter(status=SUBMITTED, is_return=True)
@@ -1228,7 +1259,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "items__item", "payments__mode_of_payment", "kots__production_unit"
         ),
         pk=pk,
-        status__in=[SUBMITTED, CANCELLED],
+        status__in=[SUBMITTED, CANCELLED, DISCARDED],
     )
     open_shift = _get_open_shift()
     context = {

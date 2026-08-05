@@ -75,7 +75,7 @@
               </span>
             </td>
             <td class="px-4 py-3">
-              <span class="rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide {% if order.is_return or order.status == 'CANCELLED' %}bg-red-50 text-red-700{% else %}bg-emerald-50 text-emerald-700{% endif %}">{% if order.is_return %}Return{% elif order.status == 'CANCELLED' %}Cancelled{% else %}Paid{% endif %}</span>
+              <span class="rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide {% if order.is_return or order.status == 'CANCELLED' %}bg-red-50 text-red-700{% elif order.status == 'DISCARDED' %}bg-slate-100 text-slate-600{% else %}bg-emerald-50 text-emerald-700{% endif %}">{% if order.is_return %}Return{% elif order.status == 'CANCELLED' %}Cancelled{% elif order.status == 'DISCARDED' %}Discarded{% else %}Paid{% endif %}</span>
             </td>
             <td class="px-4 py-3 text-center font-mono text-sm font-bold tabular-nums text-slate-600">{{ order.items.all|length }}</td>
             <td class="px-4 py-3 font-mono text-sm font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</td>

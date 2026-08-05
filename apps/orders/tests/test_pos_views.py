@@ -1015,7 +1015,7 @@ class POSCancelTest(POSViewTestBase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "DRAFT")
 
-    def test_cancel_empty_draft(self):
+    def test_cancel_empty_draft_rejected(self):
         self.client.post(reverse("pos:pos_order_new"), {"order_type": "DINE_IN", "guest_count": "1"})
         empty = Order.objects.filter(status="DRAFT").exclude(pk=self.order.pk).first()
         self.assertIsNotNone(empty)
@@ -1025,9 +1025,28 @@ class POSCancelTest(POSViewTestBase):
         )
         self.assertEqual(response.status_code, 302)
         empty.refresh_from_db()
-        self.assertEqual(empty.status, "CANCELLED")
-        self.assertEqual(empty.cancel_reason, "cashier_error")
-        self.assertEqual(empty.cancelled_by, self.user)
+        self.assertEqual(empty.status, "DRAFT")
+
+    def test_discard_empty_draft(self):
+        self.client.post(reverse("pos:pos_order_new"), {"order_type": "DINE_IN", "guest_count": "1"})
+        empty = Order.objects.filter(status="DRAFT").exclude(pk=self.order.pk).first()
+        self.assertIsNotNone(empty)
+        response = self.client.post(
+            reverse("pos:pos_order_discard", kwargs={"pk": empty.pk}),
+        )
+        self.assertEqual(response.status_code, 302)
+        empty.refresh_from_db()
+        self.assertEqual(empty.status, "DISCARDED")
+        self.assertEqual(empty.discarded_by, self.user)
+        self.assertIsNotNone(empty.discarded_at)
+
+    def test_discard_order_with_items_rejected(self):
+        response = self.client.post(
+            reverse("pos:pos_order_discard", kwargs={"pk": self.order.pk}),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "DRAFT")
 
 
 class POSPrintTest(POSViewTestBase):

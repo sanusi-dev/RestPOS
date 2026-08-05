@@ -81,6 +81,8 @@
               {% if order.status == "DRAFT" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
               {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
                 {% if order.is_paid %}<p class="text-[11px] text-emerald-600 mt-1 font-semibold">Paid</p>{% endif %}
+              {% elif order.status == "DISCARDED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 ring-1 ring-slate-200">Discarded</span>
+                {% if order.discarded_by %}<p class="text-[11px] text-slate-500 mt-1">By {{ order.discarded_by.get_display_name }}</p>{% endif %}
               {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
                 {% if order.cancel_reason %}<p class="text-[11px] text-red-500 mt-1">{{ order.get_cancel_reason_display }}</p>{% endif %}
               {% endif %}

@@ -429,13 +429,14 @@ class OrderCancelTest(OrderTestBase):
         order.cancel_sent_order("wrong_order")
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
 
-    def test_cancel_sent_order_allows_empty_draft(self):
+    def test_cancel_sent_order_blocks_empty_draft(self):
+        from django.core.exceptions import ValidationError
+
         draft = self._create_order()
-        draft.cancel_sent_order("cashier_error")
+        with self.assertRaises(ValidationError):
+            draft.cancel_sent_order("cashier_error")
         draft.refresh_from_db()
-        self.assertEqual(draft.status, "CANCELLED")
-        self.assertEqual(draft.cancel_reason, "cashier_error")
-        self.assertEqual(draft.audit_events.filter(event_type="CANCELLED").count(), 1)
+        self.assertEqual(draft.status, "DRAFT")
 
     def test_cancel_sent_order_blocks_untouched_draft_with_items(self):
         from django.core.exceptions import ValidationError
@@ -446,6 +447,53 @@ class OrderCancelTest(OrderTestBase):
             draft.cancel_sent_order("wrong_order")
         draft.refresh_from_db()
         self.assertEqual(draft.status, "DRAFT")
+
+    def test_discard_empty_draft(self):
+        draft = self._create_order()
+        draft.discard(discarded_by=self.user)
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "DISCARDED")
+        self.assertEqual(draft.discarded_by, self.user)
+        self.assertIsNotNone(draft.discarded_at)
+        self.assertEqual(draft.audit_events.filter(event_type="DISCARDED").count(), 1)
+
+    def test_discard_blocks_order_with_items(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.add_item(self.item, qty=1, rate=Decimal("1500"))
+        with self.assertRaisesMessage(ValidationError, "Only empty orders can be discarded."):
+            draft.discard()
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "DRAFT")
+
+    def test_discard_blocks_printed_order(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.invoice_printed = True
+        draft.save(update_fields=["invoice_printed"])
+        with self.assertRaisesMessage(ValidationError, "Printed, sent or paid orders cannot be discarded."):
+            draft.discard()
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "DRAFT")
+
+    def test_discard_blocks_submitted_order(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.add_item(self.item, qty=1, rate=Decimal("1500"))
+        draft.settle([{"mode_of_payment": self.cash.pk, "amount": "1500"}])
+        with self.assertRaisesMessage(ValidationError, "Only draft orders can be discarded."):
+            draft.discard()
+
+    def test_discard_blocks_cancelled_order(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.cancel("Changed mind")
+        with self.assertRaisesMessage(ValidationError, "Only draft orders can be discarded."):
+            draft.discard()
 
 
 class OrderReturnTest(OrderTestBase):

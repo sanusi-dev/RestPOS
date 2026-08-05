@@ -63,6 +63,7 @@
       </div>
       {% if order.status == "DRAFT" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700">Draft</span>
       {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Submitted{% if order.is_paid %} · Paid{% endif %}</span>
+      {% elif order.status == "DISCARDED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Discarded</span>
       {% else %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
     </div>
     <dl class="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-6">

@@ -93,6 +93,7 @@
               <td class="px-6 py-4">
                 {% if order.status == "DRAFT" %}<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">Draft</span>
                 {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Paid</span>
+                {% elif order.status == "DISCARDED" %}<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">Discarded</span>
                 {% else %}<span class="inline-flex px-2 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
               </td>
               <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ order.grand_total|intcomma }}</td>

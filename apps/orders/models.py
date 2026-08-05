@@ -13,7 +13,13 @@ from apps.utils.models import BaseModel
 DRAFT = "DRAFT"
 SUBMITTED = "SUBMITTED"
 CANCELLED = "CANCELLED"
-STATUS_CHOICES = [(DRAFT, "Draft"), (SUBMITTED, "Submitted"), (CANCELLED, "Cancelled")]
+DISCARDED = "DISCARDED"
+STATUS_CHOICES = [
+    (DRAFT, "Draft"),
+    (SUBMITTED, "Submitted"),
+    (CANCELLED, "Cancelled"),
+    (DISCARDED, "Discarded"),
+]
 
 DINE_IN = "DINE_IN"
 TAKE_AWAY = "TAKE_AWAY"
@@ -109,6 +115,14 @@ class Order(BaseModel):
         related_name="cancelled_orders",
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    discarded_by = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="discarded_orders",
+    )
+    discarded_at = models.DateTimeField(null=True, blank=True)
     opening_entry = models.ForeignKey(
         "staff.POSOpeningEntry", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
     )
@@ -164,13 +178,16 @@ class Order(BaseModel):
             previous = type(self).objects.get(pk=self.pk)
             allow_cancellation = getattr(self, "_allow_cancellation", False)
             allow_submit = getattr(self, "_allow_submit", False)
+            allow_discard = getattr(self, "_allow_discard", False)
 
-            if previous.status in {SUBMITTED, CANCELLED} and not allow_cancellation:
-                raise ValidationError("Submitted or cancelled orders cannot be modified.")
+            if previous.status in {SUBMITTED, CANCELLED, DISCARDED} and not allow_cancellation:
+                raise ValidationError("Submitted, cancelled or discarded orders cannot be modified.")
             if previous.status == DRAFT and self.status == SUBMITTED and not allow_submit:
                 raise ValidationError("Only settlement can submit an order.")
             if previous.status == DRAFT and self.status == CANCELLED and not allow_cancellation:
                 raise ValidationError("Use the order cancellation flow to cancel an order.")
+            if previous.status == DRAFT and self.status == DISCARDED and not allow_discard:
+                raise ValidationError("Use the order discard flow to discard an order.")
             if (self.is_return, self.return_against_id) != (previous.is_return, previous.return_against_id):
                 raise ValidationError("An order's return status and source cannot be changed.")
             if previous.stock_warehouse_id and self.stock_warehouse_id != previous.stock_warehouse_id:
@@ -736,6 +753,8 @@ class Order(BaseModel):
         if order.status == CANCELLED:
             self.refresh_from_db()
             return []
+        if order.status == DISCARDED:
+            raise ValidationError("Discarded orders cannot be cancelled.")
         if order.status == SUBMITTED and order.is_paid:
             raise ValidationError("Submitted paid orders cannot be cancelled; use the refund flow.")
         if not reason or not reason.strip():
@@ -775,13 +794,13 @@ class Order(BaseModel):
 
     @transaction.atomic
     def cancel_sent_order(self, reason, reason_note="", cancelled_by=None):
-        """Cancel an unpaid draft — empty drafts can be abandoned, sent or printed orders cancelled."""
+        """Cancel an unpaid order after its kitchen or bar tickets were sent."""
         order = type(self).objects.select_for_update().get(pk=self.pk)
         if order.status != DRAFT:
             raise ValidationError("Only draft orders can be cancelled from the POS.")
         if order.is_paid:
             raise ValidationError("Paid orders cannot be cancelled from the POS.")
-        if order.items.exists() and not order.kots.exists() and not order.invoice_printed:
+        if not order.kots.exists() and not order.invoice_printed:
             raise ValidationError("Only a printed or sent order can be cancelled here.")
         if reason not in dict(CANCEL_REASON_CHOICES):
             raise ValidationError("Choose a valid cancellation reason.")
@@ -814,6 +833,28 @@ class Order(BaseModel):
         )
         self.refresh_from_db()
         return cancellation_kots
+
+    @transaction.atomic
+    def discard(self, discarded_by=None):
+        """Mark an empty, untouched draft as discarded instead of cancelling it."""
+        order = type(self).objects.select_for_update().get(pk=self.pk)
+        if order.status != DRAFT:
+            raise ValidationError("Only draft orders can be discarded.")
+        if order.items.exists():
+            raise ValidationError("Only empty orders can be discarded.")
+        if order.invoice_printed or order.kots.exists() or order.is_paid:
+            raise ValidationError("Printed, sent or paid orders cannot be discarded.")
+        order._release_drink_reservations()
+        order.status = DISCARDED
+        order.discarded_by = discarded_by
+        order.discarded_at = timezone.now()
+        order._allow_discard = True
+        try:
+            order.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
+        finally:
+            del order._allow_discard
+        order.audit("DISCARDED", actor=discarded_by)
+        self.refresh_from_db()
 
     def _cancel_kots(self):
         """Create one cancellation KOT per station and close the source tickets."""

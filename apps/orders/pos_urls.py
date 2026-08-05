@@ -32,6 +32,7 @@ urlpatterns = [
     path("order/<int:pk>/clear/", view=views_pos.pos_order_clear, name="pos_order_clear"),
     path("order/<int:pk>/settle/", view=views_pos.pos_order_settle, name="pos_order_settle"),
     path("order/<int:pk>/cancel/", view=views_pos.pos_order_cancel, name="pos_order_cancel"),
+    path("order/<int:pk>/discard/", view=views_pos.pos_order_discard, name="pos_order_discard"),
     path("order/<int:pk>/print/", view=views_pos.pos_order_print, name="pos_order_print"),
     path(
         "order/<int:pk>/ticket/<str:ticket_type>/<str:action>/",

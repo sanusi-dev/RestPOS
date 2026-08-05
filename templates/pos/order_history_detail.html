@@ -31,6 +31,8 @@
         <span class="rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">Return</span>
         {% elif order.status == "CANCELLED" %}
         <span class="rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">Cancelled</span>
+        {% elif order.status == "DISCARDED" %}
+        <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-600">Discarded</span>
         {% else %}
         <span class="rounded-lg bg-emerald-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">Paid</span>
         {% endif %}
@@ -152,6 +154,8 @@
           <span class="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Return</span>
           {% elif order.status == "CANCELLED" %}
           <span class="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Cancelled</span>
+          {% elif order.status == "DISCARDED" %}
+          <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">Discarded</span>
           {% else %}
           <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Paid</span>
           {% endif %}

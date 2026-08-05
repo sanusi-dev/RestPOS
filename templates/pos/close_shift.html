@@ -25,7 +25,7 @@
       </span>
       <h2 class="mt-5 text-xl font-extrabold tracking-tight text-slate-900">Resolve open orders first</h2>
       <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
-        {{ draft_count }} open order{{ draft_count|pluralize }} must be settled or cancelled before this shift can close.
+        {{ draft_count }} open order{{ draft_count|pluralize }} must be settled, cancelled, or discarded before this shift can close.
       </p>
       <a href="{% url 'pos:pos_home' %}" hx-get="{% url 'pos:pos_home' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
          class="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-700 px-6 text-sm font-bold text-white shadow-lg transition-colors hover:bg-teal-800">
