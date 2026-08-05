@@ -96,6 +96,8 @@ App runs at http://localhost:8000
 
 **Vite dev vs build:** while the Vite dev server (`make npm-dev`) is running, it serves assets directly with HMR — no `make npm-build` needed. Only run `make npm-build` when serving without the dev server (django-vite falls back to the built manifest in `static/`), e.g. after a fresh deploy/restart.
 
+**Important:** Never run `npm build` as part of normal development while the Vite dev server is running. Use the dev server's HMR assets; build only for production or when Django must serve compiled assets without Vite.
+
 ## Reference Codebase Navigation
 
 `references/` is READ ONLY: never write, edit, create, delete, or import from it. Use it only to read and port logic into Django. Always check the reference before implementing any feature.
@@ -318,6 +320,7 @@ GOOD: (no comment — standard Django pattern)
 - Invent a data model without first checking the ERPNext reference doctype
 - Implement a POS API endpoint without first reading `ury_pos/api.py`
 - Write more than one feature at a time — complete and confirm one before the next
+- Run Playwright or browser-based tests only when the user explicitly requests them
 
 ## Skills
 
