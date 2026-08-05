@@ -238,6 +238,16 @@ class OrderSettleTest(OrderTestBase):
         self.order = self._create_order()
         self.order.add_item(self.item, qty=2, rate=Decimal("1500"))
 
+    def _add_bank_mode(self):
+        bank, _ = ModeOfPayment.objects.get_or_create(name="Bank", defaults={"type": "BANK"})
+        PaymentGLMapping.objects.get_or_create(mode_of_payment=bank, defaults={"default_account": "Bank Account"})
+        OpeningPayment.objects.get_or_create(
+            opening_entry=self.opening,
+            mode_of_payment=bank,
+            defaults={"opening_amount": Decimal("0")},
+        )
+        return bank
+
     def test_settle_changes_status(self):
         self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         self.order.refresh_from_db()
@@ -248,6 +258,36 @@ class OrderSettleTest(OrderTestBase):
         self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         self.assertEqual(self.order.payments.count(), 1)
         self.assertEqual(self.order.payments.first().amount, Decimal("3000"))
+
+    def test_settle_accepts_electronic_payment_without_reference(self):
+        bank = self._add_bank_mode()
+
+        self.order.settle([{"mode_of_payment": bank.pk, "amount": "3000"}])
+
+        payment = self.order.payments.get()
+        self.assertEqual(payment.mode_of_payment, bank)
+        self.assertEqual(payment.reference_no, "")
+
+    def test_settle_ignores_zero_payment_rows(self):
+        bank = self._add_bank_mode()
+
+        self.order.settle(
+            [
+                {"mode_of_payment": bank.pk, "amount": "0"},
+                {"mode_of_payment": self.cash.pk, "amount": "3000"},
+            ]
+        )
+
+        self.assertEqual(self.order.payments.count(), 1)
+        self.assertEqual(self.order.payments.get().mode_of_payment, self.cash)
+
+    def test_settle_rejects_all_zero_payment_rows(self):
+        with self.assertRaisesMessage(ValidationError, "At least one payment is required"):
+            self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "0"}])
+
+    def test_settle_rejects_negative_payment_rows(self):
+        with self.assertRaisesMessage(ValidationError, "amount must not be negative"):
+            self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "-1"}])
 
     def test_settle_computes_change(self):
         self.order.settle([{"mode_of_payment": self.cash.pk, "amount": "5000"}])
@@ -334,15 +374,7 @@ class OrderSettleTest(OrderTestBase):
             order.settle([{"mode_of_payment": self.cash.pk, "amount": "1500"}])
 
     def test_non_cash_overpayment_is_rejected(self):
-        from django.core.exceptions import ValidationError
-
-        bank, _ = ModeOfPayment.objects.get_or_create(name="Bank", defaults={"type": "BANK"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=bank, defaults={"default_account": "Bank Account"})
-        OpeningPayment.objects.create(
-            opening_entry=self.opening,
-            mode_of_payment=bank,
-            opening_amount=Decimal("0"),
-        )
+        bank = self._add_bank_mode()
         with self.assertRaises(ValidationError):
             self.order.settle([{"mode_of_payment": bank.pk, "amount": "3500", "reference_no": "BANK-1"}])
 
@@ -396,6 +428,24 @@ class OrderCancelTest(OrderTestBase):
         order.create_tickets()
         order.cancel_sent_order("wrong_order")
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
+
+    def test_cancel_sent_order_allows_empty_draft(self):
+        draft = self._create_order()
+        draft.cancel_sent_order("cashier_error")
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "CANCELLED")
+        self.assertEqual(draft.cancel_reason, "cashier_error")
+        self.assertEqual(draft.audit_events.filter(event_type="CANCELLED").count(), 1)
+
+    def test_cancel_sent_order_blocks_untouched_draft_with_items(self):
+        from django.core.exceptions import ValidationError
+
+        draft = self._create_order()
+        draft.add_item(self.item, qty=1, rate=Decimal("1500"))
+        with self.assertRaises(ValidationError):
+            draft.cancel_sent_order("wrong_order")
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, "DRAFT")
 
 
 class OrderReturnTest(OrderTestBase):

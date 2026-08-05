@@ -492,6 +492,17 @@ class Order(BaseModel):
             if not isinstance(entry, dict):
                 raise ValidationError(f"Payment row {row_number} is malformed.")
 
+            try:
+                amount = Decimal(str(entry.get("amount")))
+                if not amount.is_finite() or amount != amount.quantize(TWO_PLACES):
+                    raise InvalidOperation
+            except InvalidOperation, TypeError, ValueError:
+                raise ValidationError(f"Payment row {row_number} has a malformed amount.") from None
+            if amount < 0:
+                raise ValidationError(f"Payment row {row_number} amount must not be negative.")
+            if amount == 0:
+                continue
+
             mode_reference = entry.get("mode_of_payment")
             if mode_reference is None:
                 mode_reference = entry.get("mode_of_payment_id")
@@ -519,18 +530,7 @@ class Order(BaseModel):
             if not mapping.default_account.strip():
                 raise ValidationError(f"Payment mode {mode.name} has no GL mapping.")
 
-            try:
-                amount = Decimal(str(entry.get("amount")))
-                if not amount.is_finite() or amount != amount.quantize(TWO_PLACES):
-                    raise InvalidOperation
-            except InvalidOperation, TypeError, ValueError:
-                raise ValidationError(f"Payment row {row_number} has a malformed amount.") from None
-            if amount <= 0:
-                raise ValidationError(f"Payment row {row_number} amount must be greater than zero.")
-
             reference_no = str(entry.get("reference_no", "") or "").strip()
-            if mode.type != ModeOfPayment.TYPE_CASH and not reference_no:
-                raise ValidationError(f"Payment row {row_number} requires a transaction reference.")
             if len(reference_no) > 100:
                 raise ValidationError(f"Payment row {row_number} has a reference that is too long.")
 
@@ -541,6 +541,8 @@ class Order(BaseModel):
                     "reference_no": reference_no,
                 }
             )
+        if not payment_rows:
+            raise ValidationError("At least one payment is required.")
         return payment_rows
 
     def _snapshot_stock_warehouse(self):
@@ -773,13 +775,13 @@ class Order(BaseModel):
 
     @transaction.atomic
     def cancel_sent_order(self, reason, reason_note="", cancelled_by=None):
-        """Cancel an unpaid order after its kitchen or bar tickets were sent."""
+        """Cancel an unpaid draft — empty drafts can be abandoned, sent or printed orders cancelled."""
         order = type(self).objects.select_for_update().get(pk=self.pk)
         if order.status != DRAFT:
             raise ValidationError("Only draft orders can be cancelled from the POS.")
         if order.is_paid:
             raise ValidationError("Paid orders cannot be cancelled from the POS.")
-        if not order.kots.exists() and not order.invoice_printed:
+        if order.items.exists() and not order.kots.exists() and not order.invoice_printed:
             raise ValidationError("Only a printed or sent order can be cancelled here.")
         if reason not in dict(CANCEL_REASON_CHOICES):
             raise ValidationError("Choose a valid cancellation reason.")
@@ -1128,19 +1130,18 @@ class OrderPayment(BaseModel):
         if not amount.is_finite() or amount <= 0 or amount != amount.quantize(TWO_PLACES):
             raise ValidationError("Payment amount must be finite and greater than zero.")
         self.amount = amount
+        self.reference_no = (self.reference_no or "").strip()
         if self.mode_of_payment_id:
             mode = (
                 self.mode_of_payment
                 if hasattr(self, "mode_of_payment")
                 else ModeOfPayment.objects.get(pk=self.mode_of_payment_id)
             )
-            if mode.type != ModeOfPayment.TYPE_CASH and not (self.reference_no or "").strip():
-                raise ValidationError("Electronic payments require a transaction reference.")
             if mode.type != ModeOfPayment.TYPE_CASH and self.reference_no:
                 duplicate = (
                     OrderPayment.objects.filter(
                         mode_of_payment_id=self.mode_of_payment_id,
-                        reference_no=self.reference_no.strip(),
+                        reference_no=self.reference_no,
                     )
                     .exclude(pk=self.pk)
                     .exists()
