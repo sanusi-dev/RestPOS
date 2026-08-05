@@ -1,5 +1,5 @@
 {% comment %}---- Cart panel wrapper (HTMX outerHTML target #cart-panel) ----{% endcomment %}
-<div id="cart-panel" class="w-[360px] xl:w-[390px] 2xl:w-[420px] min-w-[330px] bg-[#FFF9ED] border-l border-slate-200 flex flex-col shadow-[-8px_0_24px_rgb(15,23,42,0.08)] shrink-0">
+<div id="cart-panel" hx-include="#catalog-search, #catalog-filter-state" class="w-[400px] xl:w-[430px] 2xl:w-[460px] min-w-[380px] bg-slate-100 border-l border-slate-200 flex flex-col shadow-[-8px_0_24px_rgb(15,23,42,0.08)] shrink-0">
 
   {% include "pos/partials/cart/guests.html" %}
 

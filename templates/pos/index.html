@@ -1,19 +1,28 @@
 {% extends "pos/base.html" %}
 {% block pos_content %}
+{% partialdef surface inline %}
 
 {% if error %}
 {% include "pos/partials/gates/error.html" %}
 {% elif no_shift %}
 {% include "pos/partials/gates/no_shift.html" %}
 {% elif order %}
-<div class="h-full flex min-w-0" x-data="{ activeGroup: 'All', search: '', specialsOnly: false, noMatches: false }"
-     @keydown.window="if (($event.ctrlKey || $event.metaKey) && $event.key === 'k') { $event.preventDefault(); $refs.catalogSearch?.focus(); }">
+<div class="h-full flex min-w-0">
 
-  {% comment %}========== CATEGORY SIDEBAR (LEFT) =========={% endcomment %}
-  {% include "pos/partials/catalog/sidebar.html" %}
+  {% partialdef catalog_workspace inline %}
+  <div id="catalog-workspace" class="flex min-w-0 flex-1">
+    <div id="catalog-filter-state" class="hidden" aria-hidden="true">
+      {% if catalog_group %}<input type="hidden" name="group" value="{{ catalog_group }}" form="catalog-search-field">{% endif %}
+      {% if catalog_specials %}<input type="hidden" name="specials" value="1" form="catalog-search-field">{% endif %}
+    </div>
 
-  {% comment %}========== CATALOG (CENTER) =========={% endcomment %}
-  {% include "pos/partials/catalog/panel.html" %}
+    {% comment %}========== CATEGORY SIDEBAR (LEFT) =========={% endcomment %}
+    {% include "pos/partials/catalog/sidebar.html" %}
+
+    {% comment %}========== CATALOG (CENTER) =========={% endcomment %}
+    {% include "pos/partials/catalog/panel.html" %}
+  </div>
+  {% endpartialdef %}
 
   {% comment %}========== CART PANEL (RIGHT) =========={% endcomment %}
   {% partialdef cart inline %}
@@ -30,4 +39,9 @@
 </div>
 {% endif %}
 
+{% if request.htmx %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
+{% endif %}
+{% endpartialdef %}
 {% endblock %}

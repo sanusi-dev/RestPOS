@@ -1,30 +1,98 @@
 {% comment %}========== NO-SHIFT GATE =========={% endcomment %}
-<div class="h-full flex items-center justify-center p-8" x-data="{ showForm: false }">
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 w-full max-w-md">
-    <div class="text-center mb-6">
-      <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 ring-1 ring-orange-100 mx-auto mb-4">
-        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      </div>
-      <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">No Open Shift</h2>
-      <p class="text-sm text-gray-500 mt-1">Open a shift to start taking orders.</p>
-    </div>
-    <form method="post" action="{% url 'pos:pos_open_shift' %}" class="space-y-3" x-show="showForm" x-cloak>
-      {% csrf_token %}
-      <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Opening Float</p>
-      {% for mode in payment_modes %}
-      <div class="flex items-center gap-3">
-        <label for="mop-{{ mode.pk }}" class="text-sm font-semibold text-gray-700 w-28 shrink-0">{{ mode.name }}</label>
-        <input id="mop-{{ mode.pk }}" type="number" min="0" step="0.01" name="mop_{{ mode.pk }}" placeholder="0.00"
-               class="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50">
-      </div>
-      {% endfor %}
-      <button type="submit" class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-        Open Shift
+<div class="h-full overflow-y-auto bg-slate-100 p-3 sm:p-4"
+     x-data="{
+       showForm: false,
+       totalOpening: 0,
+       processing: false,
+       money(value) { return '₦' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+       recalc() { this.totalOpening = Array.from(this.$el.querySelectorAll('[data-opening]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0); }
+     }"
+     x-init="$nextTick(() => recalc())" @input="recalc()">
+  <div class="mx-auto max-w-4xl">
+    <header class="mb-4">
+      <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-orange-600">Shift Opening</p>
+      <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Open shift</h1>
+      <p class="mt-1 max-w-2xl text-sm leading-5 text-slate-500">Record each payment method's opening balance before taking orders.</p>
+    </header>
+
+    <div x-show="!showForm" class="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-900/5 sm:p-10">
+      <span class="mx-auto flex size-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+        {% hgi_stroke name="wallet-03" size="28" color="currentColor" stroke_width="1.8" %}
+      </span>
+      <h2 class="mt-5 text-xl font-extrabold tracking-tight text-slate-900">No open shift</h2>
+      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Start a shift to accept orders and track payment reconciliation.</p>
+      <button type="button" @click="showForm = true; $nextTick(() => recalc())"
+              class="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-7 text-sm font-bold text-white shadow-lg transition-colors hover:bg-teal-800">
+        {% hgi_stroke name="wallet-03" size="19" color="currentColor" stroke_width="2" %}
+        Open shift
       </button>
+    </div>
+
+    <form method="post" action="{% url 'pos:pos_open_shift' %}" hx-post="{% url 'pos:pos_open_shift' %}" hx-target="#pos-main" hx-swap="innerHTML" x-show="showForm" x-cloak
+          @submit="processing = true"
+          class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5">
+      {% csrf_token %}
+      <div class="border-b border-slate-200 px-5 py-3 sm:px-6">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-bold text-slate-900">Opening balances</p>
+            <p class="mt-1 text-xs text-slate-500">Enter the amount available for each payment method.</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">{{ request.user.get_display_name }}</span>
+        </div>
+      </div>
+
+      <div class="divide-y divide-slate-100">
+        {% for mode in payment_modes %}
+        <div class="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(12rem,0.75fr)] sm:items-center sm:px-6">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-xl {% if mode.type == 'CASH' %}bg-emerald-50 text-emerald-700{% else %}bg-teal-50 text-teal-700{% endif %}">
+              {% if mode.type == "CASH" %}
+                {% hgi_stroke name="cash-01" size="20" color="currentColor" stroke_width="2" %}
+              {% elif mode.type == "BANK" %}
+                {% hgi_stroke name="bank" size="20" color="currentColor" stroke_width="2" %}
+              {% elif mode.type == "PHONE" %}
+                {% hgi_stroke name="smart-phone-03" size="20" color="currentColor" stroke_width="2" %}
+              {% else %}
+                {% hgi_stroke name="credit-card-pos" size="20" color="currentColor" stroke_width="2" %}
+              {% endif %}
+            </span>
+            <div class="min-w-0">
+              <label for="mop-{{ mode.pk }}" class="block truncate text-sm font-bold text-slate-900">{{ mode.name }}</label>
+              <p class="mt-0.5 text-xs text-slate-400">{% if mode.type == 'CASH' %}Opening float{% else %}Opening balance{% endif %}</p>
+            </div>
+          </div>
+          <div class="relative">
+            <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₦</span>
+            <input id="mop-{{ mode.pk }}" type="number" min="0" step="0.01" inputmode="decimal" name="mop_{{ mode.pk }}" value="0.00" data-opening
+                   class="min-h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-8 pr-4 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+          </div>
+        </div>
+        {% empty %}
+        <p class="px-7 py-10 text-center text-sm text-slate-500">No payment methods are configured.</p>
+        {% endfor %}
+      </div>
+
+      <div class="flex items-baseline justify-between gap-4 border-y border-slate-200 bg-slate-50 px-5 py-3 sm:px-6">
+        <span class="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Total Opening Balance</span>
+        <span class="text-right font-mono text-xl font-extrabold tabular-nums text-slate-900" x-text="money(totalOpening)"></span>
+      </div>
+
+      <div class="px-5 py-3 sm:px-6">
+        <label for="opening-remarks" class="mb-1.5 block text-sm font-bold text-slate-900">Notes <span class="font-normal text-slate-400">(optional)</span></label>
+        <textarea id="opening-remarks" name="remarks" rows="2" maxlength="1000" placeholder="Add a short opening note..."
+                  class="w-full resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20"></textarea>
+      </div>
+
+      <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-3 sm:flex-row sm:justify-between sm:px-6">
+        <button type="button" @click="showForm = false"
+                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-transparent px-6 text-sm font-bold text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-800">Back</button>
+        <button type="submit" :disabled="processing || {{ payment_modes|yesno:'false,true' }}"
+                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-7 text-sm font-bold text-white shadow-lg transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">
+          {% hgi_stroke name="wallet-done-01" size="19" color="currentColor" stroke_width="2" %}
+          <span x-text="processing ? 'Opening shift...' : 'Open shift'">Open shift</span>
+        </button>
+      </div>
     </form>
-    <button @click="showForm = true" x-show="!showForm"
-            class="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-      Open Shift
-    </button>
   </div>
 </div>

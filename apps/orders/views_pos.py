@@ -6,14 +6,17 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.inventory.models import Bin, Item
 from apps.menu.models import MenuItem
 from apps.orders.models import (
+    CANCELLED,
     DINE_IN,
     DRAFT,
     KOT,
@@ -21,9 +24,11 @@ from apps.orders.models import (
     KOT_PRINTED,
     ORDER_TYPE_CHOICES,
     SUBMITTED,
+    TAKE_AWAY,
     TICKET_BAR,
     TICKET_KITCHEN,
     Order,
+    OrderPayment,
 )
 from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
@@ -35,6 +40,24 @@ from .forms import POSOrderCancelForm
 
 SESSION_ORDER_KEY = "pos_order_id"
 SESSION_CARD_KEY = "pos_active_cards"
+CATALOG_FILTER_TARGETS = {"catalog-workspace", "#catalog-workspace"}
+ORDER_DETAILS_DRAWER_TARGETS = {"order-details-drawer", "#order-details-drawer"}
+
+
+def _render_pos_surface(request, template_name, context):
+    """Render a full POS page or its HTMX surface partial."""
+    if request.htmx:
+        template_name = f"{template_name}#surface"
+    return render(request, template_name, context)
+
+
+def _home_or_redirect(request):
+    """Return the POS home surface for HTMX or preserve the normal redirect."""
+    if request.htmx:
+        response = pos_home(request)
+        response["HX-Push-Url"] = reverse("pos:pos_home")
+        return response
+    return redirect("pos:pos_home")
 
 
 def _get_open_shift(lock=False):
@@ -70,6 +93,42 @@ def _get_payment_modes():
 def _get_settle_payment_modes():
     """Return enabled payment modes that can be posted at checkout."""
     return _get_payment_modes().filter(gl_mapping__isnull=False).exclude(gl_mapping__default_account="")
+
+
+def _get_catalog_filters(request):
+    """Read catalog filters from the current request."""
+    params = request.GET if request.method == "GET" else request.POST
+    query = str(params.get("q", "") or "").strip()
+    group = str(params.get("group", "") or "").strip()
+    specials = str(params.get("specials", "") or "").lower() in {"1", "true", "on", "yes"}
+    return query, group, specials
+
+
+def _is_catalog_filter_request(request):
+    """Return whether an HTMX request targets the replaceable catalog workspace."""
+    if not request.htmx:
+        return False
+    target = request.headers.get("HX-Target")
+    if target in CATALOG_FILTER_TARGETS:
+        return True
+    return target is None and any(parameter in request.GET for parameter in ("q", "group", "specials", "clear_filters"))
+
+
+def _is_order_details_drawer_request(request):
+    """Return whether an HTMX request targets the history detail drawer."""
+    return request.htmx and request.headers.get("HX-Target") in ORDER_DETAILS_DRAWER_TARGETS
+
+
+def _get_kitchen_status(order):
+    """Summarize the order's kitchen and bar ticket state."""
+    tickets = list(order.kots.all())
+    if not tickets:
+        return "Not sent"
+    if all(ticket.status == CANCELLED or ticket.print_status == "CANCELLED" for ticket in tickets):
+        return "Cancelled"
+    if any(ticket.status == SUBMITTED and ticket.print_status == KOT_PRINT_PENDING for ticket in tickets):
+        return "Pending print"
+    return "Sent"
 
 
 def _group_menu_items(menu_items):
@@ -120,18 +179,35 @@ def _render_cart(request, order, **extra_context):
 
 def _build_order_context(request, order):
     """Build the context dict for the order screen."""
+    catalog_query, catalog_group, catalog_specials = _get_catalog_filters(request)
     settings = Restaurant.load()
     active_menu = settings.active_menu if settings and settings.active_menu.enabled else None
-    menu_items = (
+    all_menu_items = (
         list(
             active_menu.items.select_related("item", "item__item_group")
-            .prefetch_related("item__add_ons__add_on_item__menu_items")
+            .prefetch_related("item__add_ons__add_on_item__menu_items", "item__add_on_for")
             .filter(disabled=False)
         )
         if active_menu
         else []
     )
-    drink_item_ids = [mi.item_id for mi in menu_items if mi.item.department == "DRINKS"]
+    group_names = {mi.item.item_group.name for mi in all_menu_items}
+    group_lookup = {name.casefold(): name for name in group_names}
+    catalog_group = group_lookup.get(catalog_group.casefold(), "") if catalog_group else ""
+    normalized_query = catalog_query.casefold()
+    menu_items = [
+        menu_item
+        for menu_item in all_menu_items
+        if (not catalog_group or menu_item.item.item_group.name == catalog_group)
+        and (not catalog_specials or menu_item.special_dish)
+        and (
+            not normalized_query
+            or normalized_query in menu_item.item_name.casefold()
+            or normalized_query in menu_item.item.item_name.casefold()
+            or normalized_query in menu_item.item.item_code.casefold()
+        )
+    ]
+    drink_item_ids = [mi.item_id for mi in all_menu_items if mi.item.department == "DRINKS"]
     drink_bins = (
         {
             bin_obj.item_id: bin_obj
@@ -143,7 +219,7 @@ def _build_order_context(request, order):
         if settings and settings.default_warehouse_id
         else {}
     )
-    for menu_item in menu_items:
+    for menu_item in all_menu_items:
         menu_item.stock_unavailable = False
         menu_item.stock_message = ""
         if menu_item.item.department != "DRINKS":
@@ -174,8 +250,13 @@ def _build_order_context(request, order):
         "order": order,
         "shift": order.opening_entry,
         "menu_items": menu_items,
-        "item_groups": _group_menu_items(menu_items),
-        "special_item_count": sum(1 for item in menu_items if item.special_dish),
+        "catalog_item_count": len(all_menu_items),
+        "item_groups": _group_menu_items(all_menu_items),
+        "special_item_count": sum(1 for item in all_menu_items if item.special_dish),
+        "catalog_query": catalog_query,
+        "catalog_group": catalog_group,
+        "catalog_specials": catalog_specials,
+        "catalog_has_filters": bool(catalog_query or catalog_group or catalog_specials),
         "active_card": _get_active_card(request, order),
         "guest_groups": _group_items_by_guest(order, items),
         "payment_modes": list(_get_settle_payment_modes()),
@@ -188,6 +269,7 @@ def _build_order_context(request, order):
         "bar_ticket_printed": bool(bar_ticket and bar_ticket.print_status == KOT_PRINTED),
         "can_reprint": request.user.is_manager or request.user.is_admin or request.user.is_superuser,
         "receipt_printable": has_items,
+        "pos_nav": "order",
     }
 
 
@@ -196,26 +278,72 @@ def pos_home(request: HttpRequest) -> HttpResponse:
     """Main POS entry: shift gate or draft orders list."""
     settings = Restaurant.load()
     if not settings:
-        return render(request, "pos/index.html", {"error": "Restaurant settings are not configured."})
+        return _render_pos_surface(
+            request,
+            "pos/index.html",
+            {"error": "Restaurant settings are not configured.", "pos_nav": "open"},
+        )
 
     shift = _get_open_shift()
 
     if not shift:
         payment_modes = _get_payment_modes()
-        return render(request, "pos/index.html", {"no_shift": True, "payment_modes": list(payment_modes)})
+        return _render_pos_surface(
+            request,
+            "pos/index.html",
+            {"no_shift": True, "payment_modes": list(payment_modes), "pos_nav": "open"},
+        )
 
-    draft_orders = (
+    order_filter = request.GET.get("filter", "all").strip()
+    order_search = request.GET.get("q", "").strip()
+    draft_orders_queryset = (
         Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift)
         .prefetch_related("items")
+        .annotate(has_sent_ticket=Exists(KOT.objects.filter(order_id=OuterRef("pk"), status=SUBMITTED)))
         .order_by("-updated_at")
-        .only("pk", "invoice_number", "order_number", "order_type", "guest_count", "grand_total", "updated_at")
+        .only(
+            "pk",
+            "invoice_number",
+            "order_number",
+            "order_type",
+            "guest_count",
+            "grand_total",
+            "arrived_time",
+            "updated_at",
+            "invoice_printed",
+        )
     )
-    return render(
+    if order_filter == "draft":
+        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=False, invoice_printed=False)
+    elif order_filter == "sent":
+        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=True)
+    if order_search:
+        search_query = Q(items__item_name__icontains=order_search)
+        if order_search.isdigit():
+            search_query |= Q(order_number=int(order_search))
+        draft_orders_queryset = draft_orders_queryset.filter(search_query).distinct()
+    draft_orders = list(draft_orders_queryset)
+    for order in draft_orders:
+        items = list(order.items.all())
+        order.item_count = len(items)
+        order.item_preview = items[:3]
+        order.minutes_ago = max(int((timezone.now() - order.updated_at).total_seconds() // 60), 0)
+    draft_count = Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift).count()
+    max_open_drafts = settings.max_open_drafts
+    return _render_pos_surface(
         request,
         "pos/draft_orders.html",
         {
             "shift": shift,
             "draft_orders": draft_orders,
+            "draft_count": draft_count,
+            "max_open_drafts": max_open_drafts,
+            "drafts_remaining": max(max_open_drafts - draft_count, 0),
+            "draft_cap_reached": draft_count >= max_open_drafts,
+            "order_filter": order_filter,
+            "order_search": order_search,
+            "show_order_tabs": True,
+            "pos_nav": "open",
         },
     )
 
@@ -225,7 +353,7 @@ def pos_home(request: HttpRequest) -> HttpResponse:
 def pos_order_new(request: HttpRequest) -> HttpResponse:
     """Create a new draft order and open the order screen."""
     if Restaurant.load() is None:
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
     order_type = request.POST.get("order_type", DINE_IN)
     valid_types = {c[0] for c in ORDER_TYPE_CHOICES}
     if order_type not in valid_types:
@@ -245,11 +373,11 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
         open_shift = _get_open_shift(lock=True)
         if not settings or not open_shift:
             messages.error(request, "Open a shift before taking orders.")
-            return redirect("pos:pos_home")
+            return _home_or_redirect(request)
         draft_count = Order.objects.filter(status=DRAFT, opening_entry=open_shift, is_return=False).count()
         if draft_count >= settings.max_open_drafts:
             messages.error(request, f"The active shift already has {settings.max_open_drafts} open drafts.")
-            return redirect("pos:pos_home")
+            return _home_or_redirect(request)
         order = Order.objects.create(
             order_type=order_type,
             guest_count=guest_count,
@@ -263,6 +391,10 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
         cards = {}
     cards[str(order.pk)] = 1
     request.session[SESSION_CARD_KEY] = cards
+    if request.htmx:
+        response = _render_pos_surface(request, "pos/index.html", _build_order_context(request, order))
+        response["HX-Push-Url"] = reverse("pos:pos_order_screen", kwargs={"pk": order.pk})
+        return response
     return redirect("pos:pos_order_screen", pk=order.pk)
 
 
@@ -271,22 +403,24 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
 def pos_open_shift(request: HttpRequest) -> HttpResponse:
     """Create a POSOpeningEntry with opening payments from the POS screen."""
     if Restaurant.load() is None:
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
     form = OpeningFloatForm(request.POST)
     if not form.is_valid():
         messages.error(request, "Enter valid non-negative opening balances.")
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
     opening_amounts = form.opening_amounts()
     if not opening_amounts:
         messages.error(request, "Configure at least one enabled payment method before opening a shift.")
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
 
     with transaction.atomic():
         settings = Restaurant.objects.select_for_update().first()
         if not settings or _get_open_shift(lock=True):
             messages.error(request, "A shift is already open.")
-            return redirect("pos:pos_home")
-        entry = POSOpeningEntry.objects.create(cashier=request.user)
+            return _home_or_redirect(request)
+        entry = POSOpeningEntry.objects.create(
+            cashier=request.user, remarks=str(request.POST.get("remarks", "")).strip()
+        )
         OpeningPayment.objects.bulk_create(
             [
                 OpeningPayment(opening_entry=entry, mode_of_payment=mode, opening_amount=amount)
@@ -296,6 +430,8 @@ def pos_open_shift(request: HttpRequest) -> HttpResponse:
         entry.full_clean()
         entry.submit()
     messages.success(request, "Shift opened successfully.")
+    if request.htmx:
+        return _home_or_redirect(request)
     return redirect("pos:pos_home")
 
 
@@ -306,10 +442,25 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     open_shift = _get_open_shift()
     if open_shift is None:
         messages.warning(request, "There is no open shift to close.")
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
+
+    draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
+    if draft_count and request.method == "GET":
+        return _render_pos_surface(
+            request,
+            "pos/close_shift.html",
+            {"draft_count": draft_count, "show_order_tabs": request.htmx, "pos_nav": "close"},
+        )
 
     with transaction.atomic():
         open_shift = POSOpeningEntry.objects.select_for_update().get(pk=open_shift.pk)
+        draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
+        if draft_count:
+            messages.error(
+                request,
+                f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift.",
+            )
+            return _home_or_redirect(request)
         closing = POSClosingEntry.objects.filter(
             opening_entry=open_shift,
             status=POSClosingEntry.DRAFT,
@@ -329,7 +480,30 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                 ]
             )
 
+    submitted_orders = Order.objects.filter(
+        opening_entry=open_shift,
+        status=SUBMITTED,
+        is_return=False,
+        submitted_at__gte=closing.period_start_date,
+        submitted_at__lte=closing.period_end_date,
+    )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
+    for payment in closing_payments:
+        collected = OrderPayment.objects.filter(
+            order__in=submitted_orders,
+            mode_of_payment_id=payment.mode_of_payment_id,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        if payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
+            collected -= sum(
+                (
+                    order.change_amount
+                    for order in submitted_orders.filter(
+                        payments__mode_of_payment_id=payment.mode_of_payment_id
+                    ).distinct()
+                ),
+                Decimal("0"),
+            )
+        payment.expected_amount = payment.opening_amount + collected
     if request.method == "POST":
         form_data = [
             (payment, ClosingPaymentForm(request.POST, instance=payment, prefix=f"cp_{payment.pk}"))
@@ -340,18 +514,33 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                 with transaction.atomic():
                     for _payment, form in form_data:
                         form.save()
+                    closing.remarks = str(request.POST.get("remarks", "")).strip()
+                    closing.save(update_fields=["remarks", "updated_at"])
                     closing.full_clean()
                     closing.submit()
             except ValidationError as exc:
                 messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
             else:
                 messages.success(request, "Shift closed successfully.")
+                if request.htmx:
+                    return _home_or_redirect(request)
                 return redirect("pos:pos_home")
     else:
         form_data = [
             (payment, ClosingPaymentForm(instance=payment, prefix=f"cp_{payment.pk}")) for payment in closing_payments
         ]
-    return render(request, "pos/close_shift.html", {"closing": closing, "form_data": form_data})
+    return _render_pos_surface(
+        request,
+        "pos/close_shift.html",
+        {
+            "closing": closing,
+            "form_data": form_data,
+            "total_expected": sum((payment.expected_amount for payment in closing_payments), Decimal("0")),
+            "draft_count": draft_count,
+            "show_order_tabs": request.htmx,
+            "pos_nav": "close",
+        },
+    )
 
 
 @login_required
@@ -359,7 +548,7 @@ def pos_order_screen(request: HttpRequest, pk: int) -> HttpResponse:
     """Render the full POS order screen (menu grid + cart)."""
     shift = _get_open_shift()
     if shift is None:
-        return redirect("pos:pos_home")
+        return _home_or_redirect(request)
     order = get_object_or_404(
         Order.objects.prefetch_related("items__item"),
         pk=pk,
@@ -368,7 +557,10 @@ def pos_order_screen(request: HttpRequest, pk: int) -> HttpResponse:
         opening_entry=shift,
     )
     request.session[SESSION_ORDER_KEY] = order.pk
-    return render(request, "pos/index.html", _build_order_context(request, order))
+    context = _build_order_context(request, order)
+    if _is_catalog_filter_request(request):
+        return render(request, "pos/index.html#catalog_workspace", context)
+    return _render_pos_surface(request, "pos/index.html", context)
 
 
 @login_required
@@ -591,7 +783,10 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
                 except ValidationError as e:
                     error = e.messages[0] if e.messages else "Unable to add that item."
 
-    return _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    response = _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    if not error and request.headers.get("HX-Request"):
+        response["HX-Trigger"] = "close-add-on-dialog"
+    return response
 
 
 @login_required
@@ -716,6 +911,9 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
                 print_failures.append(result.ticket_type)
             ticket.save(update_fields=["print_status", "updated_at"])
 
+    if not print_failures:
+        messages.success(request, f"Sent {len(kots)} ticket{'s' if len(kots) != 1 else ''} to kitchen & bar.")
+
     return _render_cart(
         request,
         order,
@@ -748,8 +946,9 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
         else:
             order.clear_items()
             order.audit("ITEMS_CLEARED", actor=request.user)
+            messages.success(request, "Order cleared.")
 
-    return _render_cart(request, order, error=error, clear_success=not error)
+    return _render_cart(request, order, error=error)
 
 
 @login_required
@@ -771,7 +970,7 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
         payments_data = []
         for key, value in request.POST.items():
             mode_pk = key.removeprefix("payment_") if key.startswith("payment_") else ""
-            if mode_pk.isdigit() and value:
+            if mode_pk.isdigit() and str(value).strip() != "":
                 payments_data.append(
                     {
                         "mode_of_payment": mode_pk,
@@ -885,7 +1084,10 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
                         ]
                     )
                     order.audit("RECEIPT_PRINTED", actor=request.user)
-                feedback = {"receipt_print_success": True, "receipt_print_action": action}
+                messages.success(
+                    request,
+                    f"Receipt {'reprinted' if action == 'reprint' else 'printed'} successfully.",
+                )
             else:
                 feedback = {"receipt_print_error": True, "receipt_print_action": action}
     return _render_cart(request, order, error=error, **feedback)
@@ -903,6 +1105,7 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
     if shift is None:
         return redirect("pos:pos_home")
 
+    feedback = {}
     required_status = KOT_PRINT_PENDING if action == "retry" else KOT_PRINTED
     with transaction.atomic():
         order = get_object_or_404(
@@ -924,7 +1127,10 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
         result = printing.print_ticket(ticket)
         if result.success:
             ticket.print_status = KOT_PRINTED
-            feedback = {"ticket_print_success": result.ticket_type, "ticket_print_action": action}
+            messages.success(
+                request,
+                f"{result.ticket_type.title()} ticket {'reprinted' if action == 'reprint' else 'retried'}.",
+            )
         else:
             ticket.print_status = KOT_PRINT_PENDING
             feedback = {"ticket_print_error": result.ticket_type, "ticket_print_action": action}
@@ -934,49 +1140,124 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
 
 @login_required
 def pos_order_history(request: HttpRequest) -> HttpResponse:
-    """POS-facing order history with payment-type and date filters."""
+    """Show cashier-safe historical orders for a selected date."""
     from datetime import date as date_type
 
     payment_filter = request.GET.get("payment", "").strip()
-    date_filter = request.GET.get("date", "").strip()
-    if date_filter:
-        try:
-            parsed_date = date_type.fromisoformat(date_filter)
-        except ValueError:
-            parsed_date = timezone.localdate()
-            date_filter = str(parsed_date)
-    else:
+    status_filter = request.GET.get("status", "sales").strip()
+    order_type_filter = request.GET.get("order_type", "").strip()
+    search = request.GET.get("q", "").strip()
+    if "date" not in request.GET:
         parsed_date = timezone.localdate()
         date_filter = str(parsed_date)
+    else:
+        date_filter = request.GET.get("date", "").strip()
+        if date_filter:
+            try:
+                parsed_date = date_type.fromisoformat(date_filter)
+            except ValueError:
+                parsed_date = timezone.localdate()
+                date_filter = str(parsed_date)
+        else:
+            parsed_date = None
 
-    orders = Order.objects.select_related("cashier").prefetch_related("payments__mode_of_payment")
-    if payment_filter == "cash":
+    orders = Order.objects.select_related("cashier").prefetch_related("payments__mode_of_payment", "items")
+    if search:
+        search_query = Q(invoice_number__icontains=search)
+        if search.isdigit():
+            search_query |= Q(order_number=int(search))
+        orders = orders.filter(search_query)
+    if status_filter == "all":
+        orders = orders.filter(
+            Q(status=SUBMITTED, is_return=False, is_paid=True)
+            | Q(status=SUBMITTED, is_return=True)
+            | Q(status=CANCELLED, is_return=False)
+        )
+    elif status_filter == "returns":
+        orders = orders.filter(status=SUBMITTED, is_return=True)
+    elif status_filter == "cancelled":
+        orders = orders.filter(status=CANCELLED, is_return=False)
+    else:
+        orders = orders.filter(status=SUBMITTED, is_paid=True, is_return=False)
+    if status_filter == "sales" and payment_filter == "cash":
         orders = orders.filter(
             status=SUBMITTED,
             is_return=False,
             is_paid=True,
             payments__mode_of_payment__type="CASH",
         )
-    elif payment_filter == "electronic":
+    elif status_filter == "sales" and payment_filter == "electronic":
         orders = orders.filter(
             status=SUBMITTED,
             is_return=False,
             is_paid=True,
             payments__mode_of_payment__type__in=["BANK", "PHONE"],
         )
-    elif payment_filter == "refunds":
-        orders = orders.filter(is_return=True)
-    else:
-        orders = orders.all()
-    orders = orders.filter(posting_date=parsed_date)
+    if order_type_filter in {DINE_IN, TAKE_AWAY}:
+        orders = orders.filter(order_type=order_type_filter)
+    if parsed_date is not None:
+        orders = orders.filter(posting_date=parsed_date)
     orders = orders.distinct().order_by("-posting_date", "-posting_time")[:50]
-
-    return render(
+    open_shift = _get_open_shift()
+    return _render_pos_surface(
         request,
         "pos/order_history.html",
         {
             "orders": orders,
             "payment_filter": payment_filter,
+            "status_filter": status_filter,
+            "order_type_filter": order_type_filter,
+            "search": search,
             "date_filter": date_filter,
+            "draft_count": (
+                Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count()
+                if open_shift
+                else 0
+            ),
+            "show_order_tabs": True,
+            "pos_nav": "history",
         },
     )
+
+
+@login_required
+def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Show a read-only cashier view of a historical order."""
+    order = get_object_or_404(
+        Order.objects.select_related("cashier", "opening_entry", "stock_warehouse").prefetch_related(
+            "items__item", "payments__mode_of_payment", "kots__production_unit"
+        ),
+        pk=pk,
+        status__in=[SUBMITTED, CANCELLED],
+    )
+    open_shift = _get_open_shift()
+    context = {
+        "order": order,
+        "draft_count": (
+            Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count() if open_shift else 0
+        ),
+        "show_order_tabs": request.htmx,
+        "pos_nav": "history",
+        "kitchen_status": _get_kitchen_status(order),
+    }
+    if _is_order_details_drawer_request(request):
+        return render(request, "pos/order_history_detail.html#drawer", context)
+    return _render_pos_surface(request, "pos/order_history_detail.html", context)
+
+
+@login_required
+@require_POST
+def pos_order_history_print(request: HttpRequest, pk: int) -> HttpResponse:
+    """Reprint a submitted or cancelled historical receipt without editing it."""
+    order = get_object_or_404(Order, pk=pk, status=SUBMITTED)
+    result = printing.print_receipt(order)
+    if result.success:
+        messages.success(request, "Receipt reprinted successfully.")
+    else:
+        messages.error(request, "Receipt could not be printed.")
+    if request.htmx:
+        response = pos_order_history_detail(request, pk=order.pk)
+        if not _is_order_details_drawer_request(request):
+            response["HX-Push-Url"] = reverse("pos:pos_order_history_detail", kwargs={"pk": order.pk})
+        return response
+    return redirect("pos:pos_order_history_detail", pk=order.pk)

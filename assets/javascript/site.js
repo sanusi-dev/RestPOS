@@ -2,6 +2,7 @@
 // HTMX setup: https://htmx.org/docs/#installing
 import './htmx';
 import './alpine';
+import './order-details-drawer';
 import './logout';
 import './toast';
 import './confirm';

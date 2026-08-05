@@ -1,47 +1,59 @@
 {% comment %}---- Guests stepper ----{% endcomment %}
-<div class="border-b border-slate-200 bg-[#FFF9ED] p-4">
-  <div class="mb-4 flex items-start justify-between gap-3">
-    <div>
-      <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Current order</p>
-      <p class="mt-1 font-mono text-lg font-bold text-slate-900">#{{ order.order_number }}</p>
+<div class="border-b border-slate-200 bg-slate-100 p-3">
+  <div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-200 pb-2.5">
+      <div class="flex min-w-0 items-baseline gap-2">
+        <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Current order</p>
+        <p class="font-mono text-base font-bold text-slate-900">#{{ order.order_number }}</p>
+      </div>
+      <span class="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide {% if order_sent or order.invoice_printed %}bg-slate-900/5 text-slate-600{% else %}bg-teal-50 text-teal-700{% endif %}">{% if order_sent or order.invoice_printed %}Locked{% else %}Draft{% endif %}</span>
     </div>
-    <span class="rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">{% if order_sent or order.invoice_printed %}Locked{% else %}Draft{% endif %}</span>
-  </div>
-  <div class="flex items-center justify-between">
-    <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Customers</p>
-    <div class="flex items-center gap-2">
-      <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
-              hx-vals='{"guest_delta": "-1"}'
-              hx-target="#cart-panel" hx-swap="outerHTML"
-               class="min-h-11 min-w-11 rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 transition-colors
-                     {% if order.guest_count <= 1 %}disabled{% endif %}"
-              {% if order.guest_count <= 1 %}disabled{% endif %}>−</button>
-       <span class="min-w-[2rem] text-center text-base font-extrabold text-slate-900">{{ order.guest_count }}</span>
-      <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
-              hx-vals='{"guest_delta": "1"}'
-              hx-target="#cart-panel" hx-swap="outerHTML"
-               class="min-h-11 min-w-11 rounded-lg border border-slate-300 bg-white text-lg font-bold text-slate-600 hover:bg-slate-50 transition-colors">+</button>
+
+    <div class="mt-3 flex items-end justify-between gap-4">
+      <div>
+        <p class="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Customers</p>
+        <div class="flex items-center overflow-hidden rounded-xl border border-slate-300 bg-transparent">
+          <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+                  hx-vals='{"guest_delta": "-1"}'
+                  hx-target="#cart-panel" hx-swap="outerHTML"
+                  aria-label="Decrease customer count"
+                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  {% if order.guest_count <= 1 or order_sent or order.invoice_printed %}disabled{% endif %}>−</button>
+          <span class="flex min-h-10 min-w-9 items-center justify-center border-x border-slate-200 text-sm font-extrabold tabular-nums text-slate-900">{{ order.guest_count }}</span>
+          <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+                  hx-vals='{"guest_delta": "1"}'
+                  hx-target="#cart-panel" hx-swap="outerHTML"
+                  aria-label="Increase customer count"
+                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  {% if order_sent or order.invoice_printed %}disabled{% endif %}>+</button>
+        </div>
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <p class="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Order type</p>
+        <div class="grid grid-cols-2 gap-1.5">
+          {% for value, label in order_type_choices %}
+          <button type="button"
+                  hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
+                  hx-vals='{"order_type": "{{ value }}"}'
+                  hx-target="#cart-panel" hx-swap="outerHTML"
+                  aria-pressed="{% if order.order_type == value %}true{% else %}false{% endif %}"
+                  class="min-h-10 rounded-xl border bg-transparent px-2 text-xs font-bold transition-colors
+                         {% if order.order_type == value %}border-teal-600 text-teal-800 ring-1 ring-teal-600/20{% else %}border-slate-300 text-slate-600 hover:border-teal-400 hover:text-teal-800{% endif %}
+                         {% if order_sent %}cursor-not-allowed opacity-50{% endif %}"
+                  {% if order_sent %}disabled{% endif %}>
+            <span class="mr-1 inline-flex size-4 items-center justify-center align-middle">
+              {% if value == "DINE_IN" %}
+                {% hgi_stroke name="restaurant-table" size="16" color="currentColor" stroke_width="2" %}
+              {% else %}
+                {% hgi_stroke name="package" size="16" color="currentColor" stroke_width="2" %}
+              {% endif %}
+            </span>
+            {{ label }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
     </div>
   </div>
-  <div class="mt-4">
-     <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Order type</p>
-    <div class="grid grid-cols-2 gap-2 mt-2">
-      {% for value, label in order_type_choices %}
-      <button type="button"
-              hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
-              hx-vals='{"order_type": "{{ value }}"}'
-              hx-target="#cart-panel" hx-swap="outerHTML"
-              aria-pressed="{% if order.order_type == value %}true{% else %}false{% endif %}"
-               class="rounded-lg border px-3 py-2.5 text-xs font-bold transition-colors
-                     {% if order.order_type == value %}bg-gray-900 border-gray-900 text-white{% else %}bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100{% endif %}
-                     {% if order_sent %}cursor-not-allowed opacity-50{% endif %}"
-              {% if order_sent %}disabled{% endif %}>
-        {{ label }}
-      </button>
-      {% endfor %}
-    </div>
-  </div>
-  {% if order.guest_count > 1 %}
-   <p class="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900">Active customer: Customer {{ active_card }}. New items go here.</p>
-  {% endif %}
 </div>

@@ -1,40 +1,40 @@
 {% comment %}========== CATALOG CATEGORY SIDEBAR =========={% endcomment %}
-<aside class="w-52 lg:w-60 shrink-0 border-r border-slate-200 bg-slate-900 px-3 py-4 text-slate-100 overflow-y-auto">
-  <div class="px-3 mb-4">
-    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Menu</p>
-    <h2 class="mt-1 text-base font-bold text-white">Categories</h2>
+<aside class="w-48 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-100 p-2 lg:w-56 lg:p-3">
+  <div class="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
+    <h2 class="px-2 pb-3 text-xs font-bold uppercase tracking-wider text-slate-900">Categories</h2>
+
+    <nav aria-label="Menu categories">
+      <button type="button"
+              hx-get="{% url 'pos:pos_order_screen' order.pk %}"
+              hx-include="#catalog-search"
+              hx-vals='{"group":"","specials":""}'
+              hx-target="#catalog-workspace" hx-swap="outerHTML" hx-push-url="true"
+              aria-pressed="{% if not catalog_group and not catalog_specials %}true{% else %}false{% endif %}"
+              class="{% if not catalog_group and not catalog_specials %}bg-teal-50 text-teal-800{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}
+                     flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-teal-600/30">
+        <span class="flex size-5 shrink-0 items-center justify-center">{% hgi_stroke name="grid-view" size="17" color="currentColor" stroke_width="2" %}</span>
+        <span class="min-w-0 flex-1 truncate">All items</span>
+        <span class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-md bg-slate-900/5 px-1.5 py-0.5 text-xs tabular-nums text-slate-500">{{ catalog_item_count }}</span>
+      </button>
+
+      <div class="my-2 border-t border-slate-200"></div>
+
+      <div class="space-y-1">
+        {% for group_name, group_items in item_groups.items %}
+        <button type="button"
+                hx-get="{% url 'pos:pos_order_screen' order.pk %}"
+                hx-include="#catalog-search"
+                hx-vals='{"group":"{{ group_name|escapejs }}","specials":""}'
+                hx-target="#catalog-workspace" hx-swap="outerHTML" hx-push-url="true"
+                aria-pressed="{% if catalog_group == group_name and not catalog_specials %}true{% else %}false{% endif %}"
+                class="{% if catalog_group == group_name and not catalog_specials %}bg-teal-50 text-teal-800{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}
+                       flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-teal-600/30">
+          <span class="flex size-5 shrink-0 items-center justify-center">{% hgi_stroke name="spoon-and-fork" size="17" color="currentColor" stroke_width="2" %}</span>
+          <span class="min-w-0 flex-1 truncate">{{ group_name }}</span>
+          <span class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-md bg-slate-900/5 px-1.5 py-0.5 text-xs tabular-nums text-slate-500">{{ group_items|length }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </nav>
   </div>
-
-  <nav aria-label="Menu categories" class="space-y-1">
-    <button type="button"
-            @click="activeGroup = 'All'; specialsOnly = false"
-            :aria-pressed="activeGroup === 'All' && !specialsOnly"
-            :class="activeGroup === 'All' && !specialsOnly ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
-            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between text-left text-sm font-semibold transition-colors">
-      <span>All items</span>
-      <span class="text-xs opacity-70">{{ menu_items|length }}</span>
-    </button>
-
-    <button type="button"
-            @click="specialsOnly = true; activeGroup = 'All'"
-            :aria-pressed="specialsOnly"
-            :class="specialsOnly ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
-            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between text-left text-sm font-semibold transition-colors">
-      <span>Specials</span>
-      <span class="text-xs opacity-70">{{ special_item_count }}</span>
-    </button>
-
-    <div class="my-4 border-t border-slate-700"></div>
-
-    {% for group_name, group_items in item_groups.items %}
-    <button type="button"
-            @click="activeGroup = '{{ group_name|escapejs }}'; specialsOnly = false"
-            :aria-pressed="activeGroup === '{{ group_name|escapejs }}' && !specialsOnly"
-            :class="activeGroup === '{{ group_name|escapejs }}' && !specialsOnly ? 'bg-slate-700 text-white ring-1 ring-slate-500' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
-            class="w-full min-h-11 rounded-lg px-3 flex items-center justify-between gap-2 text-left text-sm font-medium transition-colors">
-      <span class="truncate">{{ group_name }}</span>
-      <span class="shrink-0 text-xs text-slate-400">{{ group_items|length }}</span>
-    </button>
-    {% endfor %}
-  </nav>
 </aside>

@@ -22,6 +22,9 @@ function showMessage(message, level) {
 }
 
 function handleMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return;
+  }
   messages.forEach((msg) => showMessage(msg.message, msg.level));
 }
 
@@ -37,5 +40,5 @@ if (messagesEl) {
 
 // Listen for HTMX HX-Trigger events containing serialized messages.
 document.body.addEventListener('showMessages', (e) => {
-  handleMessages(e.detail);
+  handleMessages(Array.isArray(e.detail) ? e.detail : e.detail?.value);
 });

@@ -3,27 +3,34 @@
 {% if order.items.exists %}
 {% if order.guest_count > 1 %}
 {% for group in guest_groups %}
-<div class="border-b border-gray-100">
+<section class="mx-3 mt-3 last:mb-3 overflow-hidden rounded-xl bg-white shadow-sm ring-1 {% if group.index == active_card %}ring-teal-500{% else %}ring-slate-200{% endif %}">
   <button hx-post="{% url 'pos:pos_customer_card_activate' order.pk group.index %}"
           hx-target="#cart-panel" hx-swap="outerHTML"
-          class="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors
-                 {% if group.index == active_card %}bg-slate-800 text-white ring-2 ring-inset ring-amber-400{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
-    <span class="text-sm font-bold">Customer {{ group.index }}</span>
-    <span class="text-sm font-semibold {% if group.index == active_card %}text-white{% else %}text-gray-500{% endif %}">
-      {% if group.subtotal > 0 %}₦{{ group.subtotal|intcomma }}{% else %}<span class="font-normal {% if group.index == active_card %}text-gray-300{% else %}text-gray-400{% endif %}">no items</span>{% endif %}
+          class="flex min-h-12 w-full items-center justify-between gap-3 border-b px-3 py-2.5 text-left transition-colors
+                 {% if group.index == active_card %}border-teal-200 bg-teal-50 text-teal-900{% else %}border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100{% endif %}">
+    <span class="flex items-center gap-2">
+      <span class="flex size-7 items-center justify-center rounded-lg {% if group.index == active_card %}bg-teal-700 text-white{% else %}bg-white text-slate-500 ring-1 ring-slate-200{% endif %}">
+        {% hgi_stroke name="user" size="15" color="currentColor" stroke_width="2" %}
+      </span>
+      <span>
+        <span class="block text-sm font-bold">Customer #{{ group.index }}</span>
+      </span>
+    </span>
+    <span class="text-sm font-bold tabular-nums {% if group.index == active_card %}text-teal-800{% else %}text-slate-600{% endif %}">
+      {% if group.subtotal > 0 %}₦{{ group.subtotal|intcomma }}{% else %}<span class="text-xs font-medium text-slate-400">No items</span>{% endif %}
     </span>
   </button>
   {% for item in group.items %}
-  <div class="group px-4 py-3 border-t border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors">
+  <div class="group border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0 hover:bg-slate-50/70">
     <div class="flex items-center justify-between">
-      <div class="min-w-0 flex-1 mr-4">
-        <p class="text-sm text-[#111827] truncate">{{ item.item_name }}</p>
+      <div class="mr-3 min-w-0 flex-1">
+        <p class="break-words text-sm leading-5 text-slate-900">{{ item.item_name }}</p>
         {% if item.comments %}
-        <p class="text-xs text-gray-400 truncate mt-0.5">{{ item.comments }}</p>
+        <p class="mt-0.5 truncate text-xs text-slate-400">{{ item.comments }}</p>
         {% endif %}
       </div>
-      <div class="flex items-center gap-6 shrink-0">
-        <div class="w-16 flex items-center justify-center">
+      <div class="flex shrink-0 items-center gap-3">
+        <div class="flex items-center justify-center">
           {% if not order_sent and not order.invoice_printed %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
@@ -33,7 +40,7 @@
              <button type="submit" aria-label="Decrease {{ item.item_name }} quantity" class="min-h-9 min-w-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-sm font-bold flex items-center justify-center transition-colors">−</button>
           </form>
           {% endif %}
-          <span class="text-sm text-[#111827] min-w-[1.5rem] text-center">{{ item.qty|floatformat:"-2" }}</span>
+          <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
           {% if not order_sent and not order.invoice_printed %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
@@ -44,47 +51,49 @@
           </form>
           {% endif %}
         </div>
-        <div class="w-24 text-right">
-          <p class="text-sm text-[#111827]">₦{{ item.rate|intcomma }}</p>
+       <div class="min-w-[5.5rem] text-right">
+          <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
         </div>
-        <div class="w-24 text-right">
-          <p class="text-sm text-[#111827]">₦{{ item.amount|intcomma }}</p>
-        </div>
+        {% if not order_sent and not order.invoice_printed %}
+        <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="inline-flex">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <button type="submit" aria-label="Remove {{ item.item_name }} from order"
+                  class="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+            {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
   </div>
   {% endfor %}
-  {% if group.items %}
-  <div class="flex items-center justify-between px-4 py-2 bg-gray-50/60 text-sm">
-    <span class="font-semibold text-gray-500">Customer {{ group.index }} subtotal</span>
-    <span class="font-bold text-gray-900">₦{{ group.subtotal|intcomma }}</span>
-  </div>
-  {% endif %}
-</div>
+</section>
 {% endfor %}
 {% else %}
-<div>
-  <div class="px-4 py-2 border-b-2 border-[#E5E7EB]">
-    <div class="flex items-center justify-between text-[0.8rem] font-semibold text-[#374151]">
-      <span>Name</span>
-      <div class="flex items-center gap-6">
-        <span class="w-16 text-center">Qty</span>
-        <span class="w-24 text-right">Price</span>
-        <span class="w-24 text-right">Subtotal</span>
-      </div>
-    </div>
+<section class="m-3 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+  <div class="flex min-h-12 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2.5">
+    <span class="flex items-center gap-2 text-slate-700">
+      <span class="flex size-7 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200">
+        {% hgi_stroke name="user" size="15" color="currentColor" stroke_width="2" %}
+      </span>
+      <span class="text-sm font-bold">Customer #1</span>
+    </span>
+    <span class="text-sm font-bold tabular-nums text-slate-600">₦{{ order.grand_total|intcomma }}</span>
   </div>
   {% for item in order.items.all %}
-  <div class="group px-4 py-3 border-b border-[#F3F4F6] hover:bg-[#F9FAFB] transition-colors">
+  <div class="group border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0 hover:bg-slate-50/70">
     <div class="flex items-center justify-between">
-      <div class="min-w-0 flex-1 mr-4">
-        <p class="text-sm text-[#111827] truncate">{{ item.item_name }}</p>
+      <div class="mr-3 min-w-0 flex-1">
+        <p class="break-words text-sm leading-5 text-slate-900">{{ item.item_name }}</p>
         {% if item.comments %}
-        <p class="text-xs text-gray-400 truncate mt-0.5">{{ item.comments }}</p>
+        <p class="mt-0.5 truncate text-xs text-slate-400">{{ item.comments }}</p>
         {% endif %}
       </div>
-      <div class="flex items-center gap-6 shrink-0">
-        <div class="w-16 flex items-center justify-center">
+      <div class="flex shrink-0 items-center gap-3">
+        <div class="flex items-center justify-center">
           {% if not order_sent and not order.invoice_printed %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
@@ -94,7 +103,7 @@
              <button type="submit" aria-label="Decrease {{ item.item_name }} quantity" class="min-h-9 min-w-9 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-sm font-bold flex items-center justify-center transition-colors">−</button>
           </form>
           {% endif %}
-          <span class="text-sm text-[#111827] min-w-[1.5rem] text-center">{{ item.qty|floatformat:"-2" }}</span>
+          <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
           {% if not order_sent and not order.invoice_printed %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
@@ -105,25 +114,34 @@
           </form>
           {% endif %}
         </div>
-        <div class="w-24 text-right">
-          <p class="text-sm text-[#111827]">₦{{ item.rate|intcomma }}</p>
+        <div class="min-w-[5.5rem] text-right">
+          <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
         </div>
-        <div class="w-24 text-right">
-          <p class="text-sm text-[#111827]">₦{{ item.amount|intcomma }}</p>
-        </div>
+        {% if not order_sent and not order.invoice_printed %}
+        <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="inline-flex">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <button type="submit" aria-label="Remove {{ item.item_name }} from order"
+                  class="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+            {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
   </div>
   {% endfor %}
-</div>
+</section>
 {% endif %}
 {% else %}
 <div class="h-full flex items-center justify-center p-8 text-center">
   <div>
-    <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto mb-3">
-      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+    <div class="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-white text-slate-300 ring-1 ring-slate-200">
+      {% hgi_stroke name="shopping-cart-01" size="24" color="currentColor" stroke_width="1.5" %}
     </div>
-    <p class="text-sm font-medium text-gray-400">Click a menu item to add it</p>
+    <p class="text-sm font-medium text-slate-400">Click a menu item to add it</p>
   </div>
 </div>
 {% endif %}

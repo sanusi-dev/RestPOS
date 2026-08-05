@@ -1,32 +1,150 @@
 {% extends "pos/base.html" %}
+{% load humanize %}
 {% block pos_content %}
-<div class="h-full overflow-y-auto p-6">
-  <div class="mx-auto max-w-2xl">
-    <div class="mb-6">
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">Shift reconciliation</p>
-      <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Close shift</h1>
-      <p class="mt-1 text-sm text-gray-500">Count each payment method and submit the closing reconciliation.</p>
+{% partialdef surface inline %}
+<div class="h-full overflow-y-auto bg-slate-100 p-3 sm:p-4"
+     x-data="{
+       totalExpected: Number('{{ total_expected }}'),
+       totalCounted: 0,
+       processing: false,
+       money(value) { return '₦' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
+       recalc() { this.totalCounted = Array.from(this.$el.querySelectorAll('[data-counted]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0); }
+     }"
+     x-init="$nextTick(() => recalc())" @input="recalc()">
+  <div class="mx-auto max-w-5xl">
+    <header class="mb-4">
+      <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-orange-600">Shift Reconciliation</p>
+      <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Close shift</h1>
+      <p class="mt-1 max-w-2xl text-sm leading-5 text-slate-500">Count each payment method and submit the closing reconciliation.</p>
+    </header>
+
+    {% if draft_count %}
+    <div class="rounded-3xl border border-amber-200 bg-white p-7 text-center shadow-xl shadow-slate-900/5 sm:p-10">
+      <span class="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+        {% hgi_stroke name="alert-02" size="27" color="currentColor" stroke_width="2" %}
+      </span>
+      <h2 class="mt-5 text-xl font-extrabold tracking-tight text-slate-900">Resolve open orders first</h2>
+      <p class="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+        {{ draft_count }} open order{{ draft_count|pluralize }} must be settled or cancelled before this shift can close.
+      </p>
+      <a href="{% url 'pos:pos_home' %}" hx-get="{% url 'pos:pos_home' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
+         class="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-700 px-6 text-sm font-bold text-white shadow-lg transition-colors hover:bg-teal-800">
+        View open orders
+        {% hgi_stroke name="arrow-right-01" size="17" color="currentColor" stroke_width="2" %}
+      </a>
     </div>
-    <form method="post" class="space-y-4 rounded-[1.5rem] border border-gray-100 bg-white p-6 shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+    {% else %}
+    <form method="post" action="{% url 'pos:pos_close_shift' %}" hx-post="{% url 'pos:pos_close_shift' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
+          class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5"
+          @submit="processing = true">
       {% csrf_token %}
-      {% for payment, form in form_data %}
-      <div class="grid grid-cols-1 gap-3 border-b border-gray-100 pb-4 sm:grid-cols-3 sm:items-center">
-        <div>
-          <p class="text-sm font-bold text-gray-900">{{ payment.mode_of_payment.name }}</p>
-          <p class="text-xs text-gray-500">Opening: ₦{{ payment.opening_amount }}</p>
-          {% if form.errors %}<p class="mt-1 text-xs font-semibold text-red-600">{{ form.errors|striptags }}</p>{% endif %}
+      <div class="border-b border-slate-200 px-5 py-3 sm:px-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-bold text-slate-900">Payment reconciliation</p>
+            <p class="mt-1 text-xs text-slate-500">Shift opened {{ closing.period_start_date|date:"j M Y, H:i" }}</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">{{ closing.opening_entry.cashier.get_display_name }}</span>
         </div>
-        <label for="{{ form.closing_amount.id_for_label }}" class="text-xs font-bold uppercase tracking-wider text-gray-500">Counted amount</label>
-        {{ form.closing_amount }}
       </div>
-      {% empty %}
-      <p class="text-sm text-gray-500">No payment methods are configured for this shift.</p>
-      {% endfor %}
-      <div class="flex gap-3 pt-2">
-        <a href="{% url 'pos:pos_home' %}" class="flex-1 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-center text-sm font-semibold text-gray-600 hover:bg-gray-50">Back</a>
-        <button type="submit" class="flex-1 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-500">Close shift</button>
+
+      <div class="hidden grid-cols-[minmax(11rem,1.35fr)_1fr_1fr_1fr] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 md:grid">
+        <span>Payment Method</span>
+        <span class="text-right">Expected</span>
+        <span class="text-right">Counted Amount</span>
+        <span class="text-right">Variance</span>
+      </div>
+
+      <div class="divide-y divide-slate-100">
+        {% for payment, form in form_data %}
+        <div class="grid gap-3 px-5 py-3 sm:px-6 md:grid-cols-[minmax(11rem,1.35fr)_1fr_1fr_1fr] md:items-center"
+             x-data="{ expected: Number('{{ payment.expected_amount }}'), counted: Number('{{ form.closing_amount.value|default:0 }}') }">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-xl {% if payment.mode_of_payment.type == 'CASH' %}bg-emerald-50 text-emerald-700{% else %}bg-teal-50 text-teal-700{% endif %}">
+              {% if payment.mode_of_payment.type == "CASH" %}
+                {% hgi_stroke name="cash-01" size="20" color="currentColor" stroke_width="2" %}
+              {% elif payment.mode_of_payment.type == "BANK" %}
+                {% hgi_stroke name="bank" size="20" color="currentColor" stroke_width="2" %}
+              {% elif payment.mode_of_payment.type == "PHONE" %}
+                {% hgi_stroke name="smart-phone-03" size="20" color="currentColor" stroke_width="2" %}
+              {% else %}
+                {% hgi_stroke name="credit-card-pos" size="20" color="currentColor" stroke_width="2" %}
+              {% endif %}
+            </span>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-bold text-slate-900">{{ payment.mode_of_payment.name }}</p>
+              <p class="mt-0.5 text-xs text-slate-400">Opening ₦{{ payment.opening_amount|floatformat:2|intcomma }}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-4 md:block md:text-right">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 md:hidden">Expected</span>
+            <span class="font-mono text-sm font-bold tabular-nums text-slate-700">₦{{ payment.expected_amount|floatformat:2|intcomma }}</span>
+          </div>
+
+          <div>
+            <label for="{{ form.closing_amount.id_for_label }}" class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400 md:hidden">Counted Amount</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₦</span>
+              <input type="number" name="{{ form.closing_amount.html_name }}" id="{{ form.closing_amount.id_for_label }}"
+                     value="{{ form.closing_amount.value|default:'0.00' }}" min="0" step="0.01" inputmode="decimal" data-counted
+                     x-model.number="counted"
+                     class="min-h-10 w-full rounded-xl border border-slate-300 bg-white py-2 pl-8 pr-3 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+            </div>
+            {% if form.errors %}<p class="mt-1 text-xs font-semibold text-red-600">{{ form.errors|striptags }}</p>{% endif %}
+          </div>
+
+          <div class="flex items-center justify-between gap-4 md:justify-end">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 md:hidden">Variance</span>
+            <span class="rounded-lg px-2.5 py-1.5 font-mono text-sm font-bold tabular-nums"
+                  :class="counted - expected === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"
+                  x-text="money(counted - expected)"></span>
+          </div>
+        </div>
+        {% empty %}
+        <p class="px-7 py-10 text-center text-sm text-slate-500">No payment methods are configured for this shift.</p>
+        {% endfor %}
+      </div>
+
+      <div class="grid gap-3 border-y border-slate-200 bg-slate-50 px-5 py-3 sm:grid-cols-3 sm:px-6">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Total Expected</p>
+          <p class="font-mono text-base font-extrabold tabular-nums text-slate-900" x-text="money(totalExpected)"></p>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Total Counted</p>
+          <p class="font-mono text-base font-extrabold tabular-nums text-slate-900" x-text="money(totalCounted)"></p>
+        </div>
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Overall Variance</p>
+          <p class="font-mono text-base font-extrabold tabular-nums"
+             :class="totalCounted - totalExpected === 0 ? 'text-emerald-700' : 'text-red-700'"
+             x-text="money(totalCounted - totalExpected)"></p>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 sm:px-6">
+        <label for="closing-remarks" class="mb-1.5 block text-sm font-bold text-slate-900">Notes <span class="font-normal text-slate-400">(optional) - explain any variance</span></label>
+        <textarea id="closing-remarks" name="remarks" rows="2" maxlength="1000" placeholder="Add a short reconciliation note..."
+                  class="w-full resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">{{ closing.remarks }}</textarea>
+      </div>
+
+      <div class="flex flex-col-reverse gap-3 border-t border-slate-200 px-5 py-3 sm:flex-row sm:justify-between sm:px-6">
+        <a href="{% url 'pos:pos_home' %}" hx-get="{% url 'pos:pos_home' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
+           class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-transparent px-6 text-sm font-bold text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-800">Back</a>
+        <button type="submit" :disabled="processing || {{ form_data|yesno:'false,true' }}"
+                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-7 text-sm font-bold text-white shadow-lg transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">
+          {% hgi_stroke name="calculator-01" size="19" color="currentColor" stroke_width="2" %}
+          <span x-text="processing ? 'Closing shift...' : 'Close shift'">Close shift</span>
+        </button>
       </div>
     </form>
+    {% endif %}
   </div>
 </div>
+{% if request.htmx %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
+{% endif %}
+{% endpartialdef %}
 {% endblock %}

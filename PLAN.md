@@ -3025,7 +3025,7 @@ dedicated POS shell component.
 #### Cart improvements
 
 - Cart wrapper renders the ticket paper (`#FFF9ED`) and reuses `catalog_oob` to refresh the fetched
-  catalogue grid after quantity-affecting actions.
+  catalogue grid after quantity-affecting actions, carrying the active server-side filter state.
 - Guests stepper posts `guest_delta` ±1 (blocked when it would strand higher-numbered guests' items);
   order-type buttons post `order_type`; both go through `pos_order_update_meta` which locks rows
   `select_for_update` and refuses edits once tickets exist or the receipt was printed.

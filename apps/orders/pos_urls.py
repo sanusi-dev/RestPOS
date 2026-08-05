@@ -7,6 +7,8 @@ app_name = "pos"
 urlpatterns = [
     path("", view=views_pos.pos_home, name="pos_home"),
     path("history/", view=views_pos.pos_order_history, name="pos_order_history"),
+    path("history/<int:pk>/", view=views_pos.pos_order_history_detail, name="pos_order_history_detail"),
+    path("history/<int:pk>/print/", view=views_pos.pos_order_history_print, name="pos_order_history_print"),
     path("open-shift/", view=views_pos.pos_open_shift, name="pos_open_shift"),
     path("close-shift/", view=views_pos.pos_close_shift, name="pos_close_shift"),
     path("order/new/", view=views_pos.pos_order_new, name="pos_order_new"),

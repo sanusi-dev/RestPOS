@@ -1,91 +1,115 @@
 {% extends "pos/base.html" %}
 {% load humanize %}
 {% block pos_content %}
-<div class="h-full overflow-y-auto">
-  <div class="bg-white border-b border-gray-100 px-6 py-2.5 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-        <a href="?date={{ date_filter }}" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
-           {% if not payment_filter %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
-          All Orders
-        </a>
-        <a href="?date={{ date_filter }}&amp;payment=cash" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
-           {% if payment_filter == 'cash' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
-          Cash
-        </a>
-        <a href="?date={{ date_filter }}&amp;payment=electronic" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
-           {% if payment_filter == 'electronic' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
-          Electronic
-        </a>
-        <a href="?date={{ date_filter }}&amp;payment=refunds" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all border shadow-sm
-           {% if payment_filter == 'refunds' %}bg-gray-900 text-white border-gray-900{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
-          Refunds
-        </a>
-      </div>
-      <form method="get" class="flex items-center gap-2">
+{% partialdef surface inline %}
+<section class="flex h-full flex-col overflow-hidden bg-slate-100" x-data="{ selectedOrder: null }" @order-details-closed.window="selectedOrder = null">
+  <header class="mt-5 shrink-0 px-4 sm:mt-6 sm:px-6">
+    <div class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-slate-300 pb-3">
+      <nav aria-label="Order status" class="inline-flex items-center gap-0.5 rounded-xl bg-slate-200/60 p-1">
+        <a href="?status=all&amp;date={{ date_filter }}" hx-get="?status=all&amp;date={{ date_filter }}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-lg px-4 py-1.5 text-sm font-bold transition-colors {% if status_filter == 'all' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">All</a>
+        <a href="?status=sales&amp;date={{ date_filter }}" hx-get="?status=sales&amp;date={{ date_filter }}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-lg px-4 py-1.5 text-sm font-bold transition-colors {% if status_filter == 'sales' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">Sales</a>
+        <a href="?status=returns&amp;date={{ date_filter }}" hx-get="?status=returns&amp;date={{ date_filter }}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-lg px-4 py-1.5 text-sm font-bold transition-colors {% if status_filter == 'returns' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">Returns</a>
+        <a href="?status=cancelled&amp;date={{ date_filter }}" hx-get="?status=cancelled&amp;date={{ date_filter }}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-lg px-4 py-1.5 text-sm font-bold transition-colors {% if status_filter == 'cancelled' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">Cancelled</a>
+      </nav>
+      <form method="get" action="{% url 'pos:pos_order_history' %}" hx-get="{% url 'pos:pos_order_history' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
+            class="flex flex-wrap items-center justify-end gap-2">
+        <input type="hidden" name="status" value="{{ status_filter }}">
         {% if payment_filter %}<input type="hidden" name="payment" value="{{ payment_filter }}">{% endif %}
+        {% if order_type_filter %}<input type="hidden" name="order_type" value="{{ order_type_filter }}">{% endif %}
+        <label for="history-search" class="sr-only">Search order</label>
+        <span class="relative block">
+          <span class="pointer-events-none absolute left-3 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-slate-400">{% hgi_stroke name="search-01" size="16" color="currentColor" stroke_width="2" %}</span>
+          <input id="history-search" type="search" name="q" value="{{ search }}" placeholder="Order or invoice..." class="min-h-10 w-44 rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+        </span>
         <label for="history-date" class="sr-only">Order date</label>
-        <input id="history-date" type="date" name="date" value="{{ date_filter }}"
-               class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 bg-white">
-        <button type="submit"
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 shadow-sm text-gray-600 bg-white hover:bg-gray-50 transition-all">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>
-          View date
-        </button>
+        <input id="history-date" type="date" name="date" value="{{ date_filter }}" class="min-h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+        <button type="submit" class="min-h-9 rounded-lg bg-teal-700 px-3 text-xs font-bold text-white transition-colors hover:bg-teal-800">View</button>
       </form>
     </div>
-  </div>
-
-  <div class="p-6">
-    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-      <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
-          <tr>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Order #</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Payment</th>
-            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
+  </header>
+  <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-8 sm:px-6 sm:pb-6 sm:pt-10">
+    <div class="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-6">
+        {% if status_filter == "sales" %}
+        <div class="flex items-center gap-1.5" aria-label="Payment method filter">
+          <a href="?status=sales&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status=sales&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if not payment_filter %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">All methods</a>
+          <a href="?status=sales&amp;payment=cash&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status=sales&amp;payment=cash&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if payment_filter == 'cash' %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">Cash</a>
+          <a href="?status=sales&amp;payment=electronic&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status=sales&amp;payment=electronic&amp;order_type={{ order_type_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if payment_filter == 'electronic' %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">Electronic</a>
+        </div>
+        <span class="mx-1 h-5 border-l border-slate-300"></span>
+        {% endif %}
+        <div class="flex items-center gap-1.5" aria-label="Order type filter">
+          <a href="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if not order_type_filter %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">All types</a>
+          <a href="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;order_type=DINE_IN&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;order_type=DINE_IN&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if order_type_filter == 'DINE_IN' %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">Dine In</a>
+          <a href="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;order_type=TAKE_AWAY&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-get="?status={{ status_filter }}&amp;payment={{ payment_filter }}&amp;order_type=TAKE_AWAY&amp;date={{ date_filter }}{% if search %}&amp;q={{ search|urlencode }}{% endif %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="rounded-full border bg-white px-3 py-1.5 text-xs font-bold transition-colors {% if order_type_filter == 'TAKE_AWAY' %}border-teal-500 text-teal-700 ring-1 ring-teal-500/20{% else %}border-slate-200 text-slate-500 hover:border-teal-300 hover:text-teal-700{% endif %}">Take Away</a>
+        </div>
+      </div>
+      <table class="w-full min-w-[820px] border-collapse">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            <th class="px-4 py-3 sm:px-6">Invoice Number</th>
+            <th class="px-5 py-3 sm:px-6">Order</th>
+            <th class="px-4 py-3">Type</th>
+            <th class="px-4 py-3">Status</th>
+            <th class="px-4 py-3 text-center">Items</th>
+            <th class="px-4 py-3">Total</th>
+            <th class="px-4 py-3">Placed at</th>
+            <th class="px-4 py-3 text-center">Action</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-slate-100">
           {% for order in orders %}
-            <tr class="hover:bg-gray-50/50 transition-colors">
-              <td class="px-6 py-4 text-sm font-bold text-gray-900">{{ order.order_number|default:"—" }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ order.invoice_number|default:"—" }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ order.get_order_type_display }}</td>
-              <td class="px-6 py-4">
-                {% if order.is_return %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Refund</span>
-                {% elif order.is_paid %}
-                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">
-                    {% for payment in order.payments.all %}{% if not forloop.first %}, {% endif %}{{ payment.mode_of_payment.name }}{% empty %}Paid{% endfor %}
-                  </span>
-                {% elif order.status == "SUBMITTED" %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Unpaid</span>
-                {% else %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-50 text-gray-500 ring-1 ring-gray-200">Draft</span>
-                {% endif %}
-              </td>
-              <td class="px-6 py-4 text-right text-sm font-semibold text-gray-900">₦{{ order.grand_total|intcomma }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ order.posting_date }} {{ order.posting_time }}</td>
-            </tr>
+          <tr class="transition-colors hover:bg-teal-50/40" :class="selectedOrder === '{{ order.pk }}' ? 'bg-teal-50/80' : ''">
+            <td class="px-4 py-3 font-mono text-sm font-semibold text-slate-600 sm:px-6">{{ order.invoice_number|default:"—" }}</td>
+            <td class="px-5 py-3 sm:px-6 font-mono text-sm font-extrabold text-slate-900">#{{ order.order_number|default:order.pk }}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center gap-2 text-xs font-bold text-slate-600" title="{{ order.get_order_type_display }}">
+                <span class="flex size-7 items-center justify-center rounded-lg {% if order.order_type == 'DINE_IN' %}bg-teal-50 text-teal-700{% else %}bg-amber-50 text-amber-700{% endif %}" aria-hidden="true">
+                  {% if order.order_type == 'DINE_IN' %}
+                  {% hgi_stroke name="kitchen-utensils" size="16" color="currentColor" stroke_width="2" %}
+                  {% else %}
+                  {% hgi_stroke name="package" size="16" color="currentColor" stroke_width="2" %}
+                  {% endif %}
+                </span>
+                <span>{{ order.get_order_type_display }}</span>
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide {% if order.is_return or order.status == 'CANCELLED' %}bg-red-50 text-red-700{% else %}bg-emerald-50 text-emerald-700{% endif %}">{% if order.is_return %}Return{% elif order.status == 'CANCELLED' %}Cancelled{% else %}Paid{% endif %}</span>
+            </td>
+            <td class="px-4 py-3 text-center font-mono text-sm font-bold tabular-nums text-slate-600">{{ order.items.all|length }}</td>
+            <td class="px-4 py-3 font-mono text-sm font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</td>
+            <td class="px-4 py-3 text-xs font-semibold text-slate-500">{{ order.posting_date|date:"j M Y" }} · {{ order.posting_time|time:"g:i A" }}</td>
+            <td class="px-4 py-3 text-center">
+              <a id="order-view-{{ order.pk }}" href="{% url 'pos:pos_order_history_detail' order.pk %}" hx-get="{% url 'pos:pos_order_history_detail' order.pk %}" hx-target="#order-details-drawer" hx-swap="innerHTML" hx-push-url="false" hx-indicator="#order-details-loading"
+                 aria-controls="order-details-drawer" aria-label="View order #{{ order.order_number|default:order.pk }}" title="View order"
+                 @click="selectedOrder = '{{ order.pk }}'" :aria-expanded="selectedOrder === '{{ order.pk }}' ? 'true' : 'false'"
+                 class="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600/30">
+                {% hgi_stroke name="view" size="18" color="currentColor" stroke_width="2" %}
+              </a>
+            </td>
+          </tr>
           {% empty %}
-            <tr>
-              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
-                <div class="flex flex-col items-center gap-2">
-                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                  </div>
-                  <span class="font-medium mt-2 text-gray-600">No orders found.</span>
-                </div>
-              </td>
-            </tr>
+          <tr>
+            <td colspan="8" class="px-6 py-16 text-center">
+              <span class="mx-auto flex size-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">{% hgi_stroke name="invoice-01" size="27" color="currentColor" stroke_width="1.8" %}</span>
+              <p class="mt-4 font-extrabold tracking-tight text-slate-900">No orders found</p>
+              <p class="mt-1 text-sm text-slate-500">Try another date or adjust the filters.</p>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    <div id="order-details-drawer" aria-live="polite"></div>
   </div>
+</section>
+<div id="order-details-loading" class="pointer-events-none fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/10 [.htmx-request]:flex" aria-live="polite">
+  <span class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 shadow-lg">Loading order...</span>
 </div>
+{% if request.htmx %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
+{% endif %}
+{% endpartialdef %}
 {% endblock %}

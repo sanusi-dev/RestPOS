@@ -1,0 +1,263 @@
+{% extends "pos/base.html" %}
+{% load humanize %}
+{% block pos_content %}
+{% partialdef surface inline %}
+<div class="h-full overflow-y-auto bg-slate-100 p-4 sm:p-6">
+  <div class="mx-auto max-w-2xl">
+    <div class="mb-4 flex items-center justify-between gap-3">
+      <a href="{% url 'pos:pos_order_history' %}" hx-get="{% url 'pos:pos_order_history' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
+         class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-800">
+        {% hgi_stroke name="arrow-left-01" size="17" color="currentColor" stroke_width="2" %}
+        History
+      </a>
+      {% if order.status == "SUBMITTED" %}
+      <form method="post" action="{% url 'pos:pos_order_history_print' order.pk %}" hx-post="{% url 'pos:pos_order_history_print' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-teal-700 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-teal-800">
+          {% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}
+          Reprint receipt
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div>
+          <h1 class="font-mono text-2xl font-extrabold tracking-tight text-slate-900">#{{ order.order_number|default:order.pk }}</h1>
+          <p class="mt-1 text-sm font-semibold text-slate-500">{{ order.get_order_type_display }} · {{ order.guest_count }} customer{{ order.guest_count|pluralize }}</p>
+        </div>
+        {% if order.is_return %}
+        <span class="rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">Return</span>
+        {% elif order.status == "CANCELLED" %}
+        <span class="rounded-lg bg-red-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">Cancelled</span>
+        {% else %}
+        <span class="rounded-lg bg-emerald-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">Paid</span>
+        {% endif %}
+      </header>
+
+      <dl class="grid gap-3 border-b border-slate-100 bg-slate-50/70 px-6 py-4 text-sm sm:grid-cols-3">
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Invoice</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.invoice_number|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cashier</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.cashier.get_display_name|default:"-" }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.posting_date|date:"j M Y" }} · {{ order.posting_time|time:"g:i A" }}</dd>
+        </div>
+      </dl>
+
+      {% if order.guest_count > 1 %}
+      {% regroup order.items.all|dictsort:"customer_index" by customer_index as customer_groups %}
+      <div class="divide-y divide-slate-100">
+        {% for group in customer_groups %}
+        <section class="px-6 py-4">
+          <h2 class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Customer {{ group.grouper }}</h2>
+          <ul class="mt-1 divide-y divide-slate-50">
+            {% for item in group.list %}
+            <li class="flex items-baseline justify-between gap-4 py-2.5 text-sm">
+              <div class="min-w-0">
+                <span class="break-words font-medium text-slate-700">{{ item.item_name }}</span>
+                {% if item.comments %}<p class="mt-0.5 text-xs text-slate-400">{{ item.comments }}</p>{% endif %}
+              </div>
+              <span class="shrink-0 text-right">
+                <span class="block font-mono text-xs tabular-nums text-slate-400">x{{ item.qty|floatformat:"-2" }} @ ₦{{ item.rate|intcomma }}</span>
+                <span class="block font-mono text-sm font-bold tabular-nums text-slate-800">₦{{ item.amount|intcomma }}</span>
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+        </section>
+        {% endfor %}
+      </div>
+      {% else %}
+      <ul class="divide-y divide-slate-100 px-6">
+        {% for item in order.items.all %}
+        <li class="flex items-baseline justify-between gap-4 py-3 text-sm">
+          <div class="min-w-0">
+            <span class="break-words font-medium text-slate-700">{{ item.item_name }}</span>
+            {% if item.comments %}<p class="mt-0.5 text-xs text-slate-400">{{ item.comments }}</p>{% endif %}
+          </div>
+          <span class="shrink-0 text-right">
+            <span class="block font-mono text-xs tabular-nums text-slate-400">x{{ item.qty|floatformat:"-2" }} @ ₦{{ item.rate|intcomma }}</span>
+            <span class="block font-mono text-sm font-bold tabular-nums text-slate-800">₦{{ item.amount|intcomma }}</span>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <footer class="border-t border-slate-100 bg-slate-50/70 px-6 py-4">
+        {% if order.payments.all %}
+        <div class="space-y-1.5 border-b border-slate-200/70 pb-3">
+          {% for payment in order.payments.all %}
+          <p class="flex items-center justify-between gap-4 text-sm">
+            <span class="font-semibold text-slate-500">{{ payment.mode_of_payment.name }}</span>
+            <span class="font-mono font-bold tabular-nums text-slate-600">₦{{ payment.amount|intcomma }}</span>
+          </p>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <p class="flex items-baseline justify-between gap-4 pt-3">
+          <span class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</span>
+          <span class="font-mono text-2xl font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</span>
+        </p>
+      </footer>
+    </article>
+  </div>
+</div>
+{% if request.htmx %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
+{% endif %}
+{% endpartialdef %}
+
+{% partialdef drawer %}
+<div x-data="orderDetailsDrawer('order-view-{{ order.pk }}')" x-cloak @keydown.escape.window="close()" class="fixed inset-0 z-[60]">
+  <div x-show="open"
+       x-transition:enter="transition-opacity duration-300 ease-in-out motion-reduce:transition-none"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition-opacity duration-300 ease-in-out motion-reduce:transition-none"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @click="close()"
+       class="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
+       aria-hidden="true"></div>
+
+  <aside x-ref="panel"
+         x-show="open"
+         x-transition:enter="transform transition duration-300 ease-in-out motion-reduce:transition-none"
+         x-transition:enter-start="translate-x-full"
+         x-transition:enter-end="translate-x-0"
+         x-transition:leave="transform transition duration-300 ease-in-out motion-reduce:transition-none"
+         x-transition:leave-start="translate-x-0"
+         x-transition:leave-end="translate-x-full"
+         @click.stop
+         @keydown="trapFocus($event)"
+         class="absolute right-0 top-0 flex h-full w-full max-w-full flex-col border-l border-slate-200 bg-white shadow-2xl sm:w-[430px] md:w-[440px] lg:w-[450px]"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="order-details-title-{{ order.pk }}">
+    <header class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">Order details</p>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <h2 id="order-details-title-{{ order.pk }}" class="font-mono text-2xl font-extrabold tracking-tight text-slate-900">#{{ order.order_number|default:order.pk }}</h2>
+          {% if order.is_return %}
+          <span class="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Return</span>
+          {% elif order.status == "CANCELLED" %}
+          <span class="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Cancelled</span>
+          {% else %}
+          <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Paid</span>
+          {% endif %}
+        </div>
+      </div>
+      <button x-ref="closeButton" type="button" @click="close()" aria-label="Close order details" class="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300">
+          {% hgi_stroke name="cancel-01" size="19" color="currentColor" stroke_width="2" %}
+      </button>
+    </header>
+
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-4 border-b border-slate-100 bg-slate-50/70 px-5 py-4 text-sm sm:px-6">
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order type</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.get_order_type_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Customers</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.guest_count }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date &amp; time</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ order.posting_date|date:"j M Y" }} · {{ order.posting_time|time:"g:i A" }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cashier</dt>
+          <dd class="mt-1 truncate font-semibold text-slate-700">{{ order.cashier.get_display_name|default:"Not recorded" }}</dd>
+        </div>
+        <div>
+          <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kitchen status</dt>
+          <dd class="mt-1 font-semibold text-slate-700">{{ kitchen_status }}</dd>
+        </div>
+      </dl>
+
+      <section class="px-5 py-5 sm:px-6" aria-labelledby="order-items-title-{{ order.pk }}">
+        <div class="flex items-center justify-between gap-3">
+          <h3 id="order-items-title-{{ order.pk }}" class="text-sm font-extrabold text-slate-900">Items ({{ order.items.all|length }})</h3>
+        </div>
+        {% with items=order.items.all %}
+        {% if items %}
+        <ul class="mt-3 divide-y divide-slate-100">
+          {% for item in items %}
+          <li class="flex gap-3 py-3 first:pt-0 last:pb-0">
+            <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-400 ring-1 ring-slate-200">
+              {% if item.item.image %}
+              <img src="{{ item.item.image.url }}" alt="{{ item.item_name }}" class="h-full w-full object-cover">
+              {% else %}
+              <span aria-hidden="true">{% hgi_stroke name="restaurant-02" size="20" color="currentColor" stroke_width="1.8" %}</span>
+              {% endif %}
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="break-words text-sm font-bold text-slate-800">{{ item.item_name }}</p>
+              <p class="mt-0.5 font-mono text-xs tabular-nums text-slate-400">₦{{ item.rate|intcomma }} × {{ item.qty|floatformat:"-2" }}</p>
+              {% if item.comments %}<p class="mt-1 text-xs font-medium text-slate-500">Note: {{ item.comments }}</p>{% endif %}
+            </div>
+            <p class="shrink-0 text-right font-mono text-sm font-extrabold tabular-nums text-slate-900">₦{{ item.amount|intcomma }}</p>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+          <p class="text-sm font-bold text-slate-700">No items recorded</p>
+          <p class="mt-1 text-xs text-slate-500">This order has no saved line items.</p>
+        </div>
+        {% endif %}
+        {% endwith %}
+      </section>
+
+      <section class="border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6" aria-label="Order summary">
+        <dl class="space-y-2 text-sm">
+          <div class="flex items-center justify-between gap-4">
+            <dt class="font-semibold text-slate-500">Subtotal</dt>
+            <dd class="font-mono font-bold tabular-nums text-slate-700">₦{{ order.net_total|intcomma }}</dd>
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <dt class="font-semibold text-slate-500">Discount</dt>
+            <dd class="font-mono font-bold tabular-nums text-slate-700">₦0</dd>
+          </div>
+          {% if order.rounding_adjustment %}
+          <div class="flex items-center justify-between gap-4">
+            <dt class="font-semibold text-slate-500">Rounding adjustment</dt>
+            <dd class="font-mono font-bold tabular-nums text-slate-700">₦{{ order.rounding_adjustment|intcomma }}</dd>
+          </div>
+          {% endif %}
+          <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-3">
+            <dt class="text-xs font-extrabold uppercase tracking-[0.14em] text-slate-700">Total</dt>
+            <dd class="font-mono text-xl font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+
+    <footer class="flex shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
+      {% if order.status == "SUBMITTED" %}
+      <form method="post" action="{% url 'pos:pos_order_history_print' order.pk %}" hx-post="{% url 'pos:pos_order_history_print' order.pk %}" hx-target="#order-details-drawer" hx-swap="innerHTML" hx-push-url="false" class="w-full">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-teal-700 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-600/30">
+          {% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}
+          Print receipt
+        </button>
+      </form>
+      {% else %}
+      <p class="w-full text-center text-xs font-semibold text-slate-400">No actions available for this order.</p>
+      {% endif %}
+    </footer>
+  </aside>
+</div>
+{% endpartialdef %}
+{% endblock %}

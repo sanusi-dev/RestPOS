@@ -1,34 +1,14 @@
 {% load humanize %}
 {% comment %}---- Success banners, grand total, action dropup, receipt, Pay ----{% endcomment %}
-<div class="border-t border-slate-200 bg-[#FFF9ED] p-4 space-y-3">
-  {% if sync_success and not print_failures %}
-  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
-    ✓ Sent {{ kot_count }} ticket{{ kot_count|pluralize }} to kitchen &amp; bar
-  </div>
-  {% endif %}
+<div class="border-t border-slate-200 bg-slate-100 p-3">
   {% if sync_success and print_failures %}
   <div class="bg-amber-50 text-amber-800 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-amber-600/10">
     Ticket{{ print_failures|pluralize }} created, but {{ print_failures|join:", " }} printing failed. Retry from Actions.
   </div>
   {% endif %}
-  {% if ticket_print_success %}
-  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
-    ✓ {{ ticket_print_success|title }} ticket {% if ticket_print_action == "retry" %}retried{% else %}reprinted{% endif %}
-  </div>
-  {% endif %}
   {% if ticket_print_error %}
   <div class="bg-amber-50 text-amber-800 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-amber-600/10">
     {{ ticket_print_error|title }} printing failed. Retry from Actions.
-  </div>
-  {% endif %}
-  {% if clear_success %}
-  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
-    ✓ Order cleared
-  </div>
-  {% endif %}
-  {% if receipt_print_success %}
-  <div class="bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-emerald-600/10">
-    Receipt {% if receipt_print_action == "reprint" %}reprinted{% else %}printed{% endif %} successfully.
   </div>
   {% endif %}
   {% if receipt_print_error %}
@@ -37,32 +17,60 @@
   </div>
   {% endif %}
 
-  <div class="flex items-end justify-between border-t border-slate-200 pt-3">
-    <span class="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</span>
-    <span class="font-mono text-2xl font-extrabold tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</span>
-  </div>
+  <div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+    <div class="flex items-baseline justify-between gap-4 border-b border-slate-200 pb-3">
+      <span class="shrink-0 text-xs font-bold uppercase leading-none tracking-[0.16em] text-slate-500">Total</span>
+      <span class="text-right font-mono text-2xl font-extrabold leading-none tabular-nums text-slate-900">₦{{ order.grand_total|intcomma }}</span>
+    </div>
 
-  <div class="flex gap-2 items-stretch">
+  <div class="mt-3 flex items-stretch gap-2">
+    {% if receipt_printable %}
+    <button type="button"
+            hx-post="{% url 'pos:pos_order_print' order.pk %}"
+            hx-target="#cart-panel" hx-swap="outerHTML"
+            hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
+            class="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-transparent px-3 text-xs font-bold text-slate-700 transition-colors hover:border-teal-400 hover:text-teal-800 disabled:opacity-60">
+      <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="flex size-4 items-center justify-center [.htmx-request_&]:hidden">{% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}</span>
+      <span>{% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}</span>
+    </button>
+    {% else %}
+    <button type="button" disabled aria-disabled="true"
+            class="flex min-h-11 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-transparent px-3 text-xs font-bold text-slate-400">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}</span>
+      <span>{% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}</span>
+    </button>
+    {% endif %}
+
     {% if not order_sent and order.items.exists %}
     <button type="button"
             hx-post="{% url 'pos:pos_order_sync' order.pk %}"
             hx-target="#cart-panel" hx-swap="outerHTML"
             hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-            class="flex-1 min-h-[2.75rem] rounded-lg bg-slate-800 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-700 inline-flex items-center justify-center gap-2 disabled:opacity-60">
+            class="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 text-xs font-bold text-white shadow-sm transition-colors hover:bg-teal-800 disabled:opacity-60">
       <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
       </svg>
-      <span>Send</span>
+      <span class="flex size-4 items-center justify-center [.htmx-request_&]:hidden">{% hgi_stroke name="kitchen-utensils" size="17" color="currentColor" stroke_width="2" %}</span>
+      <span>Send to kitchen</span>
+    </button>
+    {% else %}
+    <button type="button" disabled aria-disabled="true"
+            class="inline-flex min-h-11 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-200 px-3 text-xs font-bold text-slate-400">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="kitchen-utensils" size="17" color="currentColor" stroke_width="2" %}</span>
+      <span>Send to kitchen</span>
     </button>
     {% endif %}
-    <div class="relative flex-1" x-data="{ open: false, cancelOpen: false }"
+    <div class="relative shrink-0" x-data="{ open: false, cancelOpen: false }"
          @click.outside="if (!cancelOpen) open = false" @keydown.escape.window="open = false; cancelOpen = false">
       <button type="button" @click="open = !open"
-              class="w-full h-full min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
-        Action
-        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 9 7 7 7-7"/></svg>
+              aria-label="More order actions" :aria-expanded="open"
+              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-300 bg-transparent text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-600/30">
+        {% hgi_stroke name="more-horizontal" size="20" color="currentColor" stroke_width="2" %}
       </button>
 
       <div x-show="open" x-cloak
@@ -72,25 +80,16 @@
            x-transition:leave="transition ease-in duration-75"
            x-transition:leave-start="opacity-100 translate-y-0"
            x-transition:leave-end="opacity-0 translate-y-1"
-           class="absolute bottom-full mb-2 left-0 w-full min-w-[15rem] bg-white rounded-xl shadow-lg ring-1 ring-gray-200 py-1.5 z-20">
-
-        {% if not order_sent and order.items.exists %}
-        <button type="button" @click="open = false"
-                hx-post="{% url 'pos:pos_order_sync' order.pk %}"
-                hx-target="#cart-panel" hx-swap="outerHTML"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors">
-          <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
-          Send to Kitchen &amp; Bar
-        </button>
-        {% endif %}
+           class="absolute bottom-full right-0 z-20 mb-2 w-60 rounded-xl bg-white py-1.5 shadow-lg ring-1 ring-slate-200">
 
         {% if kitchen_ticket_pending %}
         <button type="button" @click="open = false"
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'retry' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
-          Retry Kitchen Printing
+                class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-50 focus:bg-amber-50 focus:outline-none active:bg-amber-100 disabled:cursor-wait disabled:opacity-60 [&.htmx-request]:bg-amber-50">
+          <span class="flex size-4 items-center justify-center [.htmx-request_&]:animate-spin">{% hgi_stroke name="refresh" size="17" color="currentColor" stroke_width="2" %}</span>
+          <span>Retry Kitchen Printing</span>
         </button>
         {% endif %}
         {% if bar_ticket_pending %}
@@ -98,8 +97,9 @@
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'retry' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
-          Retry Bar Printing
+                class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-50 focus:bg-amber-50 focus:outline-none active:bg-amber-100 disabled:cursor-wait disabled:opacity-60 [&.htmx-request]:bg-amber-50">
+          <span class="flex size-4 items-center justify-center [.htmx-request_&]:animate-spin">{% hgi_stroke name="refresh" size="17" color="currentColor" stroke_width="2" %}</span>
+          <span>Retry Bar Printing</span>
         </button>
         {% endif %}
          {% if kitchen_ticket_printed and can_reprint %}
@@ -107,8 +107,9 @@
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'kitchen' 'reprint' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
-          Reprint Kitchen
+                class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-800 focus:bg-teal-50 focus:text-teal-800 focus:outline-none active:bg-teal-100 disabled:cursor-wait disabled:opacity-60 [&.htmx-request]:bg-teal-50 [&.htmx-request]:text-teal-800">
+          <span class="flex size-4 items-center justify-center [.htmx-request_&]:animate-pulse">{% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}</span>
+          <span>Reprint Kitchen</span>
         </button>
         {% endif %}
          {% if bar_ticket_printed and can_reprint %}
@@ -116,17 +117,18 @@
                 hx-post="{% url 'pos:pos_order_ticket_print' order.pk 'bar' 'reprint' %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 inline-flex items-center gap-2.5 transition-colors disabled:opacity-60">
-          Reprint Bar
+                class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-800 focus:bg-teal-50 focus:text-teal-800 focus:outline-none active:bg-teal-100 disabled:cursor-wait disabled:opacity-60 [&.htmx-request]:bg-teal-50 [&.htmx-request]:text-teal-800">
+          <span class="flex size-4 items-center justify-center [.htmx-request_&]:animate-pulse">{% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}</span>
+          <span>Reprint Bar</span>
         </button>
         {% endif %}
 
-        <div class="my-1 border-t border-gray-100"></div>
+        <div class="my-1 border-t border-slate-100"></div>
 
-        {% if order_sent or order.invoice_printed %}
+        {% if order_sent or order.invoice_printed or not order.items.exists %}
         <button type="button" @click="open = false; cancelOpen = true"
-                class="w-full text-left px-4 py-2.5 text-sm font-semibold text-orange-700 hover:bg-orange-50 inline-flex items-center gap-2.5 transition-colors">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 6 12 12M18 6 6 18"/></svg>
+                class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-red-700 transition-colors hover:bg-red-50">
+          {% hgi_stroke name="cancel-circle" size="17" color="currentColor" stroke_width="2" %}
           Cancel Order
         </button>
         {% else %}
@@ -134,7 +136,7 @@
                 @click="open = false"
                 onclick="Swal.fire({title:'Clear order?',text:'Remove all items from this order.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Clear Order'}).then((r)=>{if(r.isConfirmed){htmx.trigger('#clear-order-btn','click')}})"
                 class="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-2.5 transition-colors">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+          {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
           Clear
         </button>
         <button id="clear-order-btn" type="button" class="hidden"
@@ -145,14 +147,14 @@
 
       <div x-show="cancelOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="cancelOpen = false"></div>
-        <div class="relative bg-white rounded-[1.5rem] shadow-2xl w-full max-w-md p-6" @click.stop>
+        <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" @click.stop>
           <div class="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h2 class="text-xl font-extrabold text-gray-900 tracking-tight">Cancel order?</h2>
-              <p class="text-sm text-gray-500 mt-1">This order will be preserved as cancelled. Start a new order for corrections.</p>
+              <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Cancel order?</h2>
+              <p class="mt-1 text-sm text-slate-500">This order will be preserved as cancelled. Start a new order for corrections.</p>
             </div>
-            <button type="button" @click="cancelOpen = false" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12"/></svg>
+            <button type="button" @click="cancelOpen = false" class="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              {% hgi_stroke name="cancel-circle" size="20" color="currentColor" stroke_width="2" %}
             </button>
           </div>
           <form method="post" action="{% url 'pos:pos_order_cancel' order.pk %}" class="space-y-4" x-data="{ cancelReason: 'wrong_order' }">
@@ -166,10 +168,11 @@
               {{ cancel_form.cancel_reason_note }}
             </div>
             <div class="flex gap-3 pt-2">
-              <button type="button" @click="cancelOpen = false" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-all">
+              <button type="button" @click="cancelOpen = false" class="flex-1 rounded-xl border border-slate-300 bg-transparent py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-800">
                 Keep Order
               </button>
-              <button type="submit" class="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold shadow hover:bg-orange-700 transition-all">
+              <button type="submit" class="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white shadow transition-colors hover:bg-red-700">
+                {% hgi_stroke name="cancel-circle" size="17" color="currentColor" stroke_width="2" %}
                 Cancel Order
               </button>
             </div>
@@ -178,32 +181,14 @@
       </div>
     </div>
 
-    {% if receipt_printable %}
-    <button type="button"
-            hx-post="{% url 'pos:pos_order_print' order.pk %}"
-            hx-target="#cart-panel" hx-swap="outerHTML"
-            hx-on::before-request="$el.disabled = true" hx-on::after-request="$el.disabled = false"
-            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all inline-flex items-center justify-center gap-1.5 disabled:opacity-60">
-      <svg class="hidden h-4 w-4 animate-spin [.htmx-request_&]:block" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-      </svg>
-      <svg class="w-4 h-4 [.htmx-request_&]:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
-       {% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}
-    </button>
-    {% else %}
-    <button type="button" disabled aria-disabled="true"
-            class="flex-1 min-h-[2.75rem] py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-400 text-sm font-semibold cursor-not-allowed inline-flex items-center justify-center gap-1.5">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2m-8-4h4v4h-4v-4Z"/></svg>
-       {% if order.invoice_printed %}Reprint Receipt{% else %}Print Receipt{% endif %}
-    </button>
-    {% endif %}
+  </div>
 
+  <div class="mt-2 border-t border-slate-200 pt-3">
     <a href="{% url 'pos:pos_order_settle' order.pk %}"
        hx-get="{% url 'pos:pos_order_settle' order.pk %}"
        hx-target="#payment-dialog-container"
        hx-swap="innerHTML"
-       class="flex-[2] min-h-[2.75rem] py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition-all text-center inline-flex items-center justify-center gap-2
+       class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-center text-sm font-bold text-white shadow transition-all hover:bg-teal-800
               [&.htmx-request]:pointer-events-none [&.htmx-request]:opacity-70
               {% if not order.items.exists %}pointer-events-none opacity-40 shadow-none{% endif %}"
        {% if not order.items.exists %}aria-disabled="true"{% endif %}>
@@ -211,7 +196,9 @@
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
       </svg>
+      <span class="flex size-5 items-center justify-center [.htmx-request_&]:hidden">{% hgi_stroke name="payment-01" size="19" color="currentColor" stroke_width="2" %}</span>
       <span>Pay</span>
     </a>
+  </div>
   </div>
 </div>
