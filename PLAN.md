@@ -804,11 +804,11 @@ def create_entry(cls, item, warehouse, actual_qty, voucher_type, voucher_no, rat
     bin = Bin.get_or_create(item, warehouse)
     previous_qty = bin.actual_qty
     new_qty = previous_qty + actual_qty
-    
+
     # FIFO queue management
     queue = json.loads(bin.stock_queue or "[]") if hasattr(bin, "stock_queue") else []
     # ... update queue based on actual_qty sign and rate
-    
+
     # Create the SLE
     sle = cls.objects.create(
         item=item, warehouse=warehouse, actual_qty=actual_qty,
@@ -819,13 +819,13 @@ def create_entry(cls, item, warehouse, actual_qty, voucher_type, voucher_no, rat
         valuation_rate=bin.valuation_rate,
         stock_value=new_qty * bin.valuation_rate,
     )
-    
+
     # Update Bin
     bin.actual_qty = new_qty
     bin.valuation_rate = ...  # recalculate
     bin.stock_value = bin.actual_qty * bin.valuation_rate
     bin.save()
-    
+
     return sle
 ```
 

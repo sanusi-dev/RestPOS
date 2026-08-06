@@ -95,7 +95,7 @@
 
   {% block notifications %}
   {% endblock %}
-  
+
   <div id="htmx-error" class="max-w-7xl mx-auto rounded-xl p-4 mt-6 mx-4 sm:mx-8 bg-red-50 text-red-800 border border-red-200 shadow-sm flex justify-between hidden" role="alert">
     <span class="flex items-center gap-2 font-medium">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -108,7 +108,7 @@
 
   <section class="section py-8 flex-grow" hx-on::response-error="document.getElementById('htmx-error').classList.remove('hidden')">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
-      
+
       <div class="w-64 hidden lg:flex lg:flex-col lg:sticky lg:top-28 lg:self-start shrink-0">
         <div class="bg-white border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] p-4">
             <ul class="flex flex-col gap-1">
@@ -121,7 +121,7 @@
         {% block app %}
         {% endblock %}
       </div>
-      
+
     </div>
   </section>
 {% endblock %}
