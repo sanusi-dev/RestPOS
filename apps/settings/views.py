@@ -1,10 +1,14 @@
+from typing import cast
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django_htmx.middleware import HtmxDetails
 
 from apps.users.models import CustomUser
 
@@ -18,6 +22,21 @@ from .models import (
 )
 
 RESTPOS_GROUP_NAMES = ["RestPOS Admin", "RestPOS Manager", "RestPOS Cashier"]
+
+
+class _HtmxRequest(HttpRequest):
+    htmx: HtmxDetails
+
+
+def _authenticated_user(request: HttpRequest) -> CustomUser:
+    user = request.user
+    if not isinstance(user, CustomUser):
+        raise PermissionDenied
+    return user
+
+
+def _is_htmx(request: HttpRequest) -> bool:
+    return bool(cast(_HtmxRequest, request).htmx)
 
 
 def _ensure_restpos_groups():
@@ -50,9 +69,10 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def restaurant_settings(request: HttpRequest) -> HttpResponse:
+    user = _authenticated_user(request)
     restaurant = Restaurant.load()
     if request.method == "POST":
-        if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+        if not (user.is_manager or user.is_admin or user.is_superuser):
             return redirect("web:home")
         form = RestaurantForm(request.POST, instance=restaurant)
         if form.is_valid():
@@ -71,7 +91,8 @@ def restaurant_settings(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def staff_list(request: HttpRequest) -> HttpResponse:
-    if not request.user.has_backoffice_access:
+    user = _authenticated_user(request)
+    if not user.has_backoffice_access:
         return redirect("web:home")
 
     search = request.GET.get("search", "")
@@ -104,7 +125,7 @@ def staff_list(request: HttpRequest) -> HttpResponse:
         "total_pages": total_pages,
         "total": total,
     }
-    if request.htmx:
+    if _is_htmx(request):
         return render(request, "backoffice/settings/staff_list.html#staff-rows", context)
     return render(request, "backoffice/settings/staff_list.html", context)
 
@@ -112,10 +133,11 @@ def staff_list(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
-    if not request.user.has_backoffice_access:
+    user = _authenticated_user(request)
+    if not user.has_backoffice_access:
         return HttpResponse("Unauthorized", status=403)
 
-    if not request.user.is_superuser:
+    if not user.is_superuser:
         return HttpResponse("Unauthorized", status=403)
 
     user = get_object_or_404(CustomUser, pk=pk)
@@ -147,7 +169,7 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
         user.groups.add(cashier_group)
         messages.success(request, f"{user.get_display_name()} is now a Cashier.")
 
-    if request.htmx:
+    if _is_htmx(request):
         response = render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
         return response
     return redirect("settings:staff_list")
@@ -156,10 +178,11 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
 @login_required
 @require_POST
 def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
-    if not request.user.has_backoffice_access:
+    user = _authenticated_user(request)
+    if not user.has_backoffice_access:
         return HttpResponse("Unauthorized", status=403)
 
-    if not request.user.is_superuser:
+    if not user.is_superuser:
         return HttpResponse("Unauthorized", status=403)
 
     user = get_object_or_404(CustomUser, pk=pk)
@@ -175,13 +198,13 @@ def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
     user.groups.remove(admin_group, manager_group, cashier_group)
     messages.success(request, f"Role removed from {user.get_display_name()}.")
 
-    if request.htmx:
+    if _is_htmx(request):
         response = render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
         return response
     return redirect("settings:staff_list")
 
 
-def _build_staff_entry(user):
+def _build_staff_entry(user: CustomUser) -> dict[str, CustomUser | str]:
     # Uses the user's prefetched groups (from staff_list) or cached role lookups;
     # one query total per user rather than up to three per-row exists() checks.
     user_group_names = set(user._restpos_group_names)
@@ -216,7 +239,8 @@ def production_unit_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def production_unit_create(request: HttpRequest) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
         return redirect("web:home")
     if request.method == "POST":
         form = ProductionUnitForm(request.POST)
@@ -236,7 +260,8 @@ def production_unit_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def production_unit_update(request: HttpRequest, pk: int) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
         return redirect("web:home")
     production_unit = get_object_or_404(ProductionUnit, pk=pk)
     if request.method == "POST":
@@ -256,7 +281,8 @@ def production_unit_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def production_unit_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
         return redirect("web:home")
     production_unit = get_object_or_404(ProductionUnit, pk=pk)
     production_unit.delete()

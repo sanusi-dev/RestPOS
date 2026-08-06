@@ -1,10 +1,11 @@
 """POS-facing views for the orders app — the cashier's full-screen workflow."""
 
 from decimal import Decimal, InvalidOperation
+from typing import Protocol, cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Sum
@@ -13,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
+from django_htmx.middleware import HtmxDetails
 
 from apps.inventory.models import Bin, Item
 from apps.menu.models import MenuItem
@@ -36,6 +38,7 @@ from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from apps.users.models import CustomUser
 
 from . import printing
 from .forms import POSOrderCancelForm
@@ -46,16 +49,42 @@ CATALOG_FILTER_TARGETS = {"catalog-workspace", "#catalog-workspace"}
 ORDER_DETAILS_DRAWER_TARGETS = {"order-details-drawer", "#order-details-drawer"}
 
 
+class _HtmxRequest(HttpRequest):
+    htmx: HtmxDetails
+
+
+class _DraftOrder(Protocol):
+    item_count: int
+    item_preview: object
+    minutes_ago: int
+
+
+class _AddOnWithMenuItem(Protocol):
+    add_on_item: Item
+    menu_item: MenuItem | None
+
+
+def _authenticated_user(request: HttpRequest) -> CustomUser:
+    user = request.user
+    if not isinstance(user, CustomUser):
+        raise PermissionDenied
+    return user
+
+
+def _is_htmx(request: HttpRequest) -> bool:
+    return bool(cast(_HtmxRequest, request).htmx)
+
+
 def _render_pos_surface(request, template_name, context):
     """Render a full POS page or its HTMX surface partial."""
-    if request.htmx:
+    if _is_htmx(request):
         template_name = f"{template_name}#surface"
     return render(request, template_name, context)
 
 
 def _home_or_redirect(request):
     """Return the POS home surface for HTMX or preserve the normal redirect."""
-    if request.htmx:
+    if _is_htmx(request):
         response = pos_home(request)
         response["HX-Push-Url"] = reverse("pos:pos_home")
         return response
@@ -95,7 +124,7 @@ def _get_catalog_filters(request):
 
 def _is_catalog_filter_request(request):
     """Return whether an HTMX request targets the replaceable catalog workspace."""
-    if not request.htmx:
+    if not _is_htmx(request):
         return False
     target = request.headers.get("HX-Target")
     if target in CATALOG_FILTER_TARGETS:
@@ -105,7 +134,7 @@ def _is_catalog_filter_request(request):
 
 def _is_order_details_drawer_request(request):
     """Return whether an HTMX request targets the history detail drawer."""
-    return request.htmx and request.headers.get("HX-Target") in ORDER_DETAILS_DRAWER_TARGETS
+    return _is_htmx(request) and request.headers.get("HX-Target") in ORDER_DETAILS_DRAWER_TARGETS
 
 
 def _get_kitchen_status(order):
@@ -168,6 +197,7 @@ def _render_cart(request, order, **extra_context):
 
 def _build_order_context(request, order):
     """Build the context dict for the order screen."""
+    user = _authenticated_user(request)
     catalog_query, catalog_group, catalog_specials = _get_catalog_filters(request)
     settings = Restaurant.load()
     active_menu = (
@@ -265,7 +295,7 @@ def _build_order_context(request, order):
         "bar_ticket_pending": bool(bar_ticket and bar_ticket.print_status == KOT_PRINT_PENDING),
         "kitchen_ticket_printed": bool(kitchen_ticket and kitchen_ticket.print_status == KOT_PRINTED),
         "bar_ticket_printed": bool(bar_ticket and bar_ticket.print_status == KOT_PRINTED),
-        "can_reprint": request.user.is_manager or request.user.is_admin or request.user.is_superuser,
+        "can_reprint": user.is_manager or user.is_admin or user.is_superuser,
         "receipt_printable": has_items,
         "setup_error": setup_error,
         "pos_nav": "order",
@@ -323,10 +353,11 @@ def pos_home(request: HttpRequest) -> HttpResponse:
         draft_orders_queryset = draft_orders_queryset.filter(search_query).distinct()
     draft_orders = list(draft_orders_queryset)
     for order in draft_orders:
+        draft_order = cast(_DraftOrder, order)
         items = list(order.items.all())
-        order.item_count = len(items)
-        order.item_preview = items[:3]
-        order.minutes_ago = max(int((timezone.now() - order.updated_at).total_seconds() // 60), 0)
+        draft_order.item_count = len(items)
+        draft_order.item_preview = items[:3]
+        draft_order.minutes_ago = max(int((timezone.now() - order.updated_at).total_seconds() // 60), 0)
     draft_count = Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift).count()
     max_open_drafts = settings.max_open_drafts
     return _render_pos_surface(
@@ -351,6 +382,7 @@ def pos_home(request: HttpRequest) -> HttpResponse:
 @require_POST
 def pos_order_new(request: HttpRequest) -> HttpResponse:
     """Create a new draft order and open the order screen."""
+    user = _authenticated_user(request)
     if Restaurant.load() is None:
         return _home_or_redirect(request)
     order_type = request.POST.get("order_type", DINE_IN)
@@ -383,14 +415,14 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
             opening_entry=open_shift,
         )
         order.assign_order_number()
-        order.audit("CREATED", actor=request.user, metadata={"order_type": order_type})
+        order.audit("CREATED", actor=user, metadata={"order_type": order_type})
     request.session[SESSION_ORDER_KEY] = order.pk
     cards = request.session.get(SESSION_CARD_KEY, {})
     if not isinstance(cards, dict):
         cards = {}
     cards[str(order.pk)] = 1
     request.session[SESSION_CARD_KEY] = cards
-    if request.htmx:
+    if _is_htmx(request):
         response = _render_pos_surface(request, "pos/index.html", _build_order_context(request, order))
         response["HX-Push-Url"] = reverse("pos:pos_order_screen", kwargs={"pk": order.pk})
         return response
@@ -401,6 +433,7 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
 @require_POST
 def pos_open_shift(request: HttpRequest) -> HttpResponse:
     """Create a POSOpeningEntry with opening payments from the POS screen."""
+    user = _authenticated_user(request)
     if Restaurant.load() is None:
         return _home_or_redirect(request)
     form = OpeningFloatForm(request.POST)
@@ -417,9 +450,7 @@ def pos_open_shift(request: HttpRequest) -> HttpResponse:
         if not settings or _get_open_shift(lock=True):
             messages.error(request, "A shift is already open.")
             return _home_or_redirect(request)
-        entry = POSOpeningEntry.objects.create(
-            cashier=request.user, remarks=str(request.POST.get("remarks", "")).strip()
-        )
+        entry = POSOpeningEntry.objects.create(cashier=user, remarks=str(request.POST.get("remarks", "")).strip())
         OpeningPayment.objects.bulk_create(
             [
                 OpeningPayment(opening_entry=entry, mode_of_payment=mode, opening_amount=amount)
@@ -429,7 +460,7 @@ def pos_open_shift(request: HttpRequest) -> HttpResponse:
         entry.full_clean()
         entry.submit()
     messages.success(request, "Shift opened successfully.")
-    if request.htmx:
+    if _is_htmx(request):
         return _home_or_redirect(request)
     return redirect("pos:pos_home")
 
@@ -512,6 +543,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     GET never creates database rows — it only renders expected amounts for counting.
     POST creates the draft closing entry (if needed) and submits the reconciliation.
     """
+    user = _authenticated_user(request)
     open_shift = _get_open_shift()
     if open_shift is None:
         messages.warning(request, "There is no open shift to close.")
@@ -525,7 +557,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
             {
                 "draft_count": draft_count,
                 "shift": open_shift,
-                "show_order_tabs": request.htmx,
+                "show_order_tabs": _is_htmx(request),
                 "pos_nav": "close",
             },
         )
@@ -545,7 +577,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                     "before closing the shift.",
                 )
                 return _home_or_redirect(request)
-            closing = _ensure_closing_draft(open_shift, request.user)
+            closing = _ensure_closing_draft(open_shift, user)
             closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
             expected_by_mode = {row["mode"].pk: row for row in expected_rows}
             form_data = []
@@ -578,7 +610,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                     messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
                 else:
                     messages.success(request, "Shift closed successfully.")
-                    if request.htmx:
+                    if _is_htmx(request):
                         return _home_or_redirect(request)
                     return redirect("pos:pos_home")
             # Invalid forms — fall through to re-render with bound forms.
@@ -593,7 +625,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                 "total_expected": sum((payment.expected_amount for payment in display_payments), Decimal("0")),
                 "draft_count": 0,
                 "shift": open_shift,
-                "show_order_tabs": request.htmx,
+                "show_order_tabs": _is_htmx(request),
                 "pos_nav": "close",
             },
         )
@@ -650,7 +682,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
             "total_expected": sum((payment.expected_amount for payment in display_payments), Decimal("0")),
             "draft_count": 0,
             "shift": open_shift,
-            "show_order_tabs": request.htmx,
+            "show_order_tabs": _is_htmx(request),
             "pos_nav": "close",
         },
     )
@@ -693,11 +725,12 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
         menu=active_menu,
         disabled=False,
     )
-    add_ons = []
+    add_ons: list[_AddOnWithMenuItem] = []
     for add_on in menu_item.item.add_ons.all():
         if add_on.add_on_item.disabled or not add_on.add_on_item.is_sales_item:
             continue
-        add_on.menu_item = next(
+        resolved_add_on = cast(_AddOnWithMenuItem, add_on)
+        resolved_add_on.menu_item = next(
             (
                 candidate
                 for candidate in add_on.add_on_item.menu_items.all()
@@ -705,8 +738,8 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
             ),
             None,
         )
-        if add_on.menu_item is not None:
-            add_ons.append(add_on)
+        if resolved_add_on.menu_item is not None:
+            add_ons.append(resolved_add_on)
     return render(
         request,
         "pos/partials/catalog/add_on_dialog.html",
@@ -1215,6 +1248,7 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
     Claim the printed state in the database first, then print after commit so a
     successful physical print cannot leave the order marked unprinted.
     """
+    user = _authenticated_user(request)
     error = None
     feedback = {}
     shift = _get_open_shift()
@@ -1237,7 +1271,7 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
         if not order.invoice_printed:
             order.invoice_printed = True
             order.invoice_printed_at = timezone.now()
-            order.invoice_printed_by = request.user
+            order.invoice_printed_by = user
             order.save(
                 update_fields=[
                     "invoice_printed",
@@ -1246,7 +1280,7 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
                     "updated_at",
                 ]
             )
-            order.audit("RECEIPT_PRINTED", actor=request.user)
+            order.audit("RECEIPT_PRINTED", actor=user)
 
     # Print outside the transaction: the printed state was claimed in the
     # DB first, so a failed physical print still leaves the order marked
@@ -1266,9 +1300,10 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, action: str) -> HttpResponse:
     """Retry or reprint one kitchen/bar ticket, including cancellation tickets."""
+    user = _authenticated_user(request)
     if ticket_type not in {TICKET_KITCHEN, TICKET_BAR} or action not in {"retry", "reprint"}:
         return HttpResponse(status=404)
-    if action == "reprint" and not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    if action == "reprint" and not (user.is_manager or user.is_admin or user.is_superuser):
         return HttpResponse(status=403)
     shift = _get_open_shift()
     if shift is None:
@@ -1332,6 +1367,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
     """
     from datetime import date as date_type
 
+    user = _authenticated_user(request)
     payment_filter = request.GET.get("payment", "").strip()
     status_filter = request.GET.get("status", "sales").strip()
     order_type_filter = request.GET.get("order_type", "").strip()
@@ -1351,7 +1387,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
             parsed_date = None
 
     restaurant = Restaurant.load()
-    is_manager = request.user.is_manager or request.user.is_admin or request.user.is_superuser
+    is_manager = user.is_manager or user.is_admin or user.is_superuser
     allow_full_history = bool(restaurant and restaurant.pos_allow_full_history) or is_manager
     manager_only_filters = {"all", "returns", "cancelled", "discarded"}
     if status_filter in manager_only_filters and not allow_full_history:
@@ -1443,7 +1479,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "draft_count": (
             Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count() if open_shift else 0
         ),
-        "show_order_tabs": request.htmx,
+        "show_order_tabs": _is_htmx(request),
         "pos_nav": "history",
         "kitchen_status": _get_kitchen_status(order),
         # GET opens the drawer with a slide-in; POST re-renders (print) stay put.
@@ -1464,7 +1500,7 @@ def pos_order_history_print(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, "Receipt reprinted successfully.")
     else:
         messages.error(request, "Receipt could not be printed.")
-    if request.htmx:
+    if _is_htmx(request):
         response = pos_order_history_detail(request, pk=order.pk)
         if not _is_order_details_drawer_request(request):
             response["HX-Push-Url"] = reverse("pos:pos_order_history_detail", kwargs={"pk": order.pk})

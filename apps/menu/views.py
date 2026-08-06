@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
@@ -152,7 +154,7 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     add_ons = ItemAddOn.objects.select_related("parent_item", "add_on_item").all()
     if parent_id:
-        add_ons = add_ons.filter(parent_item_id=parent_id)
+        add_ons = add_ons.filter(parent_item_id=cast(int, parent_id))
     parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
@@ -208,7 +210,7 @@ def variant_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     variants = ItemVariant.objects.select_related("parent_item", "variant_item").all()
     if parent_id:
-        variants = variants.filter(parent_item_id=parent_id)
+        variants = variants.filter(parent_item_id=cast(int, parent_id))
     parent_items = Item.objects.filter(pos_variants__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,

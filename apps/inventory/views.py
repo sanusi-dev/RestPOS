@@ -1,4 +1,5 @@
 import urllib.parse
+from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -224,7 +225,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
 
     items = Item.objects.select_related("item_group", "stock_uom", "variant_of")
     if item_group_id:
-        items = items.filter(item_group_id=item_group_id)
+        items = items.filter(item_group_id=cast(int, item_group_id))
     if department:
         items = items.filter(department=department)
     if sellable == "1":
@@ -408,7 +409,7 @@ def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = StockEntryDetailFormSet(post_data, prefix="items")
     return render(
@@ -438,10 +439,10 @@ def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
@@ -567,7 +568,7 @@ def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = StockReconciliationItemFormSet(post_data, prefix="items")
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
@@ -597,10 +598,10 @@ def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
@@ -718,7 +719,7 @@ def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = PurchaseReceiptItemFormSet(post_data, prefix="items")
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
@@ -748,10 +749,10 @@ def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpRespon
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)

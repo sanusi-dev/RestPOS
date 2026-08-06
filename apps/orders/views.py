@@ -2,7 +2,7 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import models as django_models
 from django.db.models import Count, Prefetch, Q, Sum
@@ -10,6 +10,8 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+
+from apps.users.models import CustomUser
 
 from . import printing
 from .forms import POSOrderCancelForm
@@ -25,6 +27,13 @@ from .models import (
     TICKET_TYPE_CHOICES,
     Order,
 )
+
+
+def _authenticated_user(request: HttpRequest) -> CustomUser:
+    user = request.user
+    if not isinstance(user, CustomUser):
+        raise PermissionDenied
+    return user
 
 
 @login_required
@@ -133,7 +142,8 @@ def order_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
         messages.error(request, "Only managers can cancel orders.")
         return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
@@ -144,7 +154,7 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         cancellation_kots = order.cancel(
             form.cleaned_data["cancel_reason"],
-            cancelled_by=request.user,
+            cancelled_by=user,
             reason_note=form.cleaned_data["cancel_reason_note"],
         )
     except ValidationError as e:
@@ -217,7 +227,8 @@ def kot_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def order_return(request: HttpRequest, pk: int) -> HttpResponse:
     """Create a return draft from a submitted order. Manager only."""
-    if not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
         messages.error(request, "Only managers can process returns.")
         return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)

@@ -3,13 +3,14 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.orders.models import DRAFT, Order
+from apps.users.models import CustomUser
 
 from .forms import (
     ClosingPaymentForm,
@@ -18,6 +19,14 @@ from .forms import (
 from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 logger = logging.getLogger(__name__)
+
+
+def _authenticated_user(request: HttpRequest) -> CustomUser:
+    user = request.user
+    if not isinstance(user, CustomUser):
+        raise PermissionDenied
+    return user
+
 
 # ---------------------------------------------------------------------------
 # Dashboard
@@ -62,9 +71,10 @@ def opening_entry_create(request: HttpRequest) -> HttpResponse:
     # POST with no form fields (the no-modes edge case, or a client that
     # omits all inputs) would be treated as a GET and `_save_opening_entry`
     # would never run.
+    user = _authenticated_user(request)
     form = OpeningFloatForm(request.POST if request.method == "POST" else None)
     if request.method == "POST" and form.is_valid():
-        entry = _save_opening_entry(form, request.user, instance=None)
+        entry = _save_opening_entry(form, user, instance=None)
         if entry is not None:
             messages.success(request, f"Opening entry #{entry.pk} created.")
             return redirect("staff:opening_entry_detail", pk=entry.pk)
@@ -93,15 +103,19 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     opening_payments = list(entry.opening_payments.select_related("mode_of_payment"))
     closing_payments = None
     if entry.closing_entry_id:
-        closing_payments = entry.closing_entry.closing_payments.select_related("mode_of_payment")
+        closing_entry = entry.closing_entry
+        if closing_entry is not None:
+            closing_payments = closing_entry.closing_payments.select_related("mode_of_payment")
 
+    user = _authenticated_user(request)
+    form: OpeningFloatForm | None
     if request.method == "POST":
         if entry.status != POSOpeningEntry.DRAFT:
             messages.error(request, "Only draft opening entries can be edited.")
             return redirect("staff:opening_entry_detail", pk=entry.pk)
         form = OpeningFloatForm(request.POST)
         if form.is_valid():
-            updated = _save_opening_entry(form, request.user, instance=entry)
+            updated = _save_opening_entry(form, user, instance=entry)
             if updated is not None:
                 messages.success(request, f"Opening entry #{entry.pk} updated.")
                 return redirect("staff:opening_entry_detail", pk=entry.pk)
@@ -265,6 +279,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
     Shift" clicks so a double-click on the dashboard button cannot race
     into two drafts.
     """
+    user = _authenticated_user(request)
     # Find the single Open shift first (no transaction needed for a read).
     open_entry = (
         POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
@@ -310,7 +325,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
 
         closing = POSClosingEntry.objects.create(
             opening_entry=open_entry,
-            cashier=request.user,
+            cashier=user,
         )
         rows = [
             ClosingPayment(
