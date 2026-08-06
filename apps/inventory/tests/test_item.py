@@ -9,16 +9,14 @@ from apps.inventory.models import (
     ItemGroup,
     Warehouse,
 )
-from apps.settings.models import Branch
 
 
 class ItemTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.warehouse = Warehouse.objects.create(name="Main Store")
         cls.item = Item.objects.create(
             item_name="Jollof Rice",
             item_group=cls.group,
@@ -48,6 +46,7 @@ class ItemModelTest(ItemTestBase):
         self.assertFalse(self.item.disabled)
         self.assertFalse(self.item.has_variants)
         self.assertEqual(self.item.safety_stock, Decimal("0"))
+        self.assertEqual(self.item.image.name, "items/default-item.png")
 
     def test_item_code_auto_generated(self):
         self.assertTrue(self.item.item_code.startswith("ITEM-"))

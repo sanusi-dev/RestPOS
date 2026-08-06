@@ -1,0 +1,60 @@
+{% load humanize %}
+{% comment %}Ordinary items post directly to the cart; items with add-ons first load the customization dialog.{% endcomment %}
+<div id="catalog-grid" {% if catalog_oob %}hx-swap-oob="outerHTML"{% endif %}
+     class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+     >
+  {% for mi in menu_items %}
+  <button type="button" aria-label="{% if mi.stock_unavailable %}{{ mi.item.item_name }}: {{ mi.stock_message }}{% else %}Add {{ mi.item.item_name }}{% endif %}"
+        {% if mi.stock_unavailable or order_sent or order.invoice_printed %}disabled aria-disabled="true"{% endif %}
+        {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and not mi.item.add_ons.all %}
+        hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
+        hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
+        hx-include="#catalog-search, #catalog-filter-state"
+        hx-target="#cart-panel"
+       hx-swap="outerHTML"
+       {% endif %}
+       {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and mi.item.add_ons.all %}
+       hx-get="{% url 'pos:pos_order_add_on_dialog' order.pk mi.item.pk %}"
+       hx-target="#add-on-dialog-container"
+       hx-swap="innerHTML"
+       {% endif %}
+         class="group flex min-h-[14.5rem] flex-col overflow-hidden rounded-xl bg-white text-left shadow-sm ring-1 ring-slate-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-600 {% if mi.stock_unavailable or order_sent or order.invoice_printed %}cursor-not-allowed grayscale opacity-55{% else %}cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] active:shadow-md{% endif %}">
+      <div class="flex aspect-[794/727] w-full shrink-0 items-center justify-center overflow-hidden bg-slate-200">
+       {% if mi.item.image %}
+       <img src="{{ mi.item.image.url }}" alt="{{ mi.item_name }}" class="h-full w-full object-contain saturate-75" loading="lazy">
+       {% else %}
+       <div class="flex h-full w-full items-center justify-center bg-slate-200 px-3 text-center">
+         <span class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">No image</span>
+       </div>
+       {% endif %}
+     </div>
+      <div class="flex min-w-0 flex-1 flex-col p-4">
+       <div class="flex items-start justify-between gap-2">
+         <p class="line-clamp-2 text-sm font-bold leading-5 text-slate-900">{{ mi.item_name }}</p>
+         {% if mi.special_dish %}<span class="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">Special</span>{% endif %}
+       </div>
+       <p class="mt-1 truncate text-xs font-medium text-slate-400">{{ mi.item.item_group.name }}</p>
+       {% if mi.item.add_on_for.all %}<p class="mt-2 text-[11px] font-semibold text-teal-700">Add-ons</p>{% endif %}
+       {% if mi.stock_unavailable %}
+       <p class="mt-1 text-[11px] font-bold text-red-700">{{ mi.stock_message }}</p>
+       {% endif %}
+      <div class="mt-auto flex items-end justify-between gap-2 pt-3">
+        <p class="font-mono text-sm font-bold tabular-nums text-slate-900">₦{{ mi.rate|intcomma }}</p>
+        {% if mi.stock_unavailable %}
+        <span class="text-xs font-bold text-red-700">Unavailable</span>
+         {% endif %}
+      </div>
+    </div>
+  </button>
+  {% empty %}
+  <div class="col-span-full rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+    {% if catalog_has_filters %}
+    <p class="font-semibold text-slate-800">No matching items</p>
+    <p class="mt-1 text-sm text-slate-500">Clear filters or choose another category.</p>
+    {% else %}
+    <p class="font-semibold text-slate-800">Menu unavailable</p>
+    <p class="mt-1 text-sm text-slate-500">No menu items are available right now.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>

@@ -14,6 +14,7 @@ def home(request):
 
 @login_required
 def dashboard(request):
+    """Backoffice landing page with shortcuts and Masters & Setup cards."""
     return render(request, "backoffice/dashboard.html")
 
 

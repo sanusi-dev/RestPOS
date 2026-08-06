@@ -28,10 +28,49 @@
     Inventory
   </a>
 </li>
+<li class="ml-8">
+  <a href="{% url 'inventory:item_group_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'item_group' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Item groups</span>
+    <span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">{{ item_group_count|default:"0" }}</span>
+  </a>
+</li>
 <li>
   <a href="{% url 'menu:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/menu' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
     Menu
+  </a>
+</li>
+<li>
+  <a href="{% url 'orders:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/orders' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+    Orders
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'orders:order_list' %}" class="group flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' %}text-orange-600 bg-orange-50/60{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}">
+    <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+    Order register
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'orders:kot_list' %}" class="group flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'kot_list' or request.resolver_match.url_name == 'kot_detail' %}text-orange-600 bg-orange-50/60{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}">
+    <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+    Kitchen &amp; Bar tickets
+  </a>
+</li>
+<li class="px-4 py-3 mt-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
+  <span>POS</span>
+</li>
+<li>
+  <a href="{% url 'payments:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/payments' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+    Payments
+  </a>
+</li>
+<li>
+  <a href="{% url 'staff:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/staff' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    Shifts
   </a>
 </li>
 {% endif %}
@@ -56,7 +95,7 @@
 
   {% block notifications %}
   {% endblock %}
-  
+
   <div id="htmx-error" class="max-w-7xl mx-auto rounded-xl p-4 mt-6 mx-4 sm:mx-8 bg-red-50 text-red-800 border border-red-200 shadow-sm flex justify-between hidden" role="alert">
     <span class="flex items-center gap-2 font-medium">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -69,7 +108,7 @@
 
   <section class="section py-8 flex-grow" hx-on::response-error="document.getElementById('htmx-error').classList.remove('hidden')">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
-      
+
       <div class="w-64 hidden lg:flex lg:flex-col lg:sticky lg:top-28 lg:self-start shrink-0">
         <div class="bg-white border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] p-4">
             <ul class="flex flex-col gap-1">
@@ -82,7 +121,7 @@
         {% block app %}
         {% endblock %}
       </div>
-      
+
     </div>
   </section>
 {% endblock %}

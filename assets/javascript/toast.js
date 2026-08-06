@@ -22,6 +22,9 @@ function showMessage(message, level) {
 }
 
 function handleMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return;
+  }
   messages.forEach((msg) => showMessage(msg.message, msg.level));
 }
 
@@ -31,11 +34,12 @@ if (messagesEl) {
   try {
     handleMessages(JSON.parse(messagesEl.textContent));
   } catch (e) {
-    // ignore parse errors
+    // A malformed server message must not prevent the rest of the page JS
+    // from initializing.
   }
 }
 
 // Listen for HTMX HX-Trigger events containing serialized messages.
 document.body.addEventListener('showMessages', (e) => {
-  handleMessages(e.detail);
+  handleMessages(Array.isArray(e.detail) ? e.detail : e.detail?.value);
 });

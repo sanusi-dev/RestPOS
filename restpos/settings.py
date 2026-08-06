@@ -1,12 +1,4 @@
-"""
-Django settings for RestPOS project.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/stable/topics/settings/
-
-For the full list of settings and their values, see
-https://docs.djangoproject.com/en/stable/ref/settings/
-"""
+"""Django settings for RestPOS."""
 
 import os
 import sys
@@ -44,6 +36,7 @@ DJANGO_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "django.contrib.humanize",
     "django.contrib.postgres",
     "django.contrib.staticfiles",
     "django.contrib.sites",
@@ -57,6 +50,7 @@ THIRD_PARTY_APPS = [
     "django_htmx",
     "django_vite",
     "django_celery_beat",
+    "django_hugeicons_stroke",
 ]
 
 # Put your project-specific apps here
@@ -66,6 +60,9 @@ PROJECT_APPS = [
     "apps.inventory.apps.InventoryConfig",
     "apps.menu.apps.MenuConfig",
     "apps.web",
+    "apps.payments.apps.PaymentsConfig",
+    "apps.staff.apps.StaffConfig",
+    "apps.orders.apps.OrdersConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PROJECT_APPS
@@ -90,12 +87,10 @@ if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append("debug_toolbar")
     INTERNAL_IPS = ["127.0.0.1"]
 
-# add browser reload only in debug mode
 if DEBUG:
     INSTALLED_APPS.append("django_browser_reload")
     MIDDLEWARE.append("django_browser_reload.middleware.BrowserReloadMiddleware")
 
-# add watchfiles only in debug mode
 if DEBUG:
     INSTALLED_APPS.append("django_watchfiles")
 
@@ -117,6 +112,9 @@ TEMPLATES = [
             BASE_DIR / "templates",
         ],
         "OPTIONS": {
+            "builtins": [
+                "django_hugeicons_stroke.templatetags.hugeicons_stroke",
+            ],
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
@@ -124,6 +122,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "apps.web.context_processors.project_meta",
                 "apps.web.context_processors.csrf_settings",
+                "apps.web.context_processors.inventory_navigation",
             ],
             "loaders": _DEFAULT_LOADERS if DEBUG else _CACHED_LOADERS,
         },
@@ -273,7 +272,6 @@ FORMS_URLFIELD_ASSUME_HTTPS = True
 
 # Email setup
 
-# default email used by your server
 SERVER_EMAIL = env("SERVER_EMAIL", default="noreply@localhost:8000")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="sanusio293@gmail.com")
 
@@ -327,11 +325,10 @@ PROJECT_METADATA = {
     "NAME": gettext_lazy("RestPOS"),
     "URL": "http://localhost:8000",
     "DESCRIPTION": gettext_lazy(
-        "RestPOS is a light weight and easy to use web-based application designed "
-        "for streamlined order management. It serves as an efficient tool for both "
-        "cashiers and captains, facilitating order management and processing with "
-        "ease and efficiency."
-    ),  # noqa: E501
+        "RestPOS is a lightweight POS for restaurant order management. Cashiers "
+        "enter all orders and payments; waiters use physical dockets and do not "
+        "access the system."
+    ),
     "IMAGE": "https://upload.wikimedia.org/wikipedia/commons/2/20/PEO-pegasus_black.svg",
     "KEYWORDS": "SaaS, django",
     "CONTACT_EMAIL": "sanusio293@gmail.com",

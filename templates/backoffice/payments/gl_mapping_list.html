@@ -1,0 +1,62 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Payments" root_url="payments:dashboard" current_label="GL Mappings" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">GL Account Mappings</h1>
+      <p class="text-sm text-gray-500">Map each payment mode to its General Ledger account</p>
+    </div>
+    <a href="{% url 'payments:gl_mapping_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      New Mapping
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Company</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Default Account</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for mapping in mappings %}
+            <tr class="hover:bg-gray-50/50 transition-colors">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ mapping.mode_of_payment.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ mapping.company }}</td>
+              <td class="px-6 py-4 text-sm text-gray-900">{{ mapping.default_account }}</td>
+              <td class="px-6 py-4 text-right">
+                <div class="inline-flex items-center gap-3">
+                  <a href="{% url 'payments:gl_mapping_update' mapping.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
+                  <form method="post" action="{% url 'payments:gl_mapping_delete' mapping.pk %}" class="inline" data-confirm-title="Remove GL mapping?" data-confirm-body="This will remove the mapping for {{ mapping.mode_of_payment.name }}. Any historical orders are unaffected." data-confirm-button="Remove">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-6 py-16 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                  </div>
+                  <span class="font-medium mt-2 text-gray-600">No GL mappings yet.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,31 +1,53 @@
-{% extends "web/base.html" %}
-{% block body %}
-<div class="min-h-[80vh] flex flex-col items-center justify-center">
-  <div class="text-center max-w-lg px-4">
-    <h1 class="text-3xl font-bold text-gray-900 tracking-tight">
-      POS Screen
-    </h1>
-    <p class="mt-4 text-gray-500">
-      The point of sale interface will be available here.
-    </p>
+{% extends "pos/base.html" %}
+{% block pos_content %}
+{% partialdef surface inline %}
 
-      <!-- Sign out button -->
-      <div class="mt-8">
-        <a href="{% url 'account_logout' %}" data-logout-link
-           class="group flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-600 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 hover:shadow-md active:scale-[0.98]">
-          <svg class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
-          Sign Out
-        </a>
-      </div>
-    </div>
-    {% if user.has_backoffice_access %}
-    <div class="mt-8">
-      <a href="{% url 'web:dashboard' %}"
-         class="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
-        Go to Backoffice
-      </a>
-    </div>
-    {% endif %}
-  </div>
+{% if error %}
+{% include "pos/partials/gates/error.html" %}
+{% elif no_shift %}
+{% include "pos/partials/gates/no_shift.html" %}
+{% elif order %}
+{% if setup_error %}
+<div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900" role="alert">
+  {{ setup_error }}
 </div>
+{% endif %}
+<div class="h-full flex min-w-0">
+
+  {% partialdef catalog_workspace inline %}
+  <div id="catalog-workspace" class="flex min-w-0 flex-1">
+    <div id="catalog-filter-state" class="hidden" aria-hidden="true">
+      {% if catalog_group %}<input type="hidden" name="group" value="{{ catalog_group }}" form="catalog-search-field">{% endif %}
+      {% if catalog_specials %}<input type="hidden" name="specials" value="1" form="catalog-search-field">{% endif %}
+    </div>
+
+    {% comment %}========== CATEGORY SIDEBAR (LEFT) =========={% endcomment %}
+    {% include "pos/partials/catalog/sidebar.html" %}
+
+    {% comment %}========== CATALOG (CENTER) =========={% endcomment %}
+    {% include "pos/partials/catalog/panel.html" %}
+  </div>
+  {% endpartialdef %}
+
+  {% comment %}========== CART PANEL (RIGHT) =========={% endcomment %}
+  {% partialdef cart inline %}
+  {% include "pos/partials/cart/panel.html" %}
+  {% endpartialdef %}
+
+  {% comment %}========== PAYMENT DIALOG (HTMX-loaded) =========={% endcomment %}
+  {% partialdef payment_dialog %}
+  {% include "pos/partials/payment/dialog.html" %}
+  {% endpartialdef %}
+
+  <div id="payment-dialog-container"></div>
+  <div id="add-on-dialog-container"></div>
+</div>
+{% endif %}
+
+{% if request.htmx %}
+  {% comment %}Navigation lives outside #pos-main, so HTMX responses refresh it with out-of-band swaps.{% endcomment %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
+  {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
+{% endif %}
+{% endpartialdef %}
 {% endblock %}

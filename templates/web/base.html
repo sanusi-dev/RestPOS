@@ -39,12 +39,13 @@
     {% vite_hmr_client %}
     <script>__cssFramework = 'tailwind';</script>
     <style>
-      /* Base font fallback if not applied via Tailwind config */
+      /* Keep a safe fallback when the generated font utility is unavailable. */
       body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     </style>
     {% block page_head %}
     {% endblock %}
 </head>
+<!-- hx-headers covers HTMX requests; normal form posts still include csrf_token explicitly. -->
 <body class="{% block body_class %}bg-[#fafafa] text-gray-800 relative min-h-screen flex flex-col{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
 <!-- Subtle Global Background Decoration -->
@@ -78,7 +79,7 @@
       {% endif %}
     </div>
   </div>
-  
+
   <template x-teleport="body">
     <div x-show="mobileMenuOpen" x-cloak class="fixed inset-0 z-50 lg:hidden">
       <div x-show="mobileMenuOpen"

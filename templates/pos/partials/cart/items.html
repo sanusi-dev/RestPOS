@@ -1,0 +1,163 @@
+{% load humanize %}
+{% comment %}The server locks edits after a ticket or receipt is created. Customer grouping uses persisted customer_index; active_card only chooses where new items are added.{% endcomment %}
+{% if order.items.exists %}
+  {% if order.guest_count > 1 %}
+    {% for group in guest_groups %}
+    <section class="mx-3 mt-3 last:mb-3 overflow-hidden rounded-xl bg-white shadow-sm ring-1 {% if group.index == active_card %}ring-teal-500{% else %}ring-slate-200{% endif %}">
+      <button hx-post="{% url 'pos:pos_customer_card_activate' order.pk group.index %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="flex min-h-12 w-full items-center justify-between gap-3 border-b px-3 py-2.5 text-left transition-all duration-150 active:scale-[0.99]
+                     {% if group.index == active_card %}border-teal-200 bg-teal-50 text-teal-900{% else %}border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100{% endif %}">
+    <span class="flex items-center gap-2">
+      <span class="flex size-7 items-center justify-center rounded-lg {% if group.index == active_card %}bg-teal-700 text-white{% else %}bg-white text-slate-500 ring-1 ring-slate-200{% endif %}">
+        {% hgi_stroke name="user" size="15" color="currentColor" stroke_width="2" %}
+      </span>
+      <span>
+        <span class="block text-sm font-bold">Customer #{{ group.index }}</span>
+      </span>
+    </span>
+    <span class="text-sm font-bold tabular-nums {% if group.index == active_card %}text-teal-800{% else %}text-slate-600{% endif %}">
+      {% if group.subtotal > 0 %}₦{{ group.subtotal|intcomma }}{% else %}<span class="text-xs font-medium text-slate-400">No items</span>{% endif %}
+    </span>
+    </button>
+  {% for item in group.items %}
+  <div class="group border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0 hover:bg-slate-50/70">
+    <div class="flex items-center justify-between">
+      <div class="mr-3 min-w-0 flex-1">
+        <p class="break-words text-sm leading-5 text-slate-900">{{ item.item_name }}</p>
+        {% if item.comments %}
+        <p class="mt-0.5 truncate text-xs text-slate-400">{{ item.comments }}</p>
+        {% endif %}
+      </div>
+      <div class="flex shrink-0 items-center gap-3">
+        <div class="flex items-center justify-center">
+          {% if not order_sent and not order.invoice_printed %}
+          <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="decrement">
+            <button type="submit" aria-label="Decrease {{ item.item_name }} quantity"
+                    class="flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600 transition-all duration-150 hover:bg-slate-200 active:scale-90 active:bg-slate-300">
+              −
+            </button>
+          </form>
+          {% endif %}
+          <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
+          {% if not order_sent and not order.invoice_printed %}
+          <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="increment">
+            <button type="submit" aria-label="Increase {{ item.item_name }} quantity"
+                    class="flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600 transition-all duration-150 hover:bg-slate-200 active:scale-90 active:bg-slate-300">
+              +
+            </button>
+          </form>
+          {% endif %}
+        </div>
+       <div class="min-w-[5.5rem] text-right">
+          <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
+        </div>
+        {% if not order_sent and not order.invoice_printed %}
+        <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="inline-flex">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <button type="submit" aria-label="Remove {{ item.item_name }} from order"
+                  class="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 transition-all duration-150 hover:bg-red-50 hover:text-red-600 active:scale-90 active:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+            <span class="flex size-4 items-center justify-center">
+              {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
+            </span>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+{% else %}
+<section class="m-3 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
+  <div class="flex min-h-12 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2.5">
+    <span class="flex items-center gap-2 text-slate-700">
+      <span class="flex size-7 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200">
+        {% hgi_stroke name="user" size="15" color="currentColor" stroke_width="2" %}
+      </span>
+      <span class="text-sm font-bold">Customer #1</span>
+    </span>
+    <span class="text-sm font-bold tabular-nums text-slate-600">₦{{ order.grand_total|intcomma }}</span>
+  </div>
+  {% for item in order.items.all %}
+  <div class="group border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0 hover:bg-slate-50/70">
+    <div class="flex items-center justify-between">
+      <div class="mr-3 min-w-0 flex-1">
+        <p class="break-words text-sm leading-5 text-slate-900">{{ item.item_name }}</p>
+        {% if item.comments %}
+        <p class="mt-0.5 truncate text-xs text-slate-400">{{ item.comments }}</p>
+        {% endif %}
+      </div>
+      <div class="flex shrink-0 items-center gap-3">
+        <div class="flex items-center justify-center">
+          {% if not order_sent and not order.invoice_printed %}
+          <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="decrement">
+            <button type="submit" aria-label="Decrease {{ item.item_name }} quantity"
+                    class="flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600 transition-all duration-150 hover:bg-slate-200 active:scale-90 active:bg-slate-300">
+              −
+            </button>
+          </form>
+          {% endif %}
+          <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
+          {% if not order_sent and not order.invoice_printed %}
+          <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+                hx-target="#cart-panel" hx-swap="outerHTML"
+                class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="increment">
+            <button type="submit" aria-label="Increase {{ item.item_name }} quantity"
+                    class="flex min-h-9 min-w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600 transition-all duration-150 hover:bg-slate-200 active:scale-90 active:bg-slate-300">
+              +
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        <div class="min-w-[5.5rem] text-right">
+          <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
+        </div>
+        {% if not order_sent and not order.invoice_printed %}
+        <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
+              hx-target="#cart-panel" hx-swap="outerHTML"
+              class="inline-flex">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <button type="submit" aria-label="Remove {{ item.item_name }} from order"
+                  class="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 transition-all duration-150 hover:bg-red-50 hover:text-red-600 active:scale-90 active:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+            <span class="flex size-4 items-center justify-center">
+              {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
+            </span>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% else %}
+<div class="h-full flex items-center justify-center p-8 text-center">
+  <div>
+    <div class="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-white text-slate-300 ring-1 ring-slate-200">
+      {% hgi_stroke name="shopping-cart-01" size="24" color="currentColor" stroke_width="1.5" %}
+    </div>
+    <p class="text-sm font-medium text-slate-400">Click a menu item to add it</p>
+  </div>
+</div>
+{% endif %}

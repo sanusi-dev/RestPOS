@@ -1,8 +1,8 @@
-"""Seed Nigerian restaurant Items (raw + finished) and the Main Menu.
+"""Seed Nigerian restaurant Items and the Main Menu.
 
 Usage:
     make manage ARGS='seed_menu_catalog'
-    make manage ARGS='seed_menu_catalog --force'   # re-link menu items / variants
+    make manage ARGS='seed_menu_catalog --force'
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from django.db import transaction
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemVariant, Menu, MenuItem
-from apps.settings.models import Branch, Restaurant
+from apps.settings.models import Restaurant
 
 # (item_name, group, uom, department, last_purchase_rate_or_None)
 # Raw materials — inventory only, not sold on POS.
@@ -212,10 +212,6 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         force = options["force"]
-        branch = Branch.objects.order_by("pk").first()
-        if branch is None:
-            branch = Branch.objects.create(name="Main Branch")
-            self.stdout.write(self.style.WARNING("Created default branch: Main Branch"))
 
         self._ensure_groups_and_uoms()
 
@@ -223,10 +219,7 @@ class Command(BaseCommand):
         simple_items = self._seed_simple_items()
         variant_data = self._seed_variant_families()
 
-        menu, _ = Menu.objects.get_or_create(name="Main Menu", defaults={"branch": branch, "enabled": True})
-        if menu.branch_id != branch.pk:
-            menu.branch = branch
-            menu.save()
+        menu, _ = Menu.objects.get_or_create(name="Main Menu", defaults={"enabled": True})
 
         menu_count = self._seed_menu(menu, simple_items, variant_data, force=force)
         self._link_variants(variant_data, force=force)
@@ -314,7 +307,7 @@ class Command(BaseCommand):
         return result
 
     def _seed_variant_families(self) -> list[dict]:
-        """Create parent template + size variants. Templates are never on the menu."""
+        """Create parent template items with POS-level size variants."""
         families = []
         for fam in VARIANT_FAMILIES:
             group = self._get_group(fam["group"])
@@ -379,7 +372,6 @@ class Command(BaseCommand):
                 special = fam["special"] and i == 0
                 count += self._upsert_menu_item(menu, vitem, rate, special, force)
 
-        menu.sync_price_list()
         return MenuItem.objects.filter(menu=menu).count()
 
     def _upsert_menu_item(self, menu: Menu, item: Item, rate: Decimal, special: bool, force: bool) -> int:

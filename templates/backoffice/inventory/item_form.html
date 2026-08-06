@@ -29,8 +29,24 @@
         <h3 class="text-base font-bold text-gray-900">Item Details</h3>
       </div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 relative z-10">
-        {% for field in form %}
-          {% if field.name == "description" %}
+          {% for field in form %}
+          {% if field.name == "image" %}
+            <div class="sm:col-span-2 grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem] md:items-start">
+              <div class="flex flex-col gap-1.5">
+                <label for="{{ field.id_for_label }}" class="text-sm font-bold text-gray-700">
+                  {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
+                </label>
+                {{ field }}
+                {% if field.errors %}<p class="text-xs font-semibold text-red-500">{{ field.errors|join:", " }}</p>{% endif %}
+                {% if field.help_text %}<p class="text-xs text-gray-500">{{ field.help_text }}</p>{% endif %}
+              </div>
+              <div class="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                {% if form.instance.image %}
+                  <img src="{{ form.instance.image.url }}" alt="Current image for {{ form.instance.item_name|default:'new item' }}" class="aspect-square w-full object-cover">
+                {% endif %}
+              </div>
+            </div>
+          {% elif field.name == "description" %}
             <div class="sm:col-span-2">
               {% include "backoffice/components/form_field.html" with field=field %}
             </div>

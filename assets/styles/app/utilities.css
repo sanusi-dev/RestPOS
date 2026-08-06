@@ -3,7 +3,7 @@
   display: none !important;
 }
 
-/* ensure htmx links use pointers */
+/* HTMX GET links behave like interactive navigation targets. */
 a[hx-get] {
   cursor: pointer;
 }
@@ -69,3 +69,4 @@ img.socialicon {
     opacity: 0;
   }
 }
+

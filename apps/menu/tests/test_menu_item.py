@@ -6,13 +6,11 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import Menu, MenuItem
-from apps.settings.models import Branch
 
 
 class MenuItemModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.item_food = Item.objects.create(
@@ -33,7 +31,7 @@ class MenuItemModelTest(TestCase):
             is_sales_item=True,
             last_purchase_rate=Decimal("300"),
         )
-        cls.menu = Menu.objects.create(name="Lunch Menu", branch=cls.branch)
+        cls.menu = Menu.objects.create(name="Lunch Menu")
 
     def test_str_returns_item_name(self):
         mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))
@@ -88,19 +86,10 @@ class MenuItemModelTest(TestCase):
             MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("2000"))
 
     def test_same_item_different_menu(self):
-        menu2 = Menu.objects.create(name="Dinner Menu", branch=self.branch)
+        menu2 = Menu.objects.create(name="Dinner Menu")
         MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))
         mi2 = MenuItem.objects.create(menu=menu2, item=self.item_food, rate=Decimal("2000"))
         self.assertEqual(mi2.rate, Decimal("2000"))
-
-    def test_disabled_item_excluded_from_price_list(self):
-        mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"))
-        pl = self.menu.price_lists.first()
-        self.assertEqual(pl.prices.count(), 1)
-        mi.disabled = True
-        mi.save()
-        pl.refresh_from_db()
-        self.assertEqual(pl.prices.count(), 0)
 
     def test_special_dish_flag(self):
         mi = MenuItem.objects.create(menu=self.menu, item=self.item_food, rate=Decimal("1500"), special_dish=True)

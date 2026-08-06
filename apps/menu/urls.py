@@ -26,7 +26,4 @@ urlpatterns = [
     path("variants/create/", view=views.variant_create, name="variant_create"),
     path("variants/<int:pk>/edit/", view=views.variant_update, name="variant_update"),
     path("variants/<int:pk>/delete/", view=views.variant_delete, name="variant_delete"),
-    # PriceList
-    path("price-lists/", view=views.price_list_list, name="price_list_list"),
-    path("price-lists/<int:pk>/", view=views.price_list_detail, name="price_list_detail"),
 ]

@@ -1,0 +1,124 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:dashboard" current_label="Order Register" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8">
+    <div>
+      <p class="text-xs font-bold text-orange-500 uppercase tracking-[0.2em] mb-2">Order register</p>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Orders</h1>
+      <p class="text-sm text-gray-500 mt-1">Search the full order history and inspect its ticket and payment trail.</p>
+    </div>
+    <a href="{% url 'orders:kot_list' %}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all">
+      Kitchen &amp; Bar tickets <span aria-hidden="true">→</span>
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] items-end gap-3">
+      <div class="flex flex-col gap-1">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-search">Search</label>
+        <input id="order-search" type="search" name="search" value="{{ search }}" placeholder="Invoice, customer, order #"
+               class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+      </div>
+      <div class="flex flex-col gap-1 min-w-[9rem]">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-status">Status</label>
+        <select id="order-status" name="status" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+          <option value="">All statuses</option>
+          {% for value, label in status_choices %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="flex flex-col gap-1 min-w-[9rem]">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-type">Order type</label>
+        <select id="order-type" name="order_type" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+          <option value="">All types</option>
+          {% for value, label in order_type_choices %}<option value="{{ value }}" {% if order_type_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="h-[2.75rem] px-5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all">Apply filters</button>
+    </form>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+      <div>
+        <h2 class="text-base font-bold text-gray-900">Order history</h2>
+        <p class="text-xs text-gray-400 mt-1">Showing up to 50 matching orders.</p>
+      </div>
+      {% if search or status_filter or order_type_filter %}<a href="{% url 'orders:order_list' %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Clear filters</a>{% endif %}
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/60">
+          <tr>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Order</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Customer</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Type / guests</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Status</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Tickets</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Total</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Updated</th>
+            <th class="px-6 py-4"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for order in orders %}
+          <tr class="hover:bg-gray-50/60 transition-colors">
+            <td class="px-6 py-4">
+              <a href="{% url 'orders:order_detail' order.pk %}" class="text-sm font-bold text-gray-900 hover:text-orange-600">{{ order.invoice_number|default:"—" }}</a>
+              <p class="text-xs text-gray-400 mt-0.5">Order #{{ order.order_number|default:"—" }}</p>
+            </td>
+            <td class="px-6 py-4">
+              <p class="text-sm font-semibold text-gray-900">{{ order.customer_name }}</p>
+              <p class="text-xs text-gray-400 mt-0.5">{{ order.item_count }} line{{ order.item_count|pluralize }}</p>
+            </td>
+            <td class="px-6 py-4">
+              <p class="text-sm text-gray-700">{{ order.get_order_type_display }}</p>
+              <p class="text-xs text-gray-400 mt-0.5">{{ order.guest_count }} guest{{ order.guest_count|pluralize }}</p>
+            </td>
+            <td class="px-6 py-4">
+              {% if order.status == "DRAFT" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+              {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+                {% if order.is_paid %}<p class="text-[11px] text-emerald-600 mt-1 font-semibold">Paid</p>{% endif %}
+              {% elif order.status == "DISCARDED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 ring-1 ring-slate-200">Discarded</span>
+                {% if order.discarded_by %}<p class="text-[11px] text-slate-500 mt-1">By {{ order.discarded_by.get_display_name }}</p>{% endif %}
+              {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
+                {% if order.cancel_reason %}<p class="text-[11px] text-red-500 mt-1">{{ order.get_cancel_reason_display }}</p>{% endif %}
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">
+              <p class="text-sm font-semibold text-gray-700">{{ order.ticket_count }} ticket{{ order.ticket_count|pluralize }}</p>
+              {% if order.pending_ticket_count %}<p class="text-[11px] text-orange-600 mt-1 font-semibold">{{ order.pending_ticket_count }} pending print</p>{% elif order.ticket_count %}<p class="text-[11px] text-emerald-600 mt-1 font-semibold">Dispatched</p>{% else %}<p class="text-[11px] text-gray-400 mt-1">Not sent</p>{% endif %}
+            </td>
+            <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ order.grand_total|intcomma }}</td>
+            <td class="px-6 py-4 text-right text-xs text-gray-400">{{ order.updated_at|date:"M j, Y H:i" }}</td>
+            <td class="px-6 py-4 text-right"><a href="{% url 'orders:order_detail' order.pk %}" class="text-xs font-bold text-orange-600 hover:text-orange-700">View</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="px-6 py-16 text-center text-gray-500"><p class="text-sm font-semibold text-gray-600">No orders found.</p><p class="text-xs text-gray-400 mt-1">Try a different search or filter.</p></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-4 flex flex-wrap items-center justify-between gap-3 px-1" aria-label="Order register pagination">
+      <p class="text-xs font-semibold text-gray-500">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        · {{ page_obj.paginator.count }} order{{ page_obj.paginator.count|pluralize }}
+      </p>
+      <div class="flex items-center gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.previous_page_number }}"
+           class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.next_page_number }}"
+           class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Next</a>
+        {% endif %}
+      </div>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

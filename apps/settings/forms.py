@@ -1,8 +1,13 @@
 from django import forms
 
-from apps.users.models import CustomUser
+from apps.inventory.models import Warehouse
+from apps.menu.models import Menu
+from apps.utils.forms import active_choices
 
-from .models import Branch, Restaurant, Room, Table, UserRoomAssignment
+from .models import (
+    ProductionUnit,
+    Restaurant,
+)
 
 TAILWIND_INPUT_CLASS = (
     "w-full rounded-xl border border-gray-300 px-4 py-3 text-sm "
@@ -42,54 +47,48 @@ class SettingsModelForm(forms.ModelForm):
                 field.empty_label = f"Select {field.label.lower()}..."
 
 
-class BranchForm(SettingsModelForm):
-    class Meta:
-        model = Branch
-        fields = ["name"]
-
-
-class RoomForm(SettingsModelForm):
-    """Branch is implicit in Phase 1 — Room.save assigns Branch.get_default()."""
-
-    class Meta:
-        model = Room
-        fields = ["name"]
-
-
-class TableForm(SettingsModelForm):
-    """Branch is derived from room on save — never shown in the form."""
-
-    class Meta:
-        model = Table
-        fields = [
-            "room",
-            "name",
-            "no_of_seats",
-            "minimum_seating",
-            "table_shape",
-            "is_take_away",
-            "layout_x",
-            "layout_y",
-            "layout_width",
-            "layout_height",
-        ]
-
-
 class RestaurantForm(SettingsModelForm):
-    """Branch is implicit in Phase 1 — Restaurant.save assigns Branch.get_default()."""
+    """The single settings record: identity, menu, stock, and POS behaviour."""
 
     class Meta:
         model = Restaurant
-        fields = ["company", "invoice_series_prefix", "address", "default_room"]
-
-
-class UserRoomAssignmentForm(SettingsModelForm):
-    """Branch is derived from room on save — never shown in the form."""
-
-    class Meta:
-        model = UserRoomAssignment
-        fields = ["user", "room"]
+        fields = [
+            "company",
+            "invoice_series_prefix",
+            "address",
+            "active_menu",
+            "store_warehouse",
+            "default_warehouse",
+            "max_open_drafts",
+            "pos_allow_full_history",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["user"].queryset = CustomUser.objects.order_by("username")
+        self.fields["max_open_drafts"].required = False
+        self.fields["active_menu"].queryset = active_choices(Menu, self.instance.active_menu_id, enabled=True)
+        self.fields["default_warehouse"].queryset = active_choices(
+            Warehouse, self.instance.default_warehouse_id, disabled=False
+        )
+        self.fields["store_warehouse"].queryset = active_choices(
+            Warehouse, self.instance.store_warehouse_id, disabled=False
+        )
+
+
+class ProductionUnitForm(SettingsModelForm):
+    class Meta:
+        model = ProductionUnit
+        fields = [
+            "name",
+            "department",
+            "warehouse",
+            "block_takeaway_kot",
+            "printer_ip",
+            "printer_paper_width",
+            "printer_cut_mode",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
+        self.fields["warehouse"].help_text = "FOOD uses Kitchen; DRINKS uses the Bar / POS sales warehouse."

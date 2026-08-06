@@ -3,7 +3,7 @@ from django import forms
 from apps.inventory.models import Item
 from apps.utils.forms import StyledModelForm
 
-from .models import ItemAddOn, ItemVariant, Menu, MenuItem, PriceList
+from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 
 class MenuModelForm(StyledModelForm):
@@ -11,7 +11,7 @@ class MenuModelForm(StyledModelForm):
 
 
 class MenuForm(MenuModelForm):
-    """Branch is not user-facing in Phase 1 — Menu.save assigns Branch.get_default()."""
+    """Form for Menu."""
 
     class Meta:
         model = Menu
@@ -21,22 +21,22 @@ class MenuForm(MenuModelForm):
 class MenuItemForm(MenuModelForm):
     class Meta:
         model = MenuItem
-        fields = ["item", "item_name", "rate", "special_dish", "disabled"]
+        fields = ["menu", "item", "item_name", "rate", "special_dish", "disabled"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Model save() fills it from the item when blank.
+        self.fields["item_name"].required = False
         self.fields["item_name"].widget = forms.HiddenInput()
+        menu_qs = Menu.objects.filter(enabled=True).order_by("name")
+        if self.instance and self.instance.menu_id:
+            menu_qs = menu_qs | Menu.objects.filter(pk=self.instance.menu_id)
+        self.fields["menu"].queryset = menu_qs.distinct().order_by("name")
         # ERPNext-aligned: sellable, non-template, active only (keep current selection if any).
         qs = Item.objects.filter(is_sales_item=True, has_variants=False, disabled=False).order_by("item_name")
         if self.instance and self.instance.item_id:
             qs = qs | Item.objects.filter(pk=self.instance.item_id)
         self.fields["item"].queryset = qs.distinct().order_by("item_name")
-
-
-class PriceListForm(MenuModelForm):
-    class Meta:
-        model = PriceList
-        fields = ["name", "enabled", "selling", "buying"]
 
 
 class ItemAddOnForm(MenuModelForm):
@@ -46,11 +46,18 @@ class ItemAddOnForm(MenuModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Share one queryset instance across the two sibling FK dropdowns so the
-        # _result_cache is populated once and reused on the second <select> render.
-        items = Item.objects.order_by("item_name")
-        self.fields["parent_item"].queryset = items
-        self.fields["add_on_item"].queryset = items
+        # Parent: sellable leaf items that can carry add-ons on the POS.
+        # Add-on: same — only sellable, non-template, active items (must also be on a menu; model.clean).
+        sellable = Item.objects.filter(is_sales_item=True, has_variants=False, disabled=False).order_by("item_name")
+        parent_qs = sellable
+        add_on_qs = sellable
+        if self.instance and self.instance.pk:
+            if self.instance.parent_item_id:
+                parent_qs = (parent_qs | Item.objects.filter(pk=self.instance.parent_item_id)).distinct()
+            if self.instance.add_on_item_id:
+                add_on_qs = (add_on_qs | Item.objects.filter(pk=self.instance.add_on_item_id)).distinct()
+        self.fields["parent_item"].queryset = parent_qs.order_by("item_name")
+        self.fields["add_on_item"].queryset = add_on_qs.order_by("item_name")
 
 
 class ItemVariantForm(MenuModelForm):

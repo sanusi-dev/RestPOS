@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 
 from apps.utils.forms import StyledModelForm, active_choices
@@ -33,7 +34,7 @@ class ItemGroupForm(InventoryModelForm):
 
 
 class WarehouseForm(InventoryModelForm):
-    """Branch is implicit in Phase 1 — Warehouse.save assigns Branch.get_default()."""
+    """Form for Warehouse."""
 
     class Meta:
         model = Warehouse
@@ -81,40 +82,40 @@ class StockEntryForm(InventoryModelForm):
 class StockEntryDetailForm(InventoryModelForm):
     class Meta:
         model = StockEntryDetail
-        fields = [
-            "item",
-            "source_warehouse",
-            "target_warehouse",
-            "qty",
-            "basic_rate",
-        ]
+        fields = ["item", "qty", "basic_rate"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False)
-        self.fields["source_warehouse"].queryset = active_choices(
-            Warehouse, self.instance.source_warehouse_id, disabled=False
-        )
-        self.fields["target_warehouse"].queryset = active_choices(
-            Warehouse, self.instance.target_warehouse_id, disabled=False
-        )
+        filters = {"disabled": False, "is_stock_item": True, "has_variants": False}
+        purpose = self.data.get("purpose") if self.is_bound else None
+        stock_entry = getattr(self.instance, "stock_entry", None)
+        if not purpose and stock_entry:
+            purpose = stock_entry.purpose
+        if purpose == "MATERIAL_RECEIPT":
+            filters["is_purchase_item"] = True
+        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, **filters)
 
 
 class StockReconciliationForm(InventoryModelForm):
     class Meta:
         model = StockReconciliation
-        fields = ["purpose", "posting_date", "warehouse", "remarks"]
+        fields = ["purpose", "reason", "posting_date", "warehouse", "remarks"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
 
 
 class StockReconciliationItemForm(InventoryModelForm):
     class Meta:
         model = StockReconciliationItem
-        fields = ["item", "warehouse", "qty", "valuation_rate"]
+        fields = ["item", "qty", "valuation_rate"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False)
-        self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
+        self.fields["item"].queryset = active_choices(
+            Item, self.instance.item_id, disabled=False, is_stock_item=True, has_variants=False
+        )
 
 
 class PurchaseReceiptForm(InventoryModelForm):
@@ -124,9 +125,18 @@ class PurchaseReceiptForm(InventoryModelForm):
             "supplier_name",
             "supplier_delivery_note",
             "posting_date",
-            "warehouse",
             "remarks",
         ]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from apps.settings.models import Restaurant
+
+        restaurant = Restaurant.load()
+        if not restaurant or not restaurant.store_warehouse_id or restaurant.store_warehouse.disabled:
+            raise ValidationError("Configure an enabled central Store warehouse before creating a purchase receipt.")
+        self.instance.warehouse = restaurant.store_warehouse
+        return cleaned_data
 
 
 class PurchaseReceiptItemForm(InventoryModelForm):
@@ -137,7 +147,12 @@ class PurchaseReceiptItemForm(InventoryModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["item"].queryset = active_choices(
-            Item, self.instance.item_id, disabled=False, is_purchase_item=True, has_variants=False
+            Item,
+            self.instance.item_id,
+            disabled=False,
+            is_stock_item=True,
+            is_purchase_item=True,
+            has_variants=False,
         )
 
 

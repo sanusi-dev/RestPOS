@@ -1,0 +1,91 @@
+<div id="add-on-dialog" x-data="posModalDialog({ selected: [], removeOnClose: true })"
+     @close-add-on-dialog.window="close()"
+     @keydown.escape.window="close()"
+     @keydown.tab="trapFocus($event)"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="add-on-dialog-title">
+  <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="close()"></div>
+
+  <div class="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-slate-200/80"
+       x-ref="panel"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100">
+
+    <header class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+      <div class="min-w-0">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">Customize</p>
+        <h2 id="add-on-dialog-title" class="mt-1 break-words text-xl font-extrabold tracking-tight text-slate-900">
+          {{ menu_item.item_name }}
+        </h2>
+        <p class="mt-1 font-mono text-sm font-bold tabular-nums text-slate-500">
+          ₦{{ menu_item.rate|floatformat:0 }}
+          <span class="font-semibold text-slate-400">base</span>
+        </p>
+      </div>
+      <button type="button" @click="close()" x-ref="closeButton"
+              class="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              aria-label="Close add-on dialog">
+        {% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}
+      </button>
+    </header>
+
+    <form method="post" action="{% url 'pos:pos_order_add_item' order.pk %}"
+          hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
+          hx-include="#catalog-search, #catalog-filter-state"
+          hx-target="#cart-panel" hx-swap="outerHTML"
+          class="flex min-h-0 flex-1 flex-col">
+      {% csrf_token %}
+      <input type="hidden" name="item_id" value="{{ menu_item.item.pk }}">
+
+      <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+        {% if add_ons %}
+        <fieldset>
+          <div class="mb-3 flex items-baseline justify-between gap-3">
+            <legend class="text-sm font-bold text-slate-900">Add-ons</legend>
+            <span class="text-xs font-semibold tabular-nums text-slate-400"
+                  x-text="selected.length ? selected.length + ' selected' : 'Optional'"></span>
+          </div>
+          <div class="grid gap-2">
+            {% for add_on in add_ons %}
+            <label class="group flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 transition-all duration-150 hover:border-teal-300 hover:bg-teal-50/30 active:scale-[0.99]"
+                   :class="selected.includes('{{ add_on.add_on_item.pk }}') ? 'border-teal-500 bg-teal-50/60 ring-1 ring-teal-500/20' : ''">
+              <input type="checkbox" name="add_on_ids" value="{{ add_on.add_on_item.pk }}" x-model="selected"
+                     class="size-4 shrink-0 rounded border-slate-300 text-teal-700 focus:ring-teal-600/40">
+              <span class="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-slate-800">
+                {{ add_on.add_on_item.item_name }}
+              </span>
+              <span class="shrink-0 font-mono text-sm font-bold tabular-nums text-slate-500 group-hover:text-slate-700"
+                    :class="selected.includes('{{ add_on.add_on_item.pk }}') ? 'text-teal-700' : ''">
+                +₦{{ add_on.menu_item.rate|floatformat:0 }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        {% endif %}
+
+        <div>
+          <label for="add-on-comments" class="mb-2 block text-sm font-bold text-slate-900">
+            Note
+            <span class="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea id="add-on-comments" name="comments" maxlength="200" rows="2"
+                    placeholder="No onions, extra spicy…"
+                    class="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20"></textarea>
+        </div>
+      </div>
+
+      <div class="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 p-4 sm:flex-row sm:justify-between sm:p-5">
+        <button type="button" @click="close()"
+                class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60">
+          Cancel
+        </button>
+        <button type="submit"
+                class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-700 px-7 text-sm font-bold text-white shadow-md shadow-teal-900/10 transition-all duration-150 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 active:scale-[0.98]">
+          <span class="flex size-4 items-center justify-center">{% hgi_stroke name="add-01" size="16" color="currentColor" stroke_width="2.2" %}</span>
+          <span>Add to order</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

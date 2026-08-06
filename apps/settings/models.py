@@ -1,107 +1,16 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.users.models import CustomUser
 from apps.utils.models import BaseModel
 
 
-class Branch(BaseModel):
-    """A restaurant branch/location."""
-
-    name = models.CharField(max_length=100, unique=True)
-
-    def __str__(self):
-        return self.name
-
-    @classmethod
-    def get_default(cls):
-        """Phase 1 single-site helper: the first (usually only) branch.
-
-        Multi-branch UI can replace this later with the user's assigned branch.
-        """
-        return cls.objects.order_by("pk").first()
-
-
-class Room(BaseModel):
-    """A dining room/area within a branch.
-
-    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
-    """
-
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="rooms")
-    name = models.CharField(max_length=100)
-
-    class Meta:
-        unique_together = [("branch", "name")]
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-    def save(self, *args, **kwargs):
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is None:
-                raise ValidationError({"branch": "Create a branch in Settings before creating a room."})
-            self.branch = default_branch
-        super().save(*args, **kwargs)
-
-
-class Table(BaseModel):
-    """A physical table within a room.
-
-    ``branch`` is denormalized from ``room.branch`` — never selected in UI.
-    """
-
-    room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="tables")
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="tables")
-    name = models.CharField(max_length=50)
-    no_of_seats = models.IntegerField(null=True, blank=True)
-    minimum_seating = models.IntegerField(null=True, blank=True)
-    table_shape = models.CharField(
-        max_length=20,
-        choices=[("RECTANGLE", "Rectangle"), ("SQUARE", "Square"), ("CIRCLE", "Circle")],
-        blank=True,
-    )
-    is_take_away = models.BooleanField(default=False)
-    occupied = models.BooleanField(default=False, editable=False)
-    latest_invoice_time = models.DateTimeField(null=True, blank=True, editable=False)
-    layout_x = models.FloatField(null=True, blank=True)
-    layout_y = models.FloatField(null=True, blank=True)
-    layout_width = models.FloatField(null=True, blank=True)
-    layout_height = models.FloatField(null=True, blank=True)
-
-    class Meta:
-        unique_together = [("room", "name")]
-        ordering = ["room__name", "name"]
-
-    def __str__(self):
-        return self.name
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Track room_id at load time so save() can skip the Room→Branch fetch
-        # pair when room hasn't changed (layout edits, name edits, etc.).
-        self._original_room_id = self.room_id
-
-    def save(self, *args, **kwargs):
-        if self.room_id and (self._state.adding or self._original_room_id != self.room_id):
-            self.branch = self.room.branch
-        super().save(*args, **kwargs)
-        self._original_room_id = self.room_id
-
-
 class Restaurant(BaseModel):
-    """Restaurant-level configuration for a branch.
-
-    Phase 1: branch is implicit (Branch.get_default()); not user-selected in UI.
-    """
+    """The single settings record for this installation — identity, menu, stock, and POS behaviour."""
 
     company = models.CharField(max_length=200)
-    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="restaurants")
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     invoice_series_prefix = models.CharField(max_length=20, default="REST-")
     address = models.TextField(blank=True)
-    default_room = models.ForeignKey(Room, on_delete=models.PROTECT, related_name="restaurants")
     active_menu = models.ForeignKey(
         "menu.Menu",
         on_delete=models.SET_NULL,
@@ -109,61 +18,160 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="active_for_restaurants",
     )
+    default_warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="default_for_restaurants",
+        verbose_name="Bar / POS sales warehouse",
+        help_text="Warehouse used for Bar stock and POS drink deductions.",
+    )
+    store_warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="store_for_restaurants",
+        verbose_name="Central Store warehouse",
+        help_text="Central Store used for all receipts and as the source of material transfers.",
+    )
+    max_open_drafts = models.PositiveIntegerField(
+        default=50,
+        help_text="Maximum normal POS drafts allowed on one active shift.",
+    )
+    pos_allow_full_history = models.BooleanField(
+        default=False,
+        help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
+    )
 
     class Meta:
         ordering = ["company"]
 
     def __str__(self):
-        return self.company or self.branch.name
+        return self.company
 
-    def save(self, *args, **kwargs):
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is None:
-                raise ValidationError({"branch": "Create a branch in Settings before creating restaurant config."})
-            self.branch = default_branch
-        super().save(*args, **kwargs)
+    @classmethod
+    def load(cls):
+        """Return the singleton settings record with menu, menu items, and warehouse prefetched, or None."""
+        return (
+            cls.objects.select_related("active_menu", "default_warehouse", "store_warehouse")
+            .prefetch_related("active_menu__items__item__item_group")
+            .order_by("pk")
+            .first()
+        )
 
     def clean(self):
         super().clean()
-        if not self.branch_id:
-            default_branch = Branch.get_default()
-            if default_branch is not None:
-                self.branch = default_branch
-        if self.branch_id:
-            if self.pk:
-                existing = Restaurant.objects.filter(branch=self.branch).exclude(pk=self.pk)
-            else:
-                existing = Restaurant.objects.filter(branch=self.branch)
-            if existing.exists():
-                raise ValidationError({"branch": "A restaurant configuration already exists for this branch."})
-        if self.default_room_id and self.branch_id and self.default_room.branch_id != self.branch_id:
-            raise ValidationError({"default_room": "The default room must belong to the same branch."})
+        if not self.pk and Restaurant.objects.exists():
+            raise ValidationError("Restaurant settings already exist — edit the existing record.")
+        if self.max_open_drafts < 1:
+            raise ValidationError({"max_open_drafts": "The open-draft limit must be at least 1."})
+        if self.default_warehouse_id and self.default_warehouse.disabled:
+            raise ValidationError({"default_warehouse": "The Bar / POS sales warehouse must be enabled."})
+        if self.store_warehouse_id and self.store_warehouse.disabled:
+            raise ValidationError({"store_warehouse": "The central Store warehouse must be enabled."})
+        if self.store_warehouse_id and self.store_warehouse_id == self.default_warehouse_id:
+            raise ValidationError({"store_warehouse": "The central Store must differ from the Bar / POS warehouse."})
+
+        # Warehouse changes affect reservations and document posting; do not
+        # let existing drafts silently move to a different stock location.
+        if self.pk:
+            previous = Restaurant.objects.only("default_warehouse_id", "store_warehouse_id").get(pk=self.pk)
+            if previous.default_warehouse_id != self.default_warehouse_id:
+                from apps.orders.models import DRAFT, Order
+
+                if Order.objects.filter(
+                    status=DRAFT,
+                    is_return=False,
+                    stock_warehouse__isnull=False,
+                ).exists():
+                    raise ValidationError(
+                        {"default_warehouse": "Clear or cancel open POS orders with drink reservations first."}
+                    )
+            if previous.store_warehouse_id != self.store_warehouse_id:
+                from apps.inventory.models import PurchaseReceipt, StockEntry
+
+                if (
+                    StockEntry.objects.filter(status="DRAFT").exists()
+                    or PurchaseReceipt.objects.filter(status="DRAFT").exists()
+                ):
+                    raise ValidationError(
+                        {"store_warehouse": "Submit or remove draft stock documents before changing the central Store."}
+                    )
+
+        # Store receives stock, Kitchen consumes FOOD, and Bar/POS supplies
+        # DRINKS; these roles must continue pointing at compatible warehouses.
+        units = ProductionUnit.objects.select_related("warehouse").all()
+        drinks_unit = next((unit for unit in units if unit.department == ProductionUnit.DRINKS), None)
+        food_unit = next((unit for unit in units if unit.department == ProductionUnit.FOOD), None)
+        if self.default_warehouse_id and drinks_unit and drinks_unit.warehouse_id != self.default_warehouse_id:
+            raise ValidationError(
+                {"default_warehouse": "The Bar / POS warehouse must match the Drinks production unit warehouse."}
+            )
+        if food_unit:
+            if self.store_warehouse_id and food_unit.warehouse_id == self.store_warehouse_id:
+                raise ValidationError({"store_warehouse": "The central Store must differ from the Kitchen warehouse."})
+            if self.default_warehouse_id and food_unit.warehouse_id == self.default_warehouse_id:
+                raise ValidationError({"default_warehouse": "The Bar / POS warehouse must differ from the Kitchen."})
 
 
-class UserRoomAssignment(BaseModel):
-    """Assigns a user (cashier/captain) to a room.
+class ProductionUnit(BaseModel):
+    """A station that produces items — kitchen or bar — with printer routing."""
 
-    ``branch`` is always derived from ``room.branch`` — never selected in UI.
-    """
+    FOOD = "FOOD"
+    DRINKS = "DRINKS"
+    DEPARTMENT_CHOICES = [(FOOD, "Food"), (DRINKS, "Drinks")]
 
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="room_assignments")
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="user_assignments")
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="user_room_assignments")
+    WIDTH_58MM = "WIDTH_58MM"
+    WIDTH_80MM = "WIDTH_80MM"
+    PAPER_WIDTH_CHOICES = [
+        (WIDTH_58MM, "58mm"),
+        (WIDTH_80MM, "80mm"),
+    ]
+
+    FULL_CUT = "FULL_CUT"
+    PARTIAL_CUT = "PARTIAL_CUT"
+    NO_CUT = "NO_CUT"
+    CUT_MODE_CHOICES = [
+        (FULL_CUT, "Full Cut"),
+        (PARTIAL_CUT, "Partial Cut"),
+        (NO_CUT, "No Cut"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="production_units")
+    department = models.CharField(max_length=10, choices=DEPARTMENT_CHOICES)
+    block_takeaway_kot = models.BooleanField(default=False)
+    printer_ip = models.CharField(max_length=50, blank=True)
+    printer_paper_width = models.CharField(max_length=10, choices=PAPER_WIDTH_CHOICES, default=WIDTH_80MM)
+    printer_cut_mode = models.CharField(max_length=15, choices=CUT_MODE_CHOICES, default=FULL_CUT)
 
     class Meta:
-        unique_together = [("user", "room")]
-        ordering = ["user__username"]
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["department"], name="settings_one_production_unit_per_department"),
+        ]
 
     def __str__(self):
-        return f"{self.user.username} → {self.room.name}"
-
-    def save(self, *args, **kwargs):
-        if self.room_id:
-            self.branch = self.room.branch
-        super().save(*args, **kwargs)
+        return self.name
 
     def clean(self):
         super().clean()
-        if self.room_id:
-            self.branch = self.room.branch
+        if self.warehouse_id and self.warehouse.disabled:
+            raise ValidationError({"warehouse": "The production unit warehouse must be enabled."})
+
+        restaurant = Restaurant.load()
+        if not restaurant or not self.warehouse_id:
+            return
+        if (
+            self.department == self.DRINKS
+            and restaurant.default_warehouse_id
+            and self.warehouse_id != restaurant.default_warehouse_id
+        ):
+            raise ValidationError({"warehouse": "Drinks must use the configured Bar / POS sales warehouse."})
+        if self.department == self.FOOD:
+            if restaurant.store_warehouse_id and self.warehouse_id == restaurant.store_warehouse_id:
+                raise ValidationError({"warehouse": "The Kitchen warehouse must differ from the central Store."})
+            if restaurant.default_warehouse_id and self.warehouse_id == restaurant.default_warehouse_id:
+                raise ValidationError({"warehouse": "The Kitchen warehouse must differ from the Bar / POS warehouse."})

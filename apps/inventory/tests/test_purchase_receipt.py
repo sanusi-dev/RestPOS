@@ -13,196 +13,108 @@ from apps.inventory.models import (
     StockLedgerEntry,
     Warehouse,
 )
-from apps.settings.models import Branch
+from apps.settings.models import Restaurant
 
 
-class PurchaseReceiptTestBase(TestCase):
+class PurchaseReceiptTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
-        cls.group = ItemGroup.objects.create(name="Food")
-        cls.accepted_wh = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.group = ItemGroup.objects.create(name="Stock")
+        cls.store = Warehouse.objects.create(name="Store")
+        cls.other = Warehouse.objects.create(name="Other")
+        Restaurant.objects.create(company="Test", store_warehouse=cls.store)
         cls.item = Item.objects.create(
-            item_name="Jollof Rice",
+            item_name="Rice",
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_stock_item=True,
+            is_purchase_item=True,
         )
 
-
-class PurchaseReceiptCRUDTest(PurchaseReceiptTestBase):
-    def test_create(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        self.assertEqual(receipt.supplier_name, "ABC Suppliers")
-        self.assertEqual(receipt.status, "DRAFT")
-        self.assertEqual(receipt.total, Decimal("0"))
-
-    def test_str(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        self.assertIn("ABC Suppliers", str(receipt))
-        self.assertIn("PR", str(receipt))
-
-    def test_create_item(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        line = PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
-        self.assertIn(line, receipt.items.all())
-        self.assertIn("x10", str(line))
-
-    def test_clean_requires_warehouse(self):
-        receipt = PurchaseReceipt(supplier_name="ABC Suppliers", warehouse=None)
-        with self.assertRaises(ValidationError):
-            receipt.full_clean()
-
-
-class PurchaseReceiptItemAutoCalcTest(PurchaseReceiptTestBase):
-    def test_amount_auto_calc(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        line = PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("150"),
-        )
-        self.assertEqual(line.amount, Decimal("1500"))
-
-
-class PurchaseReceiptSubmitTest(PurchaseReceiptTestBase):
-    def test_submit_creates_sles_to_warehouse(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
-        receipt.submit()
-        self.assertEqual(receipt.status, "SUBMITTED")
-        sles = StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt", voucher_no=str(receipt.pk))
-        self.assertEqual(sles.count(), 1)
-        self.assertEqual(sles[0].actual_qty, Decimal("10"))
-        self.assertEqual(sles[0].warehouse, self.accepted_wh)
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.accepted_wh)
-        self.assertEqual(bin_obj.actual_qty, Decimal("10"))
-
-    def test_submit_sets_total(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
+    def test_submit_forces_configured_store(self):
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=10, rate=100)
         receipt.submit()
         receipt.refresh_from_db()
+        self.assertEqual(receipt.warehouse, self.store)
         self.assertEqual(receipt.total, Decimal("1000"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("10"))
 
-    def test_submit_only_on_draft(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
+    def test_submit_rejects_overridden_warehouse(self):
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.other)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=1, rate=10)
+        with self.assertRaisesMessage(ValidationError, "central Store"):
+            receipt.submit()
+
+    def test_submit_rejects_non_stock_non_purchase_disabled_and_template_items(self):
+        for changes in (
+            {"is_stock_item": False},
+            {"is_purchase_item": False},
+            {"disabled": True},
+            {"has_variants": True},
+        ):
+            values = {"is_stock_item": True, "is_purchase_item": True, "disabled": False, "has_variants": False}
+            values.update(changes)
+            Item.objects.filter(pk=self.item.pk).update(**values)
+            self.item.refresh_from_db()
+            receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
+            PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=1, rate=10)
+            with self.assertRaisesMessage(ValidationError, "enabled stock and purchase item"):
+                receipt.submit()
+
+    def test_cancel_is_idempotent(self):
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
+        receipt.submit()
+        receipt.cancel()
+        receipt.cancel()
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("0"))
+
+    def test_cancel_rejects_consumed_stock_and_rolls_back_all_reversals(self):
+        second_item = Item.objects.create(
+            item_name="Beans",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_stock_item=True,
+            is_purchase_item=True,
         )
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=second_item, received_qty=2, rate=20)
         receipt.submit()
-        receipt.submit()
+        # Consuming only the second line makes cancellation fail after the
+        # first reversal would otherwise succeed; the whole cancellation must roll back.
+        StockLedgerEntry.create_entry(second_item, self.store, -2, "Consumption", "1")
+
+        with self.assertRaisesMessage(ValidationError, "Insufficient stock"):
+            receipt.cancel()
+
+        receipt.refresh_from_db()
         self.assertEqual(receipt.status, "SUBMITTED")
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("2"))
+        self.assertFalse(StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt Cancellation").exists())
+        self.assertFalse(
+            StockLedgerEntry.objects.filter(
+                voucher_type="Purchase Receipt", voucher_no=str(receipt.pk), is_cancelled=True
+            ).exists()
+        )
 
-    def test_submitted_stock_visible_in_bin(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("12"),
-            rate=Decimal("50"),
-        )
+    def test_cancel_consumes_current_fifo_and_preserves_remaining_valuation(self):
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
         receipt.submit()
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.accepted_wh)
-        self.assertEqual(bin_obj.actual_qty, Decimal("12"))
-        self.assertGreater(bin_obj.valuation_rate, Decimal("0"))
-
-
-class PurchaseReceiptCancelTest(PurchaseReceiptTestBase):
-    def test_cancel_reverses_sles(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
-        receipt.submit()
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.accepted_wh)
-        self.assertEqual(bin_obj.actual_qty, Decimal("10"))
+        StockLedgerEntry.create_entry(self.item, self.store, 2, "Later Receipt", "1", rate=Decimal("200"))
 
         receipt.cancel()
-        self.assertEqual(receipt.status, "CANCELLED")
-        bin_obj.refresh_from_db()
-        self.assertEqual(bin_obj.actual_qty, Decimal("0"))
 
-    def test_cancel_creates_reversal_entries(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
-        receipt.submit()
-        receipt.cancel()
-        reversal_sles = StockLedgerEntry.objects.filter(
+        stock_bin = Bin.objects.get(item=self.item, warehouse=self.store)
+        reversal = StockLedgerEntry.objects.get(
             voucher_type="Purchase Receipt Cancellation", voucher_no=str(receipt.pk)
         )
-        self.assertEqual(reversal_sles.count(), 1)
-        self.assertEqual(reversal_sles[0].actual_qty, Decimal("-10"))
-
-    def test_cancel_only_on_submitted(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        receipt.cancel()
-        self.assertEqual(receipt.status, "DRAFT")
-
-
-class PurchaseReceiptStatusTransitionTest(PurchaseReceiptTestBase):
-    def test_draft_to_submitted_to_cancelled(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.accepted_wh,
-        )
-        self.assertEqual(receipt.status, "DRAFT")
-        receipt.submit()
-        self.assertEqual(receipt.status, "SUBMITTED")
-        receipt.cancel()
-        self.assertEqual(receipt.status, "CANCELLED")
+        self.assertEqual(reversal.outgoing_rate, Decimal("100"))
+        self.assertEqual(stock_bin.actual_qty, Decimal("2"))
+        self.assertEqual(stock_bin.valuation_rate, Decimal("200"))
+        self.assertEqual(stock_bin.stock_value, Decimal("400"))

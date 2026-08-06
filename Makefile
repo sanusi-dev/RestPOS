@@ -1,5 +1,7 @@
 include custom.mk
 
+unexport PYTHONPATH
+
 setup-env:
 	@[ ! -f ./.env ] && cp ./.env.example ./.env || echo ".env file already exists."
 

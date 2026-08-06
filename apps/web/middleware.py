@@ -46,6 +46,8 @@ class MessagesMiddleware:
         if not message_list:
             return
 
+        # Preserve events emitted by the view while adding the message event
+        # consumed by the toast listener.
         trigger_data = json.loads(response.get("HX-Trigger", "{}"))
         trigger_data["showMessages"] = message_list
         response["HX-Trigger"] = json.dumps(trigger_data)

@@ -1,14 +1,45 @@
-# RestPOS — Feature Specification (Implementation Version)
+# RestPOS — Feature Specification
 
-> This is the definitive feature list for RestPOS Phase 1. It is derived from URY and ERPNext
-> reference codebases, with any feature that contradicts a RestPOS-specific requirement replaced
-> by the RestPOS version. Every feature listed here will have an implementation plan in PLAN.md.
+> Derived from URY and ERPNext reference codebases. Not every row applies to RestPOS in its
+> current scope — sections marked as out-of-scope or deferred are listed for reference only.
+
+## RestPOS product scope (current)
+
+RestPOS is designed for a single restaurant location:
+
+- **One site, one settings surface** — a `Restaurant` singleton holds identity, active menu,
+  the central Store warehouse, the Bar/POS deduction warehouse, and POS behaviour. No `Branch`,
+  `POSProfile`, or multi-site configuration.
+- **Cashier-only POS** — cashiers enter all orders and payments on the POS screen. Roles:
+  Admin, Manager, Cashier. No waiter/captain roles and no system access for waiters (physical
+  dockets offline).
+- **No tables, rooms, or floor plans** — orders are started by type (Dine-In / Take-Away) and
+  guest count, not assigned to a physical table.
+- **No tax system** — totals come from item lines plus rounding; no TaxTemplate / TaxRate.
+- **No free-form cashier discount** — coupons later if ever; no open discount path.
+- **Departmental split** — menu items belong to `FOOD` or `DRINKS`; revenue is split in reports.
+  The bar is a separate business entity sharing the same cashier but tracked independently.
+- **Operational stock, not recipes** — there is no BOM/ingredient-level automatic consumption or
+  production. Food usage is counted through Kitchen Stock Reconciliation; POS stock reservation and
+  deduction apply only to drinks.
+- **Local network** — Django runs on the cashier desktop; back office reachable from any device
+  on the same WiFi. Hosting later mainly for remote back-office visibility.
+- **Multi-branch** — out of scope and deferred. Separate paid work. The product does not
+  half-support it today.
+
+Sections marked **Out of scope** are URY/ERPNext features the product intentionally does not
+include. Sections marked **Deferred** are planned but not yet implemented.
 
 ---
 
 ## A. BACK OFFICE FEATURES
 
 ### A1. Restaurant Configuration
+
+> RestPOS scope: the restaurant config is a singleton (`Restaurant` model).
+> Rooms (#2), tables (#3), layout editor (#4), multi-room cashier assignment (#5),
+> and branch association (#6) are **out of scope**. Items referencing branches or
+> multi-site are deferred.
 
 | # | Feature | What it does |
 |---|---|---|
@@ -36,20 +67,25 @@
 
 | # | Feature | What it does |
 |---|---|---|
-| 14 | Production unit | Defines a station in the restaurant that produces items — typically the kitchen or the bar. Each production unit is linked to a POS profile, a branch, and a warehouse, and is assigned to a department (FOOD or DRINKS). When an order is placed, the system routes items to the production unit whose department matches the item's department flag — FOOD items go to the kitchen production unit, DRINKS items go to the bar production unit. In RestPOS, production units map directly to the kitchen printer and bar printer. The production unit's own responsibilities are: warehouse linkage and block-takeaway-KOT settings. Printer IP assignment is handled on the production printer assignment (#16). Ticket routing is driven by the department flag on each item, not by item-group mappings on the production unit. |
+| 14 | Production unit | Defines the Kitchen or Bar station and its warehouse, department, ticket settings, and printer routing. FOOD routes to the FOOD ProductionUnit and its Kitchen warehouse. DRINKS routes to the DRINKS ProductionUnit, whose warehouse must match `Restaurant.default_warehouse` (the Bar/POS deduction warehouse). ProductionUnit and Restaurant warehouse links define operational meaning; Warehouse has no role/type field. |
 | 15 | Block takeaway KOT | An optional setting on a production unit that suppresses ticket printing for takeaway orders. For example, the bar might not need a printed ticket for a takeaway order because the cashier handles the drink directly. When this flag is enabled, only dine-in orders generate a bar ticket; takeaway orders with drinks do not. This reduces unnecessary ticket noise at the bar station. |
 | 16 | Production printer assignment | Each production unit is assigned a specific thermal printer. In RestPOS, the kitchen production unit is assigned the kitchen printer's static IP address, and the bar production unit is assigned the bar printer's static IP address. When a ticket is generated, the print agent sends it to the printer assigned to the relevant production unit. This is how the system knows where to send each ticket. |
 
 ### A4. POS Profile / Terminal Configuration
 
+> RestPOS scope: **out of scope as a separate document**. The POS behaviour knobs
+> (warehouse, payment methods) live on the `Restaurant` singleton; order numbers are a
+> continuous counter with no daily reset (§6.12). Multi-profile, role gates, and
+> accounting fields are intentionally omitted.
+
 | # | Feature | What it does |
 |---|---|---|
 | 17 | POS profile | The master configuration for a POS terminal or cashier role. It defines: which company and warehouse the terminal operates under, which currency it uses, which selling price list is default, which payment methods are accepted, which item groups are visible, which customer groups are selectable, which print format to use for receipts, which tax template applies, and which cost center to post transactions against. Every order placed on the POS references a POS profile. A restaurant can have multiple profiles (e.g. one for the main cashier, one for the bar). |
 | 18 | Cashier permissions | Granular toggles that control what a cashier is allowed to do on the POS. The manager can enable or disable: applying a discount (discount change), switching the warehouse from which stock is deducted, accepting partial payments, and rounding the total to the nearest whole number. These toggles let the owner control how much freedom each cashier has, preventing unauthorised discounting. The price list price is always the starting point — cashiers cannot override an item's price directly. |
-| 19 | Stock validation | Controls how and when the system checks whether items are in stock. When an item is added to an order, the system checks stock levels and reserves the quantity (see #124 for the reservation formula). When `update_stock` is enabled, stock is automatically deducted from the warehouse when the order is submitted (paid) — at that point the reservation is converted to an actual deduction. If an item is out of stock at add-time, the cashier sees a warning and cannot add the item to the cart. The "Hide unavailable items" toggle (#22) uses a stock snapshot taken when the menu is loaded. |
+| 19 | Stock validation | POS stock validation is department-specific. `FOOD` lines never validate, reserve, or deduct stock, even when the Item is stock tracked. Every POS-sold `DRINKS` item must be stock tracked; adding or increasing a draft line atomically reserves quantity in `Bin.reserved_qty` at `Restaurant.default_warehouse` (the Bar/POS deduction warehouse), and settlement atomically converts the reservation into an actual deduction. Insufficient available drink stock blocks the add/increase and settlement paths. Explicit Item/Menu disable remains authoritative for both departments. |
 | 20 | Auto-print on order complete | When enabled, the cashier receipt prints automatically the moment a takeaway order is submitted and paid. The cashier does not need to click a "Print" button — the print agent receives the job and sends it to the cashier printer immediately. For dine-in orders, the pre-payment bill (#53) serves as the single print — no second receipt prints after payment. This speeds up the checkout flow and ensures every paid order gets a receipt. |
 | 21 | Auto-add scanned item to cart | When enabled, scanning a barcode immediately adds the item to the cart with a quantity of 1, without opening a product dialog. This is useful for high-volume items like bottled drinks where the cashier just scans and moves on. If the item has variants or add-ons, the dialog still opens. |
-| 22 | Hide images / unavailable items | Two UI toggles: "Hide images" removes item images from the POS menu cards (useful on slow devices or when images aren't available), and "Hide unavailable items" removes out-of-stock items from the menu entirely so the cashier doesn't accidentally try to order something that can't be served. |
+| 22 | Hide images / unavailable items | "Hide images" removes item images from POS menu cards. Stock-unavailable drinks are not hidden: they remain visible, greyed, disabled, and unselectable so the cashier can still see the full drinks catalogue. Food remains inventory-available regardless of Bin quantity. Explicitly disabled Items or MenuItems remain unavailable under the normal disable behavior. |
 | 23 | Write-off config | Allows the cashier to write off small unpaid balances (e.g. when the customer is 50 naira short and the cashier doesn't want to chase it). The manager configures a maximum write-off limit, a write-off GL account, and a write-off cost center. When the paid amount is slightly less than the total, the difference is posted to the write-off account instead of showing as outstanding. This keeps the books clean without forcing the cashier to collect every last naira. See #133 for the accounting entry details. |
 | 24 | Action on new invoice | Controls what happens after an order is submitted. The manager can choose: "Always Ask" (prompt the cashier what to do), "Save Changes and Load New" (automatically start a fresh order), or "Discard Changes and Load New" (clear everything and start fresh). This is a workflow speed setting — high-volume restaurants prefer "Discard Changes and Load New" so the cashier is immediately ready for the next customer. |
 | 25 | Set grand total to default payment method | When enabled, the total amount of the order is automatically filled into the default payment method's input field when the payment dialog opens. The cashier only needs to confirm and click "Pay". If the customer is paying with a different method or splitting the payment, the cashier can manually adjust. This saves a keystroke in the most common case (full payment in cash). |
@@ -153,17 +189,24 @@
 
 ### A12. Inventory / Stock Management
 
+> RestPOS uses operational warehouse stock only. It does not use BOMs, recipes, automatic
+> ingredient consumption, manufacturing, or production entries. Item flags are independent:
+> menu eligibility follows `is_sales_item`, while receipt eligibility requires both
+> `is_stock_item=True` and `is_purchase_item=True`; neither department nor menu linkage makes an
+> item receivable. A FOOD item may therefore be sellable/non-stock/non-purchase,
+> sellable+stock (optionally purchasable), or internal stock+purchasable.
+
 | # | Feature | What it does |
 |---|---|---|
-| 110 | Item master | The central database of all products the restaurant sells or uses. Each item has: a unique item code, a display name, an item group (category), a stock UOM (unit of measure, e.g. "each" or "kg"), an optional image, a description, and an opening stock quantity. Items are the building blocks of the menu — every menu item references an item from this master. The selling rate is set on the menu item, not on the Item master. |
+| 110 | Item master | The central database of products the restaurant sells or uses. Each Item independently records `is_sales_item`, `is_stock_item`, and `is_purchase_item`; department and menu linkage do not imply either stock tracking or purchase eligibility. Menu lines require a sellable Item. Material Receipt and Purchase Receipt lines require both stock and purchase flags. The selling rate is set on the MenuItem, not the Item master. |
 | 111 | Item groups | Flat list of product categories that organise items. For a restaurant, typical groups are: "Food", "Beverages", "Proteins", "Sides". Item groups are used for: filtering items on the POS screen (the category sidebar filters by Item Group), and grouping items in reports. Ticket routing is driven by the department flag on each item, not by Item Group. No tree hierarchy — flat categories are sufficient. |
 | 115 | Item variants | A single item can have multiple variants (e.g. "Chicken" with variants "Quarter", "Half", "Full"). Each variant is a separate item in the inventory, linked to a parent "template" item. On the POS, selecting the parent item opens a dialog showing all available variants. Each variant has its own price and stock level. This is useful for items that come in multiple sizes or flavours. |
-| 119 | Stock ledger entry | An immutable (never-changing) record of every stock movement. Every time stock is added (goods received, stock transferred in, refund restoration), removed (sold, wasted, transferred out), or adjusted (stocktake), a stock ledger entry is created. Each entry records: the item, the warehouse, the quantity change (positive for in, negative for out), the running balance after the entry, the valuation rate, and the source document (e.g. which POS invoice caused the deduction). This is the source of truth for all stock reporting. |
-| 120 | Stock entry | A document for recording manual stock movements. Common types: "Material Issue" (issue ingredients from the store to the kitchen), "Material Receipt" (receive goods from a supplier without a formal purchase receipt), "Material Transfer" (move stock between warehouses, e.g. from the storeroom to the kitchen), "Repack" (break down bulk into individual units, e.g. open a case of drinks), and "Opening Stock" (set the initial stock levels when the system is first set up). Each stock entry creates stock ledger entries. |
-| 121 | Warehouse | A physical location where stock is stored. Each warehouse belongs to a branch. Flat structure — no tree hierarchy needed for a restaurant setup. Typical warehouses: "Storeroom", "Freezer", "Kitchen", "Bar". Stock entries transfer items between warehouses. |
-| 122 | Stock reconciliation | The stocktake / physical inventory count process. The manager counts the actual stock in each warehouse and enters the counted quantities into the system. The system compares the counted quantity with the system quantity and calculates the difference (gain or loss). The difference is posted to an opening stock entry. This corrects discrepancies caused by theft, wastage, or measurement errors. |
-| 123 | Purchase receipt | Records the receipt of goods from a supplier. When a delivery arrives, the storekeeper creates a purchase receipt listing the items, quantities, and rates. The system increases the stock levels and creates a liability (the amount owed to the supplier). If some items are damaged, they can be routed to a "rejected warehouse" instead of the main warehouse. Once received, the items are immediately available for sale on the POS. |
-| 124 | Stock availability check | Before allowing an item to be added to an order, the system checks whether it's in stock. It calculates the available quantity as: current bin quantity − reserved POS quantity (items on draft but unconsolidated POS invoices). This prevents overselling — if two cashiers try to sell the last bottle of wine simultaneously, the system reserves it for the first one and blocks the second. Reservation covers draft invoices only; once an invoice is submitted (paid), the stock is actually deducted and the reservation is released. |
+| 119 | Stock ledger entry | An immutable record of every posted stock movement. Receipts, transfers, drink POS deductions, and reconciliation adjustments create signed ledger entries with running balance and valuation. FOOD POS sales create no stock ledger entries. Posting and cancellation of Stock Entries and Stock Reconciliations are atomic; cancellation creates reversals rather than editing history. |
+| 120 | Stock entry | Manual movement supports Material Receipt and Material Transfer only; Material Issue is removed completely. Material Receipt always lands in `Restaurant.store_warehouse`. Normal Material Transfer preserves source valuation, prevents negative source stock, and is restricted to Store → configured Bar or Kitchen: DRINKS target Bar (`Restaurant.default_warehouse`), FOOD target the FOOD ProductionUnit warehouse (Kitchen). Reverse transfers and Bar↔Kitchen routes are not allowed. |
+| 121 | Warehouse | A flat physical stock location with no role/type field. Meaning comes from existing configuration: `Restaurant.store_warehouse` is central Store, `Restaurant.default_warehouse` is Bar/POS deduction, the FOOD ProductionUnit warehouse is Kitchen, and the DRINKS ProductionUnit warehouse must match the Restaurant default warehouse. |
+| 122 | Stock reconciliation | The single one-sided adjustment workflow for physical counts, corrections, waste/damage, and Kitchen consumption counts. Every reconciliation requires a structured reason (`PHYSICAL_COUNT`, `CONSUMPTION`, `WASTE_DAMAGE`, or `CORRECTION`) and may include remarks. It is date-flexible with no forced weekly schedule. Reports filter by date, warehouse, and reason and compare Kitchen `CONSUMPTION` adjustments against FOOD sales. |
+| 123 | Purchase receipt | Records supplier goods received into the central Store. The warehouse is fixed to `Restaurant.store_warehouse`; eligible lines require `is_stock_item=True` and `is_purchase_item=True`, independently of department or menu linkage. Internal movement from Store to Bar or Kitchen uses Material Transfer. |
+| 124 | Stock availability check | Applies only to POS-sold DRINKS. Available quantity is `Bin.actual_qty - Bin.reserved_qty` at `Restaurant.default_warehouse`. Draft add/increment reserves atomically; decrement, remove, clear, draft cancellation, and draft deletion release atomically; settlement atomically releases the reservation and deducts actual stock. The lock/check/update lifecycle prevents concurrent overselling. FOOD POS lines bypass stock availability regardless of `is_stock_item`. |
 | 126 | Valuation method | Controls how the system calculates the cost of items when they're sold or transferred. "FIFO" (First In, First Out) assumes the oldest stock is sold first — this is the most common method for perishable food items. "Moving Average" calculates a weighted average cost based on all purchases. The valuation method affects the cost of goods sold and the gross profit calculation. |
 
 ### A13. Financial / Accounting
@@ -186,7 +229,7 @@
 | # | Feature | What it does |
 |---|---|---|
 | 137 | Daily P&L statement | A comprehensive daily profit and loss document that calculates the restaurant's financial performance for a single day. It starts with gross sales (total of all orders), subtracts discounts and round-offs, subtracts tax (to get net sales), subtracts the cost of goods sold (the ingredient cost of everything sold), subtracts direct expenses (electricity, consumables), to arrive at gross profit. Then it subtracts indirect expenses (employee costs, depreciation, other overheads) to arrive at net profit. Every line shows both the naira amount and its percentage of gross sales, so the manager can see the cost structure at a glance. |
-| 138 | Cost of goods sold (COGS) breakup | A detailed breakdown of the ingredient cost for everything sold that day. For each item sold, the system shows: the item, the quantity sold, the buying price (from the configured buying price list), and the total amount. The sum of all items is the total COGS. This tells the manager exactly how much the food they sold cost to make, which is essential for pricing decisions and waste tracking. |
+| 138 | Cost of goods sold (COGS) breakup | A detailed operational cost view. DRINKS cost follows actual POS stock deductions and stock valuation. FOOD does not use BOM-derived ingredient cost or automatic consumption; Kitchen `CONSUMPTION` reconciliations are reported alongside FOOD sales for comparison over the selected period. |
 | 139 | Direct expenses breakup | Lists all direct expenses for the day — costs that are directly tied to daily operations. This includes electricity (calculated from meter readings), consumables (cooking gas, napkins, cleaning supplies), and any other daily costs. Each expense is a line item with an amount and a percentage of gross sales. This helps the manager see whether utility costs are proportionate to revenue. |
 | 140 | Employee costs breakup | Lists the daily labour cost for each employee. This is typically calculated from each employee's salary divided by the number of working days, multiplied by their attendance for the day. The total employee cost is shown as both a naira amount and a percentage of gross sales. This is typically the largest expense category after COGS, so tracking it daily helps identify overstaffing on slow days. |
 | 141 | Indirect expenses breakup | Lists all indirect expenses — costs that aren't directly tied to daily operations but are allocated daily. This includes rent (monthly rent / days in month), insurance, depreciation of equipment, and other fixed overheads. Each is shown as a daily amount and a percentage of gross sales. This helps the manager understand the minimum daily revenue needed to cover fixed costs. |
@@ -262,6 +305,9 @@
 
 ### B2. Table Management Screen
 
+> **Out of scope.** RestPOS has no table/room/floor-plan concept. Orders start
+> by type (Dine-In / Take-Away) and guest count from the POS home screen.
+
 | # | Feature | What it does |
 |---|---|---|
 | 182 | Room selection | A row of tab buttons at the top of the table screen, one for each room the user is assigned to. Clicking a room tab loads the tables for that room. The selected room is remembered across page navigation (stored in the session). Each room tab shows the total number of tables in that room as a badge. |
@@ -280,7 +326,7 @@
 
 | # | Feature | What it does |
 |---|---|---|
-| 193 | Menu grid | The main area of the POS screen, showing all menu items as cards in a responsive grid. Each card shows the item's image (or initials placeholder), name, and price. The grid adjusts from 2 columns on small screens to 5 columns on large screens. Clicking an item adds it to the cart; double-clicking opens the full product dialog. The grid is rendered as a Django template and updated via HTMX when filters change. |
+| 193 | Menu grid | The main area of the POS screen, showing all menu items as cards in a responsive grid. Each card shows the item's image (or initials placeholder), name, and price. The grid adjusts from 2 columns on small screens to 5 columns on large screens. Clicking an available item adds it to the cart; detail actions open the product dialog. Out-of-stock DRINKS remain visible but greyed, disabled, and unselectable, while FOOD does not use stock availability. The grid is rendered as a Django template and updated via HTMX when filters, cart reservations, or availability change. |
 | 194 | Image fallback | If a menu item has no image, or if the image fails to load, the card shows a coloured placeholder with the first two letters of the item name. This ensures the grid always looks consistent, even when images are missing. |
 | 195 | Category sidebar | A left sidebar listing "All Items" plus one button per Item Group (e.g. "Starters", "Mains", "Soft Drinks", "Beer"). Each button shows the number of items in that category as a badge. Clicking a category filters the menu grid to show only items in that Item Group. Clicking "All Items" removes the filter. The active category is highlighted with a coloured indicator bar. |
 | 196 | Quick filter | Two toggle buttons above the menu grid: "All" (shows all items) and "Special" (shows only items marked as special dishes). This lets the cashier quickly narrow the menu to featured items without scrolling through the entire list. |
@@ -387,6 +433,9 @@
 
 ### D2. Branch / Location Management
 
+> **Out of scope — deferred.** Multi-branch is separate paid work. The product
+> is single-location and does not half-support branching today.
+
 | # | Feature | What it does |
 |---|---|---|
 | 269 | Multi-branch | The system supports multiple restaurant branches, each with its own rooms, tables, menu, printers, staff, and configuration. All branch data is isolated — a cashier at Branch A cannot see Branch B's orders, tables, or reports. This is essential for restaurant groups that operate multiple locations. |
@@ -406,11 +455,11 @@
 
 | # | Feature | What it does |
 |---|---|---|
-| 275 | Local network only (Phase 1) | The entire system runs on the cashier desktop and the local network. Django serves the POS and back office on the local WiFi. All operations — ordering, printing, inventory, reports — work without any internet connection. The owner can access the back office from any device (phone, laptop, tablet) connected to the same WiFi network inside the restaurant. No cloud, no external servers, no internet dependency. |
+| 275 | Local network only | The entire system runs on the cashier desktop and the local network. Django serves the POS and back office on the local WiFi. All operations — ordering, printing, inventory, reports — work without any internet connection. The owner can access the back office from any device (phone, laptop, tablet) connected to the same WiFi network inside the restaurant. No cloud, no external servers, no internet dependency. |
 | 276 | Django + HTMX + Tailwind + Alpine.js | The frontend is built entirely with Django templates enhanced by HTMX (for partial page updates without full reloads), Tailwind CSS (for styling), and Alpine.js (for lightweight client-side interactions like dropdowns and modals). No React, no Vue, no Django REST Framework, no Socket.io. This keeps the stack simple, fast, and maintainable by a single developer. |
 | 277 | PostgreSQL | The database is PostgreSQL, not SQLite. PostgreSQL handles concurrent access better (important when multiple cashiers are using the system simultaneously), supports advanced queries for reporting, and is more robust for financial data. |
 | 278 | DecimalField for all money | All monetary values (prices, totals, discounts, payments, balances) are stored as `DecimalField` in the database, never `FloatField`. Floating-point numbers can introduce rounding errors (e.g. 0.1 + 0.2 = 0.30000000000000004), which is unacceptable for financial data. DecimalField stores exact decimal values, ensuring naira amounts are always precise. |
 | 279 | No CASCADE on financial records | Orders, payments, and stock ledger entries never use `CASCADE` delete on their foreign keys. If a referenced record (e.g. a customer or an item) is deleted, the financial record is preserved (the foreign key is set to NULL or the deletion is blocked). This ensures the financial audit trail can never be broken by a cascading delete. |
-| 285 | Celery + Redis for scheduled tasks | The duplicate-ticket detection job (#72) runs every minute via Celery beat. Redis is the message broker. This is the only scheduled task in Phase 1 — Celery and Redis are already part of the stack for future background job needs. |
+| 285 | Celery + Redis for scheduled tasks | The duplicate-ticket detection job (#72) runs every minute via Celery beat. Redis is the message broker. Celery and Redis are already part of the stack for future background job needs. |
 
 > **Note:** The submit/cancel immutability principle is described in #166 (A16 — Document Workflow & Audit). All financial documents — orders, payments, stock entries, refund entries, and reversal stock ledger entries — follow this workflow.

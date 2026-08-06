@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -14,7 +15,7 @@ from apps.inventory.models import (
     StockEntryDetail,
     Warehouse,
 )
-from apps.settings.models import Branch
+from apps.settings.models import Restaurant
 from apps.users.models import CustomUser
 
 
@@ -26,15 +27,16 @@ class InventoryViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
-        cls.branch = Branch.objects.create(name="Main Branch")
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Main Store", branch=cls.branch)
+        cls.warehouse = Warehouse.objects.create(name="Main Store")
+        Restaurant.objects.create(company="Test Restaurant", store_warehouse=cls.warehouse)
         cls.item = Item.objects.create(
             item_name="Jollof Rice",
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
+            is_purchase_item=True,
         )
 
     def setUp(self):
@@ -128,7 +130,7 @@ class TestWarehouseViews(InventoryViewTestBase):
     def test_warehouse_create_get(self):
         response = self.client.get(reverse("inventory:warehouse_create"))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="branch"')
+        self.assertContains(response, 'name="name"')
 
     def test_warehouse_create_post(self):
         response = self.client.post(
@@ -140,7 +142,7 @@ class TestWarehouseViews(InventoryViewTestBase):
         )
         self.assertRedirects(response, reverse("inventory:warehouse_list"))
         wh = Warehouse.objects.get(name="Bar Store")
-        self.assertEqual(wh.branch_id, self.branch.pk)
+        self.assertEqual(wh.name, "Bar Store")
 
     def test_warehouse_detail_200(self):
         response = self.client.get(reverse("inventory:warehouse_detail", kwargs={"pk": self.warehouse.pk}))
@@ -224,6 +226,25 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertIsNotNone(entry)
         self.assertRedirects(response, reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
 
+    def test_stock_entry_create_rolls_back_parent_when_formset_save_fails(self):
+        with (
+            patch("apps.inventory.views.StockEntryDetailFormSet.save", side_effect=RuntimeError("failed")),
+            self.assertRaisesMessage(RuntimeError, "failed"),
+        ):
+            self.client.post(
+                reverse("inventory:stock_entry_create"),
+                {
+                    "purpose": "MATERIAL_RECEIPT",
+                    "posting_date": "2025-01-15",
+                    "remarks": "atomic failure",
+                    "items-TOTAL_FORMS": "0",
+                    "items-INITIAL_FORMS": "0",
+                    "items-MIN_NUM_FORMS": "0",
+                    "items-MAX_NUM_FORMS": "1000",
+                },
+            )
+        self.assertFalse(StockEntry.objects.filter(remarks="atomic failure").exists())
+
     def test_stock_entry_detail_200(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
         StockEntryDetail.objects.create(
@@ -256,6 +277,15 @@ class TestStockEntryViews(InventoryViewTestBase):
         response = self.client.get(reverse("inventory:stock_entry_submit", kwargs={"pk": entry.pk}))
         self.assertEqual(response.status_code, 405)
 
+    def test_stock_entry_submit_validation_error_is_visible(self):
+        entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
+        StockEntryDetail.objects.create(stock_entry=entry, item=self.item, qty=Decimal("10"))
+        response = self.client.post(reverse("inventory:stock_entry_submit", kwargs={"pk": entry.pk}), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bar / POS sales warehouse")
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, "DRAFT")
+
     def test_stock_entry_cancel_post(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
         StockEntryDetail.objects.create(
@@ -282,6 +312,29 @@ class TestReconciliationViews(InventoryViewTestBase):
         response = self.client.get(reverse("inventory:reconciliation_list"))
         self.assertEqual(response.status_code, 200)
 
+    def test_reconciliation_create_rolls_back_parent_when_formset_save_fails(self):
+        from apps.inventory.models import StockReconciliation
+
+        with (
+            patch("apps.inventory.views.StockReconciliationItemFormSet.save", side_effect=RuntimeError("failed")),
+            self.assertRaisesMessage(RuntimeError, "failed"),
+        ):
+            self.client.post(
+                reverse("inventory:reconciliation_create"),
+                {
+                    "purpose": "RECONCILIATION",
+                    "reason": "PHYSICAL_COUNT",
+                    "posting_date": "2025-01-15",
+                    "warehouse": self.warehouse.pk,
+                    "remarks": "atomic failure",
+                    "items-TOTAL_FORMS": "0",
+                    "items-INITIAL_FORMS": "0",
+                    "items-MIN_NUM_FORMS": "0",
+                    "items-MAX_NUM_FORMS": "1000",
+                },
+            )
+        self.assertFalse(StockReconciliation.objects.filter(remarks="atomic failure").exists())
+
     def test_reconciliation_detail_200(self):
         from apps.inventory.models import StockReconciliation
 
@@ -295,6 +348,23 @@ class TestReconciliationViews(InventoryViewTestBase):
         rec = StockReconciliation.objects.create(warehouse=self.warehouse)
         response = self.client.get(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}))
         self.assertEqual(response.status_code, 405)
+
+    def test_reconciliation_submit_validation_error_is_visible(self):
+        from apps.inventory.models import StockReconciliation
+
+        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
+        response = self.client.post(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add at least one item")
+
+    def test_reconciliation_filters_by_reason(self):
+        from apps.inventory.models import StockReconciliation
+
+        physical = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
+        correction = StockReconciliation.objects.create(warehouse=self.warehouse, reason="CORRECTION")
+        response = self.client.get(reverse("inventory:reconciliation_list"), {"reason": "CORRECTION"})
+        self.assertContains(response, reverse("inventory:reconciliation_detail", kwargs={"pk": correction.pk}))
+        self.assertNotContains(response, reverse("inventory:reconciliation_detail", kwargs={"pk": physical.pk}))
 
 
 class TestReportViews(InventoryViewTestBase):
@@ -331,7 +401,6 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
                 "supplier_name": "ABC Suppliers",
                 "supplier_delivery_note": "DN-001",
                 "posting_date": "2025-01-15",
-                "warehouse": self.warehouse.pk,
                 "remarks": "",
                 "items-TOTAL_FORMS": "0",
                 "items-INITIAL_FORMS": "0",
@@ -342,6 +411,26 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         receipt = PurchaseReceipt.objects.filter(supplier_name="ABC Suppliers").first()
         self.assertIsNotNone(receipt)
         self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+
+    def test_purchase_receipt_create_rolls_back_parent_when_formset_save_fails(self):
+        with (
+            patch("apps.inventory.views.PurchaseReceiptItemFormSet.save", side_effect=RuntimeError("failed")),
+            self.assertRaisesMessage(RuntimeError, "failed"),
+        ):
+            self.client.post(
+                reverse("inventory:purchase_receipt_create"),
+                {
+                    "supplier_name": "Atomic Failure",
+                    "supplier_delivery_note": "",
+                    "posting_date": "2025-01-15",
+                    "remarks": "",
+                    "items-TOTAL_FORMS": "0",
+                    "items-INITIAL_FORMS": "0",
+                    "items-MIN_NUM_FORMS": "0",
+                    "items-MAX_NUM_FORMS": "1000",
+                },
+            )
+        self.assertFalse(PurchaseReceipt.objects.filter(supplier_name="Atomic Failure").exists())
 
     def test_purchase_receipt_detail_200(self):
         receipt = PurchaseReceipt.objects.create(
@@ -381,6 +470,16 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         )
         response = self.client.get(reverse("inventory:purchase_receipt_submit", kwargs={"pk": receipt.pk}))
         self.assertEqual(response.status_code, 405)
+
+    def test_purchase_receipt_submit_validation_error_is_visible(self):
+        receipt = PurchaseReceipt.objects.create(supplier_name="ABC Suppliers", warehouse=self.warehouse)
+        response = self.client.post(
+            reverse("inventory:purchase_receipt_submit", kwargs={"pk": receipt.pk}), follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add at least one item")
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, "DRAFT")
 
     def test_purchase_receipt_cancel_post(self):
         receipt = PurchaseReceipt.objects.create(

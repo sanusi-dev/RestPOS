@@ -1,7 +1,10 @@
 import urllib.parse
+from typing import cast
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.http import HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -40,6 +43,7 @@ def inventory_dashboard(request: HttpRequest) -> HttpResponse:
     )
     context = {
         "item_count": Item.objects.count(),
+        "item_group_count": ItemGroup.objects.count(),
         "warehouse_count": Warehouse.objects.count(),
         "uom_count": UOM.objects.count(),
         "stock_entry_count": StockEntry.objects.count(),
@@ -221,7 +225,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
 
     items = Item.objects.select_related("item_group", "stock_uom", "variant_of")
     if item_group_id:
-        items = items.filter(item_group_id=item_group_id)
+        items = items.filter(item_group_id=cast(int, item_group_id))
     if department:
         items = items.filter(department=department)
     if sellable == "1":
@@ -341,6 +345,11 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
 # StockEntry
 # ---------------------------------------------------------------------------
 
+# The item add/remove endpoints below rebuild a bound formset from POST data
+# instead of saving, so the partial re-render keeps the user's other rows
+# intact. The remove view renumbers the surviving rows (Django formset
+# management indices must stay contiguous).
+
 
 @login_required
 def stock_entry_list(request: HttpRequest) -> HttpResponse:
@@ -366,15 +375,18 @@ def stock_entry_list(request: HttpRequest) -> HttpResponse:
 def stock_entry_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StockEntryForm(request.POST)
-        detail_fs = StockEntryDetailFormSet(request.POST, instance=StockEntry(), prefix="items")
+        detail_fs = StockEntryDetailFormSet(
+            request.POST, instance=StockEntry(purpose=request.POST.get("purpose", "")), prefix="items"
+        )
         if form.is_valid() and detail_fs.is_valid():
-            entry = form.save()
-            detail_fs.instance = entry
-            detail_fs.save()
+            with transaction.atomic():
+                entry = form.save()
+                detail_fs.instance = entry
+                detail_fs.save()
             return redirect("inventory:stock_entry_detail", pk=entry.pk)
     else:
         form = StockEntryForm()
-        detail_fs = StockEntryDetailFormSet(instance=StockEntry(), prefix="items")
+        detail_fs = StockEntryDetailFormSet(instance=StockEntry(purpose="MATERIAL_RECEIPT"), prefix="items")
     return render(
         request,
         "backoffice/inventory/stock_entry_form.html",
@@ -397,7 +409,7 @@ def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = StockEntryDetailFormSet(post_data, prefix="items")
     return render(
@@ -427,10 +439,10 @@ def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
@@ -460,7 +472,10 @@ def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "DRAFT":
-        entry.submit()
+        try:
+            entry.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -469,7 +484,10 @@ def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "SUBMITTED":
-        entry.cancel()
+        try:
+            entry.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -481,13 +499,34 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def reconciliation_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
+    reason = request.GET.get("reason")
+    warehouse_id = request.GET.get("warehouse")
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
     reconciliations = StockReconciliation.objects.select_related("warehouse").all()
     if status:
         reconciliations = reconciliations.filter(status=status)
+    if reason:
+        reconciliations = reconciliations.filter(reason=reason)
+    if warehouse_id:
+        reconciliations = reconciliations.filter(warehouse_id=warehouse_id)
+    if date_from:
+        reconciliations = reconciliations.filter(posting_date__gte=date_from)
+    if date_to:
+        reconciliations = reconciliations.filter(posting_date__lte=date_to)
     return render(
         request,
         "backoffice/inventory/reconciliation_list.html",
-        {"reconciliations": reconciliations, "selected_status": status},
+        {
+            "reconciliations": reconciliations,
+            "warehouses": Warehouse.objects.filter(disabled=False),
+            "reason_choices": StockReconciliation._meta.get_field("reason").choices,
+            "selected_status": status,
+            "selected_reason": reason,
+            "selected_warehouse": warehouse_id,
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+        },
     )
 
 
@@ -497,9 +536,10 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
         form = StockReconciliationForm(request.POST)
         item_fs = StockReconciliationItemFormSet(request.POST, instance=StockReconciliation(), prefix="items")
         if form.is_valid() and item_fs.is_valid():
-            reconciliation = form.save()
-            item_fs.instance = reconciliation
-            item_fs.save()
+            with transaction.atomic():
+                reconciliation = form.save()
+                item_fs.instance = reconciliation
+                item_fs.save()
             return redirect("inventory:reconciliation_detail", pk=reconciliation.pk)
     else:
         form = StockReconciliationForm()
@@ -514,6 +554,8 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
+    # Append one empty row to the posted formset data and re-render the
+    # partial (same pattern as stock_entry_item_add).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -526,7 +568,7 @@ def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = StockReconciliationItemFormSet(post_data, prefix="items")
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
@@ -535,6 +577,8 @@ def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+    # Drop the indexed row and renumber the survivors (same pattern as
+    # stock_entry_item_remove).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -554,10 +598,10 @@ def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
@@ -572,7 +616,7 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
         StockReconciliation.objects.select_related("warehouse"),
         pk=pk,
     )
-    items = reconciliation.items.select_related("item", "warehouse").all()
+    items = reconciliation.items.select_related("item").all()
     voucher_no = str(pk)
     ledger_entries = StockLedgerEntry.objects.filter(
         voucher_type="Stock Reconciliation", voucher_no=voucher_no
@@ -593,7 +637,10 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "DRAFT":
-        reconciliation.submit()
+        try:
+            reconciliation.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -602,7 +649,10 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "SUBMITTED":
-        reconciliation.cancel()
+        try:
+            reconciliation.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -637,9 +687,10 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
         form = PurchaseReceiptForm(request.POST)
         item_fs = PurchaseReceiptItemFormSet(request.POST, instance=PurchaseReceipt(), prefix="items")
         if form.is_valid() and item_fs.is_valid():
-            receipt = form.save()
-            item_fs.instance = receipt
-            item_fs.save()
+            with transaction.atomic():
+                receipt = form.save()
+                item_fs.instance = receipt
+                item_fs.save()
             return redirect("inventory:purchase_receipt_detail", pk=receipt.pk)
     else:
         form = PurchaseReceiptForm()
@@ -654,6 +705,8 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
+    # Append one empty row to the posted formset data and re-render the
+    # partial (same pattern as stock_entry_item_add).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -666,7 +719,7 @@ def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
     for field in line_fields:
         post_data[f"items-{total_forms}-{field}"] = ""
 
-    post_data["items-TOTAL_FORMS"] = total_forms + 1
+    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
 
     formset = PurchaseReceiptItemFormSet(post_data, prefix="items")
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
@@ -675,6 +728,8 @@ def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+    # Drop the indexed row and renumber the survivors (same pattern as
+    # stock_entry_item_remove).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -694,10 +749,10 @@ def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpRespon
             new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
         new_index += 1
 
-    new_data["items-TOTAL_FORMS"] = new_index
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", 0)
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", 0)
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", 1000)
+    new_data["items-TOTAL_FORMS"] = str(new_index)
+    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
+    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
+    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
 
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
@@ -727,10 +782,12 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    # select_related("warehouse") saves one FK fetch inside receipt.submit().
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "DRAFT":
-        receipt.submit()
+        try:
+            receipt.submit()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 
@@ -739,7 +796,10 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
 def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "SUBMITTED":
-        receipt.cancel()
+        try:
+            receipt.cancel()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 

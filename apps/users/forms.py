@@ -14,7 +14,7 @@ class CustomLoginForm(LoginForm):
 
 
 class CustomSignupForm(SignupForm):
-    """Custom signup form for RestPOS."""
+    """Signup form that suppresses password help text."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

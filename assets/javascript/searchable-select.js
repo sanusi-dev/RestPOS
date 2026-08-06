@@ -2,7 +2,7 @@
  * Searchable select fields (Tom Select).
  *
  * Enhances every <select> with a type-to-search box so long option lists
- * (items, warehouses, rooms, etc.) are usable. Skips elements marked with
+ * (items and warehouses) are usable. Skips elements marked with
  * data-no-search. Re-runs after HTMX swaps so dynamic formset rows work.
  */
 import TomSelect from 'tom-select';

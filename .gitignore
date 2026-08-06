@@ -18,6 +18,9 @@ node_modules/
 .claude/settings.local.json
 openapitools.json
 media/
+!media/
+!media/items/
+!media/items/default-item.png
 docs/_build
 _dist/
 .env
@@ -33,6 +36,7 @@ static/.vite/
 references/
 .mypy_cache/
 .claude
+.commandcode
 
 # local scratch / prototype files
 landing-after-optimization.png

@@ -2,7 +2,8 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.settings.models import Branch, Restaurant, Room, Table, UserRoomAssignment
+from apps.inventory.models import Warehouse
+from apps.settings.models import ProductionUnit, Restaurant
 from apps.users.models import CustomUser
 
 
@@ -14,11 +15,6 @@ class SettingsViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
-        cls.branch = Branch.objects.create(name="Main Branch")
-        cls.room = Room.objects.create(branch=cls.branch, name="Hall")
-        cls.table = Table.objects.create(
-            room=cls.room, branch=cls.branch, name="T1", no_of_seats=4, table_shape="RECTANGLE"
-        )
 
     def setUp(self):
         self.client.login(username="admin@test.com", password="testpass123")
@@ -29,24 +25,12 @@ class TestLoginRequired(TestCase):
         response = self.client.get(reverse("settings:dashboard"))
         self.assertRedirects(response, f"/accounts/login/?next={reverse('settings:dashboard')}")
 
-    def test_branch_list_requires_login(self):
-        response = self.client.get(reverse("settings:branch_list"))
+    def test_restaurant_settings_requires_login(self):
+        response = self.client.get(reverse("settings:restaurant_settings"))
         self.assertEqual(response.status_code, 302)
 
-    def test_room_list_requires_login(self):
-        response = self.client.get(reverse("settings:room_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_table_list_requires_login(self):
-        response = self.client.get(reverse("settings:table_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_restaurant_detail_requires_login(self):
-        response = self.client.get(reverse("settings:restaurant_detail"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_user_room_list_requires_login(self):
-        response = self.client.get(reverse("settings:user_room_list"))
+    def test_production_unit_list_requires_login(self):
+        response = self.client.get(reverse("settings:production_unit_list"))
         self.assertEqual(response.status_code, 302)
 
 
@@ -54,232 +38,143 @@ class TestDashboardView(SettingsViewTestBase):
     def test_dashboard_200(self):
         response = self.client.get(reverse("settings:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Settings")
+        self.assertContains(response, "Restaurant Settings")
 
 
-class TestBranchViews(SettingsViewTestBase):
-    def test_branch_list_200(self):
-        response = self.client.get(reverse("settings:branch_list"))
+class TestRestaurantSettingsView(SettingsViewTestBase):
+    def _post_data(self, **overrides):
+        data = {
+            "company": "Test Co",
+            "invoice_series_prefix": "REST-",
+            "address": "123 Street",
+            "active_menu": "",
+            "store_warehouse": "",
+            "default_warehouse": "",
+            "max_open_drafts": "50",
+        }
+        data.update(overrides)
+        return data
+
+    def test_get_200_no_config(self):
+        response = self.client.get(reverse("settings:restaurant_settings"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Branch")
+        self.assertContains(response, "Create Settings")
 
-    def test_branch_create_get(self):
-        response = self.client.get(reverse("settings:branch_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create Branch")
+    def test_post_creates_singleton(self):
+        response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        self.assertEqual(Restaurant.objects.count(), 1)
+        self.assertEqual(Restaurant.objects.get().company, "Test Co")
 
-    def test_branch_create_post(self):
-        response = self.client.post(
-            reverse("settings:branch_create"),
-            {"name": "New Branch"},
-        )
-        self.assertRedirects(response, reverse("settings:branch_list"))
-        self.assertTrue(Branch.objects.filter(name="New Branch").exists())
-
-    def test_branch_detail_200(self):
-        response = self.client.get(reverse("settings:branch_detail", kwargs={"pk": self.branch.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Branch")
-
-    def test_branch_detail_404(self):
-        response = self.client.get(reverse("settings:branch_detail", kwargs={"pk": 9999}))
-        self.assertEqual(response.status_code, 404)
-
-    def test_branch_update_get(self):
-        response = self.client.get(reverse("settings:branch_update", kwargs={"pk": self.branch.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Edit Branch")
-
-    def test_branch_update_post(self):
-        response = self.client.post(
-            reverse("settings:branch_update", kwargs={"pk": self.branch.pk}),
-            {"name": "Updated Branch"},
-        )
-        self.assertRedirects(response, reverse("settings:branch_detail", kwargs={"pk": self.branch.pk}))
-        self.branch.refresh_from_db()
-        self.assertEqual(self.branch.name, "Updated Branch")
-
-
-class TestRoomViews(SettingsViewTestBase):
-    def test_room_list_200(self):
-        response = self.client.get(reverse("settings:room_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Hall")
-
-    def test_room_create_get(self):
-        response = self.client.get(reverse("settings:room_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="branch"')
-
-    def test_room_create_post(self):
-        response = self.client.post(
-            reverse("settings:room_create"),
-            {"name": "Garden"},
-        )
-        self.assertRedirects(response, reverse("settings:room_list"))
-        room = Room.objects.get(name="Garden")
-        self.assertEqual(room.branch_id, self.branch.pk)
-
-    def test_room_detail_200(self):
-        response = self.client.get(reverse("settings:room_detail", kwargs={"pk": self.room.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Hall")
-
-    def test_room_update_get(self):
-        response = self.client.get(reverse("settings:room_update", kwargs={"pk": self.room.pk}))
-        self.assertEqual(response.status_code, 200)
-
-    def test_room_update_post(self):
-        response = self.client.post(
-            reverse("settings:room_update", kwargs={"pk": self.room.pk}),
-            {"name": "Main Hall"},
-        )
-        self.assertRedirects(response, reverse("settings:room_detail", kwargs={"pk": self.room.pk}))
-        self.room.refresh_from_db()
-        self.assertEqual(self.room.name, "Main Hall")
-        self.assertEqual(self.room.branch_id, self.branch.pk)
-
-
-class TestTableViews(SettingsViewTestBase):
-    def test_table_list_200(self):
-        response = self.client.get(reverse("settings:table_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "T1")
-
-    def test_table_list_filter_by_room(self):
-        response = self.client.get(reverse("settings:table_list"), {"room": str(self.room.pk)})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "T1")
-
-    def test_table_layout_200(self):
-        response = self.client.get(reverse("settings:table_layout"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_table_create_get(self):
-        response = self.client.get(reverse("settings:table_create"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_table_create_post(self):
-        response = self.client.post(
-            reverse("settings:table_create"),
-            {
-                "room": self.room.pk,
-                "name": "T2",
-                "no_of_seats": "2",
-                "minimum_seating": "",
-                "table_shape": "SQUARE",
-                "is_take_away": "",
-            },
-        )
-        self.assertRedirects(response, reverse("settings:table_list"))
-        table = Table.objects.get(name="T2")
-        self.assertEqual(table.branch_id, self.room.branch_id)
-
-    def test_table_detail_200(self):
-        response = self.client.get(reverse("settings:table_detail", kwargs={"pk": self.table.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "T1")
-
-    def test_table_update_get(self):
-        response = self.client.get(reverse("settings:table_update", kwargs={"pk": self.table.pk}))
-        self.assertEqual(response.status_code, 200)
-
-    def test_table_update_layout_post(self):
-        response = self.client.post(
-            reverse("settings:table_update_layout", kwargs={"pk": self.table.pk}),
-            {"x": "10.5", "y": "20.0", "width": "120", "height": "80"},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.table.refresh_from_db()
-        self.assertEqual(self.table.layout_x, 10.5)
-        self.assertEqual(self.table.layout_y, 20.0)
-
-    def test_table_update_layout_invalid(self):
-        response = self.client.post(
-            reverse("settings:table_update_layout", kwargs={"pk": self.table.pk}),
-            {"x": "abc", "y": "20", "width": "120", "height": "80"},
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_table_update_layout_requires_post(self):
-        response = self.client.get(reverse("settings:table_update_layout", kwargs={"pk": self.table.pk}))
-        self.assertEqual(response.status_code, 405)
-
-
-class TestRestaurantViews(SettingsViewTestBase):
-    def test_restaurant_detail_no_config(self):
-        Restaurant.objects.all().delete()
-        response = self.client.get(reverse("settings:restaurant_detail"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No restaurant configuration")
-
-    def test_restaurant_detail_with_config(self):
-        Restaurant.objects.create(company="Test Co", branch=self.branch, default_room=self.room)
-        response = self.client.get(reverse("settings:restaurant_detail"))
+    def test_get_with_config(self):
+        Restaurant.objects.create(company="Test Co")
+        response = self.client.get(reverse("settings:restaurant_settings"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Co")
 
-    def test_restaurant_update_redirects_when_no_config(self):
-        Restaurant.objects.all().delete()
-        response = self.client.get(reverse("settings:restaurant_update"))
-        self.assertRedirects(response, reverse("settings:restaurant_detail"))
+    def test_post_updates_singleton(self):
+        restaurant = Restaurant.objects.create(company="Test Co")
+        response = self.client.post(reverse("settings:restaurant_settings"), self._post_data(company="Updated Co"))
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        restaurant.refresh_from_db()
+        self.assertEqual(restaurant.company, "Updated Co")
+        self.assertEqual(Restaurant.objects.count(), 1)
 
-    def test_restaurant_update_get(self):
-        Restaurant.objects.create(company="Test Co", branch=self.branch, default_room=self.room)
-        response = self.client.get(reverse("settings:restaurant_update"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_restaurant_update_post(self):
-        Restaurant.objects.create(company="Test Co", branch=self.branch, default_room=self.room)
+    def test_post_sets_default_warehouse(self):
+        warehouse = Warehouse.objects.create(name="Kitchen")
         response = self.client.post(
-            reverse("settings:restaurant_update"),
-            {
-                "company": "Updated Co",
-                "invoice_series_prefix": "REST-",
-                "address": "123 Street",
-                "default_room": self.room.pk,
-            },
+            reverse("settings:restaurant_settings"), self._post_data(default_warehouse=warehouse.pk)
         )
-        self.assertRedirects(response, reverse("settings:restaurant_detail"))
-        r = Restaurant.objects.get(branch=self.branch)
-        self.assertEqual(r.company, "Updated Co")
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        self.assertEqual(Restaurant.objects.get().default_warehouse_id, warehouse.pk)
 
-
-class TestUserRoomAssignmentViews(SettingsViewTestBase):
-    def test_user_room_list_200(self):
-        UserRoomAssignment.objects.create(user=self.user, room=self.room, branch=self.branch)
-        response = self.client.get(reverse("settings:user_room_list"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_user_room_create_get(self):
-        response = self.client.get(reverse("settings:user_room_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'name="branch"')
-
-    def test_user_room_create_post(self):
+    def test_post_sets_store_warehouse_and_uses_clear_labels(self):
+        store = Warehouse.objects.create(name="Store")
+        bar = Warehouse.objects.create(name="Bar")
         response = self.client.post(
-            reverse("settings:user_room_create"),
-            {"user": self.user.pk, "room": self.room.pk},
+            reverse("settings:restaurant_settings"),
+            self._post_data(store_warehouse=store.pk, default_warehouse=bar.pk),
         )
-        self.assertRedirects(response, reverse("settings:user_room_list"))
-        assignment = UserRoomAssignment.objects.get(user=self.user, room=self.room)
-        self.assertEqual(assignment.branch_id, self.room.branch_id)
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        restaurant = Restaurant.objects.get()
+        self.assertEqual((restaurant.store_warehouse, restaurant.default_warehouse), (store, bar))
+        response = self.client.get(reverse("settings:restaurant_settings"))
+        self.assertContains(response, "Central Store warehouse")
+        self.assertContains(response, "Bar / POS sales warehouse")
 
-    def test_user_room_update_get(self):
-        a = UserRoomAssignment.objects.create(user=self.user, room=self.room, branch=self.branch)
-        response = self.client.get(reverse("settings:user_room_update", kwargs={"pk": a.pk}))
+    def test_cashier_cannot_post(self):
+        cashier = CustomUser.objects.create_user(username="cashier@test.com", password="testpass123")
+        cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+        cashier.groups.add(cashier_group)
+        self.client.login(username="cashier@test.com", password="testpass123")
+        response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Restaurant.objects.exists())
+
+
+class TestProductionUnitViews(SettingsViewTestBase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.warehouse = Warehouse.objects.create(name="Kitchen")
+        cls.unit = ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
+
+    def _post_data(self, **overrides):
+        data = {
+            "name": "Bar",
+            "department": "DRINKS",
+            "warehouse": self.warehouse.pk,
+            "printer_ip": "192.168.1.51",
+            "printer_paper_width": "WIDTH_80MM",
+            "printer_cut_mode": "FULL_CUT",
+        }
+        data.update(overrides)
+        return data
+
+    def test_list_200(self):
+        response = self.client.get(reverse("settings:production_unit_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kitchen")
+
+    def test_list_filter_by_department(self):
+        unit_url = reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk})
+        response = self.client.get(reverse("settings:production_unit_list"), {"department": "DRINKS"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, unit_url)
+        response = self.client.get(reverse("settings:production_unit_list"), {"department": "FOOD"})
+        self.assertContains(response, unit_url)
+
+    def test_create_get(self):
+        response = self.client.get(reverse("settings:production_unit_create"))
         self.assertEqual(response.status_code, 200)
 
-    def test_user_room_delete_post(self):
-        a = UserRoomAssignment.objects.create(user=self.user, room=self.room, branch=self.branch)
-        response = self.client.post(reverse("settings:user_room_delete", kwargs={"pk": a.pk}))
-        self.assertRedirects(response, reverse("settings:user_room_list"))
-        self.assertFalse(UserRoomAssignment.objects.filter(pk=a.pk).exists())
+    def test_create_post(self):
+        response = self.client.post(reverse("settings:production_unit_create"), self._post_data())
+        self.assertRedirects(response, reverse("settings:production_unit_list"))
+        self.assertTrue(ProductionUnit.objects.filter(name="Bar").exists())
 
-    def test_user_room_delete_requires_post(self):
-        a = UserRoomAssignment.objects.create(user=self.user, room=self.room, branch=self.branch)
-        response = self.client.get(reverse("settings:user_room_delete", kwargs={"pk": a.pk}))
-        self.assertEqual(response.status_code, 405)
+    def test_detail_200(self):
+        response = self.client.get(reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kitchen")
+
+    def test_detail_404(self):
+        response = self.client.get(reverse("settings:production_unit_detail", kwargs={"pk": 9999}))
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_post(self):
+        response = self.client.post(
+            reverse("settings:production_unit_update", kwargs={"pk": self.unit.pk}),
+            self._post_data(name="Main Kitchen", department="FOOD"),
+        )
+        self.assertRedirects(response, reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk}))
+        self.unit.refresh_from_db()
+        self.assertEqual(self.unit.name, "Main Kitchen")
+
+    def test_delete_post(self):
+        response = self.client.post(reverse("settings:production_unit_delete", kwargs={"pk": self.unit.pk}))
+        self.assertRedirects(response, reverse("settings:production_unit_list"))
+        self.assertFalse(ProductionUnit.objects.filter(pk=self.unit.pk).exists())
 
 
 class TestStaffManagementViews(TestCase):
@@ -297,8 +192,6 @@ class TestStaffManagementViews(TestCase):
         cls.newbie = CustomUser.objects.create_user(
             username="newbie@test.com", password="testpass123", email="newbie@test.com"
         )
-        from django.contrib.auth.models import Group
-
         cls.admin_group, _ = Group.objects.get_or_create(name="RestPOS Admin")
         cls.manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")

@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
@@ -12,7 +14,7 @@ from .forms import (
     MenuForm,
     MenuItemForm,
 )
-from .models import ItemAddOn, ItemVariant, Menu, MenuItem, PriceList
+from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 
 @login_required
@@ -20,7 +22,6 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "menu_count": Menu.objects.count(),
         "menu_item_count": MenuItem.objects.count(),
-        "price_list_count": PriceList.objects.count(),
         "add_on_count": ItemAddOn.objects.count(),
         "variant_count": ItemVariant.objects.count(),
     }
@@ -102,16 +103,14 @@ def menu_item_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def menu_item_create(request: HttpRequest) -> HttpResponse:
-    menu_id = request.POST.get("menu") or request.GET.get("menu")
+    menu_id = request.GET.get("menu")
     if request.method == "POST":
         form = MenuItemForm(request.POST)
         if form.is_valid():
-            if menu_id:
-                form.instance.menu_id = menu_id
             menu_item = form.save()
             return redirect("menu:menu_detail", pk=menu_item.menu_id)
     else:
-        form = MenuItemForm()
+        form = MenuItemForm(initial={"menu": menu_id} if menu_id else None)
     return render(
         request,
         "backoffice/menu/menu_item_form.html",
@@ -155,7 +154,7 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     add_ons = ItemAddOn.objects.select_related("parent_item", "add_on_item").all()
     if parent_id:
-        add_ons = add_ons.filter(parent_item_id=parent_id)
+        add_ons = add_ons.filter(parent_item_id=cast(int, parent_id))
     parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
@@ -211,7 +210,7 @@ def variant_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     variants = ItemVariant.objects.select_related("parent_item", "variant_item").all()
     if parent_id:
-        variants = variants.filter(parent_item_id=parent_id)
+        variants = variants.filter(parent_item_id=cast(int, parent_id))
     parent_items = Item.objects.filter(pos_variants__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
@@ -255,26 +254,3 @@ def variant_delete(request: HttpRequest, pk: int) -> HttpResponse:
     variant = get_object_or_404(ItemVariant, pk=pk)
     variant.delete()
     return redirect("menu:variant_list")
-
-
-# ---------------------------------------------------------------------------
-# PriceList
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def price_list_list(request: HttpRequest) -> HttpResponse:
-    # select_related avoids per-row FK fetch of pl.menu; annotate avoids per-row COUNT.
-    price_lists = PriceList.objects.select_related("menu").annotate(price_count=Count("prices"))
-    return render(request, "backoffice/menu/price_list_list.html", {"price_lists": price_lists})
-
-
-@login_required
-def price_list_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    price_list = get_object_or_404(PriceList.objects.select_related("menu"), pk=pk)
-    item_prices = price_list.prices.select_related("item", "uom").all()
-    return render(
-        request,
-        "backoffice/menu/price_list_detail.html",
-        {"price_list": price_list, "item_prices": item_prices},
-    )

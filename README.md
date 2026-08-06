@@ -1,6 +1,6 @@
 # RestPOS
 
-RestPOS is a light weight and easy to use web-based application designed for streamlined order management. It serves as an efficient tool for both cashiers and captains, facilitating order processing at the cash counter and tables.It supports various order types, including dine-in, delivery, takeout and Aggregator.
+RestPOS is a lightweight web-based POS for restaurant order management. Cashiers enter all orders and payments at the counter; waiters use physical dockets and do not access the system. It supports dine-in, delivery, takeaway, and related order types.
 
 ## Quickstart
 
