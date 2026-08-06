@@ -1,49 +1,47 @@
 {% if nav_location == "header" %}
 <div id="pos-header-nav"{% if shell_nav_oob %} hx-swap-oob="outerHTML"{% endif %}{% if show_order_tabs %} class="mr-auto flex items-center"{% endif %}>
   {% if show_order_tabs %}
-  <nav aria-label="Order views" class="flex items-center gap-1">
+  <nav aria-label="Order views" class="inline-flex items-center rounded-full bg-slate-100 p-1 ring-1 ring-slate-200/80">
     <a href="{% url 'pos:pos_home' %}" hx-get="{% url 'pos:pos_home' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
        {% if pos_nav == "open" %}aria-current="page"{% endif %}
-       class="inline-flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-colors {% if pos_nav == 'open' %}bg-teal-50 text-teal-700{% else %}text-slate-500 hover:bg-slate-50 hover:text-teal-700{% endif %}">
-      {% hgi_stroke name="invoice-01" size="17" color="currentColor" stroke_width="2" %}
-      Open
-      <span class="inline-flex min-w-6 items-center justify-center rounded-md bg-slate-900/5 px-1.5 py-0.5 text-[10px] tabular-nums text-slate-500">{{ draft_count }}</span>
+       class="inline-flex min-h-9 items-center gap-2 rounded-full px-3.5 text-sm font-bold transition-all duration-150 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 {% if pos_nav == 'open' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">
+      <span>Open</span>
+      <span class="inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums {% if pos_nav == 'open' %}bg-teal-50 text-teal-700{% else %}bg-slate-200/80 text-slate-500{% endif %}">{{ draft_count }}</span>
     </a>
     <a href="{% url 'pos:pos_order_history' %}" hx-get="{% url 'pos:pos_order_history' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
        {% if pos_nav == "history" %}aria-current="page"{% endif %}
-       class="inline-flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-colors {% if pos_nav == 'history' %}bg-teal-50 text-teal-700{% else %}text-slate-500 hover:bg-slate-50 hover:text-teal-700{% endif %}">
-      {% hgi_stroke name="clock-01" size="17" color="currentColor" stroke_width="2" %}
-      History
+       class="inline-flex min-h-9 items-center gap-2 rounded-full px-3.5 text-sm font-bold transition-all duration-150 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 {% if pos_nav == 'history' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-500 hover:text-slate-800{% endif %}">
+      <span>History</span>
     </a>
   </nav>
   {% endif %}
 </div>
 {% else %}
 <div id="pos-footer-nav"{% if shell_nav_oob %} hx-swap-oob="outerHTML"{% endif %}>
-  <nav aria-label="POS navigation" class="flex items-center justify-center gap-1 sm:gap-3">
+  <nav aria-label="POS navigation" class="inline-flex items-center rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200/80">
     <a href="{% url 'pos:pos_home' %}" hx-get="{% url 'pos:pos_home' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
        {% if pos_nav == "open" or pos_nav == "history" %}aria-current="page"{% endif %}
-       class="flex min-w-20 flex-col items-center gap-1 rounded-xl px-4 py-1 text-[11px] font-bold transition-colors {% if pos_nav == 'open' or pos_nav == 'history' %}text-teal-700{% else %}text-slate-500 hover:bg-teal-50 hover:text-teal-700{% endif %}">
+       class="flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-xl px-5 py-1.5 text-[11px] font-bold transition-all duration-150 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 {% if pos_nav == 'open' or pos_nav == 'history' %}bg-white text-teal-700 shadow-sm{% else %}text-slate-400 hover:text-slate-600{% endif %}">
       <span class="flex size-6 items-center justify-center">
-        {% hgi_stroke name="home-01" size="21" color="currentColor" stroke_width="2" %}
+        {% hgi_stroke name="home-01" size="20" color="currentColor" stroke_width="2" %}
       </span>
-      Orders
+      <span>Orders</span>
     </a>
     {% if order %}
     <a href="{% url 'pos:pos_order_screen' order.pk %}" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
        {% if pos_nav == "order" %}aria-current="page"{% endif %}
-       class="flex min-w-20 flex-col items-center gap-1 rounded-xl px-4 py-1 text-[11px] font-bold {% if pos_nav == 'order' %}bg-teal-50 text-teal-700{% else %}text-slate-500 hover:bg-teal-50 hover:text-teal-700{% endif %}">
+       class="flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-xl px-5 py-1.5 text-[11px] font-bold transition-all duration-150 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 {% if pos_nav == 'order' %}bg-white text-teal-700 shadow-sm{% else %}text-slate-400 hover:text-slate-600{% endif %}">
       <span class="flex size-6 items-center justify-center">
-        {% hgi_stroke name="credit-card" size="21" color="currentColor" stroke_width="2" %}
+        {% hgi_stroke name="credit-card" size="20" color="currentColor" stroke_width="2" %}
       </span>
-      POS
+      <span>POS</span>
     </a>
     {% else %}
-    <span aria-disabled="true" class="flex min-w-20 cursor-not-allowed flex-col items-center gap-1 rounded-xl px-4 py-1 text-[11px] font-bold text-slate-300">
+    <span aria-disabled="true" class="flex min-w-[5.5rem] cursor-not-allowed flex-col items-center gap-0.5 rounded-xl px-5 py-1.5 text-[11px] font-bold text-slate-300">
       <span class="flex size-6 items-center justify-center">
-        {% hgi_stroke name="credit-card" size="21" color="currentColor" stroke_width="2" %}
+        {% hgi_stroke name="credit-card" size="20" color="currentColor" stroke_width="2" %}
       </span>
-      POS
+      <span>POS</span>
     </span>
     {% endif %}
   </nav>

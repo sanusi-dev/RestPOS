@@ -10,6 +10,8 @@ class UserConfig(AppConfig):
         from django.contrib.auth.models import Group
         from django.db.models.signals import post_migrate
 
+        # These names are the stable role identifiers used by CustomUser's
+        # permission properties, so keep seed data and authorization aligned.
         def create_roles(**kwargs):
             Group.objects.get_or_create(name="RestPOS Admin")
             Group.objects.get_or_create(name="RestPOS Manager")

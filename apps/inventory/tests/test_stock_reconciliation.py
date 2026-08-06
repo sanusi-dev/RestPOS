@@ -51,6 +51,8 @@ class StockReconciliationTest(TestCase):
         rec = self.make_reconciliation()
         line = StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
         StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
+        # The line snapshot is intentionally stale; submit() must lock and read
+        # the current Bin rather than trusting current_qty from line creation.
         self.assertEqual(line.current_qty, Decimal("0"))
         rec.submit()
         line.refresh_from_db()

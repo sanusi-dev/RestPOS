@@ -1,4 +1,4 @@
-{% comment %}---- Guests stepper ----{% endcomment %}
+{% comment %}Disabled controls reflect the current order state, but the view still validates every change server-side.{% endcomment %}
 <div class="border-b border-slate-200 bg-slate-100 p-3">
   <div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
     <div class="flex items-center justify-between gap-3 border-b border-slate-200 pb-2.5">
@@ -17,15 +17,19 @@
                   hx-vals='{"guest_delta": "-1"}'
                   hx-target="#cart-panel" hx-swap="outerHTML"
                   aria-label="Decrease customer count"
-                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
-                  {% if order.guest_count <= 1 or order_sent or order.invoice_printed %}disabled{% endif %}>−</button>
+                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-all duration-150 hover:bg-slate-50 active:scale-90 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100"
+                  {% if order.guest_count <= 1 or order_sent or order.invoice_printed %}disabled{% endif %}>
+            −
+          </button>
           <span class="flex min-h-10 min-w-9 items-center justify-center border-x border-slate-200 text-sm font-extrabold tabular-nums text-slate-900">{{ order.guest_count }}</span>
           <button hx-post="{% url 'pos:pos_order_update_meta' order.pk %}"
                   hx-vals='{"guest_delta": "1"}'
                   hx-target="#cart-panel" hx-swap="outerHTML"
                   aria-label="Increase customer count"
-                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
-                  {% if order_sent or order.invoice_printed %}disabled{% endif %}>+</button>
+                  class="flex min-h-10 min-w-10 items-center justify-center text-base font-bold text-slate-600 transition-all duration-150 hover:bg-slate-50 active:scale-90 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100"
+                  {% if order_sent or order.invoice_printed %}disabled{% endif %}>
+            +
+          </button>
         </div>
       </div>
 
@@ -38,18 +42,18 @@
                   hx-vals='{"order_type": "{{ value }}"}'
                   hx-target="#cart-panel" hx-swap="outerHTML"
                   aria-pressed="{% if order.order_type == value %}true{% else %}false{% endif %}"
-                  class="min-h-10 rounded-xl border bg-transparent px-2 text-xs font-bold transition-colors
+                  class="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border bg-transparent px-2 text-xs font-bold transition-all duration-150 active:scale-[0.97]
                          {% if order.order_type == value %}border-teal-600 text-teal-800 ring-1 ring-teal-600/20{% else %}border-slate-300 text-slate-600 hover:border-teal-400 hover:text-teal-800{% endif %}
-                         {% if order_sent %}cursor-not-allowed opacity-50{% endif %}"
-                  {% if order_sent %}disabled{% endif %}>
-            <span class="mr-1 inline-flex size-4 items-center justify-center align-middle">
+                         {% if order_sent or order.invoice_printed %}cursor-not-allowed opacity-50 active:scale-100{% endif %}"
+                  {% if order_sent or order.invoice_printed %}disabled{% endif %}>
+            <span class="inline-flex size-4 items-center justify-center">
               {% if value == "DINE_IN" %}
-                {% hgi_stroke name="restaurant-table" size="16" color="currentColor" stroke_width="2" %}
+                {% hgi_stroke name="kitchen-utensils" size="16" color="currentColor" stroke_width="2" %}
               {% else %}
                 {% hgi_stroke name="package" size="16" color="currentColor" stroke_width="2" %}
               {% endif %}
             </span>
-            {{ label }}
+            <span>{{ label }}</span>
           </button>
           {% endfor %}
         </div>

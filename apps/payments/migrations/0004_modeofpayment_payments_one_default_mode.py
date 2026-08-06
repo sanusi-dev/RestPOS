@@ -3,15 +3,35 @@
 from django.db import migrations, models
 
 
+def ensure_one_default_mode(apps, schema_editor):
+    ModeOfPayment = apps.get_model("payments", "ModeOfPayment")
+    if ModeOfPayment.objects.filter(is_default=True).exists():
+        return
+    cash = ModeOfPayment.objects.filter(name="Cash").first()
+    if cash is not None:
+        cash.is_default = True
+        cash.save(update_fields=["is_default"])
+        return
+    first = ModeOfPayment.objects.order_by("pk").first()
+    if first is not None:
+        first.is_default = True
+        first.save(update_fields=["is_default"])
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payments', '0003_alter_paymentglmapping_options_and_more'),
+        ("payments", "0003_alter_paymentglmapping_options_and_more"),
     ]
 
     operations = [
+        migrations.RunPython(ensure_one_default_mode, migrations.RunPython.noop),
         migrations.AddConstraint(
-            model_name='modeofpayment',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_default', True)), fields=('is_default',), name='payments_one_default_mode'),
+            model_name="modeofpayment",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("is_default", True)),
+                fields=("is_default",),
+                name="payments_one_default_mode",
+            ),
         ),
     ]

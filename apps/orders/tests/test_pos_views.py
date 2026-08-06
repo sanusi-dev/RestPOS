@@ -14,7 +14,7 @@ from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import ItemAddOn, Menu, MenuItem
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
-from apps.staff.models import OpeningPayment, POSOpeningEntry
+from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
@@ -219,16 +219,17 @@ class POSShiftCloseTest(POSViewTestBase):
     def test_close_shift_page_shows_reconciliation_fields(self):
         response = self.client.get(reverse("pos:pos_close_shift"))
 
-        self.assertContains(response, "Total Expected")
-        self.assertContains(response, "Total Counted")
-        self.assertContains(response, "Overall Variance")
-        self.assertContains(response, "Notes")
+        self.assertContains(response, "Expected")
+        self.assertContains(response, "Counted")
+        self.assertContains(response, "Variance")
+        self.assertContains(response, "Close shift")
+        self.assertNotContains(response, "Notes")
 
     def test_close_shift_htmx_get_returns_only_the_close_surface(self):
         response = self.client.get(reverse("pos:pos_close_shift"), HTTP_HX_REQUEST="true")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Total Expected")
+        self.assertContains(response, "Count the drawer")
         self.assertNotContains(response, "<html")
         self.assertNotContains(response, 'id="pos-main"')
         self.assertContains(response, f'hx-post="{reverse("pos:pos_close_shift")}"')
@@ -239,7 +240,7 @@ class POSShiftCloseTest(POSViewTestBase):
 
         response = self.client.get(reverse("pos:pos_close_shift"))
 
-        self.assertContains(response, "Resolve open orders first")
+        self.assertContains(response, "Finish open orders first")
         self.assertContains(response, "1 open order")
         self.opening.refresh_from_db()
         self.assertIsNone(self.opening.closing_entry_id)
@@ -255,7 +256,6 @@ class POSShiftCloseTest(POSViewTestBase):
 
     def test_close_shift_saves_notes_and_closes_opening(self):
         response = self.client.get(reverse("pos:pos_close_shift"))
-        closing = response.context["closing"]
         form_data = response.context["form_data"]
         post_data = {form["closing_amount"].html_name: str(payment.expected_amount) for payment, form in form_data}
         post_data["remarks"] = "Counted with manager"
@@ -263,11 +263,21 @@ class POSShiftCloseTest(POSViewTestBase):
         response = self.client.post(reverse("pos:pos_close_shift"), post_data)
 
         self.assertEqual(response.status_code, 302)
-        closing.refresh_from_db()
         self.opening.refresh_from_db()
+        closing = POSClosingEntry.objects.get(opening_entry=self.opening)
         self.assertEqual(closing.remarks, "Counted with manager")
         self.assertEqual(closing.status, closing.SUBMITTED)
         self.assertEqual(self.opening.closing_entry_id, closing.pk)
+
+    def test_close_shift_get_does_not_create_closing_rows(self):
+        from apps.staff.models import ClosingPayment
+
+        before_entries = POSClosingEntry.objects.count()
+        before_payments = ClosingPayment.objects.count()
+        response = self.client.get(reverse("pos:pos_close_shift"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(POSClosingEntry.objects.count(), before_entries)
+        self.assertEqual(ClosingPayment.objects.count(), before_payments)
 
     def test_close_shift_htmx_success_returns_no_shift_surface_and_pushes_home_url(self):
         response = self.client.get(reverse("pos:pos_close_shift"))
@@ -334,7 +344,17 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertNotContains(response, "<html")
         self.assertNotContains(response, 'id="pos-main"')
         self.assertContains(response, 'hx-swap-oob="outerHTML"')
+        # Cashiers without the restaurant setting only see Sales.
+        self.assertNotContains(response, 'hx-get="?status=all')
+        self.assertContains(response, 'hx-get="?status=sales')
+
+    def test_history_full_filters_when_restaurant_setting_enabled(self):
+        self.restaurant.pos_allow_full_history = True
+        self.restaurant.save(update_fields=["pos_allow_full_history"])
+        response = self.client.get(reverse("pos:pos_order_history"))
         self.assertContains(response, 'hx-get="?status=all')
+        self.assertContains(response, 'hx-get="?status=returns')
+        self.assertContains(response, 'hx-get="?status=cancelled')
 
     def test_history_view_link_targets_drawer_without_url_push(self):
         response = self.client.get(reverse("pos:pos_order_history"))
@@ -361,6 +381,7 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, "₦0")
         self.assertContains(response, "No items recorded")
         self.assertContains(response, "orderDetailsDrawer")
+        self.assertContains(response, "animate: true")
         self.assertNotContains(response, "<html")
         self.assertNotContains(response, 'id="pos-main"')
         self.assertNotContains(response, 'hx-swap-oob="outerHTML"')
@@ -381,14 +402,24 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertNotIn("HX-Push-Url", response)
         self.assertContains(response, 'role="dialog"')
         self.assertContains(response, "Print receipt")
+        # Re-render after print must not re-run the slide-in animation.
+        self.assertContains(response, "animate: false")
         self.assertNotContains(response, "<html")
 
     def test_history_all_filter_includes_sales_returns_and_cancelled(self):
+        self.restaurant.pos_allow_full_history = True
+        self.restaurant.save(update_fields=["pos_allow_full_history"])
         response = self.client.get(reverse("pos:pos_order_history"), {"status": "all"})
 
         self.assertContains(response, "#101")
         self.assertContains(response, "#102")
         self.assertContains(response, "#103")
+
+    def test_cashier_without_full_history_is_forced_to_sales(self):
+        response = self.client.get(reverse("pos:pos_order_history"), {"status": "all"})
+        self.assertContains(response, "#101")
+        self.assertNotContains(response, "#102")
+        self.assertNotContains(response, "#103")
 
     def test_history_with_cleared_date_shows_older_orders(self):
         older_sale = Order.objects.create(
@@ -406,6 +437,8 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, f"#{older_sale.order_number}")
 
     def test_history_filters_returns_and_cancelled(self):
+        self.restaurant.pos_allow_full_history = True
+        self.restaurant.save(update_fields=["pos_allow_full_history"])
         returns_response = self.client.get(reverse("pos:pos_order_history"), {"status": "returns"})
         cancelled_response = self.client.get(reverse("pos:pos_order_history"), {"status": "cancelled"})
 
@@ -1101,14 +1134,15 @@ class POSPrintTest(POSViewTestBase):
         self.assertContains(response, "Reprint Receipt")
 
     @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_failed_receipt_print_does_not_mark_invoice_printed(self, print_receipt):
+    def test_failed_receipt_print_still_claims_printed_state(self, print_receipt):
+        """DB claim happens before the agent so a successful print cannot leave state unprinted."""
         print_receipt.return_value = PrintResult(success=False, ticket_type="receipt")
         response = self.client.post(
             reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
         )
         self.assertEqual(response.status_code, 200)
         self.order.refresh_from_db()
-        self.assertFalse(self.order.invoice_printed)
+        self.assertTrue(self.order.invoice_printed)
         self.assertContains(response, "Receipt printing failed. Try again.")
 
     @patch("apps.orders.views_pos.printing.print_receipt")

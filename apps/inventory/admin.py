@@ -16,6 +16,50 @@ from .models import (
 )
 
 
+class SubmittedDocumentAdminMixin:
+    """Lock submitted/cancelled inventory documents in Django admin."""
+
+    IMMUTABLE_STATUSES = frozenset({"SUBMITTED", "CANCELLED"})
+
+    def _is_immutable(self, obj):
+        return obj is not None and getattr(obj, "status", None) in self.IMMUTABLE_STATUSES
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if self._is_immutable(obj):
+            return [field.name for field in self.model._meta.fields]
+        return readonly
+
+    def has_delete_permission(self, request, obj=None):
+        if self._is_immutable(obj):
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        if self._is_immutable(obj):
+            return False
+        return super().has_change_permission(request, obj)
+
+
+class SubmittedInlineMixin:
+    """Make inlines read-only when the parent document is submitted or cancelled."""
+
+    def has_add_permission(self, request, obj=None):
+        if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
+            return False
+        return super().has_add_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
+            return False
+        return super().has_delete_permission(request, obj)
+
+
 @admin.register(UOM)
 class UOMAdmin(admin.ModelAdmin):
     list_display = ("name", "created_at")
@@ -88,15 +132,21 @@ class StockLedgerEntryAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def has_change_permission(self, request, obj=None):
+        return False
 
-class StockEntryDetailInline(admin.TabularInline):
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class StockEntryDetailInline(SubmittedInlineMixin, admin.TabularInline):
     model = StockEntryDetail
     extra = 1
     exclude = ("source_warehouse", "target_warehouse")
 
 
 @admin.register(StockEntry)
-class StockEntryAdmin(admin.ModelAdmin):
+class StockEntryAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
     list_display = ("id", "purpose", "posting_date", "status")
     list_filter = ("purpose", "status")
     search_fields = ("remarks",)
@@ -104,14 +154,14 @@ class StockEntryAdmin(admin.ModelAdmin):
     inlines = [StockEntryDetailInline]
 
 
-class StockReconciliationItemInline(admin.TabularInline):
+class StockReconciliationItemInline(SubmittedInlineMixin, admin.TabularInline):
     model = StockReconciliationItem
     extra = 1
     readonly_fields = ("current_qty",)
 
 
 @admin.register(StockReconciliation)
-class StockReconciliationAdmin(admin.ModelAdmin):
+class StockReconciliationAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
     list_display = ("id", "purpose", "reason", "posting_date", "warehouse", "status")
     list_filter = ("purpose", "reason", "status", "posting_date")
     list_select_related = ("warehouse",)
@@ -120,14 +170,14 @@ class StockReconciliationAdmin(admin.ModelAdmin):
     inlines = [StockReconciliationItemInline]
 
 
-class PurchaseReceiptItemInline(admin.TabularInline):
+class PurchaseReceiptItemInline(SubmittedInlineMixin, admin.TabularInline):
     model = PurchaseReceiptItem
     extra = 1
     readonly_fields = ("amount",)
 
 
 @admin.register(PurchaseReceipt)
-class PurchaseReceiptAdmin(admin.ModelAdmin):
+class PurchaseReceiptAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
     list_display = ("supplier_name", "posting_date", "status", "warehouse", "total")
     list_filter = ("status", "posting_date", "warehouse")
     list_select_related = ("warehouse",)
@@ -137,4 +187,9 @@ class PurchaseReceiptAdmin(admin.ModelAdmin):
     readonly_fields = ("total",)
 
     def get_readonly_fields(self, request, obj=None):
-        return (*self.readonly_fields, "warehouse")
+        readonly = list(super().get_readonly_fields(request, obj))
+        if "warehouse" not in readonly:
+            readonly.append("warehouse")
+        if "total" not in readonly:
+            readonly.append("total")
+        return readonly

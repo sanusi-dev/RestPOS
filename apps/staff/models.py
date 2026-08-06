@@ -97,6 +97,8 @@ class POSOpeningEntry(BaseModel):
         with transaction.atomic():
             from apps.settings.models import Restaurant
 
+            # Lock the Restaurant row as a single global mutex so two
+            # concurrent shift-open POSTs can't both pass the check below.
             Restaurant.objects.select_for_update().first()
             open_exists = (
                 POSOpeningEntry.objects.select_for_update()
@@ -121,6 +123,14 @@ class POSOpeningEntry(BaseModel):
         if self.closing_entry_id is not None:
             raise ValidationError(
                 "Cannot cancel a shift that has already been closed. Cancel the closing entry instead."
+            )
+        from apps.orders.models import Order
+
+        order_count = Order.objects.filter(opening_entry_id=self.pk).count()
+        if order_count:
+            raise ValidationError(
+                f"Cannot cancel a shift that has {order_count} order{'s' if order_count != 1 else ''}. "
+                "Settle, cancel, or discard every order first."
             )
         self.status = self.CANCELLED
         self.cancelled_at = timezone.now()
@@ -227,6 +237,8 @@ class POSClosingEntry(BaseModel):
         opening = POSOpeningEntry.objects.select_for_update().get(pk=closing.opening_entry_id)
         if not opening.is_open:
             raise ValidationError("The opening shift is no longer open.")
+        # Cut off at submit time so orders settled after the draft was opened are included.
+        closing.period_end_date = timezone.now()
         opening_modes = {
             op.mode_of_payment_id: op for op in opening.opening_payments.select_related("mode_of_payment").all()
         }
@@ -245,6 +257,8 @@ class POSClosingEntry(BaseModel):
             submitted_at__gte=closing.period_start_date,
             submitted_at__lte=closing.period_end_date,
         )
+        # Drafts block the close above; returns are excluded because they are
+        # handled by the deferred refund flow rather than drawer sales.
         closing.total_quantity = submitted_orders.aggregate(total=Sum("items__qty"))["total"] or Decimal("0")
         closing.net_total = submitted_orders.aggregate(total=Sum("net_total"))["total"] or Decimal("0")
         closing.grand_total = submitted_orders.aggregate(total=Sum("grand_total"))["total"] or Decimal("0")
@@ -258,6 +272,8 @@ class POSClosingEntry(BaseModel):
                 mode_of_payment_id=cp.mode_of_payment_id,
             ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
             if cp.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
+                # Cash change given to customers leaves the drawer without an
+                # OrderPayment row, so net it off the expected total.
                 change_total = sum(
                     (
                         order.change_amount
@@ -285,6 +301,7 @@ class POSClosingEntry(BaseModel):
         closing.status = closing.SUBMITTED
         closing.save(
             update_fields=[
+                "period_end_date",
                 "total_quantity",
                 "net_total",
                 "grand_total",
@@ -303,6 +320,9 @@ class POSClosingEntry(BaseModel):
         """Cancel a closing entry. Blocked if a new Open shift exists."""
         if self.status == self.CANCELLED:
             return
+        # Re-opening a previous shift while a newer one is live would make
+        # two shifts claim the same period, so only the most recent close
+        # may be cancelled.
         new_open_exists = (
             POSOpeningEntry.objects.filter(
                 status=self.SUBMITTED,

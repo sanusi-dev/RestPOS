@@ -43,6 +43,23 @@ class ModeOfPayment(BaseModel):
             clash = ModeOfPayment.objects.filter(is_default=True).exclude(pk=self.pk).exists()
             if clash:
                 raise ValidationError({"is_default": "Another payment method is already the default."})
+        elif self.pk:
+            # Unsetting the only default would leave the POS with no
+            # preselected payment mode, so a replacement must be chosen first.
+            was_default = ModeOfPayment.objects.filter(pk=self.pk, is_default=True).exists()
+            if was_default and not ModeOfPayment.objects.filter(is_default=True).exclude(pk=self.pk).exists():
+                raise ValidationError(
+                    {"is_default": "Choose another default payment method before unsetting this one."}
+                )
+
+    def save(self, *args, **kwargs):
+        # Model.save() does not call clean(), so ordinary admin/script saves
+        # must enforce the same invariant as form validation.
+        if self.pk and not self.is_default:
+            was_default = ModeOfPayment.objects.filter(pk=self.pk, is_default=True).exists()
+            if was_default and not ModeOfPayment.objects.filter(is_default=True).exclude(pk=self.pk).exists():
+                raise ValidationError("Choose another default payment method before unsetting this one.")
+        super().save(*args, **kwargs)
 
     @property
     def can_dispense_change(self):

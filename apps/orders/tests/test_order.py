@@ -101,6 +101,8 @@ class OrderItemTest(OrderTestBase):
     def test_reservation_locks_restaurant_without_nullable_outer_join(self):
         order = self._create_order()
 
+        # This minimal reservation path exercises the PostgreSQL lock query
+        # without introducing a nullable related warehouse join.
         order.add_item(self.item2, qty=1, rate=Decimal("500"))
 
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("1"))
@@ -610,6 +612,8 @@ class OrderSequenceConcurrencyTest(TransactionTestCase):
 
         def assign():
             try:
+                # Start all workers together so the sequence row lock is tested
+                # under real contention rather than by chance.
                 barrier.wait()
                 with transaction.atomic():
                     order = Order.objects.create()
@@ -617,6 +621,8 @@ class OrderSequenceConcurrencyTest(TransactionTestCase):
                 with lock:
                     results.append(number)
             finally:
+                # Django connections are thread-local; close each worker's
+                # connection before the test tears down the database.
                 connection.close()
 
         threads = [threading.Thread(target=assign) for _ in range(n_threads)]
@@ -657,6 +663,7 @@ class DrinkReservationConcurrencyTest(TransactionTestCase):
 
         def reserve(order_pk):
             try:
+                # Force both orders to compete for the same final unit.
                 barrier.wait()
                 order = Order.objects.get(pk=order_pk)
                 order.add_item(self.item, qty=1, rate=Decimal("500"))

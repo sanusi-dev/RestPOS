@@ -73,6 +73,8 @@ class StockEntryTest(TestCase):
             entry.submit()
 
     def test_transfer_derives_department_targets_and_preserves_fifo_rate(self):
+        # Two FIFO layers make the three-unit transfer rate 133.33 (2 at 100,
+        # then 1 at 200), proving transfer-in inherits source cost.
         StockLedgerEntry.create_entry(self.food, self.store, Decimal("2"), "Opening", "1", rate=Decimal("100"))
         StockLedgerEntry.create_entry(self.food, self.store, Decimal("3"), "Opening", "2", rate=Decimal("200"))
         StockLedgerEntry.create_entry(self.drink, self.store, Decimal("2"), "Opening", "3", rate=Decimal("75"))
@@ -134,6 +136,8 @@ class StockEntryTest(TestCase):
         self.assertFalse(StockLedgerEntry.objects.filter(voucher_type="Stock Entry Cancellation").exists())
 
     def test_cancel_transfer_uses_current_target_fifo_and_original_source_rate(self):
+        # The target already has a newer 300-rate layer; cancellation must use
+        # that current target cost while restoring the source at its original rate.
         StockLedgerEntry.create_entry(self.food, self.store, Decimal("2"), "Opening", "1", rate=Decimal("100"))
         StockLedgerEntry.create_entry(self.food, self.kitchen, Decimal("1"), "Opening", "2", rate=Decimal("300"))
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")

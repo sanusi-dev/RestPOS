@@ -1,9 +1,13 @@
 from django.db import migrations
 
 
-def backfill_reason(apps, schema_editor):
+def delete_legacy_null_reason_rows(apps, schema_editor):
+    """Drop development/dummy reconciliations that lack a required reason."""
     StockReconciliation = apps.get_model("inventory", "StockReconciliation")
-    StockReconciliation.objects.filter(reason__isnull=True).update(reason="PHYSICAL_COUNT")
+    StockReconciliationItem = apps.get_model("inventory", "StockReconciliationItem")
+    legacy = StockReconciliation.objects.filter(reason__isnull=True)
+    StockReconciliationItem.objects.filter(reconciliation__in=legacy).delete()
+    legacy.delete()
 
 
 class Migration(migrations.Migration):
@@ -12,5 +16,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(backfill_reason, migrations.RunPython.noop),
+        migrations.RunPython(delete_legacy_null_reason_rows, migrations.RunPython.noop),
     ]

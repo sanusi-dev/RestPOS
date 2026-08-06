@@ -187,12 +187,8 @@ def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     if entry.status != POSOpeningEntry.DRAFT:
         messages.error(request, "This opening entry is no longer in draft.")
         return redirect("staff:opening_entry_detail", pk=entry.pk)
-    # `clean()` enforces "one Open shift" and `submit()` re-checks inside
-    # `select_for_update` (race-safe). The legacy "confirm_empty" branch was
-    # removed because `_save_opening_entry` now always seeds one row per
-    # active `ModeOfPayment` — a draft with no rows only exists if no modes
-    # are configured, in which case the create form blocks it at the form
-    # level (no `OpeningPayment` rows can ever be missing on a draft).
+    # Validation gives early feedback; submit() repeats the one-open-shift
+    # check while holding the row lock so concurrent submissions cannot race.
     try:
         entry.full_clean()
     except ValidationError as e:

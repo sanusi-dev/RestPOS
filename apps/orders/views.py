@@ -3,6 +3,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import models as django_models
 from django.db.models import Count, Prefetch, Q, Sum
 from django.http import HttpRequest, HttpResponse
@@ -93,13 +94,15 @@ def order_list(request: HttpRequest) -> HttpResponse:
         orders = orders.filter(status=status_filter)
     if order_type_filter:
         orders = orders.filter(order_type=order_type_filter)
-    orders = orders[:50]
+    orders = orders.order_by("-updated_at")
+    page_obj = Paginator(orders, 50).get_page(request.GET.get("page") or 1)
 
     return render(
         request,
         "backoffice/orders/order_list.html",
         {
-            "orders": orders,
+            "orders": page_obj,
+            "page_obj": page_obj,
             "search": search,
             "status_filter": status_filter,
             "order_type_filter": order_type_filter,

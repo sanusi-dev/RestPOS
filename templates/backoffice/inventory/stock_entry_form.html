@@ -47,6 +47,7 @@
     </div>
 
     {% partialdef detail_items_partial inline %}
+    {% comment %}This container is replaced by HTMX; the management form preserves formset indices for validation.{% endcomment %}
     <div id="stock-entry-items-container" class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3 relative z-10">
         <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-500 flex items-center justify-center shadow-sm">

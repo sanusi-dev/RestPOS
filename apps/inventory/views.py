@@ -344,6 +344,11 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
 # StockEntry
 # ---------------------------------------------------------------------------
 
+# The item add/remove endpoints below rebuild a bound formset from POST data
+# instead of saving, so the partial re-render keeps the user's other rows
+# intact. The remove view renumbers the surviving rows (Django formset
+# management indices must stay contiguous).
+
 
 @login_required
 def stock_entry_list(request: HttpRequest) -> HttpResponse:
@@ -548,6 +553,8 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
+    # Append one empty row to the posted formset data and re-render the
+    # partial (same pattern as stock_entry_item_add).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -569,6 +576,8 @@ def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+    # Drop the indexed row and renumber the survivors (same pattern as
+    # stock_entry_item_remove).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -695,6 +704,8 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
+    # Append one empty row to the posted formset data and re-render the
+    # partial (same pattern as stock_entry_item_add).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -716,6 +727,8 @@ def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+    # Drop the indexed row and renumber the survivors (same pattern as
+    # stock_entry_item_remove).
     post_data = request.POST.copy()
     total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
 
@@ -768,7 +781,6 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    # select_related("warehouse") saves one FK fetch inside receipt.submit().
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "DRAFT":
         try:

@@ -40,6 +40,10 @@ class Restaurant(BaseModel):
         default=50,
         help_text="Maximum normal POS drafts allowed on one active shift.",
     )
+    pos_allow_full_history = models.BooleanField(
+        default=False,
+        help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
+    )
 
     class Meta:
         ordering = ["company"]
@@ -70,6 +74,8 @@ class Restaurant(BaseModel):
         if self.store_warehouse_id and self.store_warehouse_id == self.default_warehouse_id:
             raise ValidationError({"store_warehouse": "The central Store must differ from the Bar / POS warehouse."})
 
+        # Warehouse changes affect reservations and document posting; do not
+        # let existing drafts silently move to a different stock location.
         if self.pk:
             previous = Restaurant.objects.only("default_warehouse_id", "store_warehouse_id").get(pk=self.pk)
             if previous.default_warehouse_id != self.default_warehouse_id:
@@ -94,6 +100,8 @@ class Restaurant(BaseModel):
                         {"store_warehouse": "Submit or remove draft stock documents before changing the central Store."}
                     )
 
+        # Store receives stock, Kitchen consumes FOOD, and Bar/POS supplies
+        # DRINKS; these roles must continue pointing at compatible warehouses.
         units = ProductionUnit.objects.select_related("warehouse").all()
         drinks_unit = next((unit for unit in units if unit.department == ProductionUnit.DRINKS), None)
         food_unit = next((unit for unit in units if unit.department == ProductionUnit.FOOD), None)

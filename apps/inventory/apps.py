@@ -9,6 +9,8 @@ class InventoryConfig(AppConfig):
     def ready(self):
         from django.db.models.signals import post_migrate
 
+        # Seed reference data after migrations; get_or_create keeps repeated
+        # deployments and test database setup idempotent.
         def seed_uoms(**kwargs):
             from .models import UOM
 

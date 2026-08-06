@@ -101,6 +101,24 @@
         </tbody>
       </table>
     </div>
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <nav class="mt-4 flex flex-wrap items-center justify-between gap-3 px-1" aria-label="Order register pagination">
+      <p class="text-xs font-semibold text-gray-500">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        · {{ page_obj.paginator.count }} order{{ page_obj.paginator.count|pluralize }}
+      </p>
+      <div class="flex items-center gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.previous_page_number }}"
+           class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.next_page_number }}"
+           class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Next</a>
+        {% endif %}
+      </div>
+    </nav>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

@@ -66,8 +66,22 @@ class ModeOfPaymentModelTest(TestCase):
 class ModeOfPaymentSeedMigrationTest(TestCase):
     """Verify the 0002 seed migration created the four default payment modes."""
 
+    @classmethod
+    def setUpTestData(cls):
+        # Re-seed if a previous test wiped modes under --keepdb.
+        for name, mode_type in [
+            ("Cash", "CASH"),
+            ("Bank Transfer", "BANK"),
+            ("Card", "BANK"),
+            ("USSD / Mobile Money", "PHONE"),
+        ]:
+            ModeOfPayment.objects.get_or_create(name=name, defaults={"type": mode_type})
+        if not ModeOfPayment.objects.filter(is_default=True).exists():
+            cash = ModeOfPayment.objects.get(name="Cash")
+            cash.is_default = True
+            cash.save(update_fields=["is_default"])
+
     def test_seed_creates_defaults(self):
-        # Migration has already run in test setup; just check the seed data exists.
         names = set(ModeOfPayment.objects.values_list("name", flat=True))
         self.assertIn("Cash", names)
         self.assertIn("Bank Transfer", names)
@@ -82,3 +96,7 @@ class ModeOfPaymentSeedMigrationTest(TestCase):
 
     def test_seed_enabled(self):
         self.assertTrue(ModeOfPayment.objects.filter(enabled=True).count() >= 4)
+
+    def test_exactly_one_default_mode(self):
+        self.assertEqual(ModeOfPayment.objects.filter(is_default=True).count(), 1)
+        self.assertTrue(ModeOfPayment.objects.get(name="Cash").is_default)

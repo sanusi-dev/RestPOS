@@ -2,7 +2,7 @@ from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -175,11 +175,26 @@ class Order(BaseModel):
 
     def save(self, *args, **kwargs):
         if self.pk:
-            previous = type(self).objects.get(pk=self.pk)
+            previous = (
+                type(self)
+                .objects.only(
+                    "status",
+                    "is_return",
+                    "return_against_id",
+                    "stock_warehouse_id",
+                    "invoice_printed",
+                    "order_type",
+                    "customer_name",
+                    "guest_count",
+                )
+                .get(pk=self.pk)
+            )
             allow_cancellation = getattr(self, "_allow_cancellation", False)
             allow_submit = getattr(self, "_allow_submit", False)
             allow_discard = getattr(self, "_allow_discard", False)
 
+            # Keep lifecycle transitions inside the domain workflows; these
+            # private flags prevent a direct save() from bypassing immutability.
             if previous.status in {SUBMITTED, CANCELLED, DISCARDED} and not allow_cancellation:
                 raise ValidationError("Submitted, cancelled or discarded orders cannot be modified.")
             if previous.status == DRAFT and self.status == SUBMITTED and not allow_submit:
@@ -194,19 +209,15 @@ class Order(BaseModel):
                 raise ValidationError("The stock warehouse snapshot cannot be changed.")
             if previous.invoice_printed and not self.invoice_printed:
                 raise ValidationError("A printed receipt cannot be marked as unprinted.")
-            if (
-                previous.status == DRAFT
-                and not allow_cancellation
-                and (previous.invoice_printed or previous.kots.exists())
-            ):
+            if previous.status == DRAFT and not allow_cancellation:
                 draft_fields = ("order_type", "customer_name", "guest_count")
                 if any(getattr(self, field) != getattr(previous, field) for field in draft_fields):
-                    message = (
-                        "This receipt has been printed. Draft edits are no longer allowed."
-                        if previous.invoice_printed
-                        else "This order was sent to the kitchen or bar. Cancel it before making changes."
-                    )
-                    raise ValidationError(message)
+                    if previous.invoice_printed:
+                        raise ValidationError("This receipt has been printed. Draft edits are no longer allowed.")
+                    if self.kots.exists():
+                        raise ValidationError(
+                            "This order was sent to the kitchen or bar. Cancel it before making changes."
+                        )
         is_new = self._state.adding
         if is_new and not self.arrived_time:
             self.arrived_time = timezone.now()
@@ -260,6 +271,8 @@ class Order(BaseModel):
             )
             seq = OrderSequence.objects.select_for_update().get(pk=sequence.pk)
             if _created:
+                # A fresh counter must continue from existing orders (e.g. a
+                # new database after a restore) instead of starting at 1.
                 seq.current_value = (
                     type(self).objects.aggregate(max_number=models.Max("order_number"))["max_number"] or 0
                 )
@@ -293,7 +306,7 @@ class Order(BaseModel):
             raise ValidationError("Cannot modify a submitted or cancelled order.")
         if persisted.invoice_printed:
             raise ValidationError("This receipt has been printed. Draft edits are no longer allowed.")
-        if self.kots.exists():
+        if self.pk and self.kots.exists():
             raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
 
     @transaction.atomic
@@ -347,9 +360,11 @@ class Order(BaseModel):
             raise ValidationError("Quantity must be a valid decimal.") from exc
         if not qty.is_finite():
             raise ValidationError("Quantity must be a valid decimal.")
-        line = order.items.select_related("item").filter(pk=order_item_pk).first()
+        line = order.items.select_related("item", "menu_item").filter(pk=order_item_pk).first()
         if line is None:
             raise ValidationError("That order line no longer exists.")
+        if qty > 0:
+            order._validate_order_line_availability(line)
         drink_quantities = order._drink_quantities()
         if line.department == "DRINKS":
             drink_quantities[line.item_id] -= line.qty
@@ -388,6 +403,22 @@ class Order(BaseModel):
         if item.department == "DRINKS" and not item.is_stock_item:
             raise ValidationError(f"{item.item_name} is a drink but is not configured as a stock item.")
 
+    def _validate_order_line_availability(self, line):
+        """Reject lines whose Item or MenuItem is no longer sellable."""
+        item = line.item
+        if item.disabled or not item.is_sales_item:
+            raise ValidationError(f"{line.item_name} is no longer available.")
+        if item.department == "DRINKS" and not item.is_stock_item:
+            raise ValidationError(f"{line.item_name} is a drink but is not configured as a stock item.")
+        menu_item = line.menu_item
+        if menu_item is not None and menu_item.disabled:
+            raise ValidationError(f"{line.item_name} is no longer available on the active menu.")
+
+    def _validate_current_lines(self):
+        """Re-check every line before quantity changes or settlement."""
+        for line in self.items.select_related("item", "menu_item").all():
+            self._validate_order_line_availability(line)
+
     def _drink_quantities(self):
         if self.is_return:
             return {}
@@ -403,6 +434,9 @@ class Order(BaseModel):
         return bool(self.stock_warehouse_id) and not self.is_return
 
     def _reservation_warehouse(self, *, required):
+        # Resolve the warehouse through the Restaurant singleton. The order's
+        # snapshot (stock_warehouse) is pinned at first reservation so a later
+        # setting change can't silently re-home a draft's drink stock.
         from apps.settings.models import Restaurant
 
         restaurant = Restaurant.objects.select_for_update().first()
@@ -420,6 +454,9 @@ class Order(BaseModel):
         return self.stock_warehouse or warehouse
 
     def _locked_drink_bins(self, item_ids, warehouse):
+        # Bin rows are created on demand for every drink item so the
+        # select_for_update below can lock a stable, complete set of rows
+        # without racing a concurrent first-reservation insert.
         item_ids = sorted(set(item_ids))
         existing_ids = set(
             Bin.objects.filter(item_id__in=item_ids, warehouse=warehouse).values_list("item_id", flat=True)
@@ -588,7 +625,11 @@ class Order(BaseModel):
 
     @transaction.atomic
     def settle(self, payments_data, cashier=None, opening_entry=None):
-        """Process a normal POS payment and submit the order atomically."""
+        """Process a normal POS payment and submit the order atomically.
+
+        Lines, stock, shift ownership, and payments are validated before the
+        order becomes immutable.
+        """
         order = type(self).objects.select_for_update().get(pk=self.pk)
         if order.status != DRAFT:
             raise ValidationError("Order is already settled or cancelled.")
@@ -596,6 +637,7 @@ class Order(BaseModel):
             raise ValidationError("Return orders must use the deferred refund flow.")
         if not order.items.exists():
             raise ValidationError("Cannot settle an order with no items.")
+        order._validate_current_lines()
         from apps.staff.models import POSOpeningEntry
 
         active_shift = (
@@ -628,12 +670,18 @@ class Order(BaseModel):
         order._settling = True
         try:
             for row in payment_rows:
-                OrderPayment.objects.create(
-                    order=order,
-                    mode_of_payment=row["mode"],
-                    amount=row["amount"],
-                    reference_no=row["reference_no"],
-                )
+                try:
+                    # The savepoint lets us translate a constraint failure
+                    # into ValidationError without leaving a broken savepoint.
+                    with transaction.atomic():
+                        OrderPayment.objects.create(
+                            order=order,
+                            mode_of_payment=row["mode"],
+                            amount=row["amount"],
+                            reference_no=row["reference_no"],
+                        )
+                except IntegrityError as exc:
+                    raise ValidationError("This electronic payment reference has already been used.") from exc
         finally:
             del order._settling
 
@@ -652,6 +700,13 @@ class Order(BaseModel):
         self.refresh_from_db()
 
     def _locked_drink_stock(self, *, reservations_initialized):
+        """Lock the order's drink bins and recheck stock availability.
+
+        The check subtracts the order's own reservation: qty available for
+        this order = actual_qty - reserved_qty + owned. When the order was
+        created before drink reservations existed, owned is 0 and the full
+        quantity must come from unreserved stock.
+        """
         drink_items = list(
             self.items.select_related("item")
             .filter(Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS"))
@@ -866,6 +921,8 @@ class Order(BaseModel):
         if not active_kots:
             return []
         created = []
+        # One cancellation ticket per production unit so each station gets a
+        # single "all of this is cancelled" sheet rather than one per source KOT.
         by_station = {}
         for original_kot in active_kots:
             station = by_station.setdefault(
@@ -880,6 +937,9 @@ class Order(BaseModel):
             production_unit = station["production_unit"]
             original_names = [kot.kot_number for kot in original_kots]
             ticket_type = original_kots[0].ticket_type
+            # Create with a temporary number because the final CNCL-* number
+            # embeds the new row's pk (kot_number is unique, so it can't be
+            # computed before the insert).
             kot = KOT.objects.create(
                 order=self,
                 production_unit=production_unit,
@@ -894,6 +954,8 @@ class Order(BaseModel):
             kot.kot_number = f"CNCL-{_ticket_prefix_for_type(kot.ticket_type)}-{kot.pk:04d}"
             KOT.objects.filter(pk=kot.pk).update(kot_number=kot.kot_number)
             kot_items = [
+                # Quantities are moved onto cancelled_qty; qty stays 0 so the
+                # cancellation sheet shows what was taken off the order.
                 KOTItem(
                     kot=kot,
                     item=ticket_item.item,
@@ -928,6 +990,8 @@ class Order(BaseModel):
         if source.return_orders.exclude(status=CANCELLED).exists():
             raise ValidationError("This order already has an active return.")
 
+        # Mirror every source line as a negative-qty line (same price, same
+        # guest tag) so the return totals are exact negatives of the sale.
         return_order = Order.objects.create(
             order_type=source.order_type,
             customer_name=source.customer_name,
@@ -998,6 +1062,8 @@ class Order(BaseModel):
 
         for department, order_items, production_unit in planned_tickets:
             ticket_type = _ticket_type_for_department(department)
+            # Same temporary-number dance as cancellation tickets: the final
+            # KOT-*/BOT-* number embeds the new row's pk.
             kot = KOT.objects.create(
                 order=order,
                 production_unit=production_unit,
@@ -1114,6 +1180,8 @@ class OrderItem(BaseModel):
         if not self.item_name and self.item_id:
             self.item_name = self.item.item_name
         if self.item_id and not self.department:
+            # Snapshot the item's department and stock flag at order time so
+            # later edits to the Item can't rewrite historical lines.
             self.department = self.item.department
         if self.item_id and self.stock_item is None:
             self.stock_item = self.item.is_stock_item
@@ -1191,12 +1259,17 @@ class OrderPayment(BaseModel):
                     raise ValidationError("This electronic payment reference has already been used.")
         order = self.order if self.order_id else None
         if not order or not getattr(order, "_settling", False):
+            # Outside the settlement flow, payments are immutable once the
+            # order leaves draft or a receipt/KOT has been printed.
             order = Order.objects.only("status", "invoice_printed").get(pk=self.order_id)
             if order.status != DRAFT:
                 raise ValidationError("Payments on submitted or cancelled orders cannot be modified.")
             if order.invoice_printed or order.kots.exists():
                 raise ValidationError("Payments cannot be edited after a receipt or KOT has been created.")
-        super().save(*args, **kwargs)
+        try:
+            super().save(*args, **kwargs)
+        except IntegrityError as exc:
+            raise ValidationError("This electronic payment reference has already been used.") from exc
 
     def delete(self, *args, **kwargs):
         order = Order.objects.only("status", "invoice_printed").get(pk=self.order_id)

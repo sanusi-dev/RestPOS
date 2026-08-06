@@ -50,6 +50,9 @@ class Command(BaseCommand):
         if restaurant.default_warehouse_id != warehouses["Bar"].pk:
             restaurant.default_warehouse = warehouses["Bar"]
             changed.append("default_warehouse")
+        if restaurant.store_warehouse_id != warehouses["Store"].pk:
+            restaurant.store_warehouse = warehouses["Store"]
+            changed.append("store_warehouse")
         if changed:
             restaurant.save(update_fields=changed + ["updated_at"])
 
@@ -98,7 +101,8 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("── POS setup complete ──"))
         self.stdout.write(f"  Restaurant: {restaurant.company}")
-        self.stdout.write(f"  Default warehouse: {restaurant.default_warehouse}")
+        self.stdout.write(f"  Store warehouse: {restaurant.store_warehouse}")
+        self.stdout.write(f"  Bar / POS warehouse: {restaurant.default_warehouse}")
         self.stdout.write(f"  Payment Methods: {', '.join(str(m) for m in ModeOfPayment.objects.filter(enabled=True))}")
         self.stdout.write(f"  Production Units: Kitchen={pu_kitchen.department}, Bar={pu_bar.department}")
         self.stdout.write(f"  Menu items: {menu_count}")

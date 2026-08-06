@@ -60,6 +60,7 @@ class RestaurantForm(SettingsModelForm):
             "store_warehouse",
             "default_warehouse",
             "max_open_drafts",
+            "pos_allow_full_history",
         ]
 
     def __init__(self, *args, **kwargs):

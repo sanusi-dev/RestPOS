@@ -33,9 +33,9 @@
         {% endif %}
         {% if shift or order or closing %}
         <a href="{% url 'pos:pos_close_shift' %}" hx-get="{% url 'pos:pos_close_shift' %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true"
-           class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-teal-50 hover:text-teal-800">
-          {% hgi_stroke name="clock-01" size="18" color="currentColor" stroke_width="2" %}
-          Close shift
+           class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition-all duration-150 hover:bg-teal-50 hover:text-teal-800 active:scale-[0.98] active:bg-teal-100">
+          <span class="flex size-4 items-center justify-center">{% hgi_stroke name="clock-01" size="18" color="currentColor" stroke_width="2" %}</span>
+          <span>Close shift</span>
         </a>
         {% endif %}
         <a href="{% url 'account_logout' %}" data-logout-link class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-50 hover:text-red-700">

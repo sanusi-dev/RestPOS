@@ -3,21 +3,33 @@
 from django.db import migrations, models
 
 
+def consolidate_restaurant_singleton(apps, schema_editor):
+    """Keep the oldest Restaurant row; delete extra development/dummy rows."""
+    Restaurant = apps.get_model("settings", "Restaurant")
+    keep = Restaurant.objects.order_by("pk").first()
+    if keep is None:
+        return
+    Restaurant.objects.exclude(pk=keep.pk).delete()
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('inventory', '0021_alter_warehouse_unique_together_alter_warehouse_name_and_more'),
-        ('settings', '0022_alter_restaurant_max_open_drafts'),
+        ("inventory", "0021_alter_warehouse_unique_together_alter_warehouse_name_and_more"),
+        ("settings", "0022_alter_restaurant_max_open_drafts"),
     ]
 
     operations = [
+        migrations.RunPython(consolidate_restaurant_singleton, migrations.RunPython.noop),
         migrations.AddField(
-            model_name='restaurant',
-            name='singleton_key',
+            model_name="restaurant",
+            name="singleton_key",
             field=models.PositiveSmallIntegerField(default=1, editable=False, unique=True),
         ),
         migrations.AddConstraint(
-            model_name='productionunit',
-            constraint=models.UniqueConstraint(fields=('department',), name='settings_one_production_unit_per_department'),
+            model_name="productionunit",
+            constraint=models.UniqueConstraint(
+                fields=("department",), name="settings_one_production_unit_per_department"
+            ),
         ),
     ]

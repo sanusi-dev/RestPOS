@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Sum
 from django.http import HttpRequest, HttpResponse
@@ -71,19 +72,6 @@ def _get_open_shift(lock=False):
     if lock:
         queryset = queryset.select_for_update()
     return queryset.first()
-
-
-def _get_pos_order(pk, shift, lock=False):
-    """Return a normal draft belonging to the active shift."""
-    queryset = Order.objects.filter(
-        pk=pk,
-        status=DRAFT,
-        is_return=False,
-        opening_entry=shift,
-    )
-    if lock:
-        queryset = queryset.select_for_update()
-    return get_object_or_404(queryset)
 
 
 def _get_payment_modes():
@@ -182,7 +170,14 @@ def _build_order_context(request, order):
     """Build the context dict for the order screen."""
     catalog_query, catalog_group, catalog_specials = _get_catalog_filters(request)
     settings = Restaurant.load()
-    active_menu = settings.active_menu if settings and settings.active_menu.enabled else None
+    active_menu = (
+        settings.active_menu if settings and settings.active_menu_id and settings.active_menu.enabled else None
+    )
+    setup_error = None
+    if settings is None:
+        setup_error = "Restaurant settings are not configured."
+    elif not settings.active_menu_id or not settings.active_menu or not settings.active_menu.enabled:
+        setup_error = "No active menu is configured. Set an enabled menu in restaurant settings."
     all_menu_items = (
         list(
             active_menu.items.select_related("item", "item__item_group")
@@ -208,6 +203,8 @@ def _build_order_context(request, order):
             or normalized_query in menu_item.item.item_code.casefold()
         )
     ]
+    # POS availability is unreserved stock, not physical stock: another open
+    # draft must not make the same drink appear sellable a second time.
     drink_item_ids = [mi.item_id for mi in all_menu_items if mi.item.department == "DRINKS"]
     drink_bins = (
         {
@@ -270,6 +267,7 @@ def _build_order_context(request, order):
         "bar_ticket_printed": bool(bar_ticket and bar_ticket.print_status == KOT_PRINTED),
         "can_reprint": request.user.is_manager or request.user.is_admin or request.user.is_superuser,
         "receipt_printable": has_items,
+        "setup_error": setup_error,
         "pos_nav": "order",
     }
 
@@ -436,10 +434,84 @@ def pos_open_shift(request: HttpRequest) -> HttpResponse:
     return redirect("pos:pos_home")
 
 
+def _closing_form_prefix(mode_of_payment_id):
+    # Keyed by payment mode, not ClosingPayment pk: the GET preview builds
+    # unsaved rows (pk None), and the POST re-binds the same prefix so the
+    # counted amounts survive a re-render on validation errors.
+    return f"cp_mop_{mode_of_payment_id}"
+
+
+def _expected_closing_amounts(open_shift, period_start, period_end):
+    """Compute expected drawer amounts for each opening payment mode.
+
+    Expected = opening float + payments collected in the period. For cash,
+    change given back to customers is netted off the collected total.
+    """
+    submitted_orders = Order.objects.filter(
+        opening_entry=open_shift,
+        status=SUBMITTED,
+        is_return=False,
+        submitted_at__gte=period_start,
+        submitted_at__lte=period_end,
+    )
+    rows = []
+    for opening_payment in open_shift.opening_payments.select_related("mode_of_payment").all():
+        collected = OrderPayment.objects.filter(
+            order__in=submitted_orders,
+            mode_of_payment_id=opening_payment.mode_of_payment_id,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        if opening_payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
+            collected -= sum(
+                (
+                    order.change_amount
+                    for order in submitted_orders.filter(
+                        payments__mode_of_payment_id=opening_payment.mode_of_payment_id
+                    ).distinct()
+                ),
+                Decimal("0"),
+            )
+        rows.append(
+            {
+                "mode": opening_payment.mode_of_payment,
+                "opening_amount": opening_payment.opening_amount,
+                "expected_amount": opening_payment.opening_amount + collected,
+            }
+        )
+    return rows
+
+
+def _ensure_closing_draft(open_shift, cashier):
+    """Return the draft closing entry for this shift, creating it only when needed."""
+    closing = POSClosingEntry.objects.filter(
+        opening_entry=open_shift,
+        status=POSClosingEntry.DRAFT,
+    ).first()
+    if closing is not None:
+        return closing
+    closing = POSClosingEntry.objects.create(opening_entry=open_shift, cashier=cashier)
+    ClosingPayment.objects.bulk_create(
+        [
+            ClosingPayment(
+                closing_entry=closing,
+                mode_of_payment=opening_payment.mode_of_payment,
+                opening_amount=opening_payment.opening_amount,
+                expected_amount=opening_payment.opening_amount,
+                closing_amount=Decimal("0"),
+            )
+            for opening_payment in open_shift.opening_payments.all()
+        ]
+    )
+    return closing
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def pos_close_shift(request: HttpRequest) -> HttpResponse:
-    """Create or edit the active shift's closing reconciliation from the POS."""
+    """Show or submit the active shift's closing reconciliation from the POS.
+
+    GET never creates database rows — it only renders expected amounts for counting.
+    POST creates the draft closing entry (if needed) and submits the reconciliation.
+    """
     open_shift = _get_open_shift()
     if open_shift is None:
         messages.warning(request, "There is no open shift to close.")
@@ -450,94 +522,134 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
         return _render_pos_surface(
             request,
             "pos/close_shift.html",
-            {"draft_count": draft_count, "show_order_tabs": request.htmx, "pos_nav": "close"},
+            {
+                "draft_count": draft_count,
+                "shift": open_shift,
+                "show_order_tabs": request.htmx,
+                "pos_nav": "close",
+            },
         )
 
-    with transaction.atomic():
-        open_shift = POSOpeningEntry.objects.select_for_update().get(pk=open_shift.pk)
-        draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
-        if draft_count:
-            messages.error(
-                request,
-                f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift.",
-            )
-            return _home_or_redirect(request)
-        closing = POSClosingEntry.objects.filter(
-            opening_entry=open_shift,
-            status=POSClosingEntry.DRAFT,
-        ).first()
-        if closing is None:
-            closing = POSClosingEntry.objects.create(opening_entry=open_shift, cashier=request.user)
-            ClosingPayment.objects.bulk_create(
-                [
-                    ClosingPayment(
-                        closing_entry=closing,
-                        mode_of_payment=opening_payment.mode_of_payment,
-                        opening_amount=opening_payment.opening_amount,
-                        expected_amount=opening_payment.opening_amount,
-                        closing_amount=Decimal("0"),
-                    )
-                    for opening_payment in open_shift.opening_payments.all()
-                ]
-            )
+    period_start = open_shift.period_start_date
+    period_end = timezone.now()
+    expected_rows = _expected_closing_amounts(open_shift, period_start, period_end)
 
-    submitted_orders = Order.objects.filter(
-        opening_entry=open_shift,
-        status=SUBMITTED,
-        is_return=False,
-        submitted_at__gte=closing.period_start_date,
-        submitted_at__lte=closing.period_end_date,
-    )
-    closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
-    for payment in closing_payments:
-        collected = OrderPayment.objects.filter(
-            order__in=submitted_orders,
-            mode_of_payment_id=payment.mode_of_payment_id,
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-        if payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
-            collected -= sum(
-                (
-                    order.change_amount
-                    for order in submitted_orders.filter(
-                        payments__mode_of_payment_id=payment.mode_of_payment_id
-                    ).distinct()
-                ),
-                Decimal("0"),
-            )
-        payment.expected_amount = payment.opening_amount + collected
     if request.method == "POST":
-        form_data = [
-            (payment, ClosingPaymentForm(request.POST, instance=payment, prefix=f"cp_{payment.pk}"))
-            for payment in closing_payments
-        ]
-        if all(form.is_valid() for _payment, form in form_data):
-            try:
-                with transaction.atomic():
-                    for _payment, form in form_data:
+        with transaction.atomic():
+            open_shift = POSOpeningEntry.objects.select_for_update().get(pk=open_shift.pk)
+            draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
+            if draft_count:
+                messages.error(
+                    request,
+                    f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} "
+                    "before closing the shift.",
+                )
+                return _home_or_redirect(request)
+            closing = _ensure_closing_draft(open_shift, request.user)
+            closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
+            expected_by_mode = {row["mode"].pk: row for row in expected_rows}
+            form_data = []
+            for payment in closing_payments:
+                expected = expected_by_mode.get(payment.mode_of_payment_id)
+                if expected is not None:
+                    payment.opening_amount = expected["opening_amount"]
+                    payment.expected_amount = expected["expected_amount"]
+                form_data.append(
+                    (
+                        payment,
+                        ClosingPaymentForm(
+                            request.POST,
+                            instance=payment,
+                            prefix=_closing_form_prefix(payment.mode_of_payment_id),
+                        ),
+                    )
+                )
+            if all(form.is_valid() for _payment, form in form_data):
+                try:
+                    for payment, form in form_data:
                         form.save()
+                        payment.save(update_fields=["opening_amount", "expected_amount", "updated_at"])
                     closing.remarks = str(request.POST.get("remarks", "")).strip()
-                    closing.save(update_fields=["remarks", "updated_at"])
+                    closing.period_end_date = timezone.now()
+                    closing.save(update_fields=["remarks", "period_end_date", "updated_at"])
                     closing.full_clean()
                     closing.submit()
-            except ValidationError as exc:
-                messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
-            else:
-                messages.success(request, "Shift closed successfully.")
-                if request.htmx:
-                    return _home_or_redirect(request)
-                return redirect("pos:pos_home")
+                except ValidationError as exc:
+                    messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
+                else:
+                    messages.success(request, "Shift closed successfully.")
+                    if request.htmx:
+                        return _home_or_redirect(request)
+                    return redirect("pos:pos_home")
+            # Invalid forms — fall through to re-render with bound forms.
+            display_closing = closing
+            display_payments = [payment for payment, _form in form_data]
+        return _render_pos_surface(
+            request,
+            "pos/close_shift.html",
+            {
+                "closing": display_closing,
+                "form_data": form_data,
+                "total_expected": sum((payment.expected_amount for payment in display_payments), Decimal("0")),
+                "draft_count": 0,
+                "shift": open_shift,
+                "show_order_tabs": request.htmx,
+                "pos_nav": "close",
+            },
+        )
+
+    # GET: render a preview without creating ClosingEntry / ClosingPayment rows.
+    existing_draft = POSClosingEntry.objects.filter(
+        opening_entry=open_shift,
+        status=POSClosingEntry.DRAFT,
+    ).first()
+    if existing_draft is not None:
+        existing_by_mode = {
+            cp.mode_of_payment_id: cp for cp in existing_draft.closing_payments.select_related("mode_of_payment").all()
+        }
     else:
-        form_data = [
-            (payment, ClosingPaymentForm(instance=payment, prefix=f"cp_{payment.pk}")) for payment in closing_payments
-        ]
+        existing_by_mode = {}
+
+    form_data = []
+    display_payments = []
+    for row in expected_rows:
+        payment = existing_by_mode.get(row["mode"].pk)
+        if payment is None:
+            payment = ClosingPayment(
+                mode_of_payment=row["mode"],
+                opening_amount=row["opening_amount"],
+                expected_amount=row["expected_amount"],
+                closing_amount=Decimal("0"),
+            )
+        else:
+            payment.opening_amount = row["opening_amount"]
+            payment.expected_amount = row["expected_amount"]
+        display_payments.append(payment)
+        form_data.append(
+            (
+                payment,
+                ClosingPaymentForm(
+                    instance=payment if payment.pk else None,
+                    initial={"closing_amount": payment.closing_amount if payment.pk else Decimal("0")},
+                    prefix=_closing_form_prefix(row["mode"].pk),
+                ),
+            )
+        )
+
+    class _PreviewClosing:
+        period_start_date = period_start
+        opening_entry = open_shift
+        remarks = existing_draft.remarks if existing_draft is not None else ""
+
     return _render_pos_surface(
         request,
         "pos/close_shift.html",
         {
-            "closing": closing,
+            "closing": existing_draft if existing_draft is not None else _PreviewClosing(),
             "form_data": form_data,
-            "total_expected": sum((payment.expected_amount for payment in closing_payments), Decimal("0")),
-            "draft_count": draft_count,
+            "total_expected": sum((payment.expected_amount for payment in display_payments), Decimal("0")),
+            "draft_count": 0,
+            "shift": open_shift,
             "show_order_tabs": request.htmx,
             "pos_nav": "close",
         },
@@ -627,6 +739,8 @@ def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
         if order.invoice_printed and (order_type or "guest_delta" in request.POST or "guest_count" in request.POST):
             error = "This receipt has been printed. Draft edits are no longer allowed."
         elif order.kots.exists() and (order_type or "guest_delta" in request.POST or "guest_count" in request.POST):
+            # A printed receipt or sent ticket makes the order a committed
+            # document: the kitchen may already be cooking these lines.
             error = "This order was sent to the kitchen or bar. Cancel it before making changes."
         else:
             if order_type and order_type not in {c[0] for c in ORDER_TYPE_CHOICES}:
@@ -859,7 +973,7 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
 @login_required
 @require_POST
 def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpResponse:
-    """Set the active customer card in session. Returns cards + cart partials."""
+    """Set the active customer card in session. Returns the cart (with catalog OOB)."""
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
@@ -870,8 +984,7 @@ def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpR
             cards = {}
         cards[str(order.pk)] = idx
         request.session[SESSION_CARD_KEY] = cards
-    ctx = _build_order_context(request, order)
-    return render(request, "pos/index.html#cart", ctx)
+    return _render_cart(request, order)
 
 
 @login_required
@@ -899,6 +1012,8 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
             error=e.messages[0] if e.messages else "Unable to send the order.",
         )
 
+    # Print each ticket individually so one printer failure doesn't block
+    # the other station; failures are surfaced for a manual retry.
     print_failures = []
     for kot in kots:
         with transaction.atomic():
@@ -1033,19 +1148,33 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Cancel failed.")
         return redirect("pos:pos_order_screen", pk=pk)
+
+    print_failures = []
     for cancellation_kot in cancellation_kots:
+        result = printing.print_ticket(cancellation_kot)
         with transaction.atomic():
             ticket = KOT.objects.select_for_update().get(pk=cancellation_kot.pk)
-            result = printing.print_ticket(ticket)
             if result.success:
                 ticket.print_status = KOT_PRINTED
+            else:
+                ticket.print_status = KOT_PRINT_PENDING
+                print_failures.append(result.ticket_type)
             ticket.save(update_fields=["print_status", "updated_at"])
+
     request.session.pop(SESSION_ORDER_KEY, None)
     cards = request.session.get(SESSION_CARD_KEY, {})
     if isinstance(cards, dict):
         cards.pop(str(order.pk), None)
         request.session[SESSION_CARD_KEY] = cards
-    messages.success(request, f"Order {order.invoice_number} cancelled.")
+    if print_failures:
+        failed = ", ".join(sorted(set(print_failures)))
+        messages.warning(
+            request,
+            f"Order {order.invoice_number} cancelled, but the {failed} cancellation ticket "
+            "failed to print. Retry it from order history.",
+        )
+    else:
+        messages.success(request, f"Order {order.invoice_number} cancelled.")
     return redirect("pos:pos_home")
 
 
@@ -1081,12 +1210,17 @@ def pos_order_discard(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
-    """Print or reprint the receipt for the current draft order."""
+    """Print or reprint the receipt for the current draft order.
+
+    Claim the printed state in the database first, then print after commit so a
+    successful physical print cannot leave the order marked unprinted.
+    """
     error = None
     feedback = {}
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
+
     with transaction.atomic():
         order = get_object_or_404(
             Order.objects.select_for_update(),
@@ -1097,36 +1231,41 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
         )
         if not order.items.exists():
             error = "Add at least one item before printing the receipt."
-        else:
-            action = "reprint" if order.invoice_printed else "print"
-            result = printing.print_receipt(order)
-            if result.success:
-                if not order.invoice_printed:
-                    order.invoice_printed = True
-                    order.invoice_printed_at = timezone.now()
-                    order.invoice_printed_by = request.user
-                    order.save(
-                        update_fields=[
-                            "invoice_printed",
-                            "invoice_printed_at",
-                            "invoice_printed_by",
-                            "updated_at",
-                        ]
-                    )
-                    order.audit("RECEIPT_PRINTED", actor=request.user)
-                messages.success(
-                    request,
-                    f"Receipt {'reprinted' if action == 'reprint' else 'printed'} successfully.",
-                )
-            else:
-                feedback = {"receipt_print_error": True, "receipt_print_action": action}
+            return _render_cart(request, order, error=error)
+
+        action = "reprint" if order.invoice_printed else "print"
+        if not order.invoice_printed:
+            order.invoice_printed = True
+            order.invoice_printed_at = timezone.now()
+            order.invoice_printed_by = request.user
+            order.save(
+                update_fields=[
+                    "invoice_printed",
+                    "invoice_printed_at",
+                    "invoice_printed_by",
+                    "updated_at",
+                ]
+            )
+            order.audit("RECEIPT_PRINTED", actor=request.user)
+
+    # Print outside the transaction: the printed state was claimed in the
+    # DB first, so a failed physical print still leaves the order marked
+    # printed rather than risking a duplicate print on retry.
+    result = printing.print_receipt(order)
+    if result.success:
+        messages.success(
+            request,
+            f"Receipt {'reprinted' if action == 'reprint' else 'printed'} successfully.",
+        )
+    else:
+        feedback = {"receipt_print_error": True, "receipt_print_action": action}
     return _render_cart(request, order, error=error, **feedback)
 
 
 @login_required
 @require_POST
 def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, action: str) -> HttpResponse:
-    """Retry or reprint one existing kitchen or bar ticket."""
+    """Retry or reprint one kitchen/bar ticket, including cancellation tickets."""
     if ticket_type not in {TICKET_KITCHEN, TICKET_BAR} or action not in {"retry", "reprint"}:
         return HttpResponse(status=404)
     if action == "reprint" and not (request.user.is_manager or request.user.is_admin or request.user.is_superuser):
@@ -1141,20 +1280,28 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
         order = get_object_or_404(
             Order.objects.select_for_update(),
             pk=pk,
-            status=DRAFT,
+            status__in=[DRAFT, CANCELLED],
             is_return=False,
             opening_entry=shift,
         )
+        # Cancellation tickets remain SUBMITTED with print_status PENDING after a failed print.
         ticket = (
             order.kots.select_for_update()
-            .filter(status=SUBMITTED, ticket_type=ticket_type, print_status=required_status)
+            .filter(ticket_type=ticket_type, print_status=required_status, status=SUBMITTED)
             .order_by("-created_at")
             .first()
         )
         if ticket is None:
-            return _render_cart(request, order, error=f"No {ticket_type} ticket is ready for that action.")
+            if order.status == DRAFT:
+                return _render_cart(request, order, error=f"No {ticket_type} ticket is ready for that action.")
+            messages.error(request, f"No {ticket_type} cancellation ticket is ready for that action.")
+            return redirect("pos:pos_order_history_detail", pk=order.pk)
+        ticket_pk = ticket.pk
 
-        result = printing.print_ticket(ticket)
+    result = printing.print_ticket(KOT.objects.get(pk=ticket_pk))
+    with transaction.atomic():
+        ticket = KOT.objects.select_for_update().get(pk=ticket_pk)
+        order = Order.objects.get(pk=pk)
         if result.success:
             ticket.print_status = KOT_PRINTED
             messages.success(
@@ -1164,13 +1311,25 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
         else:
             ticket.print_status = KOT_PRINT_PENDING
             feedback = {"ticket_print_error": result.ticket_type, "ticket_print_action": action}
+            if order.status != DRAFT:
+                messages.error(
+                    request,
+                    f"{result.ticket_type.title()} cancellation ticket failed to print. Try again.",
+                )
         ticket.save(update_fields=["print_status", "updated_at"])
-    return _render_cart(request, order, **feedback)
+
+    if order.status == DRAFT:
+        return _render_cart(request, order, **feedback)
+    return redirect("pos:pos_order_history_detail", pk=order.pk)
 
 
 @login_required
 def pos_order_history(request: HttpRequest) -> HttpResponse:
-    """Show cashier-safe historical orders for a selected date."""
+    """Show cashier-safe historical orders for a selected date.
+
+    Defaults to today's paid sales; cashiers without full-history access
+    are restricted to that view (and payment-method filtering).
+    """
     from datetime import date as date_type
 
     payment_filter = request.GET.get("payment", "").strip()
@@ -1191,6 +1350,13 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
         else:
             parsed_date = None
 
+    restaurant = Restaurant.load()
+    is_manager = request.user.is_manager or request.user.is_admin or request.user.is_superuser
+    allow_full_history = bool(restaurant and restaurant.pos_allow_full_history) or is_manager
+    manager_only_filters = {"all", "returns", "cancelled", "discarded"}
+    if status_filter in manager_only_filters and not allow_full_history:
+        status_filter = "sales"
+
     orders = Order.objects.select_related("cashier").prefetch_related("payments__mode_of_payment", "items")
     if search:
         search_query = Q(invoice_number__icontains=search)
@@ -1208,7 +1374,10 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
         orders = orders.filter(status=SUBMITTED, is_return=True)
     elif status_filter == "cancelled":
         orders = orders.filter(status=CANCELLED, is_return=False)
+    elif status_filter == "discarded":
+        orders = orders.filter(status=DISCARDED, is_return=False)
     else:
+        status_filter = "sales"
         orders = orders.filter(status=SUBMITTED, is_paid=True, is_return=False)
     if status_filter == "sales" and payment_filter == "cash":
         orders = orders.filter(
@@ -1228,18 +1397,25 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
         orders = orders.filter(order_type=order_type_filter)
     if parsed_date is not None:
         orders = orders.filter(posting_date=parsed_date)
-    orders = orders.distinct().order_by("-posting_date", "-posting_time")[:50]
+    orders = orders.distinct().order_by("-posting_date", "-posting_time")
+    paginator = Paginator(orders, 50)
+    page_number = request.GET.get("page") or 1
+    page_obj = paginator.get_page(page_number)
     open_shift = _get_open_shift()
     return _render_pos_surface(
         request,
         "pos/order_history.html",
         {
-            "orders": orders,
+            "orders": page_obj,
+            "page_obj": page_obj,
+            "paginator": paginator,
             "payment_filter": payment_filter,
             "status_filter": status_filter,
             "order_type_filter": order_type_filter,
             "search": search,
             "date_filter": date_filter,
+            "allow_full_history": allow_full_history,
+            "shift": open_shift,
             "draft_count": (
                 Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count()
                 if open_shift
@@ -1270,6 +1446,8 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
         "show_order_tabs": request.htmx,
         "pos_nav": "history",
         "kitchen_status": _get_kitchen_status(order),
+        # GET opens the drawer with a slide-in; POST re-renders (print) stay put.
+        "drawer_animate": request.method == "GET",
     }
     if _is_order_details_drawer_request(request):
         return render(request, "pos/order_history_detail.html#drawer", context)
@@ -1279,7 +1457,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @require_POST
 def pos_order_history_print(request: HttpRequest, pk: int) -> HttpResponse:
-    """Reprint a submitted or cancelled historical receipt without editing it."""
+    """Reprint a submitted historical receipt without editing it."""
     order = get_object_or_404(Order, pk=pk, status=SUBMITTED)
     result = printing.print_receipt(order)
     if result.success:

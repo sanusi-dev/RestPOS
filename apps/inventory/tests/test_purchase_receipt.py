@@ -85,6 +85,8 @@ class PurchaseReceiptTest(TestCase):
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=second_item, received_qty=2, rate=20)
         receipt.submit()
+        # Consuming only the second line makes cancellation fail after the
+        # first reversal would otherwise succeed; the whole cancellation must roll back.
         StockLedgerEntry.create_entry(second_item, self.store, -2, "Consumption", "1")
 
         with self.assertRaisesMessage(ValidationError, "Insufficient stock"):

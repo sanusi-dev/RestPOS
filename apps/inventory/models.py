@@ -8,6 +8,15 @@ from django.utils import timezone
 from apps.utils.models import BaseModel
 
 
+def _assert_document_is_draft(document, *, action="modify"):
+    """Reject mutations on submitted or cancelled inventory documents."""
+    if document is None or not document.pk:
+        return
+    status = type(document).objects.only("status").get(pk=document.pk).status
+    if status != "DRAFT":
+        raise ValidationError(f"Cannot {action} a {status.lower()} inventory document.")
+
+
 class UOM(BaseModel):
     """Unit of measure (e.g. Nos, Kg, Litre, Box)."""
 
@@ -309,6 +318,9 @@ class StockLedgerEntry(BaseModel):
             queue.append([actual_qty, rate])
             valuation_rate = rate
         elif actual_qty < 0:
+            # FIFO: consume the oldest [qty, rate] batches first. The consumed
+            # value sets the outgoing rate; what remains becomes the new queue
+            # and its weighted-average rate the new valuation rate.
             remaining = abs(actual_qty)
             consumed_value = Decimal("0")
             while remaining > 0 and queue:
@@ -331,7 +343,6 @@ class StockLedgerEntry(BaseModel):
         else:
             # Zero-qty adjustment (e.g. rate-only reconciliation) — no queue change.
             pass
-
         stock_value = new_qty * valuation_rate
 
         sle = cls.objects.create(
@@ -349,6 +360,8 @@ class StockLedgerEntry(BaseModel):
             voucher_detail_no=voucher_detail_no,
         )
 
+        # The Bin mirrors the ledger's tail state so reads don't need to
+        # replay the SLE history.
         bin_obj.actual_qty = new_qty
         bin_obj.valuation_rate = valuation_rate
         bin_obj.stock_value = stock_value
@@ -389,6 +402,24 @@ class StockEntry(BaseModel):
     def __str__(self):
         return f"{self.purpose} - {self.posting_date}"
 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.only("status").get(pk=self.pk)
+            if previous.status != "DRAFT" and self.status == previous.status:
+                raise ValidationError(f"Cannot modify a {previous.status.lower()} stock entry.")
+            if previous.status != "DRAFT" and self.status not in {"SUBMITTED", "CANCELLED"}:
+                raise ValidationError(f"Cannot modify a {previous.status.lower()} stock entry.")
+            if previous.status == "SUBMITTED" and self.status not in {"SUBMITTED", "CANCELLED"}:
+                raise ValidationError("Submitted stock entries can only be cancelled.")
+            if previous.status == "CANCELLED" and self.status != "CANCELLED":
+                raise ValidationError("Cancelled stock entries cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.pk:
+            _assert_document_is_draft(self, action="delete")
+        return super().delete(*args, **kwargs)
+
     def submit(self):
         """Post the stock entry: create SLEs for every detail line and mark submitted."""
         from apps.settings.models import ProductionUnit, Restaurant
@@ -406,6 +437,8 @@ class StockEntry(BaseModel):
 
             targets = {}
             if entry.purpose == "MATERIAL_TRANSFER":
+                # Store is the only source; FOOD flows to the Kitchen unit's
+                # warehouse and DRINKS to the Bar / POS sales warehouse.
                 if not restaurant.default_warehouse_id or restaurant.default_warehouse.disabled:
                     raise ValidationError("Configure an enabled Bar / POS sales warehouse before transferring stock.")
                 units = {
@@ -456,6 +489,8 @@ class StockEntry(BaseModel):
             }
             for item_id, warehouse_id in sorted(bin_keys):
                 Bin.get_or_create_bin_id(item_id, warehouse_id)
+            # Stable lock ordering prevents two multi-line documents from
+            # deadlocking while they update FIFO state for shared bins.
             locked_bins = {
                 (bin_obj.item_id, bin_obj.warehouse_id): bin_obj
                 for bin_obj in Bin.objects.select_for_update()
@@ -484,6 +519,8 @@ class StockEntry(BaseModel):
                         prevent_negative=False,
                         bin_obj=store_bin,
                     )
+                    # Receipts carry the purchase rate into the item's last-buy
+                    # price so downstream transfers are valued at cost.
                     detail.item.last_purchase_rate = detail.basic_rate
                     updated_items.add(detail.item)
                 else:
@@ -501,6 +538,8 @@ class StockEntry(BaseModel):
                         prevent_negative=True,
                         bin_obj=store_bin,
                     )
+                    # The transfer-in is valued at the outgoing FIFO rate so
+                    # the store's cost follows the goods into the unit.
                     StockLedgerEntry._create_entry_locked(
                         item=detail.item,
                         warehouse=target,
@@ -590,6 +629,16 @@ class StockEntryDetail(BaseModel):
     def __str__(self):
         return f"{self.item.item_code} x{self.qty}"
 
+    def save(self, *args, **kwargs):
+        if self.stock_entry_id:
+            _assert_document_is_draft(self.stock_entry, action="modify lines on")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.stock_entry_id:
+            _assert_document_is_draft(self.stock_entry, action="delete lines from")
+        return super().delete(*args, **kwargs)
+
     def clean(self):
         super().clean()
         if not self.stock_entry_id:
@@ -657,6 +706,22 @@ class StockReconciliation(BaseModel):
     def __str__(self):
         return f"{self.get_purpose_display()} - {self.warehouse.name} - {self.posting_date}"
 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.only("status").get(pk=self.pk)
+            if previous.status != "DRAFT" and self.status == previous.status:
+                raise ValidationError(f"Cannot modify a {previous.status.lower()} stock reconciliation.")
+            if previous.status == "SUBMITTED" and self.status not in {"SUBMITTED", "CANCELLED"}:
+                raise ValidationError("Submitted reconciliations can only be cancelled.")
+            if previous.status == "CANCELLED" and self.status != "CANCELLED":
+                raise ValidationError("Cancelled reconciliations cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.pk:
+            _assert_document_is_draft(self, action="delete")
+        return super().delete(*args, **kwargs)
+
     def submit(self):
         """Post adjustment SLEs so each item's Bin matches the counted qty."""
         from apps.settings.models import ProductionUnit
@@ -681,6 +746,8 @@ class StockReconciliation(BaseModel):
                 if line.qty < 0:
                     raise ValidationError(f"Counted quantity for {line.item.item_name} cannot be negative.")
             if reconciliation.reason == "CONSUMPTION":
+                # Consumption write-offs only make sense at the Kitchen
+                # warehouse: that's where food stock is used up in cooking.
                 kitchen = (
                     ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
                 )
@@ -704,6 +771,8 @@ class StockReconciliation(BaseModel):
                 bin_obj = locked_bins[line.item_id]
                 current_qty = bin_obj.actual_qty
                 if reconciliation.purpose != "OPENING_STOCK" and line.qty < bin_obj.reserved_qty:
+                    # A physical count can never dip below what the POS has
+                    # promised to sell (open draft reservations).
                     raise ValidationError(
                         f"Counted quantity for {line.item.item_name} cannot be below reserved quantity "
                         f"({bin_obj.reserved_qty})."
@@ -713,6 +782,9 @@ class StockReconciliation(BaseModel):
                 difference = line.qty - current_qty
                 if difference == 0:
                     continue
+                # Opening stock values the item at its configured rate; a
+                # reconciliation posts at zero and relies on the existing
+                # FIFO valuation.
                 rate = line.valuation_rate if reconciliation.purpose == "OPENING_STOCK" else Decimal("0")
                 StockLedgerEntry._create_entry_locked(
                     item=line.item,
@@ -794,10 +866,17 @@ class StockReconciliationItem(BaseModel):
         return f"{self.item.item_code}: {self.qty}"
 
     def save(self, *args, **kwargs):
+        if self.reconciliation_id:
+            _assert_document_is_draft(self.reconciliation, action="modify lines on")
         if not self.pk and self.item_id and self.reconciliation_id:
             bin_obj = Bin.get_or_create_bin_id(self.item_id, self.reconciliation.warehouse_id)
             self.current_qty = bin_obj.actual_qty
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.reconciliation_id:
+            _assert_document_is_draft(self.reconciliation, action="delete lines from")
+        return super().delete(*args, **kwargs)
 
 
 class PurchaseReceipt(BaseModel):
@@ -834,6 +913,22 @@ class PurchaseReceipt(BaseModel):
 
     def __str__(self):
         return f"PR - {self.supplier_name} - {self.posting_date}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.only("status").get(pk=self.pk)
+            if previous.status != "DRAFT" and self.status == previous.status:
+                raise ValidationError(f"Cannot modify a {previous.status.lower()} purchase receipt.")
+            if previous.status == "SUBMITTED" and self.status not in {"SUBMITTED", "CANCELLED"}:
+                raise ValidationError("Submitted purchase receipts can only be cancelled.")
+            if previous.status == "CANCELLED" and self.status != "CANCELLED":
+                raise ValidationError("Cancelled purchase receipts cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.pk:
+            _assert_document_is_draft(self, action="delete")
+        return super().delete(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -988,8 +1083,15 @@ class PurchaseReceiptItem(BaseModel):
         return f"{self.item.item_code} x{self.received_qty}"
 
     def save(self, *args, **kwargs):
+        if self.purchase_receipt_id:
+            _assert_document_is_draft(self.purchase_receipt, action="modify lines on")
         self.amount = self.received_qty * self.rate
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.purchase_receipt_id:
+            _assert_document_is_draft(self.purchase_receipt, action="delete lines from")
+        return super().delete(*args, **kwargs)
 
     def validate_for_submission(self):
         if self.received_qty <= 0:

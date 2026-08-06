@@ -7,6 +7,11 @@
 {% elif no_shift %}
 {% include "pos/partials/gates/no_shift.html" %}
 {% elif order %}
+{% if setup_error %}
+<div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900" role="alert">
+  {{ setup_error }}
+</div>
+{% endif %}
 <div class="h-full flex min-w-0">
 
   {% partialdef catalog_workspace inline %}
@@ -40,6 +45,7 @@
 {% endif %}
 
 {% if request.htmx %}
+  {% comment %}Navigation lives outside #pos-main, so HTMX responses refresh it with out-of-band swaps.{% endcomment %}
   {% include "pos/partials/shell_navigation.html" with nav_location="header" shell_nav_oob=True %}
   {% include "pos/partials/shell_navigation.html" with nav_location="footer" shell_nav_oob=True %}
 {% endif %}

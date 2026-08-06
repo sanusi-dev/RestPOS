@@ -34,7 +34,8 @@ if (messagesEl) {
   try {
     handleMessages(JSON.parse(messagesEl.textContent));
   } catch (e) {
-    // ignore parse errors
+    // A malformed server message must not prevent the rest of the page JS
+    // from initializing.
   }
 }
 
