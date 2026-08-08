@@ -1,5 +1,4 @@
 import logging
-from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,11 +11,12 @@ from django.views.decorators.http import require_POST
 from apps.orders.models import DRAFT, Order
 from apps.users.models import CustomUser
 
+from . import services
 from .forms import (
     ClosingPaymentForm,
     OpeningFloatForm,
 )
-from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from .models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 logger = logging.getLogger(__name__)
 
@@ -323,22 +323,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         if existing_draft is not None:
             return redirect("staff:closing_entry_detail", pk=existing_draft.pk)
 
-        closing = POSClosingEntry.objects.create(
-            opening_entry=open_entry,
-            cashier=user,
-        )
-        rows = [
-            ClosingPayment(
-                closing_entry=closing,
-                mode_of_payment=op.mode_of_payment,
-                opening_amount=op.opening_amount,
-                expected_amount=op.opening_amount,
-                closing_amount=Decimal("0"),
-                difference=Decimal("0"),
-            )
-            for op in open_entry.opening_payments.all()
-        ]
-        ClosingPayment.objects.bulk_create(rows)
+        closing = services.ensure_closing_draft(open_entry, user)
     messages.success(
         request,
         f"Closing entry #{closing.pk} started for the open shift. "

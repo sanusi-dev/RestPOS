@@ -8,7 +8,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -30,12 +29,12 @@ from apps.orders.models import (
     TICKET_BAR,
     TICKET_KITCHEN,
     Order,
-    OrderPayment,
 )
 from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from apps.staff.services import ensure_closing_draft, expected_closing_amounts
 from apps.users.models import CustomUser
 
 from . import printing, services
@@ -402,69 +401,6 @@ def _closing_form_prefix(mode_of_payment_id):
     return f"cp_mop_{mode_of_payment_id}"
 
 
-def _expected_closing_amounts(open_shift, period_start, period_end):
-    """Compute expected drawer amounts for each opening payment mode.
-
-    Expected = opening float + payments collected in the period. For cash,
-    change given back to customers is netted off the collected total.
-    """
-    submitted_orders = Order.objects.filter(
-        opening_entry=open_shift,
-        status=SUBMITTED,
-        is_return=False,
-        submitted_at__gte=period_start,
-        submitted_at__lte=period_end,
-    )
-    rows = []
-    for opening_payment in open_shift.opening_payments.select_related("mode_of_payment").all():
-        collected = OrderPayment.objects.filter(
-            order__in=submitted_orders,
-            mode_of_payment_id=opening_payment.mode_of_payment_id,
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-        if opening_payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
-            collected -= sum(
-                (
-                    order.change_amount
-                    for order in submitted_orders.filter(
-                        payments__mode_of_payment_id=opening_payment.mode_of_payment_id
-                    ).distinct()
-                ),
-                Decimal("0"),
-            )
-        rows.append(
-            {
-                "mode": opening_payment.mode_of_payment,
-                "opening_amount": opening_payment.opening_amount,
-                "expected_amount": opening_payment.opening_amount + collected,
-            }
-        )
-    return rows
-
-
-def _ensure_closing_draft(open_shift, cashier):
-    """Return the draft closing entry for this shift, creating it only when needed."""
-    closing = POSClosingEntry.objects.filter(
-        opening_entry=open_shift,
-        status=POSClosingEntry.DRAFT,
-    ).first()
-    if closing is not None:
-        return closing
-    closing = POSClosingEntry.objects.create(opening_entry=open_shift, cashier=cashier)
-    ClosingPayment.objects.bulk_create(
-        [
-            ClosingPayment(
-                closing_entry=closing,
-                mode_of_payment=opening_payment.mode_of_payment,
-                opening_amount=opening_payment.opening_amount,
-                expected_amount=opening_payment.opening_amount,
-                closing_amount=Decimal("0"),
-            )
-            for opening_payment in open_shift.opening_payments.all()
-        ]
-    )
-    return closing
-
-
 @login_required
 @require_http_methods(["GET", "POST"])
 def pos_close_shift(request: HttpRequest) -> HttpResponse:
@@ -494,7 +430,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
 
     period_start = open_shift.period_start_date
     period_end = timezone.now()
-    expected_rows = _expected_closing_amounts(open_shift, period_start, period_end)
+    expected_rows = expected_closing_amounts(open_shift, period_start, period_end)
 
     if request.method == "POST":
         with transaction.atomic():
@@ -507,7 +443,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                     "before closing the shift.",
                 )
                 return _home_or_redirect(request)
-            closing = _ensure_closing_draft(open_shift, user)
+            closing = ensure_closing_draft(open_shift, user)
             closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
             expected_by_mode = {row["mode"].pk: row for row in expected_rows}
             form_data = []
