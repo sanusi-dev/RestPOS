@@ -704,6 +704,25 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 649 tests green, ruff clean.
 
+### 6.1i Merge of fix/performance-audit (2026-08-08)
+
+Merged `fix/performance-audit` (`4c4b3ce perf: optimize POS and shift queries`) into `refactor/service-layer` with a 3-way merge. Conflicts in 3 files resolved by keeping the §6.1c–h architecture and porting the perf optimizations into the new locations:
+
+| Perf change (from fix/performance-audit) | Where it landed |
+|---|---|
+| `collect_submitted_payment_totals()` — per-mode payment totals in 2 queries instead of N | Adopted in `staff/services.py`; used by `expected_closing_amounts` (single source) and `submit_closing_entry` |
+| `Subquery`-based `total_quantity` aggregate in closing submit | Ported into `services.submit_closing_entry` (the model `submit()` no longer exists) |
+| `order_history_rows` — `annotate(item_count)` instead of prefetching items | Adopted in `orders/services.py` |
+| `_render_cart` catalog OOB opt-in (`catalog_oob` only when requested) | Adopted in `views_pos.py` (`pos_order_add_item`, `update_item`, `sync`, `clear`, `print`) |
+| `pos_order_settle` GET renders a minimal dialog without `_build_order_context` | Adopted |
+| `Restaurant.load()` — dropped the `active_menu__items` prefetch | Adopted in `settings/models.py` |
+| `_entry_to_initial(opening_payments)` reuse in staff opening detail | Adopted |
+| `test_performance.py` (3 query-count tests) | Updated to call `add_order_line` (the `Order.add_item` it used was removed in §6.1c) |
+
+**Resolutions:** `staff/models.py` — kept the §6.1d version (the perf changes were inside the model `submit()` that no longer exists; the optimizations were ported to the service). `views_pos.py` — §6.1f versions with the perf `catalog_oob`/context tweaks applied. `staff/services.py` — merged both sides.
+
+**Verification:** 652 tests green (649 + 3 perf), ruff clean.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)

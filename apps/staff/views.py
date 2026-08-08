@@ -134,7 +134,7 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     # GET — build an unbound form pre-filled with existing draft amounts so
     # the inline table renders the current values.
     if entry.status == POSOpeningEntry.DRAFT:
-        initial = _entry_to_initial(entry)
+        initial = _entry_to_initial(opening_payments)
         form = OpeningFloatForm(initial=initial)
     else:
         form = None
@@ -155,10 +155,10 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-def _entry_to_initial(entry: POSOpeningEntry) -> dict:
+def _entry_to_initial(opening_payments: list[OpeningPayment]) -> dict:
     """Build form-initial data from an existing draft's OpeningPayment rows."""
     initial = {}
-    for op in entry.opening_payments.select_related("mode_of_payment"):
+    for op in opening_payments:
         initial[OpeningFloatForm._field_name_for(op.mode_of_payment)] = str(op.opening_amount)
     return initial
 

@@ -45,7 +45,6 @@ def inventory_dashboard(request: HttpRequest) -> HttpResponse:
     )
     context = {
         "item_count": Item.objects.count(),
-        "item_group_count": ItemGroup.objects.count(),
         "warehouse_count": Warehouse.objects.count(),
         "uom_count": UOM.objects.count(),
         "stock_entry_count": StockEntry.objects.count(),

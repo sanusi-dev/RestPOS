@@ -4,13 +4,50 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
 
-from apps.orders.models import Order, OrderPayment
+from apps.orders.models import Order, OrderItem, OrderPayment
 from apps.payments.models import ModeOfPayment
 
 from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+
+
+def collect_submitted_payment_totals(submitted_orders, payment_rows):
+    """Return submitted payment totals per mode, net of cash change."""
+    mode_ids = {payment.mode_of_payment_id for payment in payment_rows}
+    if not mode_ids:
+        return {}
+
+    payment_totals = {
+        row["mode_of_payment_id"]: row["total"] or Decimal("0")
+        for row in OrderPayment.objects.filter(
+            order__in=submitted_orders,
+            mode_of_payment_id__in=mode_ids,
+        )
+        .values("mode_of_payment_id")
+        .annotate(total=Sum("amount"))
+    }
+    cash_mode_ids = {
+        payment.mode_of_payment_id
+        for payment in payment_rows
+        if payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH
+    }
+    if not cash_mode_ids:
+        return payment_totals
+
+    cash_change_totals = {}
+    cash_orders = (
+        submitted_orders.filter(payments__mode_of_payment_id__in=cash_mode_ids)
+        .values("payments__mode_of_payment_id", "pk", "change_amount")
+        .distinct()
+    )
+    for row in cash_orders:
+        mode_id = row["payments__mode_of_payment_id"]
+        cash_change_totals[mode_id] = cash_change_totals.get(mode_id, Decimal("0")) + row["change_amount"]
+    for mode_id, change_total in cash_change_totals.items():
+        payment_totals[mode_id] = payment_totals.get(mode_id, Decimal("0")) - change_total
+    return payment_totals
 
 
 def expected_closing_amounts(open_shift, period_start, period_end):
@@ -20,22 +57,11 @@ def expected_closing_amounts(open_shift, period_start, period_end):
     change given back to customers is netted off the collected total.
     """
     submitted_orders = Order.objects.submitted_in_shift(open_shift, period_start, period_end)
+    opening_payments = list(open_shift.opening_payments.select_related("mode_of_payment").all())
+    collected_by_mode = collect_submitted_payment_totals(submitted_orders, opening_payments)
     rows = []
-    for opening_payment in open_shift.opening_payments.select_related("mode_of_payment").all():
-        collected = OrderPayment.objects.filter(
-            order__in=submitted_orders,
-            mode_of_payment_id=opening_payment.mode_of_payment_id,
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-        if opening_payment.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
-            collected -= sum(
-                (
-                    order.change_amount
-                    for order in submitted_orders.filter(
-                        payments__mode_of_payment_id=opening_payment.mode_of_payment_id
-                    ).distinct()
-                ),
-                Decimal("0"),
-            )
+    for opening_payment in opening_payments:
+        collected = collected_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
         rows.append(
             {
                 "mode": opening_payment.mode_of_payment,
@@ -109,9 +135,9 @@ def submit_closing_entry(closing):
         raise ValidationError("The opening shift is no longer open.")
     # Cut off at submit time so orders settled after the draft was opened are included.
     locked.period_end_date = timezone.now()
-    opening_modes = {
-        op.mode_of_payment_id: op for op in opening.opening_payments.select_related("mode_of_payment").all()
-    }
+    opening_payments = list(opening.opening_payments.select_related("mode_of_payment").all())
+    opening_modes = {op.mode_of_payment_id: op for op in opening_payments}
+    closing_payments = list(locked.closing_payments.select_related("mode_of_payment").all())
 
     draft_count = Order.objects.open_drafts(opening).count()
     if draft_count:
@@ -122,17 +148,30 @@ def submit_closing_entry(closing):
     submitted_orders = Order.objects.submitted_in_shift(opening, locked.period_start_date, locked.period_end_date)
     # Drafts block the close above; returns are excluded because they are
     # handled by the deferred refund flow rather than drawer sales.
-    locked.total_quantity = submitted_orders.aggregate(total=Sum("items__qty"))["total"] or Decimal("0")
-    locked.net_total = submitted_orders.aggregate(total=Sum("net_total"))["total"] or Decimal("0")
-    locked.grand_total = submitted_orders.aggregate(total=Sum("grand_total"))["total"] or Decimal("0")
+    item_totals = (
+        OrderItem.objects.filter(order_id=OuterRef("pk"))
+        .values("order_id")
+        .annotate(total=Sum("qty"))
+        .values("total")
+    )
+    order_totals = submitted_orders.aggregate(
+        total_quantity=Sum(Subquery(item_totals)),
+        net_total=Sum("net_total"),
+        grand_total=Sum("grand_total"),
+    )
+    locked.total_quantity = order_totals["total_quantity"] or Decimal("0")
+    locked.net_total = order_totals["net_total"] or Decimal("0")
+    locked.grand_total = order_totals["grand_total"] or Decimal("0")
+
+    for cp in closing_payments:
+        if cp.mode_of_payment_id not in opening_modes:
+            raise ValidationError({"mode_of_payment": (f"{cp.mode_of_payment} was not declared at shift open.")})
 
     expected_by_mode = {
         row["mode"].pk: row
         for row in expected_closing_amounts(opening, locked.period_start_date, locked.period_end_date)
     }
-    for cp in locked.closing_payments.select_related("mode_of_payment").all():
-        if cp.mode_of_payment_id not in opening_modes:
-            raise ValidationError({"mode_of_payment": (f"{cp.mode_of_payment} was not declared at shift open.")})
+    for cp in closing_payments:
         expected = expected_by_mode[cp.mode_of_payment_id]
         cp.opening_amount = expected["opening_amount"]
         cp.expected_amount = expected["expected_amount"]
@@ -145,10 +184,7 @@ def submit_closing_entry(closing):
                 "updated_at",
             ]
         )
-    locked.total_short_excess = sum(
-        (cp.difference for cp in locked.closing_payments.all()),
-        Decimal("0"),
-    )
+    locked.total_short_excess = sum((cp.difference for cp in closing_payments), Decimal("0"))
     locked.status = POSClosingEntry.SUBMITTED
     locked.save(
         update_fields=[
