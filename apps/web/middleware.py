@@ -1,9 +1,8 @@
 import json
 
 from django.contrib import messages as django_messages
+from django.db.models import prefetch_related_objects
 from django.shortcuts import redirect
-
-from apps.users.models import CustomUser
 
 
 class BackofficeAccessMiddleware:
@@ -17,7 +16,7 @@ class BackofficeAccessMiddleware:
             # the user's groups once and let cached_property role checks reuse them
             # (one groups query per request instead of ~9 groups.exists() per page).
             if path.startswith("/pos/") or path.startswith("/backoffice/"):
-                request.user = CustomUser.objects.prefetch_related("groups").get(pk=request.user.pk)
+                prefetch_related_objects([request.user], "groups")
             if path.startswith("/backoffice/") and not request.user.has_backoffice_access:
                 return redirect("web:pos_index")
             if path.startswith("/pos/") and not request.user.has_staff_role:

@@ -181,7 +181,7 @@ def _get_active_card(request, order):
 def _render_cart(request, order, **extra_context):
     """Render the cart fragment with optional action feedback."""
     context = _build_order_context(request, order)
-    context["catalog_oob"] = True
+    context["catalog_oob"] = extra_context.pop("catalog_oob", False)
     context.update(extra_context)
     return render(request, "pos/index.html#cart", context)
 
@@ -247,6 +247,7 @@ def _build_order_context(request, order):
         "catalog_specials": catalog_specials,
         "catalog_has_filters": bool(catalog_query or catalog_group or catalog_specials),
         "active_card": _get_active_card(request, order),
+        "order_items": items,
         "guest_groups": _group_items_by_guest(order, items),
         "payment_modes": list(_get_settle_payment_modes()),
         "order_type_choices": ORDER_TYPE_CHOICES,
@@ -258,6 +259,7 @@ def _build_order_context(request, order):
         "bar_ticket_printed": bool(bar_ticket and bar_ticket.print_status == KOT_PRINTED),
         "can_reprint": user.is_manager or user.is_admin or user.is_superuser,
         "receipt_printable": has_items,
+        "has_items": has_items,
         "setup_error": setup_error,
         "pos_nav": "order",
     }
@@ -678,7 +680,7 @@ def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
                 except ValidationError as e:
                     error = e.messages[0] if e.messages else "Cannot change guest count."
 
-    return _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    return _render_cart(request, order, error=error)
 
 
 @login_required
@@ -741,7 +743,7 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
                 except ValidationError as e:
                     error = e.messages[0] if e.messages else "Unable to add that item."
 
-    response = _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    response = _render_cart(request, order, error=error, catalog_oob=not error)
     if not error and request.headers.get("HX-Request"):
         response["HX-Trigger"] = "close-add-on-dialog"
     return response
@@ -810,13 +812,13 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
             except ValueError, TypeError, InvalidOperation:
                 error = "Invalid item update."
 
-    return _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    return _render_cart(request, order, error=error, catalog_oob=not error)
 
 
 @login_required
 @require_POST
 def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpResponse:
-    """Set the active customer card in session. Returns the cart (with catalog OOB)."""
+    """Set the active customer card in session and return the cart."""
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
@@ -865,6 +867,7 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
     return _render_cart(
         request,
         order,
+        catalog_oob=True,
         sync_success=True,
         kot_count=len(kots),
         print_failures=print_failures,
@@ -881,7 +884,7 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("pos:pos_home")
     with transaction.atomic():
         order = get_object_or_404(
-            Order.objects.select_for_update().prefetch_related("items"),
+            Order.objects.select_for_update(),
             pk=pk,
             status=DRAFT,
             is_return=False,
@@ -896,7 +899,7 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
             order.audit("ITEMS_CLEARED", actor=request.user)
             messages.success(request, "Order cleared.")
 
-    return _render_cart(request, order, error=error)
+    return _render_cart(request, order, error=error, catalog_oob=not error)
 
 
 @login_required
@@ -906,13 +909,7 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(
-        Order.objects.prefetch_related("items", "payments"),
-        pk=pk,
-        status=DRAFT,
-        is_return=False,
-        opening_entry=shift,
-    )
+    order = get_object_or_404(Order, pk=pk, status=DRAFT, is_return=False, opening_entry=shift)
 
     if request.method == "POST":
         payments_data = []
@@ -945,10 +942,15 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f"Order {order.invoice_number} settled.")
         return redirect("pos:pos_home")
 
-    ctx = _build_order_context(request, order)
-    ctx["payment_modes"] = list(_get_settle_payment_modes())
-    ctx["show_payment"] = True
-    return render(request, "pos/index.html#payment_dialog", ctx)
+    return render(
+        request,
+        "pos/index.html#payment_dialog",
+        {
+            "order": order,
+            "payment_modes": list(_get_settle_payment_modes()),
+            "show_payment": True,
+        },
+    )
 
 
 @login_required
@@ -1083,7 +1085,7 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
         )
     else:
         feedback = {"receipt_print_error": True, "receipt_print_action": action}
-    return _render_cart(request, order, error=error, **feedback)
+    return _render_cart(request, order, error=error, catalog_oob=action == "print", **feedback)
 
 
 @login_required

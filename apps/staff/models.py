@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import Sum
+from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
 
 from apps.payments.models import ModeOfPayment
@@ -239,10 +239,11 @@ class POSClosingEntry(BaseModel):
             raise ValidationError("The opening shift is no longer open.")
         # Cut off at submit time so orders settled after the draft was opened are included.
         closing.period_end_date = timezone.now()
-        opening_modes = {
-            op.mode_of_payment_id: op for op in opening.opening_payments.select_related("mode_of_payment").all()
-        }
-        from apps.orders.models import DRAFT, SUBMITTED, Order, OrderPayment  # noqa: I001
+        opening_payments = list(opening.opening_payments.select_related("mode_of_payment").all())
+        opening_modes = {op.mode_of_payment_id: op for op in opening_payments}
+        closing_payments = list(closing.closing_payments.select_related("mode_of_payment").all())
+        from apps.orders.models import DRAFT, SUBMITTED, Order, OrderItem  # noqa: I001
+        from apps.staff.services import collect_submitted_payment_totals
 
         draft_count = Order.objects.filter(opening_entry=opening, status=DRAFT, is_return=False).count()
         if draft_count:
@@ -259,31 +260,29 @@ class POSClosingEntry(BaseModel):
         )
         # Drafts block the close above; returns are excluded because they are
         # handled by the deferred refund flow rather than drawer sales.
-        closing.total_quantity = submitted_orders.aggregate(total=Sum("items__qty"))["total"] or Decimal("0")
-        closing.net_total = submitted_orders.aggregate(total=Sum("net_total"))["total"] or Decimal("0")
-        closing.grand_total = submitted_orders.aggregate(total=Sum("grand_total"))["total"] or Decimal("0")
+        item_totals = (
+            OrderItem.objects.filter(order_id=OuterRef("pk"))
+            .values("order_id")
+            .annotate(total=Sum("qty"))
+            .values("total")
+        )
+        order_totals = submitted_orders.aggregate(
+            total_quantity=Sum(Subquery(item_totals)),
+            net_total=Sum("net_total"),
+            grand_total=Sum("grand_total"),
+        )
+        closing.total_quantity = order_totals["total_quantity"] or Decimal("0")
+        closing.net_total = order_totals["net_total"] or Decimal("0")
+        closing.grand_total = order_totals["grand_total"] or Decimal("0")
 
-        for cp in closing.closing_payments.select_related("mode_of_payment").all():
+        for cp in closing_payments:
             if cp.mode_of_payment_id not in opening_modes:
                 raise ValidationError({"mode_of_payment": (f"{cp.mode_of_payment} was not declared at shift open.")})
+
+        payment_totals = collect_submitted_payment_totals(submitted_orders, closing_payments)
+        for cp in closing_payments:
             cp.opening_amount = opening_modes[cp.mode_of_payment_id].opening_amount
-            payment_total = OrderPayment.objects.filter(
-                order__in=submitted_orders,
-                mode_of_payment_id=cp.mode_of_payment_id,
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-            if cp.mode_of_payment.type == ModeOfPayment.TYPE_CASH:
-                # Cash change given to customers leaves the drawer without an
-                # OrderPayment row, so net it off the expected total.
-                change_total = sum(
-                    (
-                        order.change_amount
-                        for order in submitted_orders.filter(
-                            payments__mode_of_payment_id=cp.mode_of_payment_id
-                        ).distinct()
-                    ),
-                    Decimal("0"),
-                )
-                payment_total -= change_total
+            payment_total = payment_totals.get(cp.mode_of_payment_id, Decimal("0"))
             cp.expected_amount = cp.opening_amount + payment_total
             cp.difference = cp.closing_amount - cp.expected_amount
             cp.save(
@@ -294,10 +293,7 @@ class POSClosingEntry(BaseModel):
                     "updated_at",
                 ]
             )
-        closing.total_short_excess = sum(
-            (cp.difference for cp in closing.closing_payments.all()),
-            Decimal("0"),
-        )
+        closing.total_short_excess = sum((cp.difference for cp in closing_payments), Decimal("0"))
         closing.status = closing.SUBMITTED
         closing.save(
             update_fields=[

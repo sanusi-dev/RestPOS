@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef, Q, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.utils import timezone
 
 from apps.inventory.models import Bin, Item, StockLedgerEntry
@@ -497,7 +497,7 @@ def order_history_rows(filters):
     search = filters.get("search", "")
     posting_date = filters.get("posting_date")
 
-    orders = Order.objects.select_related("cashier").prefetch_related("payments__mode_of_payment", "items")
+    orders = Order.objects.select_related("cashier").annotate(item_count=Count("items", distinct=True))
     if search:
         search_query = Q(invoice_number__icontains=search)
         if search.isdigit():

@@ -30,4 +30,6 @@ def csrf_settings(request):
 
 def inventory_navigation(request):
     """Expose the item-group count used by backoffice navigation."""
+    if not request.path.startswith("/backoffice/"):
+        return {}
     return {"item_group_count": ItemGroup.objects.count()}

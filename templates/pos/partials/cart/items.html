@@ -1,6 +1,6 @@
 {% load humanize %}
 {% comment %}The server locks edits after a ticket or receipt is created. Customer grouping uses persisted customer_index; active_card only chooses where new items are added.{% endcomment %}
-{% if order.items.exists %}
+{% if has_items %}
   {% if order.guest_count > 1 %}
     {% for group in guest_groups %}
     <section class="mx-3 mt-3 last:mb-3 overflow-hidden rounded-xl bg-white shadow-sm ring-1 {% if group.index == active_card %}ring-teal-500{% else %}ring-slate-200{% endif %}">
@@ -91,7 +91,7 @@
     </span>
     <span class="text-sm font-bold tabular-nums text-slate-600">₦{{ order.grand_total|intcomma }}</span>
   </div>
-  {% for item in order.items.all %}
+  {% for item in order_items %}
   <div class="group border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0 hover:bg-slate-50/70">
     <div class="flex items-center justify-between">
       <div class="mr-3 min-w-0 flex-1">
