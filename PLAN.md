@@ -678,6 +678,18 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 611 tests green, ruff clean. Two regressions caught and fixed during the phase: `claim_receipt_print` must compute "print"/"reprint" *before* claiming (the original did), and `open_shift` lives in `staff/services.py` — both fixed before commit.
 
+### 6.1g Direct service tests (2026-08-08)
+
+**Continuation of §6.1b/f** — the refactor's payoff: business rules tested without constructing HTTP requests.
+
+**Added:**
+- `apps/orders/tests/test_services.py` (26 tests) — `create_draft_order` (draft cap, missing shift/settings), `update_order_meta` (order-type/guest rules, clamping, printed/sent guards, no-op), `update_order_item` (increment/decrement/remove/set, audits, totals), `claim_receipt_print` (claim/audit/reprint semantics), `dispatch_tickets` (print status persistence, failure reporting via patched printer), `drink_stock_available` (out-of-stock and setup-required marking).
+- `apps/staff/tests/test_services.py` (12 tests) — `open_shift` (float/remarks, one-open-shift rule, missing settings), `expected_closing_amounts` (per-mode collection, cash-change netting), `submit_closing_entry` (difference, shift flip, draft-orders block).
+
+**Why now:** through §6.1c/e/f the business rules moved to services but were still exercised only through the HTTP views (1,300-line view tests) or model-level tests. These new tests pin the moved logic directly — the rules the views previously enforced inline are now testable without a template render.
+
+**Verification:** 649 tests green (611 + 38 new), ruff clean. View tests untouched — they keep covering HTTP concerns.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)
