@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from . import services
 from .forms import (
     ItemForm,
     ItemGroupForm,
@@ -433,7 +434,7 @@ def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "DRAFT":
         try:
-            entry.submit()
+            services.submit_stock_entry(entry)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
@@ -445,7 +446,7 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     if entry.status == "SUBMITTED":
         try:
-            entry.cancel()
+            services.cancel_stock_entry(entry)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:stock_entry_detail", pk=pk)
@@ -557,7 +558,7 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "DRAFT":
         try:
-            reconciliation.submit()
+            services.submit_stock_reconciliation(reconciliation)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
@@ -569,7 +570,7 @@ def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "SUBMITTED":
         try:
-            reconciliation.cancel()
+            services.cancel_stock_reconciliation(reconciliation)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:reconciliation_detail", pk=pk)
@@ -663,7 +664,7 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "DRAFT":
         try:
-            receipt.submit()
+            services.submit_purchase_receipt(receipt)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)
@@ -675,7 +676,7 @@ def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
     if receipt.status == "SUBMITTED":
         try:
-            receipt.cancel()
+            services.cancel_purchase_receipt(receipt)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:purchase_receipt_detail", pk=pk)

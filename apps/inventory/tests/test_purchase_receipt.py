@@ -13,6 +13,7 @@ from apps.inventory.models import (
     StockLedgerEntry,
     Warehouse,
 )
+from apps.inventory.services import cancel_purchase_receipt, submit_purchase_receipt
 from apps.settings.models import Restaurant
 
 
@@ -36,7 +37,7 @@ class PurchaseReceiptTest(TestCase):
     def test_submit_forces_configured_store(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=10, rate=100)
-        receipt.submit()
+        submit_purchase_receipt(receipt)
         receipt.refresh_from_db()
         self.assertEqual(receipt.warehouse, self.store)
         self.assertEqual(receipt.total, Decimal("1000"))
@@ -46,7 +47,7 @@ class PurchaseReceiptTest(TestCase):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.other)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=1, rate=10)
         with self.assertRaisesMessage(ValidationError, "central Store"):
-            receipt.submit()
+            submit_purchase_receipt(receipt)
 
     def test_submit_rejects_non_stock_non_purchase_disabled_and_template_items(self):
         for changes in (
@@ -62,14 +63,14 @@ class PurchaseReceiptTest(TestCase):
             receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
             PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=1, rate=10)
             with self.assertRaisesMessage(ValidationError, "enabled stock and purchase item"):
-                receipt.submit()
+                submit_purchase_receipt(receipt)
 
     def test_cancel_is_idempotent(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
-        receipt.submit()
-        receipt.cancel()
-        receipt.cancel()
+        submit_purchase_receipt(receipt)
+        cancel_purchase_receipt(receipt)
+        cancel_purchase_receipt(receipt)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("0"))
 
     def test_cancel_rejects_consumed_stock_and_rolls_back_all_reversals(self):
@@ -84,13 +85,13 @@ class PurchaseReceiptTest(TestCase):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=second_item, received_qty=2, rate=20)
-        receipt.submit()
+        submit_purchase_receipt(receipt)
         # Consuming only the second line makes cancellation fail after the
         # first reversal would otherwise succeed; the whole cancellation must roll back.
         StockLedgerEntry.create_entry(second_item, self.store, -2, "Consumption", "1")
 
         with self.assertRaisesMessage(ValidationError, "Insufficient stock"):
-            receipt.cancel()
+            cancel_purchase_receipt(receipt)
 
         receipt.refresh_from_db()
         self.assertEqual(receipt.status, "SUBMITTED")
@@ -105,10 +106,10 @@ class PurchaseReceiptTest(TestCase):
     def test_cancel_consumes_current_fifo_and_preserves_remaining_valuation(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
-        receipt.submit()
+        submit_purchase_receipt(receipt)
         StockLedgerEntry.create_entry(self.item, self.store, 2, "Later Receipt", "1", rate=Decimal("200"))
 
-        receipt.cancel()
+        cancel_purchase_receipt(receipt)
 
         stock_bin = Bin.objects.get(item=self.item, warehouse=self.store)
         reversal = StockLedgerEntry.objects.get(

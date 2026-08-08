@@ -15,6 +15,7 @@ from apps.inventory.models import (
     StockEntryDetail,
     Warehouse,
 )
+from apps.inventory.services import submit_purchase_receipt, submit_stock_entry
 from apps.settings.models import Restaurant
 from apps.users.models import CustomUser
 
@@ -295,7 +296,7 @@ class TestStockEntryViews(InventoryViewTestBase):
             qty=Decimal("10"),
             basic_rate=Decimal("100"),
         )
-        entry.submit()
+        submit_stock_entry(entry)
         response = self.client.post(reverse("inventory:stock_entry_cancel", kwargs={"pk": entry.pk}))
         self.assertRedirects(response, reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
         entry.refresh_from_db()
@@ -492,7 +493,7 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
             received_qty=Decimal("10"),
             rate=Decimal("100"),
         )
-        receipt.submit()
+        submit_purchase_receipt(receipt)
         response = self.client.post(reverse("inventory:purchase_receipt_cancel", kwargs={"pk": receipt.pk}))
         self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
         receipt.refresh_from_db()

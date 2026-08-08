@@ -15,6 +15,7 @@ from apps.inventory.models import (
     StockReconciliationItem,
     Warehouse,
 )
+from apps.inventory.services import cancel_stock_reconciliation, submit_stock_reconciliation
 from apps.settings.models import ProductionUnit
 
 
@@ -54,7 +55,7 @@ class StockReconciliationTest(TestCase):
         # The line snapshot is intentionally stale; submit() must lock and read
         # the current Bin rather than trusting current_qty from line creation.
         self.assertEqual(line.current_qty, Decimal("0"))
-        rec.submit()
+        submit_stock_reconciliation(rec)
         line.refresh_from_db()
         self.assertEqual(line.current_qty, Decimal("5"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("8"))
@@ -64,7 +65,7 @@ class StockReconciliationTest(TestCase):
         rec = self.make_reconciliation()
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("3"))
         with self.assertRaisesMessage(ValidationError, "reserved quantity"):
-            rec.submit()
+            submit_stock_reconciliation(rec)
         bin_obj.refresh_from_db()
         self.assertEqual(bin_obj.actual_qty, Decimal("10"))
 
@@ -73,7 +74,7 @@ class StockReconciliationTest(TestCase):
         rec = self.make_reconciliation(reason="CONSUMPTION", warehouse=other)
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
         with self.assertRaisesMessage(ValidationError, "configured Kitchen"):
-            rec.submit()
+            submit_stock_reconciliation(rec)
 
     def test_disabled_or_non_stock_item_rejected(self):
         self.item.disabled = True
@@ -81,13 +82,13 @@ class StockReconciliationTest(TestCase):
         rec = self.make_reconciliation()
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
         with self.assertRaisesMessage(ValidationError, "enabled stock item"):
-            rec.submit()
+            submit_stock_reconciliation(rec)
 
     def test_cancel_reverses_atomically_and_is_idempotent(self):
         StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
         rec = self.make_reconciliation()
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
-        rec.submit()
-        rec.cancel()
-        rec.cancel()
+        submit_stock_reconciliation(rec)
+        cancel_stock_reconciliation(rec)
+        cancel_stock_reconciliation(rec)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("5"))

@@ -637,6 +637,27 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 611 tests green, ruff clean. Error messages and validation order unchanged.
 
+### 6.1e Inventory document workflows to services (2026-08-08)
+
+**Continuation of §6.1b** — moves the stock posting/reversal workflows off the models.
+
+**Moved to `apps/inventory/services.py`:**
+
+| Model method (removed) | Service function |
+|---|---|
+| `StockEntry.submit` / `StockEntry.cancel` | `submit_stock_entry` / `cancel_stock_entry` |
+| `StockReconciliation.submit` / `StockReconciliation.cancel` | `submit_stock_reconciliation` / `cancel_stock_reconciliation` |
+| `PurchaseReceipt.submit` / `PurchaseReceipt.cancel` | `submit_purchase_receipt` / `cancel_purchase_receipt` |
+| `PurchaseReceipt._revert_last_purchase_rates` | `_revert_last_purchase_rates(receipt)` (module-private) |
+
+**Why:** these are cross-entity workflows (config validation, bin locking in stable order, SLE creation/reversal, item-rate updates, status flips) — the largest concentration of orchestration left on models. The three `cancel()` bodies were near-identical (~40 lines each) and now share one `_reverse_voucher()` helper.
+
+**Also changed:** 6 view wrappers in `inventory/views.py` call the service functions; ~35 test call sites updated across `test_stock_entry.py`, `test_stock_reconciliation.py`, `test_purchase_receipt.py`, `test_views.py`.
+
+**Retained on the models:** `save()`/`delete()` draft guards, `clean()`, line-model validation (`validate_for_submission`, `StockEntryDetail.clean`, etc.), `StockLedgerEntry._create_entry_locked` (FIFO core), `Bin` helpers, and `StockEntry.stock_ledger_entries_for_voucher` (query helper used by the detail views).
+
+**Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — same error messages, same locking order, same status propagation.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)
