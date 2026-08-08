@@ -16,6 +16,7 @@ from apps.menu.models import Menu, MenuItem
 from apps.orders.management.commands.seed_pos_setup import Command as SeedPosSetup
 from apps.orders.models import DRAFT, KOT_CANCELLED, KOT_PRINT_PENDING, KOT_PRINTED, Order
 from apps.orders.printing import PrintResult
+from apps.orders.services import cancel_sent_order, create_tickets, settle_order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
@@ -107,7 +108,8 @@ class DisabledLineValidationTest(ReviewFixBase):
         self.menu_item.disabled = True
         self.menu_item.save(update_fields=["disabled"])
         with self.assertRaises(ValidationError):
-            order.settle(
+            settle_order(
+                order,
                 [{"mode_of_payment": self.cash, "amount": Decimal("1000")}],
                 cashier=self.user,
             )
@@ -164,7 +166,8 @@ class ClosingPeriodEndIncludesLateOrdersTest(ReviewFixBase):
                 closing_amount=Decimal("1000"),
             )
         order = self._draft_order_with_item()
-        order.settle(
+        settle_order(
+            order,
             [{"mode_of_payment": self.cash, "amount": Decimal("1000")}],
             cashier=self.user,
         )
@@ -205,8 +208,8 @@ class ReceiptPrintClaimsBeforePrintTest(ReviewFixBase):
 class CancellationTicketRetryTest(ReviewFixBase):
     def test_retry_pending_cancellation_ticket_on_cancelled_order(self):
         order = self._draft_order_with_item()
-        order.create_tickets(created_by=self.user)
-        order.cancel_sent_order(reason="wrong_order", cancelled_by=self.user)
+        create_tickets(order, created_by=self.user)
+        cancel_sent_order(order, reason="wrong_order", cancelled_by=self.user)
         cancel_ticket = order.kots.filter(type=KOT_CANCELLED).first()
         self.assertIsNotNone(cancel_ticket)
         # Simulate the print agent failing after cancellation, leaving a ticket

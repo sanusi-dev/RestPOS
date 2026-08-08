@@ -7,6 +7,7 @@ from django.urls import reverse
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order
+from apps.orders.services import create_tickets, settle_order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
@@ -142,7 +143,7 @@ class OrderCancelTest(BackofficeViewTestBase):
 class OrderReturnTest(BackofficeViewTestBase):
     def _settle_order(self, order):
         order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        order.settle([{"mode_of_payment": self.cash.pk, "amount": "3000"}])
+        settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         order.refresh_from_db()
 
     def test_return_creates_draft_for_manager(self):
@@ -181,7 +182,9 @@ class KOTListTest(BackofficeViewTestBase):
     def test_kot_list_with_data(self):
         order = self._create_order()
         order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        order.create_tickets()
+        create_tickets(
+            order,
+        )
         response = self.client.get(reverse("orders:kot_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "KOT-")
@@ -195,7 +198,9 @@ class KOTDetailTest(BackofficeViewTestBase):
     def test_kot_detail(self):
         order = self._create_order()
         order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        order.create_tickets()
+        create_tickets(
+            order,
+        )
         kot = order.kots.first()
         response = self.client.get(reverse("orders:kot_detail", kwargs={"pk": kot.pk}))
         self.assertEqual(response.status_code, 200)

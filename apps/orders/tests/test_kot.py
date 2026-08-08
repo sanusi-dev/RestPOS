@@ -9,6 +9,7 @@ from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 
 from ..models import Order
+from ..services import cancel_order, create_tickets
 
 
 class KOTTestBase(TestCase):
@@ -45,7 +46,9 @@ class KOTGenerationTest(KOTTestBase):
 
     def test_generate_kot_new_order(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        kots = self.order.create_tickets()
+        kots = create_tickets(
+            self.order,
+        )
         self.assertEqual(len(kots), 1)
         kot = kots[0]
         self.assertEqual(kot.type, "New Order")
@@ -57,25 +60,35 @@ class KOTGenerationTest(KOTTestBase):
 
     def test_sent_order_cannot_be_modified(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        self.order.create_tickets()
+        create_tickets(
+            self.order,
+        )
         with self.assertRaises(ValidationError):
             self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
 
     def test_second_send_is_rejected(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        self.order.create_tickets()
+        create_tickets(
+            self.order,
+        )
         with self.assertRaises(ValidationError):
-            self.order.create_tickets()
+            create_tickets(
+                self.order,
+            )
 
     def test_department_routing_food_to_kitchen(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        kots = self.order.create_tickets()
+        kots = create_tickets(
+            self.order,
+        )
         self.assertEqual(len(kots), 1)
         self.assertEqual(kots[0].production_unit, self.kitchen)
 
     def test_department_routing_drinks_to_bar(self):
         self.order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
-        kots = self.order.create_tickets()
+        kots = create_tickets(
+            self.order,
+        )
         self.assertEqual(len(kots), 1)
         self.assertEqual(kots[0].ticket_type, "bar")
         self.assertTrue(kots[0].kot_number.startswith("BOT-"))
@@ -84,7 +97,9 @@ class KOTGenerationTest(KOTTestBase):
     def test_department_routing_both_creates_two_kots(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         self.order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
-        kots = self.order.create_tickets()
+        kots = create_tickets(
+            self.order,
+        )
         self.assertEqual(len(kots), 2)
         pu_names = {k.production_unit.name for k in kots}
         self.assertEqual(pu_names, {"Kitchen", "Bar"})
@@ -95,7 +110,9 @@ class KOTGenerationTest(KOTTestBase):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         self.order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
         with self.assertRaises(ValidationError):
-            self.order.create_tickets()
+            create_tickets(
+                self.order,
+            )
         self.assertEqual(self.order.kots.count(), 0)
 
     def test_takeaway_blocked_department_is_not_ticketed(self):
@@ -104,13 +121,17 @@ class KOTGenerationTest(KOTTestBase):
         order = Order.objects.create(order_type="TAKE_AWAY")
         order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         order.add_item(self.drink_item, qty=1, rate=Decimal("500"))
-        kots = order.create_tickets()
+        kots = create_tickets(
+            order,
+        )
         self.assertEqual(len(kots), 1)
         self.assertEqual(kots[0].ticket_type, "kitchen")
 
     def test_sent_order_cannot_reduce_item_quantity(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        self.order.create_tickets()
+        create_tickets(
+            self.order,
+        )
         oi = self.order.items.first()
         with self.assertRaises(ValidationError):
             self.order.remove_item(oi.pk)
@@ -119,7 +140,9 @@ class KOTGenerationTest(KOTTestBase):
         order = Order.objects.create(guest_count=2)
         order.add_item(self.food_item, qty=1, rate=Decimal("1500"), customer_index=1)
         order.add_item(self.food_item, qty=1, rate=Decimal("1500"), customer_index=2)
-        kots = order.create_tickets()
+        kots = create_tickets(
+            order,
+        )
         self.assertEqual(len(kots), 1)
         kot = kots[0]
         self.assertEqual(kot.items.count(), 2)
@@ -128,13 +151,17 @@ class KOTGenerationTest(KOTTestBase):
 
     def test_kot_number_format(self):
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        kots = self.order.create_tickets()
+        kots = create_tickets(
+            self.order,
+        )
         self.assertTrue(kots[0].kot_number.startswith("KOT-"))
 
     def test_cancel_kot_number_format(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        self.order.create_tickets()
-        self.order.cancel("Test reason")
+        create_tickets(
+            self.order,
+        )
+        cancel_order(self.order, "Test reason")
         cancel_kot = self.order.kots.filter(type="Cancelled").first()
         self.assertTrue(cancel_kot.kot_number.startswith("CNCL-KOT-"))
 
@@ -142,11 +169,15 @@ class KOTGenerationTest(KOTTestBase):
         self.kitchen.delete()
         self.order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         with self.assertRaises(ValidationError):
-            self.order.create_tickets()
+            create_tickets(
+                self.order,
+            )
 
     def test_sent_order_cannot_remove_item(self):
         self.order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
-        self.order.create_tickets()
+        create_tickets(
+            self.order,
+        )
         oi = self.order.items.first()
         with self.assertRaises(ValidationError):
             self.order.remove_item(oi.pk)

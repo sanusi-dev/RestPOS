@@ -18,6 +18,7 @@ from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
+from ..services import create_tickets, settle_order
 
 CustomUser = get_user_model()
 
@@ -123,7 +124,7 @@ class POSHomeTest(POSViewTestBase):
         sent_order = Order.objects.create(opening_entry=opening)
         sent_order.assign_order_number()
         sent_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        sent_order.create_tickets(created_by=self.user)
+        create_tickets(sent_order, created_by=self.user)
         printed_order = Order.objects.create(opening_entry=opening, invoice_printed=True)
         printed_order.assign_order_number()
 
@@ -138,7 +139,7 @@ class POSHomeTest(POSViewTestBase):
         draft_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
         sent_order = Order.objects.create(opening_entry=opening, order_number=202)
         sent_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
-        sent_order.create_tickets(created_by=self.user)
+        create_tickets(sent_order, created_by=self.user)
 
         draft_response = self.client.get(reverse("pos:pos_home"), {"filter": "draft"})
         sent_response = self.client.get(reverse("pos:pos_home"), {"filter": "sent"})
@@ -510,7 +511,9 @@ class POSOrderHistoryTest(POSViewTestBase):
         order = Order.objects.create(opening_entry=self.opening, guest_count=2)
         order.add_item(self.food_item, qty=1, customer_index=1, rate=Decimal("1500"))
         order.add_item(self.drink_item, qty=2, customer_index=2, rate=Decimal("500"))
-        order.settle([{"mode_of_payment": self.cash.pk, "amount": "2500", "reference_no": ""}], cashier=self.user)
+        settle_order(
+            order, [{"mode_of_payment": self.cash.pk, "amount": "2500", "reference_no": ""}], cashier=self.user
+        )
 
         response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": order.pk}))
 

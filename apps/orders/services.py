@@ -1,0 +1,934 @@
+"""Order workflow services — multi-entity operations shared by the POS and backoffice."""
+
+from decimal import Decimal, InvalidOperation
+from typing import Protocol, cast
+from uuid import uuid4
+
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef, Q, Sum
+from django.utils import timezone
+
+from apps.inventory.models import Bin, Item, StockLedgerEntry
+from apps.menu.models import MenuItem
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
+
+from . import printing
+from .models import (
+    CANCEL_REASON_CHOICES,
+    CANCEL_REASON_OTHER,
+    CANCELLED,
+    DINE_IN,
+    DISCARDED,
+    DRAFT,
+    KOT,
+    KOT_CANCELLED,
+    KOT_PRINT_PENDING,
+    KOT_PRINTED,
+    NEW_ORDER,
+    SUBMITTED,
+    TAKE_AWAY,
+    TICKET_BAR,
+    TICKET_KITCHEN,
+    TWO_PLACES,
+    KOTItem,
+    Order,
+    OrderItem,
+    OrderPayment,
+)
+
+# ---------------------------------------------------------------------------
+# Order workflows
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def settle_order(order, payments_data, cashier=None, opening_entry=None):
+    """Process a normal POS payment and submit the order atomically.
+
+    Lines, stock, shift ownership, and payments are validated before the
+    order becomes immutable.
+    """
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Order is already settled or cancelled.")
+    if locked.is_return:
+        raise ValidationError("Return orders must use the deferred refund flow.")
+    if not locked.items.exists():
+        raise ValidationError("Cannot settle an order with no items.")
+    locked._validate_current_lines()
+    from apps.staff.models import POSOpeningEntry
+
+    active_shift = (
+        POSOpeningEntry.objects.select_for_update()
+        .filter(pk=locked.opening_entry_id, status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
+        .first()
+    )
+    if active_shift is None:
+        raise ValidationError("An active shift is required before settlement.")
+    if opening_entry is not None and opening_entry.pk != active_shift.pk:
+        raise ValidationError("This order does not belong to the active shift.")
+    if cashier:
+        locked.cashier = cashier
+    locked.recalculate_totals()
+    locked.grand_total = locked.rounded_total
+    reservations_initialized = _reservations_initialized(locked)
+    _snapshot_stock_warehouse(locked)
+    _validate_drink_stock_for_settlement(locked, reservations_initialized=reservations_initialized)
+    payment_rows = _validate_payment_data(locked, payments_data, active_shift)
+    total_paid = sum((row["amount"] for row in payment_rows), Decimal("0"))
+    if total_paid < locked.grand_total:
+        raise ValidationError("Payment must cover the full total.")
+    if total_paid > locked.grand_total and any(row["mode"].type != ModeOfPayment.TYPE_CASH for row in payment_rows):
+        raise ValidationError("Only cash payments may include change.")
+    if locked.payments.exists():
+        raise ValidationError("This draft already has payment rows and requires manager review.")
+
+    if locked.order_number is None:
+        locked.assign_order_number()
+    locked._settling = True
+    try:
+        for row in payment_rows:
+            try:
+                # The savepoint lets us translate a constraint failure
+                # into ValidationError without leaving a broken savepoint.
+                with transaction.atomic():
+                    OrderPayment.objects.create(
+                        order=locked,
+                        mode_of_payment=row["mode"],
+                        amount=row["amount"],
+                        reference_no=row["reference_no"],
+                    )
+            except IntegrityError as exc:
+                raise ValidationError("This electronic payment reference has already been used.") from exc
+    finally:
+        del locked._settling
+
+    locked.paid_amount = total_paid
+    locked.change_amount = max(total_paid - locked.grand_total, Decimal("0"))
+    locked.is_paid = True
+    locked.status = SUBMITTED
+    locked.submitted_at = timezone.now()
+    locked._allow_submit = True
+    try:
+        locked.save()
+    finally:
+        del locked._allow_submit
+    _convert_drink_reservations(locked, reservations_initialized=reservations_initialized)
+    locked.audit("SUBMITTED", actor=cashier, metadata={"paid_amount": str(total_paid)})
+    order.refresh_from_db()
+
+
+@transaction.atomic
+def cancel_order(order, reason, cancelled_by=None, reason_note=""):
+    """Cancel an order through the immutable document workflow.
+
+    Payment rows are preserved for audit — the cancelled order retains its
+    original items, payments, and totals. Shift close (Phase 7) excludes
+    cancelled orders by filtering on status != CANCELLED.
+    """
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status == CANCELLED:
+        order.refresh_from_db()
+        return []
+    if locked.status == DISCARDED:
+        raise ValidationError("Discarded orders cannot be cancelled.")
+    if locked.status == SUBMITTED and locked.is_paid:
+        raise ValidationError("Submitted paid orders cannot be cancelled; use the refund flow.")
+    if not reason or not reason.strip():
+        raise ValidationError("A cancel reason is required.")
+    reason = reason.strip()
+    reason_note = reason_note.strip()
+    if reason not in dict(CANCEL_REASON_CHOICES):
+        reason_note = reason_note or reason
+        reason = CANCEL_REASON_OTHER
+    locked.cancel_reason = reason
+    locked.cancel_reason_note = reason_note
+    locked.cancelled_by = cancelled_by
+    locked.cancelled_at = timezone.now()
+    if locked.status == SUBMITTED:
+        _restore_stock(locked)
+    else:
+        release_drink_reservations(locked)
+    cancellation_kots = _cancel_kots(locked)
+    locked.status = CANCELLED
+    locked._allow_cancellation = True
+    try:
+        locked.save(
+            update_fields=[
+                "status",
+                "cancel_reason",
+                "cancel_reason_note",
+                "cancelled_by",
+                "cancelled_at",
+                "updated_at",
+            ]
+        )
+    finally:
+        del locked._allow_cancellation
+    locked.audit("CANCELLED", actor=cancelled_by, metadata={"reason": reason})
+    order.refresh_from_db()
+    return cancellation_kots
+
+
+@transaction.atomic
+def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
+    """Cancel an unpaid order after its kitchen or bar tickets were sent."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be cancelled from the POS.")
+    if locked.is_paid:
+        raise ValidationError("Paid orders cannot be cancelled from the POS.")
+    if not locked.kots.exists() and not locked.invoice_printed:
+        raise ValidationError("Only a printed or sent order can be cancelled here.")
+    if reason not in dict(CANCEL_REASON_CHOICES):
+        raise ValidationError("Choose a valid cancellation reason.")
+
+    locked.status = CANCELLED
+    locked.cancel_reason = reason
+    locked.cancel_reason_note = reason_note.strip()
+    locked.cancelled_by = cancelled_by
+    locked.cancelled_at = timezone.now()
+    release_drink_reservations(locked)
+    cancellation_kots = _cancel_kots(locked)
+    locked._allow_cancellation = True
+    try:
+        locked.save(
+            update_fields=[
+                "status",
+                "cancel_reason",
+                "cancel_reason_note",
+                "cancelled_by",
+                "cancelled_at",
+                "updated_at",
+            ]
+        )
+    finally:
+        del locked._allow_cancellation
+    locked.audit(
+        "CANCELLED",
+        actor=cancelled_by,
+        metadata={"reason": reason, "ticket_count": len(cancellation_kots)},
+    )
+    order.refresh_from_db()
+    return cancellation_kots
+
+
+@transaction.atomic
+def discard_order(order, discarded_by=None):
+    """Mark an empty, untouched draft as discarded instead of cancelling it."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be discarded.")
+    if locked.items.exists():
+        raise ValidationError("Only empty orders can be discarded.")
+    if locked.invoice_printed or locked.kots.exists() or locked.is_paid:
+        raise ValidationError("Printed, sent or paid orders cannot be discarded.")
+    release_drink_reservations(locked)
+    locked.status = DISCARDED
+    locked.discarded_by = discarded_by
+    locked.discarded_at = timezone.now()
+    locked._allow_discard = True
+    try:
+        locked.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
+    finally:
+        del locked._allow_discard
+    locked.audit("DISCARDED", actor=discarded_by)
+    order.refresh_from_db()
+
+
+@transaction.atomic
+def make_return(order):
+    """Create a manager-reviewed draft return with negative item quantities."""
+    source = Order.objects.select_for_update().prefetch_related("items", "payments").get(pk=order.pk)
+    if source.status != SUBMITTED:
+        raise ValidationError("Can only return submitted orders.")
+    if source.is_return:
+        raise ValidationError("Cannot return a return order.")
+    if not source.is_paid:
+        raise ValidationError("Only paid orders can be returned.")
+    if source.return_orders.exclude(status=CANCELLED).exists():
+        raise ValidationError("This order already has an active return.")
+
+    # Mirror every source line as a negative-qty line (same price, same
+    # guest tag) so the return totals are exact negatives of the sale.
+    return_order = Order.objects.create(
+        order_type=source.order_type,
+        customer_name=source.customer_name,
+        guest_count=source.guest_count,
+        cashier=source.cashier,
+        opening_entry=source.opening_entry,
+        is_return=True,
+        return_against=source,
+        stock_warehouse=source.stock_warehouse,
+    )
+    return_order.assign_order_number()
+    for oi in source.items.all():
+        OrderItem.objects.create(
+            order=return_order,
+            item=oi.item,
+            item_name=oi.item_name,
+            qty=-oi.qty,
+            rate=oi.rate,
+            department=oi.department,
+            stock_item=oi.stock_item,
+            customer_index=oi.customer_index,
+            comments=oi.comments,
+            menu_item=oi.menu_item,
+            return_against_item=oi,
+        )
+    return_order.recalculate_totals()
+    return_order.audit("RETURN_CREATED", actor=source.cashier, metadata={"source_order": source.pk})
+    return return_order
+
+
+@transaction.atomic
+def create_tickets(order, created_by=None):
+    """Create one immutable kitchen ticket and one bar ticket from the order snapshot."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be sent to the kitchen or bar.")
+    if locked.kots.exists():
+        raise ValidationError("This order has already been sent to the kitchen or bar.")
+    if not locked.items.exists():
+        raise ValidationError("Add at least one item before sending the order.")
+
+    if locked.order_number is None:
+        locked.assign_order_number()
+
+    from apps.settings.models import ProductionUnit
+
+    items_by_department = {}
+    for order_item in locked.items.select_related("item"):
+        department = order_item.department or order_item.item.department
+        items_by_department.setdefault(department, []).append(order_item)
+    production_units = {pu.department: pu for pu in ProductionUnit.objects.all()}
+    planned_tickets = []
+    missing_departments = []
+    for department, order_items in items_by_department.items():
+        production_unit = production_units.get(department)
+        if locked.order_type == TAKE_AWAY and production_unit and production_unit.block_takeaway_kot:
+            continue
+        if not production_unit:
+            missing_departments.append(department)
+            continue
+        planned_tickets.append((department, order_items, production_unit))
+
+    if missing_departments:
+        labels = ", ".join("Food" if department == "FOOD" else "Drinks" for department in missing_departments)
+        raise ValidationError(f"Configure a production unit before sending: {labels}.")
+    if not planned_tickets:
+        raise ValidationError("No kitchen or bar ticket is required for this order.")
+    created = []
+
+    for department, order_items, production_unit in planned_tickets:
+        ticket_type = _ticket_type_for_department(department)
+        # Same temporary-number dance as cancellation tickets: the final
+        # KOT-*/BOT-* number embeds the new row's pk.
+        kot = KOT.objects.create(
+            order=locked,
+            production_unit=production_unit,
+            type=NEW_ORDER,
+            ticket_type=ticket_type,
+            print_status=KOT_PRINT_PENDING,
+            created_by=created_by,
+            kot_number=f"TMP-{uuid4().hex}",
+            order_number=locked.order_number,
+        )
+        kot.kot_number = f"{_ticket_prefix_for_type(ticket_type)}-{kot.pk:04d}"
+        KOT.objects.filter(pk=kot.pk).update(kot_number=kot.kot_number)
+        KOTItem.objects.bulk_create(
+            [
+                KOTItem(
+                    kot=kot,
+                    item=order_item.item,
+                    item_name=order_item.item_name,
+                    qty=order_item.qty,
+                    comments=order_item.comments,
+                    customer_index=order_item.customer_index,
+                )
+                for order_item in order_items
+            ]
+        )
+        created.append(kot)
+
+    locked.audit("KOTS_CREATED", actor=created_by, metadata={"count": len(created)})
+    return created
+
+
+# ---------------------------------------------------------------------------
+# Ticket dispatch
+# ---------------------------------------------------------------------------
+
+
+def dispatch_tickets(tickets):
+    """Print each ticket, persist its print status, and return failed ticket types."""
+    print_failures = []
+    for kot in tickets:
+        with transaction.atomic():
+            ticket = KOT.objects.select_for_update().get(pk=kot.pk)
+            if ticket.status != SUBMITTED:
+                continue
+            result = printing.print_ticket(ticket)
+            if result.success:
+                ticket.print_status = KOT_PRINTED
+            else:
+                ticket.print_status = KOT_PRINT_PENDING
+                print_failures.append(result.ticket_type)
+            ticket.save(update_fields=["print_status", "updated_at"])
+    return print_failures
+
+
+# ---------------------------------------------------------------------------
+# Drink stock accounting
+# ---------------------------------------------------------------------------
+
+
+def drink_quantities(order):
+    if order.is_return:
+        return {}
+    rows = (
+        order.items.filter(Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS"))
+        .values("item_id")
+        .annotate(qty=Sum("qty"))
+        .order_by("item_id")
+    )
+    return {row["item_id"]: row["qty"] for row in rows if row["qty"] > 0}
+
+
+def reserve_drink_stock(order, target_quantities):
+    """Synchronize this draft's aggregate drink reservation to target quantities."""
+    if order.is_return:
+        return
+    initialized = _reservations_initialized(order)
+    current_quantities = drink_quantities(order) if initialized else {}
+    item_ids = set(current_quantities) | set(target_quantities)
+    if not item_ids:
+        return
+    if initialized and order.stock_warehouse_id:
+        warehouse = order.stock_warehouse
+        increasing = any(
+            target_quantities.get(item_id, Decimal("0")) > current_quantities.get(item_id, Decimal("0"))
+            for item_id in item_ids
+        )
+        if warehouse.disabled and increasing:
+            raise ValidationError("The order's Bar/POS warehouse snapshot is disabled.")
+    else:
+        warehouse = _reservation_warehouse(order, required=bool(target_quantities))
+    items = {item.pk: item for item in Item.objects.filter(pk__in=item_ids).order_by("pk")}
+    for item_id in target_quantities:
+        item = items.get(item_id)
+        if item is None or item.department != "DRINKS" or not item.is_stock_item:
+            name = item.item_name if item else "This drink"
+            raise ValidationError(f"{name} is not configured as a stock-tracked drink.")
+    if warehouse is None:
+        return
+    bins = _locked_drink_bins(item_ids, warehouse)
+    for item_id in sorted(item_ids):
+        bin_obj = bins[item_id]
+        owned = current_quantities.get(item_id, Decimal("0"))
+        target = target_quantities.get(item_id, Decimal("0"))
+        increase = target - owned
+        available_for_order = bin_obj.actual_qty - bin_obj.reserved_qty + owned
+        if increase > 0 and target > available_for_order:
+            raise ValidationError(f"Insufficient stock for {items[item_id].item_name} in {warehouse.name}.")
+        new_reserved = bin_obj.reserved_qty + increase
+        if new_reserved < 0:
+            raise ValidationError("Stock reservation data is inconsistent; manager review is required.")
+        bin_obj.reserved_qty = new_reserved
+        bin_obj.save(update_fields=["reserved_qty", "updated_at"])
+    snapshot_id = warehouse.pk if target_quantities else None
+    if order.stock_warehouse_id != snapshot_id:
+        Order.objects.filter(pk=order.pk).update(stock_warehouse_id=snapshot_id, updated_at=timezone.now())
+        order.stock_warehouse_id = snapshot_id
+
+
+def release_drink_reservations(order):
+    if not _reservations_initialized(order):
+        return
+    reserve_drink_stock(order, {})
+
+
+def drink_stock_available(menu_items, settings):
+    """Set POS availability (unreserved stock) on each menu item."""
+    drink_item_ids = [mi.item_id for mi in menu_items if mi.item.department == "DRINKS"]
+    drink_bins = (
+        {
+            bin_obj.item_id: bin_obj
+            for bin_obj in Bin.objects.filter(
+                item_id__in=drink_item_ids,
+                warehouse=settings.default_warehouse,
+            )
+        }
+        if settings and settings.default_warehouse_id
+        else {}
+    )
+    for menu_item in menu_items:
+        menu_item.stock_unavailable = False
+        menu_item.stock_message = ""
+        if menu_item.item.department != "DRINKS":
+            continue
+        if not menu_item.item.is_stock_item:
+            menu_item.stock_unavailable = True
+            menu_item.stock_message = "Setup required: mark this drink as a stock item"
+            continue
+        if not settings or not settings.default_warehouse_id or settings.default_warehouse.disabled:
+            menu_item.stock_unavailable = True
+            menu_item.stock_message = "Setup required: configure the Bar/POS warehouse"
+            continue
+        drink_bin = drink_bins.get(menu_item.item_id)
+        available_qty = drink_bin.actual_qty - drink_bin.reserved_qty if drink_bin is not None else Decimal("0")
+        menu_item.available_qty = available_qty
+        if available_qty <= 0:
+            menu_item.stock_unavailable = True
+            menu_item.stock_message = "Out of stock"
+
+
+# ---------------------------------------------------------------------------
+# POS read builders (query construction; views keep rendering/messages)
+# ---------------------------------------------------------------------------
+
+
+def order_history_rows(filters):
+    """Build the POS history queryset from parsed filters."""
+    payment_filter = filters.get("payment", "")
+    status_filter = filters.get("status", "sales")
+    order_type_filter = filters.get("order_type", "")
+    search = filters.get("search", "")
+    posting_date = filters.get("posting_date")
+
+    orders = Order.objects.select_related("cashier").prefetch_related("payments__mode_of_payment", "items")
+    if search:
+        search_query = Q(invoice_number__icontains=search)
+        if search.isdigit():
+            search_query |= Q(order_number=int(search))
+        orders = orders.filter(search_query)
+    if status_filter == "all":
+        orders = orders.filter(
+            Q(status=SUBMITTED, is_return=False, is_paid=True)
+            | Q(status=SUBMITTED, is_return=True)
+            | Q(status=CANCELLED, is_return=False)
+            | Q(status=DISCARDED, is_return=False)
+        )
+    elif status_filter == "returns":
+        orders = orders.filter(status=SUBMITTED, is_return=True)
+    elif status_filter == "cancelled":
+        orders = orders.filter(status=CANCELLED, is_return=False)
+    elif status_filter == "discarded":
+        orders = orders.filter(status=DISCARDED, is_return=False)
+    else:
+        orders = orders.filter(status=SUBMITTED, is_paid=True, is_return=False)
+    if status_filter == "sales" and payment_filter == "cash":
+        orders = orders.filter(
+            status=SUBMITTED,
+            is_return=False,
+            is_paid=True,
+            payments__mode_of_payment__type="CASH",
+        )
+    elif status_filter == "sales" and payment_filter == "electronic":
+        orders = orders.filter(
+            status=SUBMITTED,
+            is_return=False,
+            is_paid=True,
+            payments__mode_of_payment__type__in=["BANK", "PHONE"],
+        )
+    if order_type_filter in {DINE_IN, TAKE_AWAY}:
+        orders = orders.filter(order_type=order_type_filter)
+    if posting_date is not None:
+        orders = orders.filter(posting_date=posting_date)
+    return orders.distinct().order_by("-posting_date", "-posting_time")
+
+
+class _DraftOrder(Protocol):
+    item_count: int
+    item_preview: object
+    minutes_ago: int
+
+
+def open_draft_orders(shift, order_filter="all", order_search=""):
+    """Return draft orders for the POS home screen, with item previews attached."""
+    draft_orders_queryset = (
+        Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift)
+        .prefetch_related("items")
+        .annotate(has_sent_ticket=Exists(KOT.objects.filter(order_id=OuterRef("pk"), status=SUBMITTED)))
+        .order_by("-updated_at")
+        .only(
+            "pk",
+            "invoice_number",
+            "order_number",
+            "order_type",
+            "guest_count",
+            "grand_total",
+            "arrived_time",
+            "updated_at",
+            "invoice_printed",
+        )
+    )
+    if order_filter == "draft":
+        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=False, invoice_printed=False)
+    elif order_filter == "sent":
+        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=True)
+    if order_search:
+        search_query = Q(items__item_name__icontains=order_search)
+        if order_search.isdigit():
+            search_query |= Q(order_number=int(order_search))
+        draft_orders_queryset = draft_orders_queryset.filter(search_query).distinct()
+    draft_orders = list(draft_orders_queryset)
+    for order in draft_orders:
+        draft_order = cast(_DraftOrder, order)
+        items = list(order.items.all())
+        draft_order.item_count = len(items)
+        draft_order.item_preview = items[:3]
+        draft_order.minutes_ago = max(int((timezone.now() - order.updated_at).total_seconds() // 60), 0)
+    return draft_orders
+
+
+def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments=""):
+    """Price and merge an item's add-on lines into the order."""
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.load()
+    active_menu = settings.active_menu if settings and settings.active_menu and settings.active_menu.enabled else None
+    menu_item = MenuItem.objects.filter(item=item, menu=active_menu, disabled=False).first()
+    if menu_item is None:
+        raise ValidationError("That menu item is not on the active menu.")
+    add_ons = []
+    if add_on_ids:
+        add_ons = list(item.add_ons.select_related("add_on_item").filter(add_on_item_id__in=add_on_ids))
+        if len(add_ons) != len(set(add_on_ids)):
+            raise ValidationError("One or more selected add-ons are not available for this item.")
+        add_on_menu_items = {
+            candidate.item_id: candidate
+            for candidate in MenuItem.objects.filter(
+                item_id__in=[add_on.add_on_item_id for add_on in add_ons],
+                menu=active_menu,
+                disabled=False,
+                item__disabled=False,
+                item__is_sales_item=True,
+            ).select_related("item")
+        }
+        if len(add_on_menu_items) != len(add_ons):
+            raise ValidationError("One or more selected add-ons are not on the active menu.")
+    with transaction.atomic():
+        order.add_item(
+            item=item,
+            qty=qty,
+            customer_index=customer_index,
+            comments=comments,
+            rate=menu_item.rate,
+            menu_item=menu_item,
+            item_name=menu_item.item_name,
+        )
+        for add_on in add_ons:
+            order.add_item(
+                item=add_on.add_on_item,
+                qty=qty,
+                customer_index=customer_index,
+                comments="",
+                rate=add_on_menu_items[add_on.add_on_item_id].rate,
+                menu_item=add_on_menu_items[add_on.add_on_item_id],
+                item_name=add_on_menu_items[add_on.add_on_item_id].item_name,
+            )
+        order.recalculate_totals()
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _validate_payment_data(order, payments_data, opening_entry):
+    """Resolve and validate payment rows before changing the order."""
+    if not isinstance(payments_data, (list, tuple)) or not payments_data:
+        raise ValidationError("At least one payment is required.")
+
+    opening_mode_ids = set(opening_entry.opening_payments.values_list("mode_of_payment_id", flat=True))
+    payment_rows = []
+    for row_number, entry in enumerate(payments_data, start=1):
+        if not isinstance(entry, dict):
+            raise ValidationError(f"Payment row {row_number} is malformed.")
+
+        try:
+            amount = Decimal(str(entry.get("amount")))
+            if not amount.is_finite() or amount != amount.quantize(TWO_PLACES):
+                raise InvalidOperation
+        except InvalidOperation, TypeError, ValueError:
+            raise ValidationError(f"Payment row {row_number} has a malformed amount.") from None
+        if amount < 0:
+            raise ValidationError(f"Payment row {row_number} amount must not be negative.")
+        if amount == 0:
+            continue
+
+        mode_reference = entry.get("mode_of_payment")
+        if mode_reference is None:
+            mode_reference = entry.get("mode_of_payment_id")
+        if isinstance(mode_reference, ModeOfPayment):
+            mode_pk = mode_reference.pk
+        else:
+            try:
+                if isinstance(mode_reference, bool):
+                    raise ValueError
+                mode_pk = int(mode_reference)
+            except TypeError, ValueError:
+                raise ValidationError(f"Payment row {row_number} has an invalid payment mode.") from None
+
+        mode = ModeOfPayment.objects.select_related("gl_mapping").filter(pk=mode_pk).first()
+        if mode is None:
+            raise ValidationError(f"Payment row {row_number} has an invalid payment mode.")
+        if not mode.enabled:
+            raise ValidationError(f"Payment mode {mode.name} is disabled.")
+        if mode.pk not in opening_mode_ids:
+            raise ValidationError(f"Payment mode {mode.name} was not declared when the shift opened.")
+        try:
+            mapping = mode.gl_mapping
+        except PaymentGLMapping.DoesNotExist:
+            raise ValidationError(f"Payment mode {mode.name} has no GL mapping.") from None
+        if not mapping.default_account.strip():
+            raise ValidationError(f"Payment mode {mode.name} has no GL mapping.")
+
+        reference_no = str(entry.get("reference_no", "") or "").strip()
+        if len(reference_no) > 100:
+            raise ValidationError(f"Payment row {row_number} has a reference that is too long.")
+
+        payment_rows.append(
+            {
+                "mode": mode,
+                "amount": amount,
+                "reference_no": reference_no,
+            }
+        )
+    if not payment_rows:
+        raise ValidationError("At least one payment is required.")
+    return payment_rows
+
+
+def _snapshot_stock_warehouse(order):
+    """Validate or capture the configured warehouse for this transaction."""
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.objects.select_for_update().first()
+    warehouse = settings.default_warehouse if settings else None
+    if warehouse is not None and warehouse.disabled:
+        raise ValidationError("Restaurant.default_warehouse is disabled.")
+    has_drinks = order.items.filter(
+        Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS")
+    ).exists()
+    if has_drinks and warehouse is None:
+        raise ValidationError("Configure the Bar/POS warehouse before settling drinks.")
+    if has_drinks and order.stock_warehouse_id:
+        if order.stock_warehouse_id != warehouse.pk:
+            raise ValidationError("The Bar/POS warehouse changed while this order was open. Clear or cancel the order.")
+        if order.stock_warehouse.disabled:
+            raise ValidationError("The order's Bar/POS warehouse snapshot is disabled.")
+        return order.stock_warehouse
+    order.stock_warehouse = warehouse if has_drinks else None
+    return order.stock_warehouse
+
+
+def _locked_drink_stock(order, *, reservations_initialized):
+    """Lock the order's drink bins and recheck stock availability.
+
+    The check subtracts the order's own reservation: qty available for
+    this order = actual_qty - reserved_qty + owned. When the order was
+    created before drink reservations existed, owned is 0 and the full
+    quantity must come from unreserved stock.
+    """
+    drink_items = list(
+        order.items.select_related("item")
+        .filter(Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS"))
+        .order_by("item_id", "pk")
+    )
+    if not drink_items:
+        return [], {}
+    if not order.stock_warehouse_id:
+        raise ValidationError("This order has no stock warehouse snapshot.")
+    warehouse = order.stock_warehouse
+    quantities = {}
+    for order_item in drink_items:
+        if not order_item.item.is_stock_item:
+            raise ValidationError(f"{order_item.item_name} is a drink but is not configured as a stock item.")
+        quantities[order_item.item_id] = quantities.get(order_item.item_id, Decimal("0")) + order_item.qty
+    owned_quantities = quantities if reservations_initialized else {}
+    bins = _locked_drink_bins(quantities, warehouse)
+    for item_id, qty in sorted(quantities.items()):
+        bin_obj = bins[item_id]
+        owned = owned_quantities.get(item_id, Decimal("0"))
+        if bin_obj.reserved_qty < owned:
+            raise ValidationError("Stock reservation data is inconsistent; manager review is required.")
+        if bin_obj.actual_qty - bin_obj.reserved_qty + owned < qty:
+            item = next(line.item for line in drink_items if line.item_id == item_id)
+            raise ValidationError(f"Insufficient stock for {item.item_name} in {warehouse.name}.")
+    return drink_items, bins
+
+
+def _validate_drink_stock_for_settlement(order, *, reservations_initialized):
+    """Lock and recheck all drink stock before creating settlement side effects."""
+    _locked_drink_stock(order, reservations_initialized=reservations_initialized)
+
+
+def _convert_drink_reservations(order, *, reservations_initialized):
+    """Atomically convert this order's drink reservations into stock ledger issues."""
+    voucher_no = str(order.pk)
+    drink_items, bins = _locked_drink_stock(order, reservations_initialized=reservations_initialized)
+    if not drink_items:
+        return
+    quantities = {}
+    for order_item in drink_items:
+        quantities[order_item.item_id] = quantities.get(order_item.item_id, Decimal("0")) + order_item.qty
+    owned_quantities = quantities if reservations_initialized else {}
+    for item_id in sorted(quantities):
+        bin_obj = bins[item_id]
+        owned = owned_quantities.get(item_id, Decimal("0"))
+        bin_obj.reserved_qty -= owned
+        bin_obj.save(update_fields=["reserved_qty", "updated_at"])
+    for oi in drink_items:
+        StockLedgerEntry._create_entry_locked(
+            item=oi.item,
+            warehouse=order.stock_warehouse,
+            actual_qty=-oi.qty,
+            voucher_type="POS Order",
+            voucher_no=voucher_no,
+            voucher_detail_no=str(oi.pk),
+            prevent_negative=True,
+            rate=Decimal("0"),
+            bin_obj=bins[oi.item_id],
+        )
+
+
+def _restore_stock(order):
+    """Create positive stock ledger entries reversing a submitted order's deductions."""
+    voucher_no = str(order.pk)
+    stock_items = order.items.select_related("item").filter(
+        Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS")
+    )
+    if not stock_items.exists():
+        return
+    if not order.stock_warehouse_id:
+        raise ValidationError("This order has no stock warehouse snapshot for reversal.")
+    warehouse = order.stock_warehouse
+    for oi in stock_items.only("item__is_stock_item", "qty"):
+        StockLedgerEntry.create_entry(
+            item=oi.item,
+            warehouse=warehouse,
+            actual_qty=oi.qty,
+            voucher_type="POS Order Cancellation",
+            voucher_no=voucher_no,
+            voucher_detail_no=str(oi.pk),
+        )
+
+
+def _cancel_kots(order):
+    """Create one cancellation KOT per station and close the source tickets."""
+    active_kots = list(
+        order.kots.filter(status=SUBMITTED, type=NEW_ORDER)
+        .select_related("production_unit")
+        .prefetch_related("items__item")
+    )
+    if not active_kots:
+        return []
+    created = []
+    # One cancellation ticket per production unit so each station gets a
+    # single "all of this is cancelled" sheet rather than one per source KOT.
+    by_station = {}
+    for original_kot in active_kots:
+        station = by_station.setdefault(
+            original_kot.production_unit_id,
+            {"production_unit": original_kot.production_unit, "kots": [], "items": []},
+        )
+        station["kots"].append(original_kot)
+        station["items"].extend(original_kot.items.all())
+
+    for station in by_station.values():
+        original_kots = station["kots"]
+        production_unit = station["production_unit"]
+        original_names = [kot.kot_number for kot in original_kots]
+        ticket_type = original_kots[0].ticket_type
+        # Create with a temporary number because the final CNCL-* number
+        # embeds the new row's pk (kot_number is unique, so it can't be
+        # computed before the insert).
+        kot = KOT.objects.create(
+            order=order,
+            production_unit=production_unit,
+            type=KOT_CANCELLED,
+            ticket_type=ticket_type,
+            print_status=KOT_PRINT_PENDING,
+            created_by=order.cancelled_by,
+            kot_number=f"TMP-{uuid4().hex}",
+            order_number=order.order_number,
+            original_kots=",".join(original_names),
+        )
+        kot.kot_number = f"CNCL-{_ticket_prefix_for_type(kot.ticket_type)}-{kot.pk:04d}"
+        KOT.objects.filter(pk=kot.pk).update(kot_number=kot.kot_number)
+        kot_items = [
+            # Quantities are moved onto cancelled_qty; qty stays 0 so the
+            # cancellation sheet shows what was taken off the order.
+            KOTItem(
+                kot=kot,
+                item=ticket_item.item,
+                item_name=ticket_item.item_name,
+                qty=Decimal("0"),
+                cancelled_qty=abs(ticket_item.qty),
+                comments=ticket_item.comments,
+                customer_index=ticket_item.customer_index,
+            )
+            for ticket_item in station["items"]
+        ]
+        KOTItem.objects.bulk_create(kot_items)
+        order.kots.filter(pk__in=[original.pk for original in original_kots]).update(
+            status=CANCELLED,
+            cancelled_by=order.cancelled_by_id,
+            cancelled_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        created.append(kot)
+    return created
+
+
+def _ticket_type_for_department(department):
+    return TICKET_KITCHEN if department == "FOOD" else TICKET_BAR
+
+
+def _ticket_prefix_for_type(ticket_type):
+    return "KOT" if ticket_type == TICKET_KITCHEN else "BOT"
+
+
+def _reservations_initialized(order):
+    return bool(order.stock_warehouse_id) and not order.is_return
+
+
+def _reservation_warehouse(order, *, required):
+    # Resolve the warehouse through the Restaurant singleton. The order's
+    # snapshot (stock_warehouse) is pinned at first reservation so a later
+    # setting change can't silently re-home a draft's drink stock.
+    from apps.settings.models import Restaurant
+
+    restaurant = Restaurant.objects.select_for_update().first()
+    warehouse = (
+        type(restaurant).objects.select_related("default_warehouse").get(pk=restaurant.pk).default_warehouse
+        if restaurant
+        else None
+    )
+    if required and warehouse is None:
+        raise ValidationError("Configure the Bar/POS warehouse before selling drinks.")
+    if warehouse is not None and warehouse.disabled:
+        raise ValidationError("The configured Bar/POS warehouse is disabled.")
+    if order.stock_warehouse_id and warehouse and order.stock_warehouse_id != warehouse.pk:
+        raise ValidationError("The Bar/POS warehouse changed while this order was open. Clear or cancel the order.")
+    return order.stock_warehouse or warehouse
+
+
+def _locked_drink_bins(item_ids, warehouse):
+    # Bin rows are created on demand for every drink item so the
+    # select_for_update below can lock a stable, complete set of rows
+    # without racing a concurrent first-reservation insert.
+    item_ids = sorted(set(item_ids))
+    existing_ids = set(Bin.objects.filter(item_id__in=item_ids, warehouse=warehouse).values_list("item_id", flat=True))
+    for item_id in item_ids:
+        if item_id not in existing_ids:
+            Bin.objects.get_or_create(item_id=item_id, warehouse=warehouse)
+    return {
+        bin_obj.item_id: bin_obj
+        for bin_obj in Bin.objects.select_for_update()
+        .filter(item_id__in=item_ids, warehouse=warehouse)
+        .order_by("item_id")
+    }
