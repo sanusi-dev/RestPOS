@@ -33,8 +33,8 @@ from apps.orders.models import (
 from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
-from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
-from apps.staff.services import ensure_closing_draft, expected_closing_amounts, submit_closing_entry
+from apps.staff.models import ClosingPayment, POSClosingEntry, POSOpeningEntry
+from apps.staff.services import ensure_closing_draft, expected_closing_amounts, open_shift, submit_closing_entry
 from apps.users.models import CustomUser
 
 from . import printing, services
@@ -323,28 +323,17 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
         guest_count = int(request.POST.get("guest_count", "1"))
     except ValueError, TypeError:
         guest_count = 1
-    if guest_count < 1:
-        guest_count = 1
-    if guest_count > 50:
-        guest_count = 50
+    guest_count = max(1, min(50, guest_count))
 
-    with transaction.atomic():
-        settings = Restaurant.objects.select_for_update().first()
-        open_shift = _get_open_shift(lock=True)
-        if not settings or not open_shift:
-            messages.error(request, "Open a shift before taking orders.")
-            return _home_or_redirect(request)
-        draft_count = Order.objects.filter(status=DRAFT, opening_entry=open_shift, is_return=False).count()
-        if draft_count >= settings.max_open_drafts:
-            messages.error(request, f"The active shift already has {settings.max_open_drafts} open drafts.")
-            return _home_or_redirect(request)
-        order = Order.objects.create(
-            order_type=order_type,
-            guest_count=guest_count,
-            opening_entry=open_shift,
-        )
-        order.assign_order_number()
-        order.audit("CREATED", actor=user, metadata={"order_type": order_type})
+    shift = _get_open_shift()
+    if shift is None:
+        messages.error(request, "Open a shift before taking orders.")
+        return _home_or_redirect(request)
+    try:
+        order = services.create_draft_order(shift, user, order_type=order_type, guest_count=guest_count)
+    except ValidationError as e:
+        messages.error(request, e.messages[0] if e.messages else "Cannot create the order.")
+        return _home_or_redirect(request)
     request.session[SESSION_ORDER_KEY] = order.pk
     cards = request.session.get(SESSION_CARD_KEY, {})
     if not isinstance(cards, dict):
@@ -374,20 +363,11 @@ def pos_open_shift(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Configure at least one enabled payment method before opening a shift.")
         return _home_or_redirect(request)
 
-    with transaction.atomic():
-        settings = Restaurant.objects.select_for_update().first()
-        if not settings or _get_open_shift(lock=True):
-            messages.error(request, "A shift is already open.")
-            return _home_or_redirect(request)
-        entry = POSOpeningEntry.objects.create(cashier=user, remarks=str(request.POST.get("remarks", "")).strip())
-        OpeningPayment.objects.bulk_create(
-            [
-                OpeningPayment(opening_entry=entry, mode_of_payment=mode, opening_amount=amount)
-                for mode, amount in opening_amounts.items()
-            ]
-        )
-        entry.full_clean()
-        entry.submit()
+    try:
+        open_shift(user, opening_amounts, remarks=request.POST.get("remarks", ""))
+    except ValidationError as e:
+        messages.error(request, e.messages[0] if e.messages else "Cannot open the shift.")
+        return _home_or_redirect(request)
     messages.success(request, "Shift opened successfully.")
     if _is_htmx(request):
         return _home_or_redirect(request)
@@ -622,63 +602,33 @@ def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
     stepper. Lowering is refused (with an error banner) when a higher-numbered guest
     still has items, so per-customer data isn't silently reassigned.
     """
-    error = None
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    with transaction.atomic():
-        order = get_object_or_404(
-            Order.objects.select_for_update(),
-            pk=pk,
-            status=DRAFT,
-            is_return=False,
-            opening_entry=shift,
+    order = get_object_or_404(
+        Order.objects.select_for_update(),
+        pk=pk,
+        status=DRAFT,
+        is_return=False,
+        opening_entry=shift,
+    )
+    try:
+        guest_count = services.update_order_meta(
+            order,
+            order_type=request.POST.get("order_type"),
+            guest_delta=request.POST.get("guest_delta"),
+            guest_count=request.POST.get("guest_count"),
+            actor=request.user,
         )
-        order_type = request.POST.get("order_type")
-        if order.invoice_printed and (order_type or "guest_delta" in request.POST or "guest_count" in request.POST):
-            error = "This receipt has been printed. Draft edits are no longer allowed."
-        elif order.kots.exists() and (order_type or "guest_delta" in request.POST or "guest_count" in request.POST):
-            # A printed receipt or sent ticket makes the order a committed
-            # document: the kitchen may already be cooking these lines.
-            error = "This order was sent to the kitchen or bar. Cancel it before making changes."
-        else:
-            if order_type and order_type not in {c[0] for c in ORDER_TYPE_CHOICES}:
-                error = "Choose a valid order type."
-            elif order_type:
-                order.order_type = order_type
-                order.save(update_fields=["order_type", "updated_at"])
-                order.audit("ORDER_TYPE_CHANGED", actor=request.user, metadata={"order_type": order_type})
-
-            delta = request.POST.get("guest_delta")
-            if error:
-                guest_count = order.guest_count
-            elif delta is not None:
-                try:
-                    guest_count = order.guest_count + int(delta)
-                except ValueError, TypeError:
-                    error = "Guest change must be a valid number."
-                    guest_count = order.guest_count
-            else:
-                try:
-                    guest_count = int(request.POST.get("guest_count", order.guest_count))
-                except ValueError, TypeError:
-                    error = "Guest count must be a valid number."
-                    guest_count = order.guest_count
-            guest_count = order.guest_count if error else max(1, min(50, guest_count))
-            if guest_count != order.guest_count:
-                try:
-                    order.change_guest_count(guest_count)
-                    order.audit("GUEST_COUNT_CHANGED", actor=request.user, metadata={"guest_count": guest_count})
-                    active = _get_active_card(request, order)
-                    if active > order.guest_count:
-                        cards = request.session.get(SESSION_CARD_KEY, {})
-                        if isinstance(cards, dict):
-                            cards[str(order.pk)] = 1
-                            request.session[SESSION_CARD_KEY] = cards
-                except ValidationError as e:
-                    error = e.messages[0] if e.messages else "Cannot change guest count."
-
-    return _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    except ValidationError as e:
+        return _render_cart(request, order, error=e.messages[0] if e.messages else "Cannot update the order.")
+    active = _get_active_card(request, order)
+    if active > guest_count:
+        cards = request.session.get(SESSION_CARD_KEY, {})
+        if isinstance(cards, dict):
+            cards[str(order.pk)] = 1
+            request.session[SESSION_CARD_KEY] = cards
+    return _render_cart(request, order)
 
 
 @login_required
@@ -751,66 +701,27 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpResponse:
     """Update item quantity or remove it. Returns the cart partial."""
-    error = None
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    with transaction.atomic():
-        order = get_object_or_404(
-            Order.objects.select_for_update(),
-            pk=pk,
-            status=DRAFT,
-            is_return=False,
-            opening_entry=shift,
+    order = get_object_or_404(
+        Order.objects.select_for_update(),
+        pk=pk,
+        status=DRAFT,
+        is_return=False,
+        opening_entry=shift,
+    )
+    try:
+        services.update_order_item(
+            order,
+            item_pk,
+            action=request.POST.get("action", "update"),
+            qty=request.POST.get("qty"),
+            actor=request.user,
         )
-        if order.invoice_printed:
-            error = "This receipt has been printed. Draft edits are no longer allowed."
-        elif order.kots.exists():
-            error = "This order was sent to the kitchen or bar. Cancel it before making changes."
-        else:
-            action = request.POST.get("action", "update")
-            try:
-                if action == "remove":
-                    removed = order.items.filter(pk=item_pk).values("item_id", "qty").first()
-                    services.remove_order_line(order, item_pk)
-                    if removed:
-                        order.audit(
-                            "ITEM_REMOVED",
-                            actor=request.user,
-                            metadata={"item_id": removed["item_id"], "quantity": str(removed["qty"])},
-                        )
-                elif action in {"increment", "decrement"}:
-                    oi = order.items.filter(pk=item_pk).first()
-                    if oi is None:
-                        error = "That order line no longer exists."
-                    else:
-                        new_qty = oi.qty + (Decimal("1") if action == "increment" else Decimal("-1"))
-                        services.update_order_line_quantity(order, item_pk, new_qty)
-                        order.audit(
-                            "ITEM_QUANTITY_CHANGED",
-                            actor=request.user,
-                            metadata={"item_id": item_pk, "quantity": str(new_qty)},
-                        )
-                else:
-                    qty = Decimal(str(request.POST.get("qty", "1")))
-                    if qty <= 0:
-                        services.remove_order_line(order, item_pk)
-                    else:
-                        oi = order.items.filter(pk=item_pk).first()
-                        if oi:
-                            services.update_order_line_quantity(order, item_pk, qty)
-                            order.audit(
-                                "ITEM_QUANTITY_CHANGED",
-                                actor=request.user,
-                                metadata={"item_id": item_pk, "quantity": str(qty)},
-                            )
-                order.recalculate_totals()
-            except ValidationError as e:
-                error = e.messages[0] if e.messages else "Invalid item update."
-            except ValueError, TypeError, InvalidOperation:
-                error = "Invalid item update."
-
-    return _render_cart(request, order, error=error) if error else _render_cart(request, order)
+    except ValidationError as e:
+        return _render_cart(request, order, error=e.messages[0] if e.messages else "Invalid item update.")
+    return _render_cart(request, order)
 
 
 @login_required
@@ -1039,7 +950,6 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
     successful physical print cannot leave the order marked unprinted.
     """
     user = _authenticated_user(request)
-    error = None
     feedback = {}
     shift = _get_open_shift()
     if shift is None:
@@ -1053,24 +963,14 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
             is_return=False,
             opening_entry=shift,
         )
-        if not order.items.exists():
-            error = "Add at least one item before printing the receipt."
-            return _render_cart(request, order, error=error)
-
-        action = "reprint" if order.invoice_printed else "print"
-        if not order.invoice_printed:
-            order.invoice_printed = True
-            order.invoice_printed_at = timezone.now()
-            order.invoice_printed_by = user
-            order.save(
-                update_fields=[
-                    "invoice_printed",
-                    "invoice_printed_at",
-                    "invoice_printed_by",
-                    "updated_at",
-                ]
+        try:
+            action = services.claim_receipt_print(order, user)
+        except ValidationError as e:
+            return _render_cart(
+                request,
+                order,
+                error=e.messages[0] if e.messages else "Unable to print the receipt.",
             )
-            order.audit("RECEIPT_PRINTED", actor=user)
 
     # Print outside the transaction: the printed state was claimed in the
     # DB first, so a failed physical print still leaves the order marked
@@ -1083,7 +983,7 @@ def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
         )
     else:
         feedback = {"receipt_print_error": True, "receipt_print_action": action}
-    return _render_cart(request, order, error=error, **feedback)
+    return _render_cart(request, order, **feedback)
 
 
 @login_required

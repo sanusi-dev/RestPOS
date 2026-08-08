@@ -27,6 +27,7 @@ from .models import (
     KOT_PRINT_PENDING,
     KOT_PRINTED,
     NEW_ORDER,
+    ORDER_TYPE_CHOICES,
     SUBMITTED,
     TAKE_AWAY,
     TICKET_BAR,
@@ -41,6 +42,138 @@ from .models import (
 # ---------------------------------------------------------------------------
 # Order workflows
 # ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
+    """Create a draft order on the shift, enforcing the open-draft cap."""
+    from apps.settings.models import Restaurant
+    from apps.staff.models import POSOpeningEntry
+
+    settings = Restaurant.objects.select_for_update().first()
+    if settings is None:
+        raise ValidationError("Restaurant settings are not configured.")
+    # Lock the shift row so concurrent creations serialize on the draft cap.
+    locked_shift = (
+        POSOpeningEntry.objects.select_for_update()
+        .filter(pk=shift.pk, status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
+        .first()
+    )
+    if locked_shift is None:
+        raise ValidationError("Open a shift before taking orders.")
+    draft_count = Order.objects.filter(status=DRAFT, opening_entry=locked_shift, is_return=False).count()
+    if draft_count >= settings.max_open_drafts:
+        raise ValidationError(f"The active shift already has {settings.max_open_drafts} open drafts.")
+    order = Order.objects.create(order_type=order_type, guest_count=guest_count, opening_entry=locked_shift)
+    order.assign_order_number()
+    order.audit("CREATED", actor=user, metadata={"order_type": order_type})
+    return order
+
+
+@transaction.atomic
+def update_order_meta(order, *, order_type=None, guest_delta=None, guest_count=None, actor=None):
+    """Apply order-type or guest-count edits to a locked draft order.
+
+    Returns the effective guest count after clamping, so callers can reset
+    per-order UI state. The printed/sent-ticket guards come from the model.
+    """
+    if order_type is None and guest_delta is None and guest_count is None:
+        return order.guest_count
+    order._ensure_editable()
+    if order_type and order_type not in {c[0] for c in ORDER_TYPE_CHOICES}:
+        raise ValidationError("Choose a valid order type.")
+    if order_type:
+        order.order_type = order_type
+        order.save(update_fields=["order_type", "updated_at"])
+        order.audit("ORDER_TYPE_CHANGED", actor=actor, metadata={"order_type": order_type})
+    if guest_delta is not None:
+        try:
+            guest_count = order.guest_count + int(guest_delta)
+        except ValueError, TypeError:
+            raise ValidationError("Guest change must be a valid number.") from None
+    if guest_count is None:
+        return order.guest_count
+    try:
+        guest_count = int(guest_count)
+    except ValueError, TypeError:
+        raise ValidationError("Guest count must be a valid number.") from None
+    guest_count = max(1, min(50, guest_count))
+    if guest_count != order.guest_count:
+        order.change_guest_count(guest_count)
+        order.audit("GUEST_COUNT_CHANGED", actor=actor, metadata={"guest_count": guest_count})
+    return guest_count
+
+
+@transaction.atomic
+def update_order_item(order, order_item_pk, *, action="update", qty=None, actor=None):
+    """Apply a POS quantity action to a draft line: remove, increment, decrement, or set qty."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    locked._ensure_editable()
+    if action == "remove":
+        removed = locked.items.filter(pk=order_item_pk).values("item_id", "qty").first()
+        remove_order_line(locked, order_item_pk)
+        if removed:
+            locked.audit(
+                "ITEM_REMOVED",
+                actor=actor,
+                metadata={"item_id": removed["item_id"], "quantity": str(removed["qty"])},
+            )
+    elif action in {"increment", "decrement"}:
+        oi = locked.items.filter(pk=order_item_pk).first()
+        if oi is None:
+            raise ValidationError("That order line no longer exists.")
+        new_qty = oi.qty + (Decimal("1") if action == "increment" else Decimal("-1"))
+        update_order_line_quantity(locked, order_item_pk, new_qty)
+        locked.audit(
+            "ITEM_QUANTITY_CHANGED",
+            actor=actor,
+            metadata={"item_id": order_item_pk, "quantity": str(new_qty)},
+        )
+    else:
+        try:
+            qty = Decimal(str(qty))
+        except (TypeError, ValueError, InvalidOperation) as exc:
+            raise ValidationError("Invalid item update.") from exc
+        if qty <= 0:
+            remove_order_line(locked, order_item_pk)
+        else:
+            oi = locked.items.filter(pk=order_item_pk).first()
+            if oi is not None:
+                update_order_line_quantity(locked, order_item_pk, qty)
+                locked.audit(
+                    "ITEM_QUANTITY_CHANGED",
+                    actor=actor,
+                    metadata={"item_id": order_item_pk, "quantity": str(qty)},
+                )
+    locked.recalculate_totals()
+    order.refresh_from_db()
+
+
+@transaction.atomic
+def claim_receipt_print(order, user):
+    """Claim a draft order's printed state before the physical print.
+
+    Returns "print" or "reprint" so callers can phrase their feedback.
+    """
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if not locked.items.exists():
+        raise ValidationError("Add at least one item before printing the receipt.")
+    action = "reprint" if locked.invoice_printed else "print"
+    if not locked.invoice_printed:
+        locked.invoice_printed = True
+        locked.invoice_printed_at = timezone.now()
+        locked.invoice_printed_by = user
+        locked.save(
+            update_fields=[
+                "invoice_printed",
+                "invoice_printed_at",
+                "invoice_printed_by",
+                "updated_at",
+            ]
+        )
+        locked.audit("RECEIPT_PRINTED", actor=user)
+        order.refresh_from_db()
+    return action
 
 
 @transaction.atomic

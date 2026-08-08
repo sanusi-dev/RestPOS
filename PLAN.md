@@ -658,6 +658,26 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — same error messages, same locking order, same status propagation.
 
+### 6.1f POS view slimming (2026-08-08)
+
+**Continuation of §6.1b/e** — extracts the remaining business rules from the POS views.
+
+| View (what left it) | Service function |
+|---|---|
+| `pos_order_new` — draft-cap check, order creation, order-number assignment, audit | `create_draft_order(shift, user, *, order_type, guest_count)` (orders) |
+| `pos_open_shift` — entry + opening-payment creation, one-open-shift check, submit | `open_shift(cashier, opening_amounts, remarks)` (staff) |
+| `pos_order_update_meta` — order-type/guest-count rules, printed/sent guards, audits | `update_order_meta(order, *, order_type, guest_delta, guest_count, actor)` (orders) |
+| `pos_order_update_item` — remove/increment/decrement/set semantics, audits, totals | `update_order_item(order, order_item_pk, *, action, qty, actor)` (orders) |
+| `pos_order_print` — printed-state claim + audit, print/reprint phrasing | `claim_receipt_print(order, user)` (orders) |
+
+**Notes:**
+- `update_order_meta` and `update_order_item` call the model's `_ensure_editable()` for the printed/sent-ticket guards — the error strings the views used were already the model's, so behavior is identical and the manual guard copies are deleted.
+- `update_order_meta` returns the effective guest count so the view can reset the session's active customer card — the one piece of per-request UI state that stays HTTP-side.
+- `pos_close_shift` was **not** further slimmed: after §6.1d its remaining body is per-row `ClosingPaymentForm` binding and GET/POST rendering — form/HTTP plumbing, not business logic. §6.1b's sizing note stands.
+- Session handling (active card, `pos_order_id`), HTMX fragment switching, messages, and redirects remain in the views.
+
+**Verification:** 611 tests green, ruff clean. Two regressions caught and fixed during the phase: `claim_receipt_print` must compute "print"/"reprint" *before* claiming (the original did), and `open_shift` lives in `staff/services.py` — both fixed before commit.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)

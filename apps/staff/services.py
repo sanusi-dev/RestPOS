@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.orders.models import DRAFT, SUBMITTED, Order, OrderPayment
 from apps.payments.models import ModeOfPayment
 
-from .models import ClosingPayment, POSClosingEntry, POSOpeningEntry
+from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 
 def expected_closing_amounts(open_shift, period_start, period_end):
@@ -74,6 +74,34 @@ def ensure_closing_draft(open_shift, cashier):
         ]
     )
     return closing
+
+
+@transaction.atomic
+def open_shift(cashier, opening_amounts, remarks=""):
+    """Open a shift with the declared opening float per payment mode."""
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.objects.select_for_update().first()
+    if settings is None:
+        raise ValidationError("Restaurant settings are not configured.")
+    open_exists = (
+        POSOpeningEntry.objects.select_for_update()
+        .filter(status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
+        .order_by("period_start_date")
+        .first()
+    )
+    if open_exists is not None:
+        raise ValidationError("A shift is already open.")
+    entry = POSOpeningEntry.objects.create(cashier=cashier, remarks=remarks.strip())
+    OpeningPayment.objects.bulk_create(
+        [
+            OpeningPayment(opening_entry=entry, mode_of_payment=mode, opening_amount=amount)
+            for mode, amount in opening_amounts.items()
+        ]
+    )
+    entry.full_clean()
+    entry.submit()
+    return entry
 
 
 @transaction.atomic
