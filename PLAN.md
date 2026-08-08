@@ -597,6 +597,32 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Caller-refresh note:** `settle_order`/`cancel_order`/`cancel_sent_order`/`discard_order` end with `order.refresh_from_db()` on the caller's instance, preserving the old methods' final `self.refresh_from_db()` semantics (tests like `test_settle_dine_in_without_print` assert post-settle state on the caller's instance).
 
+### 6.1c Order draft-mutation consolidation (2026-08-08)
+
+**Continuation of §6.1b** — closes the model↔service circularity left by the first pass.
+
+**Moved from `Order` to `apps/orders/services.py`:**
+
+| Model method (removed) | Service function (added) |
+|---|---|
+| `Order.add_item` | `add_order_line(order, ...)` |
+| `Order.update_item_quantity` | `update_order_line_quantity(order, ...)` |
+| `Order.remove_item` | `remove_order_line(order, ...)` |
+| `Order.clear_items` | `clear_order_lines(order)` |
+
+**Why:** the four methods were the last place `Order` called *into* `services.py` (via in-function `from apps.orders import services`), while services call *into* `Order` — a circular boundary with no single home for draft-mutation rules. The dependency is now one-directional: views → services → models.
+
+**Also changed:**
+- The private-flag dances (`locked._allow_submit = True; try: save() finally: del ...`) — five copies across `settle_order`/`cancel_order`/`cancel_sent_order`/`discard_order` (+ `_settling`) — are replaced by one `_transition(order, flag=...)` context manager in services. Same guard semantics; no way to forget the cleanup.
+- `apply_add_on_line` calls `add_order_line` directly (same module).
+- Test call sites (~85 across `test_order.py`, `test_kot.py`, `test_pos_views.py`, `test_backoffice_views.py`, `test_review_fixes.py`) updated to the service functions.
+
+**Retained on the model:** `_ensure_editable`, `_validate_pos_item`, `_validate_order_line_availability`, `_validate_current_lines` (single-item rules), `recalculate_totals`, `change_guest_count`, and the `save()` lifecycle guards (with the `_transition` bypass).
+
+**Deliberate skip:** `Order.delete()` keeps its override and its in-method `from apps.orders import services` import — it has no production callers (admin blocks deletion; tests use it once) and moving it would reintroduce the circular import. Follow-up when the draft-delete flow gets a real entry point (`delete_draft_order` in services).
+
+**Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — no error message or validation-order changes.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)

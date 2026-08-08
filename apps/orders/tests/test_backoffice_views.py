@@ -7,7 +7,7 @@ from django.urls import reverse
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order
-from apps.orders.services import create_tickets, settle_order
+from apps.orders.services import add_order_line, create_tickets, settle_order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
@@ -96,7 +96,7 @@ class OrdersDashboardTest(BackofficeViewTestBase):
 class OrderDetailTest(BackofficeViewTestBase):
     def test_order_detail(self):
         order = self._create_order()
-        order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=2, rate=Decimal("1500"))
         response = self.client.get(reverse("orders:order_detail", kwargs={"pk": order.pk}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Jollof Rice")
@@ -142,7 +142,7 @@ class OrderCancelTest(BackofficeViewTestBase):
 
 class OrderReturnTest(BackofficeViewTestBase):
     def _settle_order(self, order):
-        order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=2, rate=Decimal("1500"))
         settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         order.refresh_from_db()
 
@@ -181,7 +181,7 @@ class KOTListTest(BackofficeViewTestBase):
 
     def test_kot_list_with_data(self):
         order = self._create_order()
-        order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
         create_tickets(
             order,
         )
@@ -197,7 +197,7 @@ class KOTListTest(BackofficeViewTestBase):
 class KOTDetailTest(BackofficeViewTestBase):
     def test_kot_detail(self):
         order = self._create_order()
-        order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=2, rate=Decimal("1500"))
         create_tickets(
             order,
         )

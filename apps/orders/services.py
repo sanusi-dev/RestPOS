@@ -1,5 +1,6 @@
 """Order workflow services — multi-entity operations shared by the POS and backoffice."""
 
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 from uuid import uuid4
@@ -109,11 +110,8 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     locked.is_paid = True
     locked.status = SUBMITTED
     locked.submitted_at = timezone.now()
-    locked._allow_submit = True
-    try:
+    with _transition(locked, flag="_allow_submit"):
         locked.save()
-    finally:
-        del locked._allow_submit
     _convert_drink_reservations(locked, reservations_initialized=reservations_initialized)
     locked.audit("SUBMITTED", actor=cashier, metadata={"paid_amount": str(total_paid)})
     order.refresh_from_db()
@@ -152,8 +150,7 @@ def cancel_order(order, reason, cancelled_by=None, reason_note=""):
         release_drink_reservations(locked)
     cancellation_kots = _cancel_kots(locked)
     locked.status = CANCELLED
-    locked._allow_cancellation = True
-    try:
+    with _transition(locked, flag="_allow_cancellation"):
         locked.save(
             update_fields=[
                 "status",
@@ -164,8 +161,6 @@ def cancel_order(order, reason, cancelled_by=None, reason_note=""):
                 "updated_at",
             ]
         )
-    finally:
-        del locked._allow_cancellation
     locked.audit("CANCELLED", actor=cancelled_by, metadata={"reason": reason})
     order.refresh_from_db()
     return cancellation_kots
@@ -191,8 +186,7 @@ def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
     locked.cancelled_at = timezone.now()
     release_drink_reservations(locked)
     cancellation_kots = _cancel_kots(locked)
-    locked._allow_cancellation = True
-    try:
+    with _transition(locked, flag="_allow_cancellation"):
         locked.save(
             update_fields=[
                 "status",
@@ -203,8 +197,6 @@ def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
                 "updated_at",
             ]
         )
-    finally:
-        del locked._allow_cancellation
     locked.audit(
         "CANCELLED",
         actor=cancelled_by,
@@ -228,12 +220,117 @@ def discard_order(order, discarded_by=None):
     locked.status = DISCARDED
     locked.discarded_by = discarded_by
     locked.discarded_at = timezone.now()
-    locked._allow_discard = True
-    try:
+    with _transition(locked, flag="_allow_discard"):
         locked.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
-    finally:
-        del locked._allow_discard
     locked.audit("DISCARDED", actor=discarded_by)
+    order.refresh_from_db()
+
+
+@contextmanager
+def _transition(order, *, flag):
+    """Allow one guarded lifecycle transition, restoring the guard on exit.
+
+    Order.save() rejects status changes that bypass the document workflows;
+    services set the matching private flag for the duration of their own
+    transition save. The context manager guarantees the flag is removed even
+    when the save raises.
+    """
+    setattr(order, flag, True)
+    try:
+        yield
+    finally:
+        delattr(order, flag)
+
+
+@transaction.atomic
+def add_order_line(order, item, qty=1, customer_index=1, comments="", rate=None, menu_item=None, item_name=None):
+    """Add a line to a draft order, merging identical lines and reserving drink stock."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    locked._ensure_editable()
+    try:
+        qty = Decimal(str(qty))
+        rate = Decimal(str(rate)) if rate is not None else None
+    except (TypeError, ValueError, InvalidOperation) as exc:
+        raise ValidationError("Quantity and rate must be valid decimals.") from exc
+    if not qty.is_finite() or qty <= 0:
+        raise ValidationError("Quantity must be greater than zero.")
+    if rate is None or not rate.is_finite() or rate < 0:
+        raise ValidationError("A valid non-negative selling rate is required.")
+    if customer_index < 1 or customer_index > locked.guest_count:
+        raise ValidationError("The customer card is outside this order's guest count.")
+    locked._validate_pos_item(item)
+    drink_qty = drink_quantities(locked)
+    if item.department == "DRINKS":
+        drink_qty[item.pk] = drink_qty.get(item.pk, Decimal("0")) + qty
+    reserve_drink_stock(locked, drink_qty)
+    existing = locked.items.filter(item=item, customer_index=customer_index, comments=comments or "").first()
+    if existing:
+        existing.qty += qty
+        existing.save()
+        order.refresh_from_db()
+        return existing
+    created = OrderItem.objects.create(
+        order=locked,
+        item=item,
+        qty=qty,
+        customer_index=customer_index,
+        comments=comments,
+        rate=rate,
+        item_name=item_name or item.item_name,
+        menu_item=menu_item,
+    )
+    order.refresh_from_db()
+    return created
+
+
+@transaction.atomic
+def update_order_line_quantity(order, order_item_pk, qty):
+    """Set a draft line quantity, reserving or releasing drink stock atomically."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    locked._ensure_editable()
+    try:
+        qty = Decimal(str(qty))
+    except (TypeError, ValueError, InvalidOperation) as exc:
+        raise ValidationError("Quantity must be a valid decimal.") from exc
+    if not qty.is_finite():
+        raise ValidationError("Quantity must be a valid decimal.")
+    line = locked.items.select_related("item", "menu_item").filter(pk=order_item_pk).first()
+    if line is None:
+        raise ValidationError("That order line no longer exists.")
+    if qty > 0:
+        locked._validate_order_line_availability(line)
+    drink_qty = drink_quantities(locked)
+    if line.department == "DRINKS":
+        drink_qty[line.item_id] -= line.qty
+        if qty > 0:
+            drink_qty[line.item_id] += qty
+        if drink_qty[line.item_id] == 0:
+            del drink_qty[line.item_id]
+    reserve_drink_stock(locked, drink_qty)
+    if qty <= 0:
+        line.delete()
+        order.refresh_from_db()
+        return None
+    line.qty = qty
+    line.save()
+    order.refresh_from_db()
+    return line
+
+
+@transaction.atomic
+def remove_order_line(order, order_item_pk):
+    """Remove a line from a draft order."""
+    return update_order_line_quantity(order, order_item_pk, Decimal("0"))
+
+
+@transaction.atomic
+def clear_order_lines(order):
+    """Remove every editable draft line and release its drink reservations."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    locked._ensure_editable()
+    reserve_drink_stock(locked, {})
+    locked.items.all().delete()
+    locked.recalculate_totals()
     order.refresh_from_db()
 
 
@@ -610,7 +707,8 @@ def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")
         if len(add_on_menu_items) != len(add_ons):
             raise ValidationError("One or more selected add-ons are not on the active menu.")
     with transaction.atomic():
-        order.add_item(
+        add_order_line(
+            order,
             item=item,
             qty=qty,
             customer_index=customer_index,
@@ -620,7 +718,8 @@ def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")
             item_name=menu_item.item_name,
         )
         for add_on in add_ons:
-            order.add_item(
+            add_order_line(
+                order,
                 item=add_on.add_on_item,
                 qty=qty,
                 customer_index=customer_index,

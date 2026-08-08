@@ -18,7 +18,7 @@ from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
-from ..services import create_tickets, settle_order
+from ..services import add_order_line, create_tickets, settle_order
 
 CustomUser = get_user_model()
 
@@ -105,7 +105,7 @@ class POSHomeTest(POSViewTestBase):
         opening = self._open_shift()
         order = Order.objects.create(opening_entry=opening, order_type=TAKE_AWAY, guest_count=2)
         order.assign_order_number()
-        order.add_item(self.food_item, qty=2, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=2, rate=Decimal("1500"))
 
         response = self.client.get(reverse("pos:pos_home"))
 
@@ -123,7 +123,7 @@ class POSHomeTest(POSViewTestBase):
         opening = self._open_shift()
         sent_order = Order.objects.create(opening_entry=opening)
         sent_order.assign_order_number()
-        sent_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(sent_order, self.food_item, qty=1, rate=Decimal("1500"))
         create_tickets(sent_order, created_by=self.user)
         printed_order = Order.objects.create(opening_entry=opening, invoice_printed=True)
         printed_order.assign_order_number()
@@ -136,9 +136,9 @@ class POSHomeTest(POSViewTestBase):
     def test_pos_home_filters_draft_and_sent_orders(self):
         opening = self._open_shift()
         draft_order = Order.objects.create(opening_entry=opening, order_number=201)
-        draft_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(draft_order, self.food_item, qty=1, rate=Decimal("1500"))
         sent_order = Order.objects.create(opening_entry=opening, order_number=202)
-        sent_order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(sent_order, self.food_item, qty=1, rate=Decimal("1500"))
         create_tickets(sent_order, created_by=self.user)
 
         draft_response = self.client.get(reverse("pos:pos_home"), {"filter": "draft"})
@@ -153,7 +153,7 @@ class POSHomeTest(POSViewTestBase):
     def test_pos_home_searches_order_number_and_item_name(self):
         opening = self._open_shift()
         order = Order.objects.create(opening_entry=opening, order_number=301)
-        order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
 
         number_response = self.client.get(reverse("pos:pos_home"), {"q": "301"})
         item_response = self.client.get(reverse("pos:pos_home"), {"q": self.food_item.item_name})
@@ -509,8 +509,8 @@ class POSOrderHistoryTest(POSViewTestBase):
 
     def test_history_detail_groups_items_by_customer_and_shows_payments(self):
         order = Order.objects.create(opening_entry=self.opening, guest_count=2)
-        order.add_item(self.food_item, qty=1, customer_index=1, rate=Decimal("1500"))
-        order.add_item(self.drink_item, qty=2, customer_index=2, rate=Decimal("500"))
+        add_order_line(order, self.food_item, qty=1, customer_index=1, rate=Decimal("1500"))
+        add_order_line(order, self.drink_item, qty=2, customer_index=2, rate=Decimal("500"))
         settle_order(
             order, [{"mode_of_payment": self.cash.pk, "amount": "2500", "reference_no": ""}], cashier=self.user
         )
@@ -992,7 +992,7 @@ class POSSettleTest(POSViewTestBase):
             order_type="TAKE_AWAY",
             opening_entry=POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED).first(),
         )
-        order.add_item(self.food_item, qty=1, rate=Decimal("1500"))
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
         response = self.client.post(
             reverse("pos:pos_order_settle", kwargs={"pk": order.pk}), {f"payment_{self.cash.pk}": "1500"}
         )

@@ -16,7 +16,13 @@ from apps.menu.models import Menu, MenuItem
 from apps.orders.management.commands.seed_pos_setup import Command as SeedPosSetup
 from apps.orders.models import DRAFT, KOT_CANCELLED, KOT_PRINT_PENDING, KOT_PRINTED, Order
 from apps.orders.printing import PrintResult
-from apps.orders.services import cancel_sent_order, create_tickets, settle_order
+from apps.orders.services import (
+    add_order_line,
+    cancel_sent_order,
+    create_tickets,
+    settle_order,
+    update_order_line_quantity,
+)
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
@@ -78,7 +84,7 @@ class ReviewFixBase(TestCase):
 
     def _draft_order_with_item(self):
         order = Order.objects.create(opening_entry=self.opening)
-        order.add_item(self.item, qty=1, rate=Decimal("1000"), menu_item=self.menu_item)
+        add_order_line(order, self.item, qty=1, rate=Decimal("1000"), menu_item=self.menu_item)
         return order
 
 
@@ -99,7 +105,7 @@ class DisabledLineValidationTest(ReviewFixBase):
         self.item.disabled = True
         self.item.save(update_fields=["disabled"])
         with self.assertRaises(ValidationError):
-            order.update_item_quantity(line.pk, Decimal("2"))
+            update_order_line_quantity(order, line.pk, Decimal("2"))
         line.refresh_from_db()
         self.assertEqual(line.qty, Decimal("1"))
 

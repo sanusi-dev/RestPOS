@@ -772,7 +772,7 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
             try:
                 if action == "remove":
                     removed = order.items.filter(pk=item_pk).values("item_id", "qty").first()
-                    order.remove_item(item_pk)
+                    services.remove_order_line(order, item_pk)
                     if removed:
                         order.audit(
                             "ITEM_REMOVED",
@@ -785,7 +785,7 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
                         error = "That order line no longer exists."
                     else:
                         new_qty = oi.qty + (Decimal("1") if action == "increment" else Decimal("-1"))
-                        order.update_item_quantity(item_pk, new_qty)
+                        services.update_order_line_quantity(order, item_pk, new_qty)
                         order.audit(
                             "ITEM_QUANTITY_CHANGED",
                             actor=request.user,
@@ -794,11 +794,11 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
                 else:
                     qty = Decimal(str(request.POST.get("qty", "1")))
                     if qty <= 0:
-                        order.remove_item(item_pk)
+                        services.remove_order_line(order, item_pk)
                     else:
                         oi = order.items.filter(pk=item_pk).first()
                         if oi:
-                            order.update_item_quantity(item_pk, qty)
+                            services.update_order_line_quantity(order, item_pk, qty)
                             order.audit(
                                 "ITEM_QUANTITY_CHANGED",
                                 actor=request.user,
@@ -892,7 +892,7 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
         elif order.kots.exists():
             error = "This order was sent to the kitchen or bar. Use Cancel Order instead of Clear."
         else:
-            order.clear_items()
+            services.clear_order_lines(order)
             order.audit("ITEMS_CLEARED", actor=request.user)
             messages.success(request, "Order cleared.")
 
