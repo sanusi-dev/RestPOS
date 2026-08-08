@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from apps.payments.models import ModeOfPayment
 from apps.staff.models import OpeningPayment, POSOpeningEntry
+from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
 
 
@@ -86,7 +87,7 @@ class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
                 closing_amount=op.opening_amount,
             )
         # Submitting the closing flips the opening to Closed.
-        closing.submit()
+        submit_closing_entry(closing)
         self.entry.refresh_from_db()
         self.assertTrue(self.entry.is_closed)
         self.assertIsNotNone(self.entry.closing_entry)

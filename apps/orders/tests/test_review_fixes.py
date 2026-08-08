@@ -26,6 +26,7 @@ from apps.orders.services import (
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from apps.staff.services import submit_closing_entry
 
 CustomUser = get_user_model()
 
@@ -178,7 +179,7 @@ class ClosingPeriodEndIncludesLateOrdersTest(ReviewFixBase):
             cashier=self.user,
         )
         order.refresh_from_db()
-        closing.submit()
+        submit_closing_entry(closing)
         closing.refresh_from_db()
         self.assertEqual(closing.status, POSClosingEntry.SUBMITTED)
         self.assertEqual(closing.grand_total, Decimal("1000"))

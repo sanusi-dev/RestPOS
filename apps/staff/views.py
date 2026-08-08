@@ -416,7 +416,7 @@ def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("staff:closing_entry_detail", pk=closing.pk)
     try:
         closing.full_clean()
-        closing.submit()
+        services.submit_closing_entry(closing)
     except ValidationError as e:
         messages.error(request, str(e))
         return redirect("staff:closing_entry_detail", pk=closing.pk)

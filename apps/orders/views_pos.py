@@ -34,7 +34,7 @@ from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
-from apps.staff.services import ensure_closing_draft, expected_closing_amounts
+from apps.staff.services import ensure_closing_draft, expected_closing_amounts, submit_closing_entry
 from apps.users.models import CustomUser
 
 from . import printing, services
@@ -471,7 +471,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                     closing.period_end_date = timezone.now()
                     closing.save(update_fields=["remarks", "period_end_date", "updated_at"])
                     closing.full_clean()
-                    closing.submit()
+                    submit_closing_entry(closing)
                 except ValidationError as exc:
                     messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
                 else:

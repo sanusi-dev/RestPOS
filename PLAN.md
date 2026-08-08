@@ -623,6 +623,20 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — no error message or validation-order changes.
 
+### 6.1d Staff closing consolidation (2026-08-08)
+
+**Continuation of §6.1b** — removes the duplicated expected-amount math between `staff/services.py` and the model.
+
+**Moved:** `POSClosingEntry.submit()` → `submit_closing_entry(closing)` in `apps/staff/services.py`. The per-mode expected computation inside the old model method is deleted; the service calls its own `expected_closing_amounts()` (the same function the POS close-shift preview uses) so the preview and the posted close can never drift apart.
+
+**Why:** the refactor's §6.1b extraction left two near-identical implementations of the drawer math (one in the preview service, one inline in `submit()`). A change to the cash-change netting in one place would silently disagree with the other — a money-reconciliation hazard.
+
+**Also changed:** the `from apps.orders.models import ... # noqa: I001` lazy import inside the old method disappears with it; `Sum` import removed from `staff/models.py`; 17 call sites updated (2 production — `staff/views.py`, `orders/views_pos.py`; 15 tests).
+
+**Retained on the model:** `POSClosingEntry.clean()`/`save()` auto-fill, `cancel()`, and `POSOpeningEntry.submit()`/`cancel()` (single-document transitions with guards — left for the §6.1e inventory-document pass, where the same pattern is assessed together).
+
+**Verification:** 611 tests green, ruff clean. Error messages and validation order unchanged.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)
