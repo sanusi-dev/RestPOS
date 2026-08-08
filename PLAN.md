@@ -560,11 +560,53 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 ---
 
+### 6.1b Service Layer Refactor (2026-08-08)
+
+**Deviation from reference (recorded per REFACTOR_SERVICE_LAYER.md §"Reference notes & deviation documentation"):**
+
+> ERPNext/URY keep document workflows as doctype methods (validate/on_submit).
+> RestPOS deviates deliberately: multi-entity workflows (order settlement,
+> cancellation, returns, ticket creation, drink stock accounting, shift closing)
+> live in per-app service modules (`apps/orders/services.py`,
+> `apps/staff/services.py`). Models retain data, invariants, and simple
+> self-contained mutations. Rationale: `Order` had grown to ~1,000 lines mixing
+> four concerns, the same drink-stock math was duplicated between the model and
+> the POS catalog view, and shift-closing logic was split across two apps. Logic
+> is ported 1:1 — no behavior change.
+
+**Extractions beyond the pure model→service move** (approved in REFACTOR_SERVICE_LAYER.md §1.4, each genuine duplication or business logic, ported 1:1):
+
+1. `dispatch_tickets(tickets)` — the print → lock → set `print_status` → save loop was duplicated in `pos_order_sync`, `pos_order_cancel`, `pos_order_ticket_print`, and backoffice `order_cancel`. (Note: `pos_order_history_print` prints a receipt, not a ticket — it was listed in the plan but does not share this loop.)
+2. `apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")` — add-on pricing/merge block from `pos_order_add_item` (signature extended with `comments` so the base line's special instructions survive; the view's item/menu validation order shifted slightly — an unavailable-menu-item error now surfaces after the comments-length error instead of before, only in the degenerate case where both apply).
+3. `order_history_rows(filters)` — filter/queryset building from `pos_order_history`; date parsing and the manager-only status clamp stayed in the view because the context needs the normalized date string and clamped filter value.
+4. `open_draft_orders(shift, order_filter, order_search)` — draft-order list query + preview attachment from `pos_home` (signature extended with the filter/search params).
+
+**Deliberate skip:** §1.4 extraction 5 (`_authenticated_user`/`_is_htmx` dedupe into `apps/utils`) was skipped — `_is_htmx` exists only 2× (one in the untouchable `settings` app), so the plan's "3 usages each" condition was not met.
+
+**Sizing targets (soft) that did not land as estimated** — all enumerated moves were done; targets were expectations per the plan:
+
+| Metric | Plan expectation | Actual |
+|---|---|---|
+| `views_pos.py` | ~1,200 (DoD under ~1,250) | 1,253 |
+| `apps/orders/services.py` | ~500 | 934 |
+| `inventory/views.py` | ~650 | 736 |
+| `staff/views.py` | ~380 | 449 |
+| Largest view in `views_pos.py` | ~87, none over ~90 | `pos_close_shift` 152, `pos_open_shift` 106 |
+
+`pos_close_shift` at 152 lines cannot shrink below ~90 with the enumerated moves alone — the two helpers it lost were module-level functions, not view internals; further slimming would need new extractions the plan forbids. Flagged per the plan's "stop and flag it" rule rather than inventing work.
+
+**Caller-refresh note:** `settle_order`/`cancel_order`/`cancel_sent_order`/`discard_order` end with `order.refresh_from_db()` on the caller's instance, preserving the old methods' final `self.refresh_from_db()` semantics (tests like `test_settle_dine_in_without_print` assert post-settle state on the caller's instance).
+
+---
+
 ### 6.2 Inventory App (Phase 2)
 
-**Status:** planned
+**Status:** complete — implemented and merged on `main`. (Per §6.20, later revisions: receipts
+post to `Restaurant.store_warehouse`, Material Transfer is Store→department only,
+`StockReconciliation.reason` is required, Material Issue was removed, and independent
+`is_stock_item` / `is_sales_item` / `is_purchase_item` flags were added.)
 **FEATURES.md sections:** A12
-**Dependencies:** settings R1 (Branch)
+**Dependencies:** settings
 
 #### Decisions
 
