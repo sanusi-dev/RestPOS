@@ -690,6 +690,20 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 **Verification:** 649 tests green (611 + 38 new), ruff clean. View tests untouched — they keep covering HTTP concerns.
 
+### 6.1h OrderQuerySet manager (2026-08-08)
+
+**Continuation of §6.1b** — centralizes the two most repeated order query shapes.
+
+**Added** `OrderQuerySet` (`apps/orders/models.py`), installed as `Order.objects` via `as_manager()`:
+- `open_drafts(shift)` — the `status=DRAFT, is_return=False, opening_entry=shift` shape, previously written 13× across views and services (in two different keyword orders — a readability trap).
+- `submitted_in_shift(shift, period_start, period_end)` — the submitted-sales window shape used by both closing-amount computations.
+
+**Replaced:** all 13 `open_drafts` call sites (POS home/close-shift counts, `get_object_or_404` fetches, `create_draft_order`, `submit_closing_entry`, closing-entry views, `open_draft_orders`) and both `submitted_in_shift` sites (staff closing math). `DRAFT`/`SUBMITTED` imports dropped from `staff/services.py` and `staff/views.py` where they became unused.
+
+**Deliberately not converted:** `POSOpeningEntry.cancel()`'s `Order.objects.filter(opening_entry_id=...)` — that one counts *all* orders (including cancelled), a different semantic.
+
+**Verification:** 649 tests green, ruff clean.
+
 ---
 
 ### 6.2 Inventory App (Phase 2)

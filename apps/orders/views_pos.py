@@ -287,7 +287,7 @@ def pos_home(request: HttpRequest) -> HttpResponse:
     order_filter = request.GET.get("filter", "all").strip()
     order_search = request.GET.get("q", "").strip()
     draft_orders = services.open_draft_orders(shift, order_filter, order_search)
-    draft_count = Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift).count()
+    draft_count = Order.objects.open_drafts(shift).count()
     max_open_drafts = settings.max_open_drafts
     return _render_pos_surface(
         request,
@@ -395,7 +395,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
         messages.warning(request, "There is no open shift to close.")
         return _home_or_redirect(request)
 
-    draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
+    draft_count = Order.objects.open_drafts(open_shift).count()
     if draft_count and request.method == "GET":
         return _render_pos_surface(
             request,
@@ -415,7 +415,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         with transaction.atomic():
             open_shift = POSOpeningEntry.objects.select_for_update().get(pk=open_shift.pk)
-            draft_count = Order.objects.filter(opening_entry=open_shift, status=DRAFT, is_return=False).count()
+            draft_count = Order.objects.open_drafts(open_shift).count()
             if draft_count:
                 messages.error(
                     request,
@@ -560,7 +560,7 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order, pk=pk, status=DRAFT, is_return=False, opening_entry=shift)
+    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
     settings = Restaurant.load()
     active_menu = settings.active_menu if settings and settings.active_menu and settings.active_menu.enabled else None
     if active_menu is None:
@@ -731,7 +731,7 @@ def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpR
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order, pk=pk, status=DRAFT, is_return=False, opening_entry=shift)
+    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
     if 1 <= idx <= order.guest_count:
         cards = request.session.get(SESSION_CARD_KEY, {})
         if not isinstance(cards, dict):
@@ -759,7 +759,7 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
             )
             kots = services.create_tickets(order, created_by=request.user)
     except ValidationError as e:
-        order = get_object_or_404(Order, pk=pk, status=DRAFT, is_return=False, opening_entry=shift)
+        order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
         return _render_cart(
             request,
             order,
@@ -1098,7 +1098,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
             "allow_full_history": allow_full_history,
             "shift": open_shift,
             "draft_count": (
-                Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count()
+                Order.objects.open_drafts(open_shift).count()
                 if open_shift
                 else 0
             ),
@@ -1122,7 +1122,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     context = {
         "order": order,
         "draft_count": (
-            Order.objects.filter(status=DRAFT, is_return=False, opening_entry=open_shift).count() if open_shift else 0
+            Order.objects.open_drafts(open_shift).count() if open_shift else 0
         ),
         "show_order_tabs": _is_htmx(request),
         "pos_nav": "history",

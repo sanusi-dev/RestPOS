@@ -64,6 +64,22 @@ CANCEL_REASON_CHOICES = [
 TWO_PLACES = Decimal("0.01")
 
 
+class OrderQuerySet(models.QuerySet):
+    def open_drafts(self, shift):
+        """Draft orders belonging to a shift."""
+        return self.filter(status=DRAFT, is_return=False, opening_entry=shift)
+
+    def submitted_in_shift(self, shift, period_start, period_end):
+        """Submitted non-return orders settled within the period."""
+        return self.filter(
+            opening_entry=shift,
+            status=SUBMITTED,
+            is_return=False,
+            submitted_at__gte=period_start,
+            submitted_at__lte=period_end,
+        )
+
+
 class OrderSequence(BaseModel):
     """Persistent counter for sequential order numbers, one row per series."""
 
@@ -76,6 +92,8 @@ class OrderSequence(BaseModel):
 
 class Order(BaseModel):
     """A POS order — the single source of truth for items, payments, and status."""
+
+    objects = OrderQuerySet.as_manager()
 
     invoice_number = models.CharField(max_length=50, unique=True, null=True, blank=True, editable=False)
     order_number = models.PositiveIntegerField(db_index=True, null=True, blank=True, editable=False)

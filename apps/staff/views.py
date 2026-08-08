@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.orders.models import DRAFT, Order
+from apps.orders.models import Order
 from apps.users.models import CustomUser
 
 from . import services
@@ -291,11 +291,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         messages.warning(request, "There is no open shift to close. Open a shift first.")
         return redirect("staff:dashboard")
 
-    draft_count = Order.objects.filter(
-        opening_entry=open_entry,
-        status=DRAFT,
-        is_return=False,
-    ).count()
+    draft_count = Order.objects.open_drafts(open_entry).count()
     if draft_count:
         messages.error(
             request,
@@ -308,11 +304,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         # cannot both pass the duplicate-draft check below. PostgreSQL's
         # `select_for_update` holds the lock until COMMIT.
         open_entry = POSOpeningEntry.objects.select_for_update().select_related("cashier").get(pk=open_entry.pk)
-        draft_count = Order.objects.filter(
-            opening_entry=open_entry,
-            status=DRAFT,
-            is_return=False,
-        ).count()
+        draft_count = Order.objects.open_drafts(open_entry).count()
         if draft_count:
             messages.error(
                 request,
@@ -347,11 +339,7 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
     )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
-    draft_count = Order.objects.filter(
-        opening_entry=closing.opening_entry,
-        status=DRAFT,
-        is_return=False,
-    ).count()
+    draft_count = Order.objects.open_drafts(closing.opening_entry).count()
 
     if request.method == "POST":
         if closing.status != POSClosingEntry.DRAFT:

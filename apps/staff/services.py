@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.orders.models import DRAFT, SUBMITTED, Order, OrderPayment
+from apps.orders.models import Order, OrderPayment
 from apps.payments.models import ModeOfPayment
 
 from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
@@ -19,13 +19,7 @@ def expected_closing_amounts(open_shift, period_start, period_end):
     Expected = opening float + payments collected in the period. For cash,
     change given back to customers is netted off the collected total.
     """
-    submitted_orders = Order.objects.filter(
-        opening_entry=open_shift,
-        status=SUBMITTED,
-        is_return=False,
-        submitted_at__gte=period_start,
-        submitted_at__lte=period_end,
-    )
+    submitted_orders = Order.objects.submitted_in_shift(open_shift, period_start, period_end)
     rows = []
     for opening_payment in open_shift.opening_payments.select_related("mode_of_payment").all():
         collected = OrderPayment.objects.filter(
@@ -119,19 +113,13 @@ def submit_closing_entry(closing):
         op.mode_of_payment_id: op for op in opening.opening_payments.select_related("mode_of_payment").all()
     }
 
-    draft_count = Order.objects.filter(opening_entry=opening, status=DRAFT, is_return=False).count()
+    draft_count = Order.objects.open_drafts(opening).count()
     if draft_count:
         raise ValidationError(
             f"Close or settle {draft_count} open order{'s' if draft_count != 1 else ''} before closing the shift."
         )
 
-    submitted_orders = Order.objects.filter(
-        opening_entry=opening,
-        status=SUBMITTED,
-        is_return=False,
-        submitted_at__gte=locked.period_start_date,
-        submitted_at__lte=locked.period_end_date,
-    )
+    submitted_orders = Order.objects.submitted_in_shift(opening, locked.period_start_date, locked.period_end_date)
     # Drafts block the close above; returns are excluded because they are
     # handled by the deferred refund flow rather than drawer sales.
     locked.total_quantity = submitted_orders.aggregate(total=Sum("items__qty"))["total"] or Decimal("0")

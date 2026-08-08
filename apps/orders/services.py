@@ -61,7 +61,7 @@ def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
     )
     if locked_shift is None:
         raise ValidationError("Open a shift before taking orders.")
-    draft_count = Order.objects.filter(status=DRAFT, opening_entry=locked_shift, is_return=False).count()
+    draft_count = Order.objects.open_drafts(locked_shift).count()
     if draft_count >= settings.max_open_drafts:
         raise ValidationError(f"The active shift already has {settings.max_open_drafts} open drafts.")
     order = Order.objects.create(order_type=order_type, guest_count=guest_count, opening_entry=locked_shift)
@@ -778,7 +778,7 @@ class _DraftOrder(Protocol):
 def open_draft_orders(shift, order_filter="all", order_search=""):
     """Return draft orders for the POS home screen, with item previews attached."""
     draft_orders_queryset = (
-        Order.objects.filter(status=DRAFT, is_return=False, opening_entry=shift)
+        Order.objects.open_drafts(shift)
         .prefetch_related("items")
         .annotate(has_sent_ticket=Exists(KOT.objects.filter(order_id=OuterRef("pk"), status=SUBMITTED)))
         .order_by("-updated_at")
