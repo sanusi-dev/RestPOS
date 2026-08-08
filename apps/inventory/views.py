@@ -1,11 +1,10 @@
-import urllib.parse
 from typing import cast
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import HttpRequest, HttpResponse, QueryDict
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -20,6 +19,8 @@ from .forms import (
     StockReconciliationItemFormSet,
     UOMForm,
     WarehouseForm,
+    add_formset_row,
+    remove_formset_row,
 )
 from .models import (
     UOM,
@@ -397,21 +398,7 @@ def stock_entry_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = StockEntryDetailFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    for field in line_fields:
-        post_data[f"items-{total_forms}-{field}"] = ""
-
-    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
-
-    formset = StockEntryDetailFormSet(post_data, prefix="items")
+    formset = add_formset_row(StockEntryDetailFormSet, "items", request.POST)
     return render(
         request, "backoffice/inventory/stock_entry_form.html#detail_items_partial", {"detail_formset": formset}
     )
@@ -420,34 +407,7 @@ def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = StockEntryDetailFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    new_data = {}
-    new_index = 0
-
-    for i in range(total_forms):
-        if i == index:
-            continue
-        for field in line_fields:
-            new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
-        new_index += 1
-
-    new_data["items-TOTAL_FORMS"] = str(new_index)
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
-
-    encoded = urllib.parse.urlencode(new_data, doseq=True)
-    rebuilt = QueryDict(encoded, mutable=True)
-
-    formset = StockEntryDetailFormSet(rebuilt, prefix="items")
+    formset = remove_formset_row(StockEntryDetailFormSet, "items", request.POST, index)
     return render(
         request, "backoffice/inventory/stock_entry_form.html#detail_items_partial", {"detail_formset": formset}
     )
@@ -556,21 +516,7 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
 def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
     # Append one empty row to the posted formset data and re-render the
     # partial (same pattern as stock_entry_item_add).
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = StockReconciliationItemFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    for field in line_fields:
-        post_data[f"items-{total_forms}-{field}"] = ""
-
-    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
-
-    formset = StockReconciliationItemFormSet(post_data, prefix="items")
+    formset = add_formset_row(StockReconciliationItemFormSet, "items", request.POST)
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
 
 
@@ -579,34 +525,7 @@ def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
 def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse:
     # Drop the indexed row and renumber the survivors (same pattern as
     # stock_entry_item_remove).
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = StockReconciliationItemFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    new_data = {}
-    new_index = 0
-
-    for i in range(total_forms):
-        if i == index:
-            continue
-        for field in line_fields:
-            new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
-        new_index += 1
-
-    new_data["items-TOTAL_FORMS"] = str(new_index)
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
-
-    encoded = urllib.parse.urlencode(new_data, doseq=True)
-    rebuilt = QueryDict(encoded, mutable=True)
-
-    formset = StockReconciliationItemFormSet(rebuilt, prefix="items")
+    formset = remove_formset_row(StockReconciliationItemFormSet, "items", request.POST, index)
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
 
 
@@ -707,21 +626,7 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
 def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
     # Append one empty row to the posted formset data and re-render the
     # partial (same pattern as stock_entry_item_add).
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = PurchaseReceiptItemFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    for field in line_fields:
-        post_data[f"items-{total_forms}-{field}"] = ""
-
-    post_data["items-TOTAL_FORMS"] = str(total_forms + 1)
-
-    formset = PurchaseReceiptItemFormSet(post_data, prefix="items")
+    formset = add_formset_row(PurchaseReceiptItemFormSet, "items", request.POST)
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
 
 
@@ -730,34 +635,7 @@ def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
 def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpResponse:
     # Drop the indexed row and renumber the survivors (same pattern as
     # stock_entry_item_remove).
-    post_data = request.POST.copy()
-    total_forms = int(post_data.get("items-TOTAL_FORMS", 0))
-
-    empty_form = PurchaseReceiptItemFormSet(prefix="items").empty_form
-    line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
-
-    new_data = {}
-    new_index = 0
-
-    for i in range(total_forms):
-        if i == index:
-            continue
-        for field in line_fields:
-            new_data[f"items-{new_index}-{field}"] = post_data.get(f"items-{i}-{field}", "")
-        new_index += 1
-
-    new_data["items-TOTAL_FORMS"] = str(new_index)
-    new_data["items-INITIAL_FORMS"] = post_data.get("items-INITIAL_FORMS", "0")
-    new_data["items-MIN_NUM_FORMS"] = post_data.get("items-MIN_NUM_FORMS", "0")
-    new_data["items-MAX_NUM_FORMS"] = post_data.get("items-MAX_NUM_FORMS", "1000")
-
-    encoded = urllib.parse.urlencode(new_data, doseq=True)
-    rebuilt = QueryDict(encoded, mutable=True)
-
-    formset = PurchaseReceiptItemFormSet(rebuilt, prefix="items")
+    formset = remove_formset_row(PurchaseReceiptItemFormSet, "items", request.POST, index)
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
 
 
