@@ -2,6 +2,10 @@
 
 RestPOS is a lightweight web-based POS for restaurant order management. Cashiers enter all orders and payments at the counter; waiters use physical dockets and do not access the system. It supports dine-in, delivery, takeaway, and related order types.
 
+## Documentation
+
+The reverse-engineered, living technical documentation for the entire project is indexed at [`docs/README.md`](docs/README.md). Start there for architecture, cross-app dependencies, POS execution flows, database behavior, and troubleshooting guidance.
+
 ## Quickstart
 
 ### Prerequisites

@@ -43,3 +43,6 @@ landing-after-optimization.png
 restpos_interactive_landing_page*.html
 restpos/templates/
 scripts/inspect_db.py
+
+# opencode session data
+.opencode/

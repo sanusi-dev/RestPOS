@@ -1,0 +1,43 @@
+# Backoffice Workflow
+
+## Access Model
+
+Requests under `/backoffice/` are redirected to the POS unless the user has `has_backoffice_access`, which is true for superusers, RestPOS Admin, or RestPOS Manager. Most backoffice views add only `@login_required`; the middleware supplies the route gate. Explicit manager checks exist for order cancellation/return and settings mutations. Superuser is required for staff role assignment/removal.
+
+## Main Surfaces
+
+| Surface | URL include | Main operations |
+|---|---|---|
+| Dashboard | `apps.web.urls` | links to modules and setup |
+| Settings | `apps.settings.urls` | Restaurant, staff roles, ProductionUnit |
+| Inventory | `apps.inventory.urls` | masters, stock documents, stock reports |
+| Menu | `apps.menu.urls` | menus, lines, add-ons, variants |
+| Payments | `apps.payments.urls` | payment modes and GL mappings |
+| Staff | `apps.staff.urls` | opening/closing documents |
+| Orders | `apps.orders.urls` | order register, KOT register, cancel, return |
+
+## Inventory Operations
+
+Create views save a parent plus inline formset in an atomic block. HTMX endpoints add/remove formset rows by rebuilding posted data and returning the inline partial. Submit and cancel endpoints call inventory services and redirect to detail with validation messages.
+
+## Menu and Product Operations
+
+Menu and item forms save directly after validation. Model `clean()` enforces cross-app sellability and warehouse rules when it is invoked by forms. A direct `.save()` does not automatically call `full_clean()`, so model validation is most reliable through forms or explicit service validation.
+
+## Order Operations
+
+The order register filters by invoice/customer/order number, status, and order type. Detail prefetches lines, payments, and tickets. Backoffice cancellation requires manager/admin/superuser and calls `cancel_order()`. Return creation requires the same roles and calls `make_return()`, producing an un-submittable negative draft in the current implementation.
+
+## Settings and Staff
+
+Restaurant and ProductionUnit changes are manager/admin-only at view level. Restaurant validation blocks unsafe warehouse changes when reserved orders or draft stock documents exist. Staff role buttons use HTMX row replacement, but the role value is not validated before removing existing role groups; an unknown role can strip roles. This is documented as a risk, not changed here.
+
+## Reporting Surfaces
+
+There is no reports app. Current aggregates are:
+
+- order dashboard: today count, paid count, cancelled count, revenue, recent orders, pending tickets;
+- inventory dashboard: counts and bins at/below safety stock;
+- stock ledger and balance filtered lists;
+- staff closing totals and per-mode variance;
+- POS history query with date/status/payment/order-type filters.
