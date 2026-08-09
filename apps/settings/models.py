@@ -53,13 +53,8 @@ class Restaurant(BaseModel):
 
     @classmethod
     def load(cls):
-        """Return the singleton settings record with menu, menu items, and warehouse prefetched, or None."""
-        return (
-            cls.objects.select_related("active_menu", "default_warehouse", "store_warehouse")
-            .prefetch_related("active_menu__items__item__item_group")
-            .order_by("pk")
-            .first()
-        )
+        """Return the singleton settings record with its direct relations loaded, or None."""
+        return cls.objects.select_related("active_menu", "default_warehouse", "store_warehouse").order_by("pk").first()
 
     def clean(self):
         super().clean()

@@ -1,5 +1,4 @@
 import logging
-from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -9,14 +8,15 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.orders.models import DRAFT, Order
+from apps.orders.models import Order
 from apps.users.models import CustomUser
 
+from . import services
 from .forms import (
     ClosingPaymentForm,
     OpeningFloatForm,
 )
-from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from .models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     # GET — build an unbound form pre-filled with existing draft amounts so
     # the inline table renders the current values.
     if entry.status == POSOpeningEntry.DRAFT:
-        initial = _entry_to_initial(entry)
+        initial = _entry_to_initial(opening_payments)
         form = OpeningFloatForm(initial=initial)
     else:
         form = None
@@ -155,10 +155,10 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 
-def _entry_to_initial(entry: POSOpeningEntry) -> dict:
+def _entry_to_initial(opening_payments: list[OpeningPayment]) -> dict:
     """Build form-initial data from an existing draft's OpeningPayment rows."""
     initial = {}
-    for op in entry.opening_payments.select_related("mode_of_payment"):
+    for op in opening_payments:
         initial[OpeningFloatForm._field_name_for(op.mode_of_payment)] = str(op.opening_amount)
     return initial
 
@@ -291,11 +291,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         messages.warning(request, "There is no open shift to close. Open a shift first.")
         return redirect("staff:dashboard")
 
-    draft_count = Order.objects.filter(
-        opening_entry=open_entry,
-        status=DRAFT,
-        is_return=False,
-    ).count()
+    draft_count = Order.objects.open_drafts(open_entry).count()
     if draft_count:
         messages.error(
             request,
@@ -308,11 +304,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         # cannot both pass the duplicate-draft check below. PostgreSQL's
         # `select_for_update` holds the lock until COMMIT.
         open_entry = POSOpeningEntry.objects.select_for_update().select_related("cashier").get(pk=open_entry.pk)
-        draft_count = Order.objects.filter(
-            opening_entry=open_entry,
-            status=DRAFT,
-            is_return=False,
-        ).count()
+        draft_count = Order.objects.open_drafts(open_entry).count()
         if draft_count:
             messages.error(
                 request,
@@ -323,22 +315,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         if existing_draft is not None:
             return redirect("staff:closing_entry_detail", pk=existing_draft.pk)
 
-        closing = POSClosingEntry.objects.create(
-            opening_entry=open_entry,
-            cashier=user,
-        )
-        rows = [
-            ClosingPayment(
-                closing_entry=closing,
-                mode_of_payment=op.mode_of_payment,
-                opening_amount=op.opening_amount,
-                expected_amount=op.opening_amount,
-                closing_amount=Decimal("0"),
-                difference=Decimal("0"),
-            )
-            for op in open_entry.opening_payments.all()
-        ]
-        ClosingPayment.objects.bulk_create(rows)
+        closing = services.ensure_closing_draft(open_entry, user)
     messages.success(
         request,
         f"Closing entry #{closing.pk} started for the open shift. "
@@ -362,11 +339,7 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
         pk=pk,
     )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))
-    draft_count = Order.objects.filter(
-        opening_entry=closing.opening_entry,
-        status=DRAFT,
-        is_return=False,
-    ).count()
+    draft_count = Order.objects.open_drafts(closing.opening_entry).count()
 
     if request.method == "POST":
         if closing.status != POSClosingEntry.DRAFT:
@@ -431,7 +404,7 @@ def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("staff:closing_entry_detail", pk=closing.pk)
     try:
         closing.full_clean()
-        closing.submit()
+        services.submit_closing_entry(closing)
     except ValidationError as e:
         messages.error(request, str(e))
         return redirect("staff:closing_entry_detail", pk=closing.pk)

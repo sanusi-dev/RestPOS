@@ -16,9 +16,17 @@ from apps.menu.models import Menu, MenuItem
 from apps.orders.management.commands.seed_pos_setup import Command as SeedPosSetup
 from apps.orders.models import DRAFT, KOT_CANCELLED, KOT_PRINT_PENDING, KOT_PRINTED, Order
 from apps.orders.printing import PrintResult
+from apps.orders.services import (
+    add_order_line,
+    cancel_sent_order,
+    create_tickets,
+    settle_order,
+    update_order_line_quantity,
+)
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from apps.staff.services import submit_closing_entry
 
 CustomUser = get_user_model()
 
@@ -77,7 +85,7 @@ class ReviewFixBase(TestCase):
 
     def _draft_order_with_item(self):
         order = Order.objects.create(opening_entry=self.opening)
-        order.add_item(self.item, qty=1, rate=Decimal("1000"), menu_item=self.menu_item)
+        add_order_line(order, self.item, qty=1, rate=Decimal("1000"), menu_item=self.menu_item)
         return order
 
 
@@ -98,7 +106,7 @@ class DisabledLineValidationTest(ReviewFixBase):
         self.item.disabled = True
         self.item.save(update_fields=["disabled"])
         with self.assertRaises(ValidationError):
-            order.update_item_quantity(line.pk, Decimal("2"))
+            update_order_line_quantity(order, line.pk, Decimal("2"))
         line.refresh_from_db()
         self.assertEqual(line.qty, Decimal("1"))
 
@@ -107,7 +115,8 @@ class DisabledLineValidationTest(ReviewFixBase):
         self.menu_item.disabled = True
         self.menu_item.save(update_fields=["disabled"])
         with self.assertRaises(ValidationError):
-            order.settle(
+            settle_order(
+                order,
                 [{"mode_of_payment": self.cash, "amount": Decimal("1000")}],
                 cashier=self.user,
             )
@@ -164,12 +173,13 @@ class ClosingPeriodEndIncludesLateOrdersTest(ReviewFixBase):
                 closing_amount=Decimal("1000"),
             )
         order = self._draft_order_with_item()
-        order.settle(
+        settle_order(
+            order,
             [{"mode_of_payment": self.cash, "amount": Decimal("1000")}],
             cashier=self.user,
         )
         order.refresh_from_db()
-        closing.submit()
+        submit_closing_entry(closing)
         closing.refresh_from_db()
         self.assertEqual(closing.status, POSClosingEntry.SUBMITTED)
         self.assertEqual(closing.grand_total, Decimal("1000"))
@@ -205,8 +215,8 @@ class ReceiptPrintClaimsBeforePrintTest(ReviewFixBase):
 class CancellationTicketRetryTest(ReviewFixBase):
     def test_retry_pending_cancellation_ticket_on_cancelled_order(self):
         order = self._draft_order_with_item()
-        order.create_tickets(created_by=self.user)
-        order.cancel_sent_order(reason="wrong_order", cancelled_by=self.user)
+        create_tickets(order, created_by=self.user)
+        cancel_sent_order(order, reason="wrong_order", cancelled_by=self.user)
         cancel_ticket = order.kots.filter(type=KOT_CANCELLED).first()
         self.assertIsNotNone(cancel_ticket)
         # Simulate the print agent failing after cancellation, leaving a ticket

@@ -560,11 +560,179 @@ Use Django's `TestCase` for database tests. Test both happy path and error/edge 
 
 ---
 
+### 6.1b Service Layer Refactor (2026-08-08)
+
+**Deviation from reference (recorded per REFACTOR_SERVICE_LAYER.md §"Reference notes & deviation documentation"):**
+
+> ERPNext/URY keep document workflows as doctype methods (validate/on_submit).
+> RestPOS deviates deliberately: multi-entity workflows (order settlement,
+> cancellation, returns, ticket creation, drink stock accounting, shift closing)
+> live in per-app service modules (`apps/orders/services.py`,
+> `apps/staff/services.py`). Models retain data, invariants, and simple
+> self-contained mutations. Rationale: `Order` had grown to ~1,000 lines mixing
+> four concerns, the same drink-stock math was duplicated between the model and
+> the POS catalog view, and shift-closing logic was split across two apps. Logic
+> is ported 1:1 — no behavior change.
+
+**Extractions beyond the pure model→service move** (approved in REFACTOR_SERVICE_LAYER.md §1.4, each genuine duplication or business logic, ported 1:1):
+
+1. `dispatch_tickets(tickets)` — the print → lock → set `print_status` → save loop was duplicated in `pos_order_sync`, `pos_order_cancel`, `pos_order_ticket_print`, and backoffice `order_cancel`. (Note: `pos_order_history_print` prints a receipt, not a ticket — it was listed in the plan but does not share this loop.)
+2. `apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")` — add-on pricing/merge block from `pos_order_add_item` (signature extended with `comments` so the base line's special instructions survive; the view's item/menu validation order shifted slightly — an unavailable-menu-item error now surfaces after the comments-length error instead of before, only in the degenerate case where both apply).
+3. `order_history_rows(filters)` — filter/queryset building from `pos_order_history`; date parsing and the manager-only status clamp stayed in the view because the context needs the normalized date string and clamped filter value.
+4. `open_draft_orders(shift, order_filter, order_search)` — draft-order list query + preview attachment from `pos_home` (signature extended with the filter/search params).
+
+**Deliberate skip:** §1.4 extraction 5 (`_authenticated_user`/`_is_htmx` dedupe into `apps/utils`) was skipped — `_is_htmx` exists only 2× (one in the untouchable `settings` app), so the plan's "3 usages each" condition was not met.
+
+**Sizing targets (soft) that did not land as estimated** — all enumerated moves were done; targets were expectations per the plan:
+
+| Metric | Plan expectation | Actual |
+|---|---|---|
+| `views_pos.py` | ~1,200 (DoD under ~1,250) | 1,253 |
+| `apps/orders/services.py` | ~500 | 934 |
+| `inventory/views.py` | ~650 | 736 |
+| `staff/views.py` | ~380 | 449 |
+| Largest view in `views_pos.py` | ~87, none over ~90 | `pos_close_shift` 152, `pos_open_shift` 106 |
+
+`pos_close_shift` at 152 lines cannot shrink below ~90 with the enumerated moves alone — the two helpers it lost were module-level functions, not view internals; further slimming would need new extractions the plan forbids. Flagged per the plan's "stop and flag it" rule rather than inventing work.
+
+**Caller-refresh note:** `settle_order`/`cancel_order`/`cancel_sent_order`/`discard_order` end with `order.refresh_from_db()` on the caller's instance, preserving the old methods' final `self.refresh_from_db()` semantics (tests like `test_settle_dine_in_without_print` assert post-settle state on the caller's instance).
+
+### 6.1c Order draft-mutation consolidation (2026-08-08)
+
+**Continuation of §6.1b** — closes the model↔service circularity left by the first pass.
+
+**Moved from `Order` to `apps/orders/services.py`:**
+
+| Model method (removed) | Service function (added) |
+|---|---|
+| `Order.add_item` | `add_order_line(order, ...)` |
+| `Order.update_item_quantity` | `update_order_line_quantity(order, ...)` |
+| `Order.remove_item` | `remove_order_line(order, ...)` |
+| `Order.clear_items` | `clear_order_lines(order)` |
+
+**Why:** the four methods were the last place `Order` called *into* `services.py` (via in-function `from apps.orders import services`), while services call *into* `Order` — a circular boundary with no single home for draft-mutation rules. The dependency is now one-directional: views → services → models.
+
+**Also changed:**
+- The private-flag dances (`locked._allow_submit = True; try: save() finally: del ...`) — five copies across `settle_order`/`cancel_order`/`cancel_sent_order`/`discard_order` (+ `_settling`) — are replaced by one `_transition(order, flag=...)` context manager in services. Same guard semantics; no way to forget the cleanup.
+- `apply_add_on_line` calls `add_order_line` directly (same module).
+- Test call sites (~85 across `test_order.py`, `test_kot.py`, `test_pos_views.py`, `test_backoffice_views.py`, `test_review_fixes.py`) updated to the service functions.
+
+**Retained on the model:** `_ensure_editable`, `_validate_pos_item`, `_validate_order_line_availability`, `_validate_current_lines` (single-item rules), `recalculate_totals`, `change_guest_count`, and the `save()` lifecycle guards (with the `_transition` bypass).
+
+**Deliberate skip:** `Order.delete()` keeps its override and its in-method `from apps.orders import services` import — it has no production callers (admin blocks deletion; tests use it once) and moving it would reintroduce the circular import. Follow-up when the draft-delete flow gets a real entry point (`delete_draft_order` in services).
+
+**Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — no error message or validation-order changes.
+
+### 6.1d Staff closing consolidation (2026-08-08)
+
+**Continuation of §6.1b** — removes the duplicated expected-amount math between `staff/services.py` and the model.
+
+**Moved:** `POSClosingEntry.submit()` → `submit_closing_entry(closing)` in `apps/staff/services.py`. The per-mode expected computation inside the old model method is deleted; the service calls its own `expected_closing_amounts()` (the same function the POS close-shift preview uses) so the preview and the posted close can never drift apart.
+
+**Why:** the refactor's §6.1b extraction left two near-identical implementations of the drawer math (one in the preview service, one inline in `submit()`). A change to the cash-change netting in one place would silently disagree with the other — a money-reconciliation hazard.
+
+**Also changed:** the `from apps.orders.models import ... # noqa: I001` lazy import inside the old method disappears with it; `Sum` import removed from `staff/models.py`; 17 call sites updated (2 production — `staff/views.py`, `orders/views_pos.py`; 15 tests).
+
+**Retained on the model:** `POSClosingEntry.clean()`/`save()` auto-fill, `cancel()`, and `POSOpeningEntry.submit()`/`cancel()` (single-document transitions with guards — left for the §6.1e inventory-document pass, where the same pattern is assessed together).
+
+**Verification:** 611 tests green, ruff clean. Error messages and validation order unchanged.
+
+### 6.1e Inventory document workflows to services (2026-08-08)
+
+**Continuation of §6.1b** — moves the stock posting/reversal workflows off the models.
+
+**Moved to `apps/inventory/services.py`:**
+
+| Model method (removed) | Service function |
+|---|---|
+| `StockEntry.submit` / `StockEntry.cancel` | `submit_stock_entry` / `cancel_stock_entry` |
+| `StockReconciliation.submit` / `StockReconciliation.cancel` | `submit_stock_reconciliation` / `cancel_stock_reconciliation` |
+| `PurchaseReceipt.submit` / `PurchaseReceipt.cancel` | `submit_purchase_receipt` / `cancel_purchase_receipt` |
+| `PurchaseReceipt._revert_last_purchase_rates` | `_revert_last_purchase_rates(receipt)` (module-private) |
+
+**Why:** these are cross-entity workflows (config validation, bin locking in stable order, SLE creation/reversal, item-rate updates, status flips) — the largest concentration of orchestration left on models. The three `cancel()` bodies were near-identical (~40 lines each) and now share one `_reverse_voucher()` helper.
+
+**Also changed:** 6 view wrappers in `inventory/views.py` call the service functions; ~35 test call sites updated across `test_stock_entry.py`, `test_stock_reconciliation.py`, `test_purchase_receipt.py`, `test_views.py`.
+
+**Retained on the models:** `save()`/`delete()` draft guards, `clean()`, line-model validation (`validate_for_submission`, `StockEntryDetail.clean`, etc.), `StockLedgerEntry._create_entry_locked` (FIFO core), `Bin` helpers, and `StockEntry.stock_ledger_entries_for_voucher` (query helper used by the detail views).
+
+**Verification:** 611 tests green, ruff clean. Behavior ported 1:1 — same error messages, same locking order, same status propagation.
+
+### 6.1f POS view slimming (2026-08-08)
+
+**Continuation of §6.1b/e** — extracts the remaining business rules from the POS views.
+
+| View (what left it) | Service function |
+|---|---|
+| `pos_order_new` — draft-cap check, order creation, order-number assignment, audit | `create_draft_order(shift, user, *, order_type, guest_count)` (orders) |
+| `pos_open_shift` — entry + opening-payment creation, one-open-shift check, submit | `open_shift(cashier, opening_amounts, remarks)` (staff) |
+| `pos_order_update_meta` — order-type/guest-count rules, printed/sent guards, audits | `update_order_meta(order, *, order_type, guest_delta, guest_count, actor)` (orders) |
+| `pos_order_update_item` — remove/increment/decrement/set semantics, audits, totals | `update_order_item(order, order_item_pk, *, action, qty, actor)` (orders) |
+| `pos_order_print` — printed-state claim + audit, print/reprint phrasing | `claim_receipt_print(order, user)` (orders) |
+
+**Notes:**
+- `update_order_meta` and `update_order_item` call the model's `_ensure_editable()` for the printed/sent-ticket guards — the error strings the views used were already the model's, so behavior is identical and the manual guard copies are deleted.
+- `update_order_meta` returns the effective guest count so the view can reset the session's active customer card — the one piece of per-request UI state that stays HTTP-side.
+- `pos_close_shift` was **not** further slimmed: after §6.1d its remaining body is per-row `ClosingPaymentForm` binding and GET/POST rendering — form/HTTP plumbing, not business logic. §6.1b's sizing note stands.
+- Session handling (active card, `pos_order_id`), HTMX fragment switching, messages, and redirects remain in the views.
+
+**Verification:** 611 tests green, ruff clean. Two regressions caught and fixed during the phase: `claim_receipt_print` must compute "print"/"reprint" *before* claiming (the original did), and `open_shift` lives in `staff/services.py` — both fixed before commit.
+
+### 6.1g Direct service tests (2026-08-08)
+
+**Continuation of §6.1b/f** — the refactor's payoff: business rules tested without constructing HTTP requests.
+
+**Added:**
+- `apps/orders/tests/test_services.py` (26 tests) — `create_draft_order` (draft cap, missing shift/settings), `update_order_meta` (order-type/guest rules, clamping, printed/sent guards, no-op), `update_order_item` (increment/decrement/remove/set, audits, totals), `claim_receipt_print` (claim/audit/reprint semantics), `dispatch_tickets` (print status persistence, failure reporting via patched printer), `drink_stock_available` (out-of-stock and setup-required marking).
+- `apps/staff/tests/test_services.py` (12 tests) — `open_shift` (float/remarks, one-open-shift rule, missing settings), `expected_closing_amounts` (per-mode collection, cash-change netting), `submit_closing_entry` (difference, shift flip, draft-orders block).
+
+**Why now:** through §6.1c/e/f the business rules moved to services but were still exercised only through the HTTP views (1,300-line view tests) or model-level tests. These new tests pin the moved logic directly — the rules the views previously enforced inline are now testable without a template render.
+
+**Verification:** 649 tests green (611 + 38 new), ruff clean. View tests untouched — they keep covering HTTP concerns.
+
+### 6.1h OrderQuerySet manager (2026-08-08)
+
+**Continuation of §6.1b** — centralizes the two most repeated order query shapes.
+
+**Added** `OrderQuerySet` (`apps/orders/models.py`), installed as `Order.objects` via `as_manager()`:
+- `open_drafts(shift)` — the `status=DRAFT, is_return=False, opening_entry=shift` shape, previously written 13× across views and services (in two different keyword orders — a readability trap).
+- `submitted_in_shift(shift, period_start, period_end)` — the submitted-sales window shape used by both closing-amount computations.
+
+**Replaced:** all 13 `open_drafts` call sites (POS home/close-shift counts, `get_object_or_404` fetches, `create_draft_order`, `submit_closing_entry`, closing-entry views, `open_draft_orders`) and both `submitted_in_shift` sites (staff closing math). `DRAFT`/`SUBMITTED` imports dropped from `staff/services.py` and `staff/views.py` where they became unused.
+
+**Deliberately not converted:** `POSOpeningEntry.cancel()`'s `Order.objects.filter(opening_entry_id=...)` — that one counts *all* orders (including cancelled), a different semantic.
+
+**Verification:** 649 tests green, ruff clean.
+
+### 6.1i Merge of fix/performance-audit (2026-08-08)
+
+Merged `fix/performance-audit` (`4c4b3ce perf: optimize POS and shift queries`) into `refactor/service-layer` with a 3-way merge. Conflicts in 3 files resolved by keeping the §6.1c–h architecture and porting the perf optimizations into the new locations:
+
+| Perf change (from fix/performance-audit) | Where it landed |
+|---|---|
+| `collect_submitted_payment_totals()` — per-mode payment totals in 2 queries instead of N | Adopted in `staff/services.py`; used by `expected_closing_amounts` (single source) and `submit_closing_entry` |
+| `Subquery`-based `total_quantity` aggregate in closing submit | Ported into `services.submit_closing_entry` (the model `submit()` no longer exists) |
+| `order_history_rows` — `annotate(item_count)` instead of prefetching items | Adopted in `orders/services.py` |
+| `_render_cart` catalog OOB opt-in (`catalog_oob` only when requested) | Adopted in `views_pos.py` (`pos_order_add_item`, `update_item`, `sync`, `clear`, `print`) |
+| `pos_order_settle` GET renders a minimal dialog without `_build_order_context` | Adopted |
+| `Restaurant.load()` — dropped the `active_menu__items` prefetch | Adopted in `settings/models.py` |
+| `_entry_to_initial(opening_payments)` reuse in staff opening detail | Adopted |
+| `test_performance.py` (3 query-count tests) | Updated to call `add_order_line` (the `Order.add_item` it used was removed in §6.1c) |
+
+**Resolutions:** `staff/models.py` — kept the §6.1d version (the perf changes were inside the model `submit()` that no longer exists; the optimizations were ported to the service). `views_pos.py` — §6.1f versions with the perf `catalog_oob`/context tweaks applied. `staff/services.py` — merged both sides.
+
+**Verification:** 652 tests green (649 + 3 perf), ruff clean.
+
+---
+
 ### 6.2 Inventory App (Phase 2)
 
-**Status:** planned
+**Status:** complete — implemented and merged on `main`. (Per §6.20, later revisions: receipts
+post to `Restaurant.store_warehouse`, Material Transfer is Store→department only,
+`StockReconciliation.reason` is required, Material Issue was removed, and independent
+`is_stock_item` / `is_sales_item` / `is_purchase_item` flags were added.)
 **FEATURES.md sections:** A12
-**Dependencies:** settings R1 (Branch)
+**Dependencies:** settings
 
 #### Decisions
 

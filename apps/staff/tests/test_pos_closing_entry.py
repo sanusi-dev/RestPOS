@@ -7,6 +7,7 @@ from django.test import TestCase
 from apps.orders.models import Order
 from apps.payments.models import ModeOfPayment
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
 
 
@@ -56,7 +57,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
     def test_save_auto_fills_from_opening(self):
         """Auto-fill period_start and cashier from the linked opening."""
         # Close the first shift so the global one-open-shift rule allows a second opening.
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         OpeningPayment.objects.create(
             opening_entry=new_opening,
@@ -72,7 +73,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
 
     def test_clean_rejects_draft_opening(self):
         """Reject if the linked opening is not open."""
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         new_closing = POSClosingEntry(opening_entry=new_opening)
         with self.assertRaises(ValidationError) as ctx:
@@ -84,7 +85,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
         cash_closing.closing_amount = Decimal("49800")
         cash_closing.save()
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         cash_closing.refresh_from_db()
         self.assertEqual(cash_closing.expected_amount, Decimal("50000"))
         self.assertEqual(cash_closing.difference, Decimal("-200"))
@@ -99,7 +100,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         Order.objects.create(opening_entry=self.opening)
 
         with self.assertRaisesMessage(ValidationError, "Close or settle 1 open order"):
-            self.closing.submit()
+            submit_closing_entry(self.closing)
 
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
@@ -114,15 +115,15 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
             closing_amount=Decimal("100"),
         )
         with self.assertRaises(ValidationError) as ctx:
-            self.closing.submit()
+            submit_closing_entry(self.closing)
         self.assertIn("mode_of_payment", ctx.exception.message_dict)
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
 
     def test_submit_idempotent(self):
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         prev_status = self.closing.status
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, prev_status)
 
@@ -131,7 +132,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
         cash_closing.closing_amount = Decimal("50000")
         cash_closing.save()
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         # Now create a new shift and open it
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         OpeningPayment.objects.create(
@@ -147,7 +148,7 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
         cash_closing.closing_amount = Decimal("50000")
         cash_closing.save()
-        self.closing.submit()
+        submit_closing_entry(self.closing)
         self.closing.cancel(by_user=self.user)
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, POSClosingEntry.CANCELLED)

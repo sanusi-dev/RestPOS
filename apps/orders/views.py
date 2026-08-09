@@ -13,13 +13,12 @@ from django.views.decorators.http import require_POST
 
 from apps.users.models import CustomUser
 
-from . import printing
+from . import services
 from .forms import POSOrderCancelForm
 from .models import (
     DRAFT,
     KOT,
     KOT_PRINT_STATUS_CHOICES,
-    KOT_PRINTED,
     KOT_TYPE_CHOICES,
     ORDER_TYPE_CHOICES,
     STATUS_CHOICES,
@@ -152,7 +151,8 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, "Choose a cancellation reason before cancelling the order.")
         return redirect("orders:order_detail", pk=order.pk)
     try:
-        cancellation_kots = order.cancel(
+        cancellation_kots = services.cancel_order(
+            order,
             form.cleaned_data["cancel_reason"],
             cancelled_by=user,
             reason_note=form.cleaned_data["cancel_reason_note"],
@@ -160,13 +160,8 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Cancel failed.")
         return redirect("orders:order_detail", pk=order.pk)
-    for cancellation_kot in cancellation_kots:
-        result = printing.print_ticket(cancellation_kot)
-        if result.success:
-            cancellation_kot.print_status = KOT_PRINTED
-            cancellation_kot.save(update_fields=["print_status", "updated_at"])
-        else:
-            messages.warning(request, f"Cancellation ticket for {result.ticket_type} remains pending.")
+    for ticket_type in services.dispatch_tickets(cancellation_kots):
+        messages.warning(request, f"Cancellation ticket for {ticket_type} remains pending.")
     messages.success(request, f"Order {order.invoice_number} cancelled.")
     return redirect("orders:order_detail", pk=order.pk)
 
@@ -233,7 +228,7 @@ def order_return(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     try:
-        return_order = order.make_return()
+        return_order = services.make_return(order)
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Return failed.")
         return redirect("orders:order_detail", pk=order.pk)

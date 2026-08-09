@@ -45,7 +45,7 @@
     </button>
     {% endif %}
 
-    {% if not order_sent and order.items.exists %}
+    {% if not order_sent and has_items %}
     <button type="button"
             hx-post="{% url 'pos:pos_order_sync' order.pk %}"
             hx-target="#cart-panel" hx-swap="outerHTML"
@@ -131,7 +131,7 @@
           {% hgi_stroke name="cancel-circle" size="17" color="currentColor" stroke_width="2" %}
           Cancel Order
         </button>
-        {% elif not order.items.exists %}
+        {% elif not has_items %}
         <button type="button" @click="open = false; discardOpen = true"
                 class="inline-flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-red-700 transition-colors hover:bg-red-50">
           {% hgi_stroke name="delete-02" size="17" color="currentColor" stroke_width="2" %}
@@ -233,8 +233,8 @@
        hx-target="#payment-dialog-container"
        hx-swap="innerHTML"
        class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-center text-sm font-bold text-white shadow transition-all duration-150 hover:bg-teal-800 active:scale-[0.98] active:bg-teal-900
-              {% if not order.items.exists %}pointer-events-none opacity-40 shadow-none active:scale-100{% endif %}"
-       {% if not order.items.exists %}aria-disabled="true"{% endif %}>
+               {% if not has_items %}pointer-events-none opacity-40 shadow-none active:scale-100{% endif %}"
+        {% if not has_items %}aria-disabled="true"{% endif %}>
       <span class="flex size-5 items-center justify-center">{% hgi_stroke name="payment-01" size="19" color="currentColor" stroke_width="2" %}</span>
       <span>Pay</span>
     </a>

@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from apps.payments.models import ModeOfPayment
 from apps.staff.models import OpeningPayment, POSOpeningEntry
+from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
 
 
@@ -335,7 +336,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         for cp in closing.closing_payments.all():
             cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
-        closing.submit()
+        submit_closing_entry(closing)
         post_data = {f"cp_{cp.pk}-closing_amount": "99999" for cp in closing.closing_payments.all()}
         response = self.client.post(
             reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk}),
@@ -351,7 +352,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         """For a SUBMITTED closing, the detail page renders the table
         read-only — no inline form, no Save button."""
         closing = self._seed_closing_draft()
-        closing.submit()
+        submit_closing_entry(closing)
         response = self.client.get(reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk}))
         self.assertEqual(response.status_code, 200)
         # The 'Difference' column only appears in the read-only view.
@@ -391,7 +392,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         for cp in closing.closing_payments.all():
             cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
-        closing.submit()
+        submit_closing_entry(closing)
         response = self.client.post(reverse("staff:closing_entry_cancel", kwargs={"pk": closing.pk}))
         self.assertEqual(response.status_code, 302)
         closing.refresh_from_db()
@@ -404,7 +405,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         for cp in closing.closing_payments.all():
             cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
-        closing.submit()
+        submit_closing_entry(closing)
         # Open a new shift — closing-cancellation must NOT reopen the older
         # shift when a newer one is already live.
         new_entry = POSOpeningEntry.objects.create(

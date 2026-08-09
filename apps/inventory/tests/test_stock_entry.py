@@ -13,6 +13,7 @@ from apps.inventory.models import (
     StockLedgerEntry,
     Warehouse,
 )
+from apps.inventory.services import cancel_stock_entry, submit_stock_entry
 from apps.settings.models import ProductionUnit, Restaurant
 
 
@@ -56,10 +57,10 @@ class StockEntryTest(TestCase):
             stock_entry=entry, item=self.food, target_warehouse=self.bar, qty=Decimal("4"), basic_rate=Decimal("50")
         )
         with self.assertRaisesMessage(ValidationError, "central Store"):
-            entry.submit()
+            submit_stock_entry(entry)
         line.target_warehouse = None
         line.save()
-        entry.submit()
+        submit_stock_entry(entry)
         line.refresh_from_db()
         self.assertEqual(line.target_warehouse, self.store)
         self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.store).actual_qty, Decimal("4"))
@@ -70,7 +71,7 @@ class StockEntryTest(TestCase):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
         StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=1)
         with self.assertRaisesMessage(ValidationError, "not purchasable"):
-            entry.submit()
+            submit_stock_entry(entry)
 
     def test_transfer_derives_department_targets_and_preserves_fifo_rate(self):
         # Two FIFO layers make the three-unit transfer rate 133.33 (2 at 100,
@@ -82,7 +83,7 @@ class StockEntryTest(TestCase):
         food_line = StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=Decimal("3"))
         drink_line = StockEntryDetail.objects.create(stock_entry=entry, item=self.drink, qty=Decimal("2"))
 
-        entry.submit()
+        submit_stock_entry(entry)
 
         food_line.refresh_from_db()
         drink_line.refresh_from_db()
@@ -99,12 +100,12 @@ class StockEntryTest(TestCase):
             stock_entry=entry, item=self.food, source_warehouse=self.bar, target_warehouse=self.store, qty=1
         )
         with self.assertRaises(ValidationError):
-            entry.submit()
+            submit_stock_entry(entry)
         line.source_warehouse = None
         line.target_warehouse = None
         line.save()
         with self.assertRaisesMessage(ValidationError, "Insufficient stock"):
-            entry.submit()
+            submit_stock_entry(entry)
         self.assertEqual(
             StockLedgerEntry.objects.filter(voucher_type="Stock Entry", voucher_no=str(entry.pk)).count(), 0
         )
@@ -113,13 +114,13 @@ class StockEntryTest(TestCase):
         StockLedgerEntry.create_entry(self.food, self.store, Decimal("5"), "Opening", "1", rate=Decimal("100"))
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
         StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=Decimal("2"))
-        entry.submit()
-        entry.submit()
+        submit_stock_entry(entry)
+        submit_stock_entry(entry)
         self.assertEqual(
             StockLedgerEntry.objects.filter(voucher_type="Stock Entry", voucher_no=str(entry.pk)).count(), 2
         )
-        entry.cancel()
-        entry.cancel()
+        cancel_stock_entry(entry)
+        cancel_stock_entry(entry)
         self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.store).actual_qty, Decimal("5"))
         self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.kitchen).actual_qty, Decimal("0"))
 
@@ -127,10 +128,10 @@ class StockEntryTest(TestCase):
         StockLedgerEntry.create_entry(self.food, self.store, Decimal("5"), "Opening", "1", rate=Decimal("100"))
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
         StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=Decimal("2"))
-        entry.submit()
+        submit_stock_entry(entry)
         StockLedgerEntry.create_entry(self.food, self.kitchen, Decimal("-2"), "Consumption", "1")
         with self.assertRaises(ValidationError):
-            entry.cancel()
+            cancel_stock_entry(entry)
         entry.refresh_from_db()
         self.assertEqual(entry.status, "SUBMITTED")
         self.assertFalse(StockLedgerEntry.objects.filter(voucher_type="Stock Entry Cancellation").exists())
@@ -142,9 +143,9 @@ class StockEntryTest(TestCase):
         StockLedgerEntry.create_entry(self.food, self.kitchen, Decimal("1"), "Opening", "2", rate=Decimal("300"))
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
         StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=Decimal("1"))
-        entry.submit()
+        submit_stock_entry(entry)
 
-        entry.cancel()
+        cancel_stock_entry(entry)
 
         reversals = StockLedgerEntry.objects.filter(voucher_type="Stock Entry Cancellation", voucher_no=str(entry.pk))
         target_reversal = reversals.get(warehouse=self.kitchen)
