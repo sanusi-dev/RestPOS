@@ -145,6 +145,41 @@ Before implementing:
 
 When writing a `PLAN.md` entry for a new feature, include: ERPNext reference file(s) consulted, URY reference file(s) consulted, Django model fields (translated from doctype JSON), business logic rules (translated from doctype Python), HTMX frontend behaviour, and any deviations with reasons.
 
+Keep `PLAN.md` synchronized in the same task whenever a change affects:
+
+- Feature scope, including in-scope, deferred, or out-of-scope decisions
+- Phase status, completion evidence, dependencies, or the next planned phase
+- Application architecture, cross-app dependencies, or implementation decisions
+- Deviations from the ERPNext or URY reference behavior
+- The planned next action or assumptions recorded in a detailed phase plan
+
+Do not update `PLAN.md` for every minor code edit when none of these planning details change. The `/docs` documentation rules below still apply whenever the implemented behavior changes.
+
+## Documentation Maintenance
+
+The documentation in `/docs` is a living representation of the current architecture and behavior of the project.
+
+Before changing complex business logic, consult the relevant documentation in `/docs`. The main entry point is `docs/README.md`.
+
+Whenever a code change affects any of the following, update the relevant documentation in the same task:
+
+- Application architecture or cross-app dependencies
+- Database models, relationships, constraints, or queries
+- Business logic or side effects
+- State transitions
+- POS workflows, order lifecycle, inventory, payments, or shifts
+- Receipt/printing behavior
+- Authentication or authorization
+- Signals, middleware, or other hidden execution
+- HTMX/frontend/backend interactions
+- Important execution flows
+
+Update existing documentation instead of creating duplicate pages. Do not regenerate unrelated documentation. If a workflow changes, update its execution-flow page. If a model or relationship changes, update the data-model page. If an app dependency changes, update the dependency page. If a state transition changes, update the state-machine page. If functionality is removed, update or remove obsolete documentation.
+
+Documentation must describe the current implementation, not the intended implementation. Do not silently guess behavior. If the implementation remains genuinely unclear after tracing callers, callees, templates, URLs, models, signals, and configuration, mark the page with `⚠️ Requires verification` and explain the uncertainty.
+
+The documentation index in `docs/README.md` must remain accurate. Add new documentation to the index and do not leave orphan pages.
+
 ## Architecture Decisions
 
 ### Printing

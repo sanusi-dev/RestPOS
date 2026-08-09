@@ -1,0 +1,49 @@
+# Hidden Side Effects
+
+## Request and Middleware Effects
+
+| Trigger | Code | Effect |
+|---|---|---|
+| Authenticated request to `/backoffice/` or `/pos/` | `apps/web/middleware.py:8-24` | Prefetches groups and redirects users without the required role. |
+| HTMX response with Django messages | `apps/web/middleware.py:27-52` | Adds `showMessages` JSON to `HX-Trigger`. |
+| Backoffice template context | `apps/web/context_processors.py:31-35` | Counts `ItemGroup` rows for navigation. |
+| Every template context | `apps/web/context_processors.py:10-28` | Adds metadata, page URLs, and CSRF cookie name. |
+
+## App Startup and Signals
+
+- `apps/users/apps.py:9-22` registers a `post_migrate` callback that creates the three RestPOS groups and imports user signal receivers.
+- `apps/inventory/apps.py:9-62` registers a `post_migrate` callback that seeds standard UOMs and item groups.
+- `apps/users/signals.py:20-26` clears cached role properties after group membership changes.
+- `apps/users/signals.py:28-45` sends an admin email after allauth signup and promotes a confirmed email address to primary.
+- `apps/users/signals.py:47-63` deletes old avatar files before user save and the current avatar after user deletion.
+
+## Model Save/Delete Effects
+
+- `Order.save()` fills `arrived_time` on insert, then creates `invoice_number` using `Restaurant.invoice_series_prefix`. It rejects bypassed lifecycle and historical edits.
+- `Order.delete()` locks the persisted row, checks draft/unprinted/unsent state, calls `release_drink_reservations()`, deletes child items, then deletes the model row.
+- `OrderItem.save()` snapshots name, department, and stock flag and calculates `amount = qty * rate`.
+- `OrderPayment.save()` normalizes references, checks amount precision, rejects duplicate non-cash references, and enforces draft/ticket/receipt editability.
+- `KOT.save()` and `KOTItem.save/delete()` protect ticket snapshots while allowing print/status updates through the service path.
+- `Item.save()` generates `ITEM-####` codes under a lock, converts variant templates to non-sellable/non-stock, and deletes add-on relationships when an item becomes non-sales.
+- `StockLedgerEntry._create_entry_locked()` both inserts the movement and updates the matching `Bin` snapshot/FIFO queue.
+
+## Service Side Effects
+
+- Order line add/update/clear/cancel/discard/delete paths adjust `Bin.reserved_qty` for DRINKS.
+- Settlement creates `OrderPayment`, updates order totals/status, releases reservations, and creates negative POS SLE rows for drinks.
+- Cancelling submitted orders creates positive stock reversal SLE rows and cancellation KOTs.
+- Creating tickets snapshots current order lines; printing changes only KOT print status after the print interface returns.
+- Shift close calculates payment totals from order payment rows and links the opening entry to the closing entry.
+- Inventory submission creates SLE rows, updates Bins, and updates `Item.last_purchase_rate` where applicable.
+
+## Frontend Event Effects
+
+- `assets/javascript/toast.js` consumes initial `#django-messages` JSON and the HTMX `showMessages` event.
+- `assets/javascript/order-details-drawer.js` removes the drawer DOM node after the leave transition and restores focus to its source row.
+- `assets/javascript/searchable-select.js` reinitializes Tom Select after HTMX swaps.
+- `templates/pos/index.html` returns header/footer navigation with `hx-swap-oob` because those elements sit outside `#pos-main`.
+- `templates/pos/partials/cart/totals.html` uses a hidden HTMX button triggered from inline SweetAlert code to clear the order.
+
+## Non-Transactional Side Effects
+
+Receipt claims commit before `printing.print_receipt()`. Ticket creation commits before each physical ticket attempt. Therefore database state can say "printed" or "pending" independently of a real device outcome. The current stub always succeeds, so real printer failure behavior is only represented by tests and the abstraction contract.
