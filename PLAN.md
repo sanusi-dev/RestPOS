@@ -20,10 +20,10 @@
 > ticket state + POS cancellation), §6.19 (POS review decisions), §6.20 (inventory/POS stock
 > rules), §6.21 (POS workbench redesign), §6.22 (POS shell navigation), and §6.23 (paid-order
 > ticket guarantee — auto ticket creation on settlement). Phases 8–12
-> (printing, accounting/GL, daily P&L, reports, refunds completion) are the remaining core
+> (accounting/GL, daily P&L, reports, refunds completion, printing) are the remaining core
 > work before a working app. Customer management and the coupon engine are **deferred** —
 > added later after the core phases. The detailed plans in §6.1–§6.7
-> describe the *original* design before the single-location cleanup; see §6.14–§6.22 for the
+> describe the *original* design before the single-location cleanup; see §6.14–§6.23 for the
 > current product fact. There is no table management or branch/multi-location model.
 
 **RestPOS** is a restaurant POS and management system for a Nigerian restaurant, built with
@@ -78,9 +78,11 @@ apps for the unbuilt phases):
 
 ```
 settings → inventory → menu → staff ↘
-                      payments core ↗    orders → printing → accounting → daily P&L → reports
-                                                                                    ↑
-                                                              refunds completion ←──┘
+                      payments core ↗    orders → accounting → daily P&L → reports
+                                                                 ↑
+                                          refunds completion ←──┘
+
+orders → printing (leaf — depends only on orders; built last)
 ```
 
 **Build order reasoning:**
@@ -90,11 +92,11 @@ settings → inventory → menu → staff ↘
 - `payments core` is standalone (no deps); built before `staff` because `OpeningPayment.mode_of_payment` is a FK to `ModeOfPayment`
 - `staff` needs `settings` (Restaurant) and `payments core` (ModeOfPayment); built before `orders` because orders stamp the active shift
 - `orders` is the central app — needs settings, menu, staff, and payments
-- `printing` (Phase 8) needs orders (ticket data to format and print)
-- `accounting` (Phase 9) needs payments (migrate `PaymentGLMapping` → FK), orders (post sales), staff (shift close), inventory (COGS)
-- `daily P&L` (Phase 10) needs accounting + inventory (COGS) + orders (sales)
-- `reports` (Phase 11) needs everything
-- `refunds completion` (Phase 12) extends orders/payments/inventory/accounting
+- `accounting` (Phase 8) needs payments (migrate `PaymentGLMapping` → FK), orders (post sales), staff (shift close), inventory (COGS)
+- `daily P&L` (Phase 9) needs accounting + inventory (COGS) + orders (sales)
+- `reports` (Phase 10) needs everything
+- `refunds completion` (Phase 11) extends orders/payments/inventory/accounting
+- `printing` (Phase 12) needs orders (ticket data to format and print); built last — leaf dependency, does not gate the accounting chain
 - `customer management` (deferred) — would be needed by orders (link to a Customer instead of a string); parked after the core phases
 - `coupon engine` (deferred) — would extend orders/payments; parked after the core phases
 
@@ -125,12 +127,12 @@ settings → inventory → menu → staff ↘
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (ModeOfPayment.enabled + is_default; PaymentGLMapping unique per mode) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings, payments core | complete (single shared shift; closing sums OrderPayment totals per mode) |
 | 6 | settings R2 | A3, A4, A5 (partial) | ProductionUnit | menu, inventory, payments | complete (merged into Restaurant singleton — §6.14 removed POSProfile/TaxTemplate) |
-| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, KOT, KOTItem, OrderAuditEvent, OrderSequence | settings, menu, staff, payments | complete (POS workbench, continuous numbering, tickets, drinks-only stock, returns) |
-| 8 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started (stub `apps/orders/printing.py`) |
-| 9 | accounting / GL | A13, A16 (partial) | LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter, write-off; migrate `PaymentGLMapping.default_account` CharField → FK | payments, orders, staff, inventory | not started — the accounting system was never planned as a real phase; §6.4/§6.6 deferred it ("Phase 9 introduces a real LedgerAccount") |
-| 10 | daily P&L | A14, C | DailyP&L, P&L line items (COGS, direct/indirect expenses, electricity, materials, employee costs), P&L amendment, departmental P&L split | all apps | not started |
-| 11 | reports | A15, C | Sales reports (daywise/monthwise/item-wise/service/time/employee), cancelled invoices, stock ledger/balance/ageing, POS register, departmental daily reports | all apps | not started |
-| 12 | refunds completion | A18 | RefundEntry / RefundPaymentEntry (GL reversal), wastage posting, partial returns | orders, payments, inventory | not started — core return data model done in Phase 7 |
+| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, KOT, KOTItem, OrderAuditEvent, OrderSequence | settings, menu, staff, payments | complete (POS workbench, continuous numbering, tickets, drinks-only stock, returns, paid-order ticket guarantee §6.23) |
+| 8 | accounting / GL | A13, A16 (partial) | LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter, write-off; migrate `PaymentGLMapping.default_account` CharField → FK | payments, orders, staff, inventory | not started — first remaining phase; a real LedgerAccount was deferred in §6.4/§6.6 ("Phase 8 introduces a real LedgerAccount") |
+| 9 | daily P&L | A14, C | DailyP&L, P&L line items (COGS, direct/indirect expenses, electricity, materials, employee costs), P&L amendment, departmental P&L split | all apps | not started |
+| 10 | reports | A15, C | Sales reports (daywise/monthwise/item-wise/service/time/employee), cancelled invoices, stock ledger/balance/ageing, POS register, departmental daily reports | all apps | not started |
+| 11 | refunds completion | A18 | RefundEntry / RefundPaymentEntry (GL reversal), wastage posting, partial returns | orders, payments, inventory | not started — core return data model done in Phase 7 |
+| 12 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started (stub `apps/orders/printing.py`) — built last; leaf dependency, does not gate the accounting chain |
 | — | customer management (deferred) | A11 | Customer, CustomerGroup, credit limits, customer search/create from POS, favourite items | orders | deferred — added later after the core phases; only `Order.customer_name` (string, default "Walk-in Customer") exists today |
 | — | coupon engine (deferred) | A13 #130–131 | CouponCode, pricing rules; cashier % discount | orders, payments | deferred — added later; no discount/coupon system exists today |
 
@@ -144,6 +146,11 @@ settings → inventory → menu → staff ↘
 > merged into the Restaurant singleton, payment-mode selection folded onto ModeOfPayment,
 > and branch/profile FKs stripped from orders, KOTs, and shift entries. The §6.1–§6.7 detailed
 > plans describe the pre-cleanup design; treat §6.14–§6.22 as the current product fact.
+>
+> **Phase 8–12 reordering note (2026-08-15):** Printing moved from Phase 8 to Phase 12 — it
+> depends only on orders and does not gate the accounting chain. Accounting/GL is now Phase 8,
+> daily P&L Phase 9, reports Phase 10, refunds completion Phase 11, printing Phase 12.
+> Forward references in earlier plans (§6.4–§6.7) have been renumbered to match.
 
 ### Status values
 
@@ -199,7 +206,7 @@ Variant
 ### payments core (Phase 4)
 
 **Scope (current):** Payment modes (Cash, Bank, General, Phone) as a flat master, GL account
-mapping (account name as a CharField — Phase 9 introduces a real `LedgerAccount` and migrates to
+mapping (account name as a CharField — Phase 8 introduces a real `LedgerAccount` and migrates to
 a FK). `ModeOfPayment` has `enabled` (accept this mode) and `is_default` (exactly one — §6.14);
 `PaymentGLMapping` is OneToOne per mode (company field dropped). Change calculation, rounding,
 and split-payment UI live in the orders app (Phase 7).
@@ -254,7 +261,7 @@ mutating any payment data.
 **Key reference doctypes:** ERPNext POS Invoice, POS Invoice Item, URY Order, URY Order Item, URY
 KOT, URY KOT Items, URY hooks for order/KOT/invoice events
 
-### printing (Phase 8)
+### printing (Phase 12)
 
 **Scope:** Three thermal printers (cashier USB, kitchen LAN, bar LAN), Python print agent
 (localhost HTTP → ESC/POS → printer), print job routing, print status update, printer
@@ -265,7 +272,7 @@ configuration (IP in DB on production unit), print formats (receipt, kitchen tic
 **Key reference doctypes:** URY Printer Settings, Network Printer Settings (Frappe core), URY print
 hooks
 
-### accounting / GL (Phase 9)
+### accounting / GL (Phase 8)
 
 **Scope:** The General Ledger. A real `LedgerAccount` model (chart of accounts), `GL` / ledger
 entries, `JournalEntry` (manual, balanced), `FiscalYear`, `CostCenter`, and write-off posting.
@@ -298,7 +305,7 @@ currently has no discount path.
 
 **Key reference doctypes:** ERPNext Coupon Code, Pricing Rule
 
-### daily P&L (Phase 10)
+### daily P&L (Phase 9)
 
 **Scope:** `DailyP&L` document per day: gross sales → COGS → direct expenses (electricity
 meter readings, materials/consumables, ad-hoc) → gross profit → indirect expenses (rent,
@@ -310,7 +317,7 @@ FOOD/DRINKS split (per C).
 
 **Key reference doctypes:** URY Daily P&L, URY P&L doctypes (materials, COGS, expenses)
 
-### reports (Phase 11)
+### reports (Phase 10)
 
 **Scope:** Sales reports (today's, daywise, month-wise, item-wise, employee-wise,
 service-wise, time-wise), cancelled invoices, average bill value, customer data + repeated
@@ -321,15 +328,15 @@ customer credit balance, departmental daily reports (C).
 
 **Key reference doctypes:** ERPNext Sales Invoice reports, Stock Ledger reports, URY reports
 
-### refunds completion (Phase 12)
+### refunds completion (Phase 11)
 
 **Scope:** Completing the refund flow from A18. Return order (is_return + return_against) already
 implemented in Phase 7 — creates draft return with negative items/payments, stock restoration on
-submit. Phase 12 adds: explicit refund payment entries (reversal GL posting), wastage posting
+submit. Phase 11 adds: explicit refund payment entries (reversal GL posting), wastage posting
 option, partial return support (adjust qty in return draft before submit), refund permission
 (Manager only, already enforced). Cross-app: touches orders, payments, inventory.
 
-**Key models:** Order, OrderItem, OrderPayment, StockLedgerEntry — Phase 7 return orders already handle the core data model; Phase 12 layers in standalone refund entries if needed.
+**Key models:** Order, OrderItem, OrderPayment, StockLedgerEntry — Phase 7 return orders already handle the core data model; Phase 11 layers in standalone refund entries if needed.
 
 **Key reference doctypes:** ERPNext Payment Entry (reversal), Stock Ledger Entry (positive entry)
 
@@ -348,8 +355,8 @@ When starting a new session to continue RestPOS implementation:
    migrations applied.
 
 4. **Find current phase:** Check the status table in Section 3 above. Phases 1–7 are complete;
-   Phase 8 (printing) is the natural next work; Phases 9–12 (accounting/GL, daily P&L, reports,
-   refunds completion) are the remaining core phases. Customer management and the coupon
+   Phase 8 (accounting/GL) is the natural next work; Phases 9–12 (daily P&L, reports, refunds
+   completion, printing) are the remaining core phases. Customer management and the coupon
    engine are deferred (added after the core phases).
 
 5. **Read the current product fact:** For implemented behavior, read §6.14–§6.22 (owner-confirmed
@@ -1230,7 +1237,7 @@ is a FK to `ModeOfPayment`.
 
 - **Flat master, no tree.** Modes are categorised by a `type` field, not nested under a parent mode.
 - **`PaymentGLMapping.default_account` is a CharField, not a Link→Account.** There is no
-  `LedgerAccount` model — that lives in Phase 9 (accounting / GL). We store the account name as a
+  `LedgerAccount` model — that lives in Phase 8 (accounting / GL). We store the account name as a
   string here and migrate to a FK when the chart of accounts is introduced.
 - **`company` is a CharField** read from `Restaurant.company` (single-company). No per-company
   switcher.
@@ -1266,7 +1273,7 @@ The manager can add specific providers (Opay, Moniepoint, FirstBank POS) or disa
 |---|---|---|
 | `mode_of_payment` | ForeignKey→`payments.ModeOfPayment`, on_delete=PROTECT, related_name="gl_mappings" | required |
 | `company` | CharField, max_length=200 | defaults from `Restaurant.company`; single-company |
-| `default_account` | CharField, max_length=200 | account name as string — Phase 9 will FK to a real `LedgerAccount` |
+| `default_account` | CharField, max_length=200 | account name as string — Phase 8 will FK to a real `LedgerAccount` |
 
 **Methods:**
 - `__str__` returns `f"{mode_of_payment.name} → {default_account}"`
@@ -1342,7 +1349,7 @@ class PaymentGLMappingAdmin(admin.ModelAdmin):
 
 | Deviation | Reason |
 |---|---|
-| `default_account` is CharField, not Link→Account | No `LedgerAccount` model; Phase 9 introduces one and migrates to FK |
+| `default_account` is CharField, not Link→Account | No `LedgerAccount` model; Phase 8 introduces one and migrates to FK |
 | `company` is CharField, not Link→Company | No Company model — single `Restaurant` singleton per branch with a company name string |
 | No per-warehouse or per-branch isolation on modes | The project is single-branch; modes are shared restaurant-wide |
 | No `is_change` flag | Change capability inferred from `type == "CASH"`; only cash modes dispense physical notes |
@@ -1410,7 +1417,7 @@ Taxes, URY User, Role Permitted, URY hooks for opening/closing validation
 - **Synchronous close only.** No `QUEUED`/`FAILED` statuses, no Celery task, no `error_message`,
   no Retry button. Phase 5's close-time work is a SQL `SUM` across the shift's `OpeningPayment`
   rows plus the cashier-entered `closing_amount` — milliseconds even for 1,000+ orders. Add async
-  only when a future phase introduces heavy close-time write work (e.g. Phase 9 accounting
+  only when a future phase introduces heavy close-time write work (e.g. Phase 8 accounting
   posting GL entries on close, or a real `Sales Invoice` consolidation).
 - **Daily-close enforcement deferred.** The ERPNext `validate_pos_opening_entry` "outdated shift"
   check and URY's `validate_pos_close` 5 AM day boundary live in the Order-app `validate` path
@@ -1820,7 +1827,7 @@ Terminal Configuration), A5 partial (Tax template — later removed)
 | `references/ury-develop/ury/ury/doctype/ury_restaurant/ury_restaurant.json` | `default_tax_template` (core Link → Sales Taxes and Charges Template) — URY's restaurant-wide tax default |
 | `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json` | TaxTemplate fields: `title`, `is_default`, `disabled`, `company`, `tax_category`, `taxes` (Table→Sales Taxes and Charges) |
 | `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.py` | Validation: default exclusivity per company, disabled-not-default, tax_category uniqueness, per-row account/cost_center validation; `autoname` = `f"{title} - {company_abbr}"` |
-| `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json` | TaxRate row: `charge_type`, `rate`, `account_head`, `description`, `cost_center`, `included_in_print_rate`, `row_id` + computed `*_base_*` fields (deferred to Phase 9) |
+| `references/erpnext-develop/erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json` | TaxRate row: `charge_type`, `rate`, `account_head`, `description`, `cost_center`, `included_in_print_rate`, `row_id` + computed `*_base_*` fields (deferred to Phase 8) |
 | `references/erpnext-develop/erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json` | `pos_profile` is a required Link on POS Opening Entry (Phase 6 adds nullable FK to RestPOS POSOpeningEntry) |
 | `references/ury-develop/ury/ury_pos/api.py` | Fields the POS frontend consumes from POSProfile (§G of research): `branch`, `warehouse`, `company`, `paid_limit`, `custom_edit_order_type`, `custom_enable_kot_reprint`, `printer_settings`, `payments`, `applicable_for_users`, `custom_daily_pos_close`. Discount / table-attention / warehouse-switch / role-billing / KOT-delay / multi-cashier fields reviewed and **dropped** — see deviations. |
 | `references/ury-develop/ury/ury/doctype/aggregator_settings/aggregator_settings.json` | Reviewed and dropped — third-party food-delivery aggregator integration is out of scope |
@@ -1834,10 +1841,10 @@ Terminal Configuration), A5 partial (Tax template — later removed)
   `restaurant.default_tax_template` at order time. The POSProfile `taxes_and_charges`
   and `tax_category` fields are not ported.
 
-- **Printer config lives on ProductionUnit as string fields for Phase 6.** Phase 8 owns `PrinterConfig`
+- **Printer config lives on ProductionUnit as string fields for Phase 6.** Phase 12 owns `PrinterConfig`
   as a standalone model. To avoid a cross-phase stub, Phase 6 stores `printer_ip` (CharField),
   `printer_paper_width` (choices), and `printer_cut_mode` (choices) directly on `ProductionUnit`.
-  Phase 8 extracts these into a `PrinterConfig` model and migrates. Documented deviation from URY's
+  Phase 12 extracts these into a `PrinterConfig` model and migrates. Documented deviation from URY's
   child-table `printer_settings` approach.
 
 - **`POSOpeningEntry.pos_profile` is a nullable FK in Phase 6.** ERPNext requires it (`reqd:1`).
@@ -1873,11 +1880,11 @@ Terminal Configuration), A5 partial (Tax template — later removed)
   the orders/printing apps. KOT delay trio (`kot_warning_time`, `notify_kot_delay`,
   `notification_recipients`) dropped — no delay notification feature.
 
-- **Accounting fields kept as CharField, enforcement deferred to Phase 9.** `cost_center`,
+- **Accounting fields kept as CharField, enforcement deferred to Phase 8.** `cost_center`,
   `income_account`, `expense_account`, `write_off_account`, `write_off_cost_center`,
-  `account_for_change_amount` — stored as strings (account names). Phase 9 introduces `LedgerAccount`
+  `account_for_change_amount` — stored as strings (account names). Phase 8 introduces `LedgerAccount`
   and migrates to FK. FEATURES #40 says cost center is mandatory — Phase 6 keeps the field optional
-  with a documented deviation (no model to FK to yet); Phase 9 enforces mandatory.
+  with a documented deviation (no model to FK to yet); Phase 8 enforces mandatory.
 
 - **`currency` defaults to "NGN".** Single-currency. `selling_price_list` kept as nullable
   FK to `menu.PriceList` for ERPNext alignment, but Phase 7 resolves pricing from the active menu
@@ -1889,7 +1896,7 @@ Terminal Configuration), A5 partial (Tax template — later removed)
 - **`utm_source`, `utm_campaign`, `utm_medium`, `ignore_pricing_rule`, `letter_head`, `tc_name`,
   `select_print_heading` dropped.** Marketing analytics irrelevant to a local restaurant POS / no
   ERPNext pricing-rule engine / ERPNext print cosmetics. `print_format` kept (consumed by URY API;
-  Phase 8 defines RestPOS print formats).
+  Phase 12 defines RestPOS print formats).
 
 #### Models (6 total)
 
@@ -1903,7 +1910,7 @@ All models extend `apps.utils.models.BaseModel`.
 | is_default | BooleanField, default=False | ERPNext `is_default` | one default per company enforced in `clean()` |
 | disabled | BooleanField, default=False | ERPNext `disabled` | disabled templates can't be assigned |
 | company | CharField, max_length=200, required | ERPNext `company` | defaults from `Restaurant.company` in `clean()`; no Company model |
-| tax_category | CharField, max_length=100, blank=True | ERPNext `tax_category` | Phase 9 migrates to FK; uniqueness enforced in `clean()` |
+| tax_category | CharField, max_length=100, blank=True | ERPNext `tax_category` | Phase 8 migrates to FK; uniqueness enforced in `clean()` |
 
 **Methods:**
 - `__str__` returns `title`
@@ -1919,9 +1926,9 @@ All models extend `apps.utils.models.BaseModel`.
 | tax_template | ForeignKey→TaxTemplate, on_delete=CASCADE, related_name="rates" | ERPNext `taxes` | |
 | charge_type | CharField, max_length=30, choices: ACTUAL / ON_NET_TOTAL / ON_PREVIOUS_ROW_AMOUNT / ON_PREVIOUS_ROW_TOTAL / ON_ITEM_QUANTITY, default=ON_NET_TOTAL | ERPNext `charge_type` | |
 | rate | DecimalField, max_digits=8, decimal_places=4, default=0 | ERPNext `rate` | percentage for ON_NET_TOTAL |
-| account_head | CharField, max_length=200, required | ERPNext `account_head` | account name string; Phase 9 migrates to FK→LedgerAccount |
+| account_head | CharField, max_length=200, required | ERPNext `account_head` | account name string; Phase 8 migrates to FK→LedgerAccount |
 | description | CharField, max_length=255, required | ERPNext `description` | |
-| cost_center | CharField, max_length=200, blank=True | ERPNext `cost_center` | Phase 9 migrates to FK |
+| cost_center | CharField, max_length=200, blank=True | ERPNext `cost_center` | Phase 8 migrates to FK |
 | included_in_print_rate | BooleanField, default=False | ERPNext `included_in_print_rate` | |
 | row_id | PositiveIntegerField, null=True, blank=True | ERPNext `row_id` | for previous-row charge types |
 
@@ -1942,14 +1949,14 @@ All models extend `apps.utils.models.BaseModel`.
 | currency | CharField, max_length=3, default="NGN" | ERPNext core | single-currency |
 | selling_price_list | ForeignKey→menu.PriceList, on_delete=SET_NULL, null=True, blank=True, related_name="pos_profiles" | ERPNext core | Phase 7 resolves from active menu |
 | taxes_and_charges | — | dropped | tax template lives on Restaurant only, not POSProfile |
-| tax_category | CharField, max_length=100, blank=True | ERPNext core | Phase 9 |
-| cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 9 migrates to FK; FEATURES #40 mandatory deferred |
-| income_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
-| expense_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
-| write_off_account | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
-| write_off_cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| tax_category | CharField, max_length=100, blank=True | ERPNext core | Phase 8 |
+| cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 8 migrates to FK; FEATURES #40 mandatory deferred |
+| income_account | CharField, max_length=200, blank=True | ERPNext core | Phase 8 |
+| expense_account | CharField, max_length=200, blank=True | ERPNext core | Phase 8 |
+| write_off_account | CharField, max_length=200, blank=True | ERPNext core | Phase 8 |
+| write_off_cost_center | CharField, max_length=200, blank=True | ERPNext core | Phase 8 |
 | write_off_limit | DecimalField, max_digits=12, decimal_places=2, default=Decimal("1.00") | ERPNext core | FEATURES #23 |
-| account_for_change_amount | CharField, max_length=200, blank=True | ERPNext core | Phase 9 |
+| account_for_change_amount | CharField, max_length=200, blank=True | ERPNext core | Phase 8 |
 | set_grand_total_to_default_mop | BooleanField, default=True | ERPNext core | FEATURES #25 |
 | action_on_new_invoice | CharField, max_length=40, choices: ALWAYS_ASK / SAVE_AND_LOAD_NEW / DISCARD_AND_LOAD_NEW, default=ALWAYS_ASK | ERPNext core | FEATURES #24 |
 | validate_stock_on_save | BooleanField, default=False | ERPNext core | |
@@ -1966,8 +1973,8 @@ All models extend `apps.utils.models.BaseModel`.
 | kot_naming_series | CharField, max_length=50, default="KOT-####" | URY `custom_kot_naming_series` | FEATURES #27; consumed in Phase 7 |
 | reset_order_number_daily | BooleanField, default=False | URY `custom_reset_order_number_daily` | FEATURES #30 |
 | enable_kot_reprint | BooleanField, default=False | URY `custom_enable_kot_reprint` | FEATURES #28 |
-| reprint_kot_format | CharField, max_length=100, blank=True | URY `custom_reprint_kot_format` | Phase 8 defines print formats |
-| print_format | CharField, max_length=100, blank=True | ERPNext core | Phase 8 defines |
+| reprint_kot_format | CharField, max_length=100, blank=True | URY `custom_reprint_kot_format` | Phase 12 defines print formats |
+| print_format | CharField, max_length=100, blank=True | ERPNext core | Phase 12 defines |
 | applicable_users | ManyToManyField→CustomUser, through=POSProfileUser, related_name="pos_profiles", blank=True | ERPNext core child | |
 | payments | ManyToManyField→payments.ModeOfPayment, through=POSProfilePayment, related_name="pos_profiles", blank=True | ERPNext core child | |
 | item_groups | ManyToManyField→inventory.ItemGroup, related_name="pos_profiles", blank=True | ERPNext core child | empty = all groups visible |
@@ -2028,7 +2035,7 @@ All models extend `apps.utils.models.BaseModel`.
 | warehouse | ForeignKey→inventory.Warehouse, on_delete=PROTECT, related_name="production_units" | URY `fetch_from pos_profile.warehouse` | stored (denormalized); auto-set from `pos_profile.warehouse` in `save()` if blank |
 | department | CharField, max_length=10, choices: FOOD / DRINKS, required | RestPOS-specific | drives ticket routing per FEATURES #14 |
 | block_takeaway_kot | BooleanField, default=False | URY `custom_block_takeaway_kot` (on printer settings) | FEATURES #15 — suppresses ticket for takeaway orders |
-| printer_ip | CharField, max_length=50, blank=True | RestPOS-specific (replaces URY `printer_settings` child) | LAN printer static IP; Phase 8 migrates to FK→PrinterConfig |
+| printer_ip | CharField, max_length=50, blank=True | RestPOS-specific (replaces URY `printer_settings` child) | LAN printer static IP; Phase 12 migrates to FK→PrinterConfig |
 | printer_paper_width | CharField, max_length=10, choices: WIDTH_58MM / WIDTH_80MM, default=WIDTH_80MM | RestPOS-specific | ESC/POS paper width |
 | printer_cut_mode | CharField, max_length=15, choices: FULL_CUT / PARTIAL_CUT / NO_CUT, default=FULL_CUT | RestPOS-specific | ESC/POS cut mode |
 
@@ -2043,7 +2050,7 @@ All models extend `apps.utils.models.BaseModel`.
 - `item_groups` child table (RestPOS routes by department, not item groups)
 - `enable_order_type_wise_display_on_mosaic` (KDS/Mosaic out of scope)
 - `order_type` child table (KDS out of scope)
-- `printer_settings` child table (folded into `printer_*` fields; Phase 8 may extract)
+- `printer_settings` child table (folded into `printer_*` fields; Phase 12 may extract)
 
 #### Cross-app migration: add `pos_profile` FK to `POSOpeningEntry`
 
@@ -2189,7 +2196,7 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 | Deviation | Reason |
 |---|---|
 | TaxTemplate attached to Restaurant only (not POSProfile) | ERPNext = per-profile; URY = per-restaurant. RestPOS uses restaurant-only — simpler for a single-site restaurant. POSProfile `taxes_and_charges` and `tax_category` dropped. |
-| Printer config as string fields on ProductionUnit (not child table) | Phase 8 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 8 migrates. |
+| Printer config as string fields on ProductionUnit (not child table) | Phase 12 owns PrinterConfig model; storing strings now avoids a cross-phase stub. Phase 12 migrates. |
 | `POSOpeningEntry.pos_profile` nullable (not required) | Phase 5 entries predate POSProfile. ERPNext requires it; Phase 7 may enforce NOT NULL. |
 | Role-permission M2Ms and KOT delay trio dropped from POSProfile | Cashier-only POS; no waiter/table-order role split, no transfer roles, no KOT delay alerts (#36–#38, #59, #74). |
 | `POSProfileUser` and `POSProfilePayment` as through models (not child tables) | Django M2M-through pattern; preserves per-row flags (`is_default`, `is_main_cashier`, `allow_in_returns`). `POSProfileUser` dropped in single-profile refactor. |
@@ -2199,7 +2206,7 @@ Register all 6 models with `list_display`, `list_filter`, `search_fields`, `list
 | `item_groups` child on ProductionUnit dropped | RestPOS routes by department flag, not item-group mappings (FEATURES #14). |
 | Aggregator Settings, QZ printing, KDS/Mosaic, KOT audio alert dropped | Out of scope per AGENTS.md. |
 | `customer`, `customer_groups`, `utm_*`, `ignore_pricing_rule`, `letter_head`, `tc_name`, `select_print_heading` dropped | No Customer model / irrelevant to local restaurant POS / ERPNext print cosmetics. |
-| Accounting fields (`cost_center`, `income_account`, etc.) as CharField, optional | Phase 9 introduces `LedgerAccount` and migrates to FK; FEATURES #40 mandatory deferred. |
+| Accounting fields (`cost_center`, `income_account`, etc.) as CharField, optional | Phase 8 introduces `LedgerAccount` and migrates to FK; FEATURES #40 mandatory deferred. |
 | `currency` hardcoded to "NGN" default | Single-currency. |
 | `selling_price_list` kept but Phase 7 ignores it | ERPNext alignment; RestPOS resolves pricing from active menu. |
 | `restaurant` field on POSProfile auto-set from branch | URY has it as user-selected; RestPOS single-site auto-derives. |
@@ -2483,7 +2490,7 @@ original order, negative qty, cannot exceed quantity sold).
 
 **Return flow (backoffice):**
 - `make_return()` — manager creates a draft return mirroring the submitted paid order's lines as
-  negative qty, referencing `return_against`; submit follows the refund flow (Phase 12 completes
+  negative qty, referencing `return_against`; submit follows the refund flow (Phase 11 completes
   the GL postings).
 
 #### Views & URLs — POS (current)
@@ -2579,7 +2586,7 @@ status badges, empty states.
 | POS screen is full-screen with inline shift open | URY gates POS with backoffice "Switch to Desk"; RestPOS puts shift open inline (Phase 5 decision) |
 | Payment dialog is inline (HTMX partial) not a separate page | Better POS UX — cashier never leaves the order screen |
 | No `Order.waiter` field; no captain/waiter transfer; no waiter login | Waiters use physical dockets only. Cashier enters all orders and runs all POS activities. URY models waiters as system users (#59, #180, #189) — RestPOS does not. |
-| Table transfer, KOT reprint (real transport), duplicate detection deferred (Phase 8) | Core flow first; printer transport is Phase 8 |
+| Table transfer, KOT reprint (real transport), duplicate detection deferred (Phase 12) | Core flow first; printer transport is Phase 12 |
 | No KOT delay config or role-permission M2Ms on POSProfile | Cashier-only POS; delay alerts and waiter/table role gates not used |
 | No cashier % discount; no `Order.discount_amount`; no `enable_discount` / `apply_discount_on` / `allow_discount_change` | URY cashier discount dropped. Future coupon system will re-introduce discounts with fixed % codes, not free-form cashier entry. |
 | No `allow_partial_payment` / `allow_rate_change` | Settle requires full payment (underpay rejected). Item rate always from menu — cashier cannot override. |
@@ -2616,21 +2623,10 @@ merged to `main`. The orders app is now complete; the current product fact is §
 
 ---
 
-### 6.8 Printing App (Phase 8)
+### 6.8 Accounting / GL (Phase 8)
 
-**Status:** not started — detailed plan to be written after orders is complete. (A stub
-`apps/orders/printing.py` exists; `KOT.print_status` / ticket reprint flow are wired.)
-
-**FEATURES.md sections:** A8
-**Dependencies:** orders (ticket data to print)
-**Key models:** PrintJob, PrinterConfig (extracted from `ProductionUnit.printer_*` fields)
-**Reference doctypes to consult:** URY Printer Settings, Network Printer Settings, URY print hooks
-
----
-
-### 6.9 Accounting / GL (Phase 9)
-
-**Status:** not started — detailed plan to be written after printing is complete.
+**Status:** not started — first of the remaining phases (orders is complete); detailed plan
+to be written next.
 
 **FEATURES.md sections:** A13 (financial/accounting), A16 (partial — amendment chain)
 **Dependencies:** payments (migrate `PaymentGLMapping.default_account` CharField → FK), orders,
@@ -2642,7 +2638,52 @@ Year, Mode of Payment Account, Write Off
 
 ---
 
-### 6.10 Customer Management (deferred)
+### 6.9 Daily P&L (Phase 9)
+
+**Status:** not started — detailed plan to be written after accounting is complete.
+
+**FEATURES.md sections:** A14, C (departmental P&L)
+**Dependencies:** accounting (GL/COGS), inventory (Kitchen consumption), orders (sales)
+**Key models:** DailyP&L, P&LLineItem, P&LAmendment
+**Reference doctypes to consult:** URY Daily P&L, URY P&L doctypes (materials, COGS, expenses)
+
+---
+
+### 6.10 Reports (Phase 10)
+
+**Status:** not started — detailed plan to be written after P&L is complete.
+
+**FEATURES.md sections:** A15, C (departmental daily reports)
+**Dependencies:** all apps
+**Key models:** query-based (no persistent aggregates unless needed)
+**Reference doctypes to consult:** ERPNext Sales Invoice reports, Stock Ledger reports
+
+---
+
+### 6.11 Refunds Completion (Phase 11)
+
+**Status:** not started — detailed plan to be written after reports is complete.
+
+**FEATURES.md sections:** A18
+**Dependencies:** orders, payments, inventory, accounting (GL reversal)
+**Key models:** RefundEntry, RefundPaymentEntry, RefundStockEntry (may be part of orders app)
+**Reference doctypes to consult:** ERPNext Payment Entry (reversal), Stock Ledger Entry (positive)
+
+---
+
+### 6.12 Printing App (Phase 12)
+
+**Status:** not started — detailed plan to be written last, after refunds completion. (A stub
+`apps/orders/printing.py` exists; `KOT.print_status` / ticket reprint flow are wired.)
+
+**FEATURES.md sections:** A8
+**Dependencies:** orders (ticket data to print)
+**Key models:** PrintJob, PrinterConfig (extracted from `ProductionUnit.printer_*` fields)
+**Reference doctypes to consult:** URY Printer Settings, Network Printer Settings, URY print hooks
+
+---
+
+### 6.13 Customer Management (deferred)
 
 **Status:** deferred — not part of the core phases (8–12). Detailed plan to be written when
 this is picked up later.
@@ -2654,7 +2695,7 @@ this is picked up later.
 
 ---
 
-### 6.10b Coupon Engine (deferred)
+### 6.13b Coupon Engine (deferred)
 
 **Status:** deferred — not part of the core phases (8–12). Detailed plan to be written when
 this is picked up later.
@@ -2663,39 +2704,6 @@ this is picked up later.
 **Dependencies:** orders, payments
 **Key models:** CouponCode, pricing rule
 **Reference doctypes to consult:** ERPNext Coupon Code, Pricing Rule
-
----
-
-### 6.11 Daily P&L (Phase 10)
-
-**Status:** not started — detailed plan to be written after accounting is complete.
-
-**FEATURES.md sections:** A14, C (departmental P&L)
-**Dependencies:** accounting (GL/COGS), inventory (Kitchen consumption), orders (sales)
-**Key models:** DailyP&L, P&LLineItem, P&LAmendment
-**Reference doctypes to consult:** URY Daily P&L, URY P&L doctypes (materials, COGS, expenses)
-
----
-
-### 6.12 Reports (Phase 11)
-
-**Status:** not started — detailed plan to be written after P&L is complete.
-
-**FEATURES.md sections:** A15, C (departmental daily reports)
-**Dependencies:** all apps
-**Key models:** query-based (no persistent aggregates unless needed)
-**Reference doctypes to consult:** ERPNext Sales Invoice reports, Stock Ledger reports
-
----
-
-### 6.13 Refunds Completion (Phase 12)
-
-**Status:** not started — detailed plan to be written after reports is complete.
-
-**FEATURES.md sections:** A18
-**Dependencies:** orders, payments, inventory, accounting (GL reversal)
-**Key models:** RefundEntry, RefundPaymentEntry, RefundStockEntry (may be part of orders app)
-**Reference doctypes to consult:** ERPNext Payment Entry (reversal), Stock Ledger Entry (positive)
 
 ---
 
@@ -2963,7 +2971,7 @@ The cashier cancels it and creates a new order instead of generating `Order Modi
 
 **Confirmed receipt-printing deviation:** Receipt printing is optional for both Dine In and Take
 Away draft orders. Payment does not depend on printing; the current draft screen offers print and
-reprint actions, while the in-process stub remains until Phase 8.
+reprint actions, while the in-process stub remains until Phase 12.
 
 ### 6.18 Orders Backoffice Control Room
 
@@ -3283,7 +3291,12 @@ and the existing `data-logout-link` behavior is preserved.
 
 ### 6.23 Paid-Order Ticket Guarantee — Auto Ticket Creation on Settlement (deviation)
 
-**Status:** planned — ready to implement.
+**Status:** complete — implemented 2026-08-15. `settle_order` auto-creates and dispatches
+departmental tickets when an order has none; `pos_order_ticket_print` retry/reprint now
+accepts SUBMITTED orders; `order_history_detail.html` shows retry actions for pending
+NEW_ORDER tickets on paid orders; seven tests in `POSSettleTest` cover the guarantee.
+(`ExpectedClosingAmountsTest`/`SubmitClosingEntryTest` fixtures in `apps/staff/tests/`
+gained a FOOD `ProductionUnit` — their settle calls now require one.)
 
 **Client decision:** a paid (SUBMITTED) order must always have a kitchen/bar ticket record for
 every production unit its items belong to. Ticket creation at settlement is mandatory — it is

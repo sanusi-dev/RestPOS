@@ -1006,7 +1006,7 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
         order = get_object_or_404(
             Order.objects.select_for_update(),
             pk=pk,
-            status__in=[DRAFT, CANCELLED],
+            status__in=[DRAFT, CANCELLED, SUBMITTED],
             is_return=False,
             opening_entry=shift,
         )
@@ -1020,14 +1020,14 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
         if ticket is None:
             if order.status == DRAFT:
                 return _render_cart(request, order, error=f"No {ticket_type} ticket is ready for that action.")
-            messages.error(request, f"No {ticket_type} cancellation ticket is ready for that action.")
+            messages.error(request, f"No {ticket_type} ticket is ready for that action.")
             return redirect("pos:pos_order_history_detail", pk=order.pk)
 
     order = Order.objects.get(pk=pk)
     if services.dispatch_tickets([ticket]):
         feedback = {"ticket_print_error": ticket_type, "ticket_print_action": action}
         if order.status != DRAFT:
-            messages.error(request, f"{ticket_type.title()} cancellation ticket failed to print. Try again.")
+            messages.error(request, f"{ticket_type.title()} ticket failed to print. Try again.")
     else:
         messages.success(request, f"{ticket_type.title()} ticket {'reprinted' if action == 'reprint' else 'retried'}.")
 
@@ -1098,11 +1098,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
             "date_filter": date_filter,
             "allow_full_history": allow_full_history,
             "shift": open_shift,
-            "draft_count": (
-                Order.objects.open_drafts(open_shift).count()
-                if open_shift
-                else 0
-            ),
+            "draft_count": (Order.objects.open_drafts(open_shift).count() if open_shift else 0),
             "show_order_tabs": True,
             "pos_nav": "history",
         },
@@ -1122,9 +1118,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     open_shift = _get_open_shift()
     context = {
         "order": order,
-        "draft_count": (
-            Order.objects.open_drafts(open_shift).count() if open_shift else 0
-        ),
+        "draft_count": (Order.objects.open_drafts(open_shift).count() if open_shift else 0),
         "show_order_tabs": _is_htmx(request),
         "pos_nav": "history",
         "kitchen_status": _get_kitchen_status(order),

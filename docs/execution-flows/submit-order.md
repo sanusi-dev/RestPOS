@@ -14,6 +14,7 @@ Pay button
   -> atomic lock Order and active shift
   -> validate current lines and rounded totals
   -> validate DRINKS bins and payment modes
+  -> ticket guarantee: if no KOTs exist, create and dispatch them (see below)
   -> create OrderPayment rows
   -> set paid/change/is_paid/status/submitted_at
   -> convert DRINKS reservations to POS Order SLEs
@@ -29,6 +30,10 @@ The service rejects non-draft/return/empty orders, revalidates current Item/Menu
 ## Totals and Payments
 
 Line amounts are summed into `net_total` and `grand_total`; `rounded_total` is whole-unit half-up. Settlement changes `grand_total` to the rounded value. Total payment must cover it. Cash may create change; non-cash overpayment is rejected.
+
+## Paid-Order Ticket Guarantee
+
+A paid (SUBMITTED) order must always have a kitchen/bar ticket record for every production unit its items belong to. When the order has no KOTs at settlement, the service plans tickets with the same departmental routing as the send action (`_plan_tickets`: production-unit lookup, takeaway `block_takeaway_kot` skip), then builds immutable NEW_ORDER KOT/BOT snapshots (`_build_ticket_snapshots`) and audits `KOTS_CREATED`. An empty plan (e.g. takeaway where every unit blocks KOTs) settles silently without tickets; a department without a configured production unit raises the same `ValidationError` as the send button and blocks settlement. `dispatch_tickets` runs inside the settlement, but a print failure never blocks it — the ticket stays `PENDING` and is retried from order history.
 
 ## Atomicity
 

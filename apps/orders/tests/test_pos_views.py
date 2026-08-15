@@ -1010,6 +1010,120 @@ class POSSettleTest(POSViewTestBase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "DRAFT")
 
+    def test_settle_auto_creates_tickets(self):
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+        self.assertEqual(self.order.kots.count(), 1)
+        kot = self.order.kots.get()
+        self.assertEqual(kot.type, "New Order")
+        self.assertEqual(kot.print_status, "PRINTED")
+        self.assertEqual(kot.created_by, self.user)
+        self.assertEqual(kot.order_number, self.order.order_number)
+        events = list(self.order.audit_events.order_by("pk").values_list("event_type", flat=True))
+        self.assertIn("KOTS_CREATED", events)
+        self.assertEqual(events[-1], "SUBMITTED")
+
+    def test_settle_existing_tickets_no_duplicates(self):
+        self.client.post(reverse("pos:pos_order_sync", kwargs={"pk": self.order.pk}))
+        ticket_count = self.order.kots.count()
+        self.assertEqual(ticket_count, 1)
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+        self.assertEqual(self.order.kots.count(), ticket_count)
+
+    def test_settle_skips_when_no_ticket_required(self):
+        production_unit = ProductionUnit.objects.get(department="FOOD")
+        production_unit.block_takeaway_kot = True
+        production_unit.save(update_fields=["block_takeaway_kot"])
+        order = Order.objects.create(
+            order_type="TAKE_AWAY",
+            opening_entry=POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED).first(),
+        )
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": order.pk}), {f"payment_{self.cash.pk}": "1500"}
+        )
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "SUBMITTED")
+        self.assertEqual(order.kots.count(), 0)
+
+    def test_settle_missing_production_unit_blocks(self):
+        ProductionUnit.objects.filter(department="FOOD").delete()
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "DRAFT")
+        self.assertEqual(self.order.payments.count(), 0)
+        self.assertEqual(self.order.kots.count(), 0)
+
+    def test_retry_submitted_pending_ticket(self):
+        with patch(
+            "apps.orders.services.printing.print_ticket",
+            return_value=PrintResult(success=False, ticket_type="kitchen"),
+        ):
+            response = self.client.post(
+                reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+            )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        kot = self.order.kots.get()
+        self.assertEqual(kot.print_status, "PENDING")
+        response = self.client.post(
+            reverse(
+                "pos:pos_order_ticket_print",
+                kwargs={"pk": self.order.pk, "ticket_type": "kitchen", "action": "retry"},
+            )
+        )
+        self.assertEqual(response.status_code, 302)
+        kot.refresh_from_db()
+        self.assertEqual(kot.print_status, "PRINTED")
+
+    def test_retry_submitted_no_pending_ticket(self):
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(
+            reverse(
+                "pos:pos_order_ticket_print",
+                kwargs={"pk": self.order.pk, "ticket_type": "kitchen", "action": "retry"},
+            ),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No kitchen ticket is ready for that action.")
+
+    def test_history_detail_retry_button_submitted(self):
+        with patch(
+            "apps.orders.services.printing.print_ticket",
+            return_value=PrintResult(success=False, ticket_type="kitchen"),
+        ):
+            self.client.post(
+                reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+            )
+        self.order.refresh_from_db()
+        response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": self.order.pk}))
+        self.assertContains(response, "Retry kitchen ticket")
+        self.client.post(
+            reverse(
+                "pos:pos_order_ticket_print",
+                kwargs={"pk": self.order.pk, "ticket_type": "kitchen", "action": "retry"},
+            )
+        )
+        response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": self.order.pk}))
+        self.assertNotContains(response, "Retry kitchen ticket")
+
 
 class POSCancelTest(POSViewTestBase):
     def setUp(self):

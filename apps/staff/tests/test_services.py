@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.orders.models import Order
 from apps.orders.services import add_order_line, settle_order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
-from apps.settings.models import Restaurant
+from apps.settings.models import ProductionUnit, Restaurant
 from apps.users.models import CustomUser
 
 from ..models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
@@ -21,12 +21,8 @@ class OpenShiftTest(TestCase):
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        cls.card, _ = ModeOfPayment.objects.get_or_create(
-            name="Card", defaults={"type": "BANK", "enabled": True}
-        )
-        PaymentGLMapping.objects.get_or_create(
-            mode_of_payment=cls.card, defaults={"default_account": "Bank Account"}
-        )
+        cls.card, _ = ModeOfPayment.objects.get_or_create(name="Card", defaults={"type": "BANK", "enabled": True})
+        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.card, defaults={"default_account": "Bank Account"})
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
 
     def test_opens_shift_with_float_and_remarks(self):
@@ -66,6 +62,7 @@ class ExpectedClosingAmountsTest(TestCase):
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
         cls.card, _ = ModeOfPayment.objects.get_or_create(name="Card", defaults={"type": "BANK", "enabled": True})
         for mode in (cls.cash, cls.card):
@@ -77,9 +74,7 @@ class ExpectedClosingAmountsTest(TestCase):
         OpeningPayment.objects.create(
             opening_entry=cls.opening, mode_of_payment=cls.cash, opening_amount=Decimal("50000")
         )
-        OpeningPayment.objects.create(
-            opening_entry=cls.opening, mode_of_payment=cls.card, opening_amount=Decimal("0")
-        )
+        OpeningPayment.objects.create(opening_entry=cls.opening, mode_of_payment=cls.card, opening_amount=Decimal("0"))
         cls.opening.submit()
 
     def _expected_rows(self):
@@ -128,10 +123,9 @@ class SubmitClosingEntryTest(TestCase):
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(
-            mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"}
-        )
+        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
         cls.opening = POSOpeningEntry.objects.create(cashier=cls.user)
         OpeningPayment.objects.create(
@@ -145,9 +139,7 @@ class SubmitClosingEntryTest(TestCase):
         settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "1500"}], cashier=self.user)
 
         closing = POSClosingEntry.objects.create(opening_entry=self.opening, cashier=self.user)
-        ClosingPayment.objects.create(
-            closing_entry=closing, mode_of_payment=self.cash, closing_amount=Decimal("51200")
-        )
+        ClosingPayment.objects.create(closing_entry=closing, mode_of_payment=self.cash, closing_amount=Decimal("51200"))
         submit_closing_entry(closing)
 
         closing.refresh_from_db()

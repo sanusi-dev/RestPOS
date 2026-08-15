@@ -220,6 +220,15 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
 
     if locked.order_number is None:
         locked.assign_order_number()
+    if not locked.kots.exists():
+        planned_tickets, missing_departments = _plan_tickets(locked)
+        if missing_departments:
+            labels = ", ".join("Food" if department == "FOOD" else "Drinks" for department in missing_departments)
+            raise ValidationError(f"Configure a production unit before sending: {labels}.")
+        if planned_tickets:
+            created = _build_ticket_snapshots(locked, planned_tickets, created_by=cashier)
+            locked.audit("KOTS_CREATED", actor=cashier, metadata={"count": len(created)})
+            dispatch_tickets(created)
     locked._settling = True
     try:
         for row in payment_rows:
@@ -526,6 +535,21 @@ def create_tickets(order, created_by=None):
     if locked.order_number is None:
         locked.assign_order_number()
 
+    planned_tickets, missing_departments = _plan_tickets(locked)
+
+    if missing_departments:
+        labels = ", ".join("Food" if department == "FOOD" else "Drinks" for department in missing_departments)
+        raise ValidationError(f"Configure a production unit before sending: {labels}.")
+    if not planned_tickets:
+        raise ValidationError("No kitchen or bar ticket is required for this order.")
+    created = _build_ticket_snapshots(locked, planned_tickets, created_by=created_by)
+
+    locked.audit("KOTS_CREATED", actor=created_by, metadata={"count": len(created)})
+    return created
+
+
+def _plan_tickets(locked):
+    """Group an order's lines by department and resolve each department's production unit."""
     from apps.settings.models import ProductionUnit
 
     items_by_department = {}
@@ -543,14 +567,12 @@ def create_tickets(order, created_by=None):
             missing_departments.append(department)
             continue
         planned_tickets.append((department, order_items, production_unit))
+    return planned_tickets, missing_departments
 
-    if missing_departments:
-        labels = ", ".join("Food" if department == "FOOD" else "Drinks" for department in missing_departments)
-        raise ValidationError(f"Configure a production unit before sending: {labels}.")
-    if not planned_tickets:
-        raise ValidationError("No kitchen or bar ticket is required for this order.")
+
+def _build_ticket_snapshots(locked, planned_tickets, *, created_by):
+    """Create the immutable KOT/KOTItem snapshots for the planned tickets."""
     created = []
-
     for department, order_items, production_unit in planned_tickets:
         ticket_type = _ticket_type_for_department(department)
         # Same temporary-number dance as cancellation tickets: the final
@@ -581,8 +603,6 @@ def create_tickets(order, created_by=None):
             ]
         )
         created.append(kot)
-
-    locked.audit("KOTS_CREATED", actor=created_by, metadata={"count": len(created)})
     return created
 
 

@@ -33,4 +33,4 @@ The endpoint accepts any submitted, cancelled, or discarded order by primary key
 
 ## Reprints and Ticket Retry
 
-Submitted order receipt reprint POSTs `pos_order_history_print`. Pending cancellation tickets use `pos_order_ticket_print` retry. Ticket retry still requires an active shift, so a closed-shift history user can be redirected to the POS gate.
+Submitted order receipt reprint POSTs `pos_order_history_print`. Pending cancellation tickets and pending NEW_ORDER tickets on submitted orders use `pos_order_ticket_print` retry, with retry forms rendered in the detail header for each pending ticket. Ticket retry still requires an active shift, so a closed-shift history user can be redirected to the POS gate.

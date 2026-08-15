@@ -21,9 +21,13 @@ This ordering means a failed physical print leaves the order marked printed and 
 
 Food routes to the FOOD ProductionUnit; drinks route to DRINKS. Cancellation creates a new cancellation ticket per station, while original tickets become cancelled. Cancellation-ticket printing can fail independently after order cancellation has committed.
 
+`settle_order()` guarantees ticket records: when a settling order has no KOTs, it plans tickets with the same departmental routing (`_plan_tickets`) and builds NEW_ORDER snapshots (`_build_ticket_snapshots`), then dispatches them inside the settlement transaction. Print failure never blocks settlement — the ticket stays `PENDING` for retry.
+
 ## Retry and Reprint
 
-`pos_order_ticket_print()` accepts `retry` for pending tickets and `reprint` for printed tickets. Reprint is manager/admin/superuser-only. The selected ticket is locked and selected in a transaction; the physical call occurs afterward. Historical receipt reprint accepts submitted orders and does not update `invoice_printed` metadata.
+`pos_order_ticket_print()` accepts `retry` for pending tickets and `reprint` for printed tickets, on draft, cancelled, and submitted orders. Reprint is manager/admin/superuser-only. The selected ticket is locked and selected in a transaction; the physical call occurs afterward. Historical receipt reprint accepts submitted orders and does not update `invoice_printed` metadata.
+
+On a submitted order, the history detail screen shows a "Retry kitchen/bar ticket" action for each pending NEW_ORDER ticket.
 
 ## Templates
 

@@ -42,6 +42,24 @@
             {% endif %}
           {% endfor %}
         {% endif %}
+        {% if order.status == "SUBMITTED" %}
+          {% for ticket in order.kots.all %}
+            {% if ticket.type == "New Order" and ticket.print_status == "PENDING" %}
+            <form method="post" action="{% url 'pos:pos_order_ticket_print' order.pk ticket.ticket_type 'retry' %}" x-data="{ processing: false }" @submit="processing = true">
+              {% csrf_token %}
+              <button type="submit" :disabled="processing"
+                      class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-bold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60">
+                <svg class="hidden h-4 w-4 animate-spin" x-show="processing" x-cloak fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="flex size-4 items-center justify-center" x-show="!processing">{% hgi_stroke name="printer" size="17" color="currentColor" stroke_width="2" %}</span>
+                <span x-show="!processing">Retry {{ ticket.ticket_type }} ticket</span>
+              </button>
+            </form>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
       </div>
     </div>
 
