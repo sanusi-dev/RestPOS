@@ -212,7 +212,9 @@ class OrderItemTest(OrderTestBase):
     def test_clear_and_delete_release_drink_reservation(self):
         order = self._create_order()
         add_order_line(order, self.item2, qty=2, rate=Decimal("500"))
-        clear_order_lines(order, )
+        clear_order_lines(
+            order,
+        )
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
 
         add_order_line(order, self.item2, qty=3, rate=Decimal("500"))
@@ -225,7 +227,9 @@ class OrderItemTest(OrderTestBase):
         Warehouse.objects.filter(pk=self.warehouse.pk).update(disabled=True)
         order.refresh_from_db()
 
-        clear_order_lines(order, )
+        clear_order_lines(
+            order,
+        )
 
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
         self.assertIsNone(order.stock_warehouse_id)

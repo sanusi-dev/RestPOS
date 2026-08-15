@@ -42,17 +42,13 @@ def submit_stock_entry(entry):
         food_unit = units.get(ProductionUnit.FOOD)
         drinks_unit = units.get(ProductionUnit.DRINKS)
         if not food_unit or food_unit.warehouse.disabled:
-            raise ValidationError(
-                "Configure an enabled Kitchen production unit warehouse before transferring stock."
-            )
+            raise ValidationError("Configure an enabled Kitchen production unit warehouse before transferring stock.")
         if (
             not drinks_unit
             or drinks_unit.warehouse.disabled
             or drinks_unit.warehouse_id != restaurant.default_warehouse_id
         ):
-            raise ValidationError(
-                "Configure the Drinks production unit to use the enabled Bar / POS sales warehouse."
-            )
+            raise ValidationError("Configure the Drinks production unit to use the enabled Bar / POS sales warehouse.")
         if (
             restaurant.store_warehouse_id
             in {
@@ -200,13 +196,9 @@ def submit_stock_reconciliation(reconciliation):
     if locked.reason == "CONSUMPTION":
         # Consumption write-offs only make sense at the Kitchen
         # warehouse: that's where food stock is used up in cooking.
-        kitchen = (
-            ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
-        )
+        kitchen = ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
         if not kitchen or kitchen.warehouse_id != locked.warehouse_id:
-            raise ValidationError(
-                "Consumption reconciliation is only allowed for the configured Kitchen warehouse."
-            )
+            raise ValidationError("Consumption reconciliation is only allowed for the configured Kitchen warehouse.")
         if any(line.item.department != "FOOD" for line in lines):
             raise ValidationError("Consumption reconciliation accepts FOOD stock items only.")
 

@@ -149,10 +149,7 @@ def submit_closing_entry(closing):
     # Drafts block the close above; returns are excluded because they are
     # handled by the deferred refund flow rather than drawer sales.
     item_totals = (
-        OrderItem.objects.filter(order_id=OuterRef("pk"))
-        .values("order_id")
-        .annotate(total=Sum("qty"))
-        .values("total")
+        OrderItem.objects.filter(order_id=OuterRef("pk")).values("order_id").annotate(total=Sum("qty")).values("total")
     )
     order_totals = submitted_orders.aggregate(
         total_quantity=Sum(Subquery(item_totals)),

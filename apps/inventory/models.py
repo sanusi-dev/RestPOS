@@ -420,6 +420,7 @@ class StockEntry(BaseModel):
             _assert_document_is_draft(self, action="delete")
         return super().delete(*args, **kwargs)
 
+    @staticmethod
     def stock_ledger_entries_for_voucher(voucher_no):
         return StockLedgerEntry.objects.select_related("item", "warehouse").filter(
             voucher_type="Stock Entry", voucher_no=voucher_no
@@ -643,6 +644,7 @@ class PurchaseReceipt(BaseModel):
             and self.warehouse_id != restaurant.store_warehouse_id
         ):
             raise ValidationError({"warehouse": "Purchase Receipt warehouse must be the configured central Store."})
+
 
 class PurchaseReceiptItem(BaseModel):
     """A single line item of a purchase receipt.
