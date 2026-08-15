@@ -1,13 +1,6 @@
 ---
 name: upgrade-js-deps
 description: Upgrade JavaScript dependencies using npm-check-updates, then run post-upgrade checks to ensure nothing is broken.
-allowed-tools: [
-    Bash(npx npm-check-updates *),
-    Bash(make npm-install *),
-    Bash(make npm-build *),
-    Bash(make npm-type-check *),
-    Bash(make test *),
-]
 ---
 
 ## Your task

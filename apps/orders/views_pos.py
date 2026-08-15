@@ -326,7 +326,6 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
     except ValueError, TypeError:
         guest_count = 1
     guest_count = max(1, min(50, guest_count))
-
     shift = _get_open_shift()
     if shift is None:
         messages.error(request, "Open a shift before taking orders.")

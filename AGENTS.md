@@ -361,12 +361,10 @@ GOOD: (no comment — standard Django pattern)
 
 Load the relevant skill at the start of matching tasks (see `available_skills` in the system prompt):
 
-- Django form or validation logic → `django-forms` (use `{% partialdef %}` not separate `_form.html` files)
-- Django view, model, or ORM query → `django-patterns` (ignore its DRF/REST sections — the project is HTMX only)
-- Any HTMX interaction → `htmx` (its `/api/` URL examples don't apply — RestPOS uses Django view URLs)
 - Any UI component, page, or interface → `frontend-design` (Tailwind only, no DaisyUI)
-- Auth, permissions, or security review → `django-security` (its HTTPS/SSL settings don't apply — the project runs on the local network)
 - mypy type errors → `fix-types`
 - Dependency upgrades → `upgrade-python-deps` or `upgrade-js-deps`
+- Pegasus project config via CLI → `pegasus-projects`
+- Pegasus upgrade → `upgrade-pegasus` then `resolve-pegasus-conflicts` if the merge conflicts
 
 Project skill constraints override conflicting skill content. Activate all relevant skills together.

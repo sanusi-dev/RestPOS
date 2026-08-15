@@ -1,12 +1,6 @@
 ---
 name: upgrade-python-deps
 description: Upgrade Python dependencies using uv, then run post-upgrade checks to ensure nothing is broken.
-allowed-tools: [
-    Bash(uv lock *),
-    Bash(uv sync *),
-    Bash(make test *),
-    Bash(uv run mypy *),
-]
 ---
 
 ## Your task

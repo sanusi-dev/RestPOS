@@ -1,9 +1,6 @@
 ---
 name: fix-types
 description: Interactively fix any type checking issues in Python code
-allowed-tools: [
-    Bash(uv run mypy *),
-]
 ---
 
 ## Your task
