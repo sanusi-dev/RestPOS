@@ -92,7 +92,7 @@ orders → printing (leaf — depends only on orders; built last)
 - `payments core` is standalone (no deps); built before `staff` because `OpeningPayment.mode_of_payment` is a FK to `ModeOfPayment`
 - `staff` needs `settings` (Restaurant) and `payments core` (ModeOfPayment); built before `orders` because orders stamp the active shift
 - `orders` is the central app — needs settings, menu, staff, and payments
-- `accounting` (Phase 8) needs payments (migrate `PaymentGLMapping` → FK), orders (post sales), staff (shift close), inventory (COGS)
+- `accounting` (Phase 8) needs payments (migrate `PaymentGLMapping` → FK), orders (post sales GL at settle), inventory (COGS valuation); shift close consumes aggregates only — no GL at close (§6.8.2.1)
 - `daily P&L` (Phase 9) needs accounting + inventory (COGS) + orders (sales)
 - `reports` (Phase 10) needs everything
 - `refunds completion` (Phase 11) extends orders/payments/inventory/accounting
@@ -128,7 +128,7 @@ orders → printing (leaf — depends only on orders; built last)
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings, payments core | complete (single shared shift; closing sums OrderPayment totals per mode) |
 | 6 | settings R2 | A3, A4, A5 (partial) | ProductionUnit | menu, inventory, payments | complete (merged into Restaurant singleton — §6.14 removed POSProfile/TaxTemplate) |
 | 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, KOT, KOTItem, OrderAuditEvent, OrderSequence | settings, menu, staff, payments | complete (POS workbench, continuous numbering, tickets, drinks-only stock, returns, paid-order ticket guarantee §6.23) |
-| 8 | accounting / GL | A13, A16 (partial) | LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter, write-off; migrate `PaymentGLMapping.default_account` CharField → FK | payments, orders, staff, inventory | not started — first remaining phase; a real LedgerAccount was deferred in §6.4/§6.6 ("Phase 8 introduces a real LedgerAccount") |
+| 8 | accounting / GL | A13, A16 (partial) | LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter, write-off; migrate `PaymentGLMapping.default_account` CharField → FK | payments, orders, staff, inventory | planned — detailed plan in §6.8 (2026-08-15); a real LedgerAccount was deferred in §6.4/§6.6 ("Phase 8 introduces a real LedgerAccount") |
 | 9 | daily P&L | A14, C | DailyP&L, P&L line items (COGS, direct/indirect expenses, electricity, materials, employee costs), P&L amendment, departmental P&L split | all apps | not started |
 | 10 | reports | A15, C | Sales reports (daywise/monthwise/item-wise/service/time/employee), cancelled invoices, stock ledger/balance/ageing, POS register, departmental daily reports | all apps | not started |
 | 11 | refunds completion | A18 | RefundEntry / RefundPaymentEntry (GL reversal), wastage posting, partial returns | orders, payments, inventory | not started — core return data model done in Phase 7 |
@@ -261,6 +261,19 @@ mutating any payment data.
 **Key reference doctypes:** ERPNext POS Invoice, POS Invoice Item, URY Order, URY Order Item, URY
 KOT, URY KOT Items, URY hooks for order/KOT/invoice events
 
+### accounting (Phase 8)
+
+**Scope (current):** The General Ledger. `LedgerAccount` chart of accounts (flat FK tree),
+`GLEntry` (immutable, reversal-only), `JournalEntry` + rows (manual balanced entries, write-off
+voucher type, amendment chain), `FiscalYear`, `CostCenter`. Sales + COGS GL posts at order
+settle and reverses at cancel; `PaymentGLMapping.default_account` migrates CharField → FK.
+No tax GL, no party/receivable legs, no GL for inventory documents or returns yet (§6.8.2).
+
+**Key models:** LedgerAccount, GLEntry, JournalEntry, JournalEntryAccount, FiscalYear, CostCenter
+
+**Key reference doctypes:** ERPNext Account, GL Entry, Journal Entry, Journal Entry Account,
+Cost Center, Fiscal Year; GL composer + `make_reverse_gl_entries`; URY POS invoice/closing hooks
+
 ### printing (Phase 12)
 
 **Scope:** Three thermal printers (cashier USB, kitchen LAN, bar LAN), Python print agent
@@ -274,15 +287,17 @@ hooks
 
 ### accounting / GL (Phase 8)
 
-**Scope:** The General Ledger. A real `LedgerAccount` model (chart of accounts), `GL` / ledger
-entries, `JournalEntry` (manual, balanced), `FiscalYear`, `CostCenter`, and write-off posting.
-Migrate `PaymentGLMapping.default_account` and `TaxRate.account_head` from CharField to FK.
-Post sales/revenue on settlement, payment on close (or consolidation), and reversal on refunds.
+**Scope:** The General Ledger. A real `LedgerAccount` model (chart of accounts), `GLEntry`,
+`JournalEntry` (manual, balanced, write-off type, amendment chain), `FiscalYear`, `CostCenter`.
+Migrate `PaymentGLMapping.default_account` from CharField to FK. Post sales + COGS GL at order
+settle and reverse at cancel (the Order is the accounting document — consolidated Sales
+Invoices at close, #127, deferred; matches URY). Inventory-document GL deferred to Phase 9;
+return/refund GL to Phase 11.
 
-**Key models:** LedgerAccount, JournalEntry, GL entry, FiscalYear, CostCenter
+**Key models:** LedgerAccount, GLEntry, JournalEntry (+ rows), FiscalYear, CostCenter
 
 **Key reference doctypes:** ERPNext Account, GL Entry, Journal Entry, Cost Center, Fiscal Year,
-Mode of Payment Account, Write Off
+Mode of Payment Account; URY `ury_pos_invoice` / `ury_pos_closing_entry` hooks
 
 ### customer management (deferred)
 
@@ -2625,16 +2640,336 @@ merged to `main`. The orders app is now complete; the current product fact is §
 
 ### 6.8 Accounting / GL (Phase 8)
 
-**Status:** not started — first of the remaining phases (orders is complete); detailed plan
-to be written next.
+**Status:** planned — detailed plan written 2026-08-15, ready to implement.
 
-**FEATURES.md sections:** A13 (financial/accounting), A16 (partial — amendment chain)
-**Dependencies:** payments (migrate `PaymentGLMapping.default_account` CharField → FK), orders,
-staff (shift close), inventory (COGS)
-**Key models:** LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter,
-write-off posting
-**Reference doctypes to consult:** ERPNext Account, GL Entry, Journal Entry, Cost Center, Fiscal
-Year, Mode of Payment Account, Write Off
+**FEATURES.md sections:** A13 #132 (GL entries on sales), #133 (write-off, partial), #134 (cost
+center), #135 (fiscal year), #136 (journal entry); A16 #167 (amendment chain, JournalEntry only).
+
+**Dependencies:** payments (migrate `PaymentGLMapping.default_account` CharField → FK), orders
+(settle/cancel GL hooks), inventory (COGS valuation from FIFO, `Warehouse.account` /
+`ItemGroup.*_account` FKs), settings (`Restaurant`/`ProductionUnit` account FKs). Staff shift
+close needs no change — it consumes aggregates only and posts no GL (see §6.8.2.1).
+
+**Key models:** LedgerAccount (chart of accounts), GLEntry, JournalEntry + JournalEntryAccount,
+FiscalYear, CostCenter.
+
+**Reference doctypes consulted:**
+`references/erpnext-develop/erpnext/accounts/doctype/account/account.{json,py}`,
+`gl_entry/gl_entry.{json,py}`, `journal_entry/journal_entry.{json,py}`,
+`cost_center/cost_center.json`, `fiscal_year/fiscal_year.json`,
+`mode_of_payment/mode_of_payment.py`,
+`pos_invoice/pos_invoice.py`, `sales_invoice/sales_invoice.py`,
+`sales_invoice/services/gl_composer.py`, `pos_closing_entry/pos_closing_entry.py`,
+`references/ury-develop/ury/ury/hooks/ury_pos_invoice.py`,
+`references/ury-develop/ury/ury/hooks/ury_pos_closing_entry.py`.
+
+#### 6.8.1 Reference findings
+
+- **ERPNext POS Invoice posts GL on submit** (`sales_invoice.py` `make_gl_entries` →
+  `SalesInvoiceGLComposer.compose`): Dr payment-mode default account per payment row, Cr income
+  account per item (resolved from Item Group → company default), Cr tax accounts, Dr expense
+  (COGS) / Cr stock-in-hand (warehouse account) when `update_stock`, Cr round-off account for
+  `rounding_adjustment` (`gl_composer.py:626-675`). Change handling: by default
+  (`POS Settings.post_change_gl_entries = 0`) the payment row whose account equals
+  `account_for_change_amount` is reduced by `change_amount` instead of posting a separate
+  change entry (`gl_composer.py:473-522`).
+- **Cancel posts mirror reversals, never edits** (`make_reverse_gl_entries`): new negated
+  entries with `is_cancelled=1` on the originals.
+- **URY posts nothing extra** — `ury_pos_invoice.py` / `ury_pos_closing_entry.py` hooks do not
+  create GL; URY rides on core POS Invoice GL. No consolidation in URY: `sub_pos_invoices` is
+  a multi-cashier aggregation child, not a GL consolidation.
+- **POS Closing Entry does not post GL** in ERPNext either; consolidation (#127) is an optional
+  ERPNext (Nigeria) feature for named-customer invoices, absent from URY.
+- **GL Entry validation** (`gl_entry.py` `validate`): exactly one of debit/credit must be
+  non-zero; posting date must fall in a fiscal year (`validate_and_set_fiscal_year`); account
+  must be a leaf, not disabled, not frozen (`validate_account_details`); GL entries are never
+  edited — only cancelled/reversed.
+- **Journal Entry validation** (`journal_entry.py`): rows may not carry both debit and credit
+  (`set_total_debit_credit`); `total_debit - total_credit` must be 0
+  (`validate_total_debit_and_credit`); `amended_from` links the amended copy.
+- **Account validation** (`account.py` `validate`): parent must exist, be a group, and not be
+  the account itself; `root_type`/`report_type` inherit from parent, roots set them explicitly;
+  groups cannot be disabled while they have children (`validate_disabled`); a leaf cannot have
+  children (`validate_group_or_ledger`).
+
+#### 6.8.2 Scope decisions (locked)
+
+1. **Single-tier posting — the Order is the accounting document.** GL posts at order settle
+   and reverses at order cancel, mirroring ERPNext POS Invoice `on_submit`/`on_cancel`.
+   FEATURES #127 (consolidated Sales Invoices at shift close) is deferred: it is an optional
+   ERPNext compliance feature that URY does not implement; the shift close keeps consuming
+   aggregates only. *(Deviation from FEATURES #127, matching URY.)*
+2. **No party ledger.** No `party`/`party_type`/receivable legs on GL entries or journal rows —
+   customer management (A11) is deferred, all sales are walk-in cash/bank. *(Deviation from
+   ERPNext GL Entry fields.)*
+3. **Tax GL deferred.** TaxTemplate/TaxRate were removed in §6.14; no tax system exists. A13
+   #128/#129 stay deferred. *(Deviation — no tax accounts in chart seed.)*
+4. **COGS at settle** from the FIFO outgoing values of the "POS Order" stock deductions created
+   in the same transaction — perpetual-inventory-at-sale, as ERPNext does with `update_stock`.
+5. **Inventory documents post no GL in Phase 8** (purchase receipts, stock entries,
+   reconciliations). Deferred to Phase 9 alongside daily P&L; Phase 8 books therefore cover
+   sales-side entries only. *(Deviation — documented.)*
+6. **Return orders post no GL in Phase 8.** A submitted return has negative items but no
+   refund payment; refund GL arrives with Phase 11 refunds. *(Deviation — documented.)*
+7. **Write-off (A13 #133) as manual JE type.** `voucher_type=WRITE_OFF` + `write_off_amount`
+   field; the GL comes from the JE rows themselves. Auto write-off of small receivable balances
+   needs the customer ledger (deferred). The `Restaurant.write_off_account` /
+   `write_off_cost_center` FKs land now (from the §6.14-removed POSProfile) but are consumed by
+   the JE workflow, not by orders.
+8. **Amendment chain (A16 #167) for JournalEntry only** in Phase 8 — `amended_from` + amend
+   action copying a cancelled JE into a new draft. Order/Payment amendment stays deferred.
+9. **Track changes (A16 #168) for accounting docs deferred** — `OrderAuditEvent` covers orders
+   already; JE audit events are a later phase.
+
+#### 6.8.3 New app: `apps/accounting`
+
+Registered in `restpos/settings.py`, URL namespace `accounting` under
+`backoffice/accounting/` (inherits the middleware backoffice role gate; views also
+`@login_required`). No Django admin registration beyond the other apps' convention.
+
+##### LedgerAccount — ERPNext Account
+
+| Field | Type | ERPNext field | Notes |
+|---|---|---|---|
+| `name` | CharField(200) unique | account_name (as key) | account name is the key, as in ERPNext |
+| `parent` | FK self, PROTECT, null=True, related_name="children" | parent_account | null = root; ERPNext roots have no parent either (top of tree) |
+| `is_group` | BooleanField default False | is_group | |
+| `root_type` | CharField choices ASSET/LIABILITY/EQUITY/INCOME/EXPENSE, blank for non-roots | root_type | required on roots, inherited otherwise |
+| `report_type` | CharField choices BALANCE_SHEET/PROFIT_AND_LOSS, blank | report_type | inherited from parent |
+| `account_type` | CharField choices (trimmed ERPNext list: Cash, Bank, Stock, Receivable, Payable, Income Account, Direct Income, Indirect Income, Expense Account, Direct Expense, Indirect Expense, Cost of Goods Sold, Round Off, Tax, Equity, Temporary, Current Asset, Current Liability, Fixed Asset, Liability, Stock Received But Not Billed, Stock Adjustment) | account_type | full ERPNext list trimmed to restaurant-relevant values |
+| `account_number` | CharField(50) blank | account_number | optional manual numbering |
+| `freeze_account` | BooleanField default False | freeze_account | blocks new GL entries while set |
+| `disabled` | BooleanField default False | disabled | |
+
+Skipped (documented deviations): `company` (single company), `account_currency` +
+currency fields (single NGN), `tax_rate` (no tax), `balance_must_be`, `include_in_gross`,
+`account_category`, Nested Set `lft/rgt/old_parent` (tree ordering via `parent` FK + name
+ordering instead).
+
+Validation (`clean`, ported from `account.py`): parent must be a group; no self-parent; no
+cycles; roots require `root_type`; non-roots inherit `root_type`/`report_type` from parent;
+a group with children cannot be disabled; an account with children cannot become a leaf.
+Deletion: `PROTECT` against `GLEntry`, `JournalEntryAccount`, `PaymentGLMapping`,
+`Warehouse.account`, `ItemGroup.*_account`, `Restaurant`/`ProductionUnit` account FKs; `clean`
+also blocks deletion of any account referenced by a GL entry (ERPNext behavior).
+
+##### FiscalYear — ERPNext Fiscal Year
+
+| Field | Type | ERPNext field |
+|---|---|---|
+| `name` | CharField(10) unique | year |
+| `year_start_date` | DateField | year_start_date |
+| `year_end_date` | DateField | year_end_date |
+| `disabled` | BooleanField default False | disabled |
+| `is_short_year` | BooleanField default False | is_short_year |
+
+Skipped: `companies` child table (single company), `auto_created`. Validation (`clean`):
+`year_end_date > year_start_date` (ERPNext `validate`); enabled years may not overlap (guard
+added because ERPNext's per-company overlap check has no port target in a single-company
+system). `FiscalYear.get_for(date)` classmethod returns the enabled year covering a date or
+raises (ERPNext `get_fiscal_year` behavior).
+
+##### CostCenter — ERPNext Cost Center
+
+| Field | Type | ERPNext field |
+|---|---|---|
+| `name` | CharField(100) unique | cost_center_name |
+| `parent` | FK self, SET_NULL, null=True, blank=True | parent_cost_center |
+| `is_group` | BooleanField default False | is_group |
+| `disabled` | BooleanField default False | disabled |
+
+Skipped: `company`, `cost_center_number`, Nested Set fields. Validation: same tree rules as
+LedgerAccount (parent is group, no cycles, group-with-children cannot be disabled).
+
+##### GLEntry — ERPNext GL Entry
+
+| Field | Type | ERPNext field | Notes |
+|---|---|---|---|
+| `posting_date` | DateField | posting_date | |
+| `account` | FK LedgerAccount, PROTECT | account | leaf accounts only |
+| `cost_center` | FK CostCenter, SET_NULL, null=True | cost_center | optional (ERPNext mandatory-CC company setting not ported) |
+| `debit` | DecimalField(14,2) default 0 | debit | exactly one of debit/credit non-zero |
+| `credit` | DecimalField(14,2) default 0 | credit | |
+| `against` | CharField(200) | against | comma-joined balancing account names (simplified from ERPNext party/against) |
+| `voucher_type` | CharField(50) | voucher_type | e.g. "Order", "Journal Entry" |
+| `voucher_no` | CharField(100) | voucher_no | order `invoice_number` / JE name |
+| `remarks` | TextField blank | remarks | |
+| `fiscal_year` | FK FiscalYear, PROTECT | fiscal_year | resolved from posting_date |
+| `is_cancelled` | BooleanField default False | is_cancelled | flipped by reversals, never un-flipped |
+| `is_opening` | BooleanField default False | is_opening | |
+
+Skipped (deviations): `party`/`party_type`, `against_voucher*` dynamic links, all currency +
+exchange fields, `project`, `due_date`, `finance_book`, `is_advance`, `to_rename`,
+`voucher_detail_no`.
+
+Immutability: `save()` blocks updates on existing rows except the reversal workflow flipping
+`is_cancelled` (private flag, same pattern as `Order._allow_cancellation`);
+`delete()` raises (ERPNext GL entries are never edited or deleted). Posting-time validation
+(service-side, ported from `gl_entry.py validate` + `make_gl_entries`): account is a leaf, not
+disabled, not frozen; posting_date within the resolved fiscal year.
+
+##### JournalEntry — ERPNext Journal Entry
+
+| Field | Type | ERPNext field | Notes |
+|---|---|---|---|
+| `voucher_type` | CharField choices JOURNAL/CASH/BANK/WRITE_OFF/OPENING, default JOURNAL | voucher_type | trimmed from ERPNext's 18 types |
+| `posting_date` | DateField | posting_date | |
+| `reference_no` | CharField(50) blank | cheque_no | |
+| `reference_date` | DateField null=True | cheque_date | |
+| `remark` | TextField blank | remark + user_remark | |
+| `status` | CharField DRAFT/SUBMITTED/CANCELLED default DRAFT | docstatus | submit/cancel pattern per §6.0 |
+| `total_debit` | DecimalField(14,2) default 0, editable=False | total_debit | recomputed on save |
+| `total_credit` | DecimalField(14,2) default 0, editable=False | total_credit | |
+| `difference` | DecimalField(14,2) default 0, editable=False | difference | must be 0 to submit |
+| `write_off_amount` | DecimalField(12,2) default 0 | write_off_amount | informational; required non-zero when voucher_type=WRITE_OFF |
+| `is_opening` | BooleanField default False | is_opening | |
+| `amended_from` | FK self, SET_NULL, null=True, blank=True | amended_from | amendment chain (#167) |
+
+Skipped: multi-currency, `write_off_based_on`, party fields, inter-company, deferred/periodic
+types, `pay_to_recd_from`, `letter_head`.
+
+Methods (mirroring `apps/staff/models.py` submit/cancel style):
+- `submit()` atomic: requires DRAFT; validates rows (`set_total_debit_credit` rules — no row
+  with both debit and credit, no duplicate account+cost_center rows, `difference == 0`,
+  `total_debit > 0`); then creates GLEntries per row with `voucher_type="Journal Entry"`,
+  `voucher_no=name`, `remarks=remark or row remarks`, `is_opening`; status → SUBMITTED.
+- `cancel()` atomic: requires SUBMITTED; creates mirror negated GLEntries with remarks
+  "On cancellation of {name}", marks the originals `is_cancelled=True`; status → CANCELLED.
+- `amend()` (ERPNext `Document.amend`): only from CANCELLED; copies the JE (same rows, posting
+  date, remark) into a new DRAFT with `amended_from` set.
+
+##### JournalEntryAccount — ERPNext Journal Entry Account (child rows)
+
+| Field | Type | ERPNext field |
+|---|---|---|
+| `journal_entry` | FK JournalEntry, CASCADE, related_name="accounts" | parent |
+| `account` | FK LedgerAccount, PROTECT | account |
+| `cost_center` | FK CostCenter, SET_NULL, null=True, blank=True | cost_center |
+| `debit` | DecimalField(14,2) default 0 | debit_in_account_currency (single-currency collapse) |
+| `credit` | DecimalField(14,2) default 0 | credit |
+| `remarks` | CharField(200) blank | user_remark |
+
+#### 6.8.4 Model changes outside accounting
+
+- **`payments.PaymentGLMapping.default_account`** CharField(200) → FK `LedgerAccount`,
+  PROTECT. `clean()` requires the mapped account to be a leaf and not disabled. Data migration
+  (separate file, per migration rules): match each existing string to an account by name
+  (case-insensitive); if missing, create a leaf account with that name — parent "Assets" root
+  (created if needed), `root_type=ASSET`, `account_type=Cash` for `mode.type=CASH` else `Bank`.
+  Runtime call sites updated: `apps/orders/services.py:927-939` (settlement requires the FK
+  mapping) and `apps/orders/views_pos.py:97-104` (settle dialog filters
+  `gl_mapping__isnull=False` only).
+- **`settings.Restaurant`** (merged Company + POSProfile surface) gains nullable account FKs:
+  `default_income_account`, `default_expense_account` (Company defaults),
+  `round_off_account` (Company `round_off_account`), `account_for_change_amount`,
+  `write_off_account`, `write_off_cost_center` (ex-POSProfile), `cost_center` FK CostCenter
+  (POSProfile `cost_center`). All optional in the model; settlement enforces the ones it needs.
+  Settings form gains an "Accounting" section.
+- **`settings.ProductionUnit.income_account`** FK LedgerAccount, null=True — the departmental
+  split hook (Kitchen = FOOD income, Bar = DRINKS income). *(Addition beyond ERPNext — the
+  food/drinks departmental split is core; see AGENTS.md departmental split.)*
+- **`inventory.ItemGroup`** gains `income_account` / `expense_account` FKs, null=True —
+  ERPNext Item Group fields, ported.
+- **`inventory.Warehouse.account`** FK LedgerAccount, null=True — ERPNext Warehouse stock
+  account; credited with the COGS-side stock value at settle for stock items.
+- **`apps/orders/management/commands/seed_pos_setup.py`** must seed accounts before creating
+  `PaymentGLMapping` rows (strings would now violate the FK).
+
+#### 6.8.5 Posting rules — order settle (translated from ERPNext GL composer)
+
+`accounting.services.post_order_gl(order)` runs inside `settle_order`'s atomic block, after the
+order flips SUBMITTED and the "POS Order" stock deductions are written. All entries get
+`voucher_type="Order"`, `voucher_no=order.invoice_number`,
+`posting_date=order.posting_date`, `fiscal_year=FiscalYear.get_for(posting_date)` (raises if
+no enabled year covers it), `cost_center=Restaurant.cost_center` (when set).
+
+| # | Dr | Cr | Amount | Account resolution |
+|---|---|---|---|---|
+| 1 | — | income account | Σ item amounts per account | per item: `item.item_group.income_account` → `ProductionUnit.income_account` (by item department) → `restaurant.default_income_account` (required — settle raises if resolution ends empty) |
+| 2 | payment account | — | per OrderPayment: `amount`, reduced by `order.change_amount` on the first row whose account equals `restaurant.account_for_change_amount` (ERPNext default change handling) | `payment.mode_of_payment.gl_mapping.default_account` (required) |
+| 3 | — | `restaurant.round_off_account` | `rounding_adjustment` (credit may be negative for round-down) | required when `rounding_adjustment != 0` |
+| 4 | expense account (COGS) | `order.stock_warehouse.account` | FIFO outgoing value of the settle-time "POS Order" SLEs, aggregated per account | expense: `item.item_group.expense_account` → `restaurant.default_expense_account` (required when stock items exist) |
+
+`against` = comma-joined names of the balancing accounts per entry. Entries with the same
+account/against/fiscal-year/cost-center merge (ERPNext `merge_similar_entries` convention).
+Returns (`order.is_return`) skip GL entirely (§6.8.2.6). Tax legs absent (§6.8.2.3).
+
+**Order cancel:** `accounting.services.reverse_order_gl(order)` inside `cancel_order`'s atomic
+block — mirror negated entries with remarks "On cancellation of {invoice_number}", originals
+`is_cancelled=True` (ERPNext `make_reverse_gl_entries`). Balance is guaranteed because the
+mirror exactly negates the original set.
+
+#### 6.8.6 HTMX frontend
+
+All pages extend the standard backoffice base; nav gains an **Accounting** section in
+`templates/web/app/app_base.html` (Chart of Accounts, Journal Entries, GL Entries, Fiscal
+Years, Cost Centers).
+
+- **Chart of accounts** (`accounting:account_list`): tree page, groups rendered with
+  indentation and expand/collapse via HTMX partial refresh; create/edit form
+  (`accounting:account_form`); disable/freeze actions; delete blocked server-side.
+- **Journal entries** (`accounting:journal_entry_list` / `_form` / `_submit` / `_cancel` /
+  `_amend`): status-filtered list; form with dynamic account rows using the existing
+  `add_formset_row` / `remove_formset_row` formset pattern
+  (`apps/inventory/views.py:23-24, 349-410`); totals bar updates via Alpine; submit/cancel/
+  amend as HTMX POST buttons per row with SweetAlert confirm.
+- **GL entries** (`accounting:gl_entry_list`): read-only table, filters on account, voucher,
+  date range, cost center; `is_cancelled` badge; sorted by posting_date/id.
+- **Fiscal years / cost centers**: simple list + form CRUD following the payments
+  master-data pages.
+- **Settings**: Restaurant form gains the Accounting section (7 account/cost-center FKs).
+
+#### 6.8.7 Seed and migrations
+
+- `payments/migrations/00XX_paymentglmapping_default_account_fk.py` — schema change generated
+  by `makemigrations`; separate data migration matches strings to accounts and creates missing
+  ones (see §6.8.4).
+- `apps/accounting/management/commands/seed_chart_of_accounts.py` — idempotent chart seed:
+  Assets (group) → Cash Account (Cash) + Bank Accounts (group) → Electronic Account (Bank);
+  Inventory (group) → stock-in-hand leaves for each warehouse; Income (group) → Food Sales +
+  Drinks Sales; Expenses (group) → Cost of Goods Sold + Round Off; Equity (group) → Owner's
+  Equity. Creates CostCenters (Kitchen, Bar), current-year FiscalYear, links
+  `ProductionUnit.income_account` (Kitchen→Food Sales, Bar→Drinks Sales), `Warehouse.account`
+  leaves, `Restaurant` defaults, and refreshes `PaymentGLMapping` mappings.
+- `seed_pos_setup` updated to invoke the chart seed first.
+
+#### 6.8.8 Tests (`apps/accounting/tests/`)
+
+- `test_models.py` — account tree rules (parent-is-group, no cycle/self-parent, root_type
+  inheritance, disable/leaf guards, deletion protection), fiscal year (end > start, overlap,
+  `get_for`), cost center tree, GL entry immutability.
+- `test_journal_entry.py` — submit posts balanced GL (ΣDr = ΣCr per account), unbalanced /
+  both-debit-and-credit-row / duplicate-row rejections, frozen/disabled/group accounts
+  rejected, cancel reverses with `is_cancelled` + negated mirrors, amend copies CANCELLED →
+  DRAFT with `amended_from`, write-off voucher requires `write_off_amount`.
+- `test_order_gl.py` — settle posts payment/income/COGS/round-off legs (departmental income
+  split across two ProductionUnits, change reduction on cash leg, rounding), cancel reverses,
+  return orders skip GL, missing account config raises, fiscal-year guard raises.
+- `test_payment_gl_mapping.py` — FK required + leaf-only validation (extends the existing
+  payments test file).
+- `test_views.py` — backoffice gate, CRUD, submit/cancel/amend flows.
+- Existing orders/staff test suites gain a shared accounting setup helper
+  (`apps/accounting/tests/utils.py` — test-only) because settle now requires the account chain.
+
+#### 6.8.9 Docs to update (same task)
+
+`docs/architecture/apps.md`, `dependencies.md`, `data-model.md`, `state-machines.md`
+(JournalEntry states), `docs/workflows/orders.md` + `payments.md` (GL legs, FK mapping),
+`docs/execution-flows/submit-order.md` + `payment.md` (GL side effects), new
+`docs/workflows/accounting.md` + index entry in `docs/README.md`.
+
+#### 6.8.10 Deviations from reference
+
+1. Single-tier posting (no consolidated Sales Invoices at close) — §6.8.2.1.
+2. No party ledger / receivable legs — §6.8.2.2.
+3. No tax accounts or tax GL — §6.8.2.3.
+4. Inventory-document GL deferred to Phase 9 — §6.8.2.5.
+5. Return-order GL deferred to Phase 11 — §6.8.2.6.
+6. Flat FK tree instead of Nested Set for Account/CostCenter — §6.8.3.
+7. Single-currency collapse of all `*_in_account_currency` / exchange fields — §6.8.3.
+8. `against` holds balancing account names instead of party names — §6.8.5.
+9. `ProductionUnit.income_account` departmental resolution — §6.8.4 (addition).
+10. Enabled-fiscal-year overlap guard — §6.8.3 (addition).
 
 ---
 

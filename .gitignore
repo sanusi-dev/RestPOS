@@ -15,6 +15,8 @@ static_root/
 node_modules/
 # ai assistants
 .playwright-mcp/
+# reference codebases (cloned read-only, see AGENTS.md)
+references/
 .claude/settings.local.json
 openapitools.json
 media/
