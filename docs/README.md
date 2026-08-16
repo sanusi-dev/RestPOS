@@ -33,6 +33,7 @@ This directory is the living technical map of the current RestPOS source tree. I
 - [Inventory](workflows/inventory.md): ledger, FIFO valuation, reservations, receipts, transfers, reconciliation, and every mutation path.
 - [Products and menu](workflows/products-and-menu.md): item flags, menus, prices, add-ons, variants, and POS catalog resolution.
 - [Payments](workflows/payments.md): payment master data, GL mappings, order payment rows, settlement validation, and cash change.
+- [Accounting scope recommendations](accounting-scope-recommendations.md): proposed accounting capabilities beyond the current Phase 8 scope, classified by implementation dependency and activation timing.
 - [Backoffice](workflows/backoffice.md): manager/owner pages and their create, submit, cancel, and filtering workflows.
 - [Authentication and access](workflows/auth.md): allauth, roles, middleware gates, and view-level permission checks.
 - [Receipts and printing](workflows/receipts-and-printing.md): receipt claims, KOT/BOT dispatch, retry behavior, and the current printer stub.
