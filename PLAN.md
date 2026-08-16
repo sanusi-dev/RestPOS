@@ -127,11 +127,11 @@ orders → printing (leaf — depends only on orders; built last)
 | 4 | payments core | A10 (partial) | ModeOfPayment, PaymentGLMapping | None (standalone) | complete (ModeOfPayment.enabled + is_default; PaymentGLMapping unique per mode) |
 | 5 | staff | A9, A17 | POSOpeningEntry, POSClosingEntry, OpeningPayment, ClosingPayment | settings, payments core | complete (single shared shift; closing sums OrderPayment totals per mode) |
 | 6 | settings R2 | A3, A4, A5 (partial) | ProductionUnit | menu, inventory, payments | complete (merged into Restaurant singleton — §6.14 removed POSProfile/TaxTemplate) |
-| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, KOT, KOTItem, OrderAuditEvent, OrderSequence | settings, menu, staff, payments | complete (POS workbench, continuous numbering, tickets, drinks-only stock, returns, paid-order ticket guarantee §6.23) |
+| 7 | orders | A6, A7, A18 | Order, OrderItem, OrderPayment, KOT, KOTItem, OrderAuditEvent, OrderSequence | settings, menu, staff, payments | complete (POS workbench, continuous numbering, tickets, drinks-only stock, returns, paid-order ticket guarantee §6.23, stage exits §6.24) |
 | 8 | accounting / GL | A13, A16 (partial) | LedgerAccount (chart of accounts), GL entry, JournalEntry, FiscalYear, CostCenter, write-off; migrate `PaymentGLMapping.default_account` CharField → FK | payments, orders, staff, inventory | planned — detailed plan in §6.8 (2026-08-15); a real LedgerAccount was deferred in §6.4/§6.6 ("Phase 8 introduces a real LedgerAccount") |
 | 9 | daily P&L | A14, C | DailyP&L, P&L line items (COGS, direct/indirect expenses, electricity, materials, employee costs), P&L amendment, departmental P&L split | all apps | not started |
 | 10 | reports | A15, C | Sales reports (daywise/monthwise/item-wise/service/time/employee), cancelled invoices, stock ledger/balance/ageing, POS register, departmental daily reports | all apps | not started |
-| 11 | refunds completion | A18 | RefundEntry / RefundPaymentEntry (GL reversal), wastage posting, partial returns | orders, payments, inventory | not started — core return data model done in Phase 7 |
+| 11 | refunds completion | A18 | RefundEntry / RefundPaymentEntry (GL reversal), wastage posting, partial returns | orders, payments, inventory | not started — core return data model done in Phase 7; submit-return core pulled forward into §6.24 (stock restore + refund rows + drawer effect); GL reversal, wastage, partial returns remain |
 | 12 | printing | A8 | PrintAgent client, ESC/POS formatter, PrinterConfig | orders | not started (stub `apps/orders/printing.py`) — built last; leaf dependency, does not gate the accounting chain |
 | — | customer management (deferred) | A11 | Customer, CustomerGroup, credit limits, customer search/create from POS, favourite items | orders | deferred — added later after the core phases; only `Order.customer_name` (string, default "Walk-in Customer") exists today |
 | — | coupon engine (deferred) | A13 #130–131 | CouponCode, pricing rules; cashier % discount | orders, payments | deferred — added later; no discount/coupon system exists today |
@@ -3727,3 +3727,172 @@ Existing settle tests need no changes — the test base configures both producti
 (`POSViewTestBase.setUpTestData`) and none of the settle tests assert an absence of tickets.
 `test_settle_takeaway_no_print_needed` still passes because a ProductionUnit exists for FOOD
 (the auto-created ticket does not affect its assertions).
+
+### 6.24 Order Stage Exits — Delete, Cancel, Settle-Print, Return (deviation)
+
+**Status:** planned — awaiting implementation (owner-confirmed design, 2026-08-16).
+
+**Client decision:** the order lifecycle gets exactly one exit per stage, grounded in the
+mainstream restaurant-POS stage model (Toast, Square for Restaurants, Lightspeed, Oracle
+Simphony) rather than the ERPNext/URY document model:
+
+1. **Draft, nothing sent** (no KOT, no receipt) — **delete** freely. No reason, no manager
+   PIN. Nothing operational happened yet; the anti-fraud control at this stage is shift-close
+   drawer reconciliation and per-cashier reports, not deletion ceremony. ("Cashier pockets
+   money and deletes the draft" is a missing payment record, which shows up at shift close
+   whether the draft is deleted or kept.)
+2. **Sent to kitchen/bar** (KOT exists) — **cancel only**, never delete. Cancel requires a
+   reason, prints cancellation tickets to the kitchen (so food is not cooked), and lands on
+   the per-cashier cancel report. The receipt print is explicitly **not** a lock: the KOT is
+   the point of no return.
+3. **Paid (submitted)** — **return only**, never cancel. A return is a separate negative
+   document (already built as `is_return` + `return_against` in Phase 7). Submitting the
+   return restores stock for stock-tracked drinks, records negative refund payment rows
+   mirroring the source payment methods, and reduces the shift-close expected drawer.
+4. **Receipt** — printed automatically at settlement (non-blocking; a printer failure never
+   stops a sale), reprintable any time from order history. No pre-payment receipt print
+   exists, so "receipt printed" implies "paid" and needs no lock of its own.
+
+**References consulted:**
+
+- Toast / Square / Lightspeed / Oracle Simphony (public POS documentation and behaviour):
+  open check → sent → closed stages; voids print a kitchen chit and require a reason;
+  closed checks are refunded to the original payment method, never voided; receipts print
+  on payment confirmation, and printer failure never blocks the payment.
+- ERPNext `pos_invoice.py` `before_cancel` — paid POS invoices inside a submitted closing
+  entry cannot be cancelled (return is the only path); `controllers/status_updater.py`
+  — status "Return" is a *submitted document* (`is_return == 1 and docstatus == 1`),
+  distinct from "Cancelled" (`docstatus == 2`).
+- URY `pos/src/data/order-types.ts` — "Return" is a first-class order-list status;
+  `ury/ury_pos/api.py` + `button_permission.py` — URY has no bespoke cancel/return logic,
+  it delegates to standard ERPNext document actions gated by role permissions.
+- RestPOS current code (verified 2026-08-16): `Order.delete()` guards, `_ensure_editable()`
+  (`invoice_printed` lock), `cancel_sent_order()` (`invoice_printed or kots` eligibility),
+  `discard_order()` (empty drafts only — a draft with items and no KOT is currently
+  **stuck**), `claim_receipt_print()`/`pos_order_print` (pre-payment receipt on drafts),
+  `settle_order()` (no receipt logic), `make_return()` (paid-only, creates return draft,
+  no submit path), `collect_submitted_payment_totals()` (excludes returns), and the
+  `order_detail.html:25` precedence bug that offers "Cancel order" to return drafts.
+
+**Why a deviation:** ERPNext cancels submitted-unpaid invoices and URY mandates printing a
+receipt before submission — both artifacts of an accounting-first document model. RestPOS
+settlement requires full payment, so a submitted-unpaid state does not exist; receipts move
+to post-payment (the universal POS pattern); and the reference's document-centric cancel vs
+return split is replaced with stage-bound exits. The deviation is documented here per the
+AGENTS.md protocol.
+
+#### Business logic
+
+**1. Delete for unsent drafts**
+
+- New `pos_order_delete` view + URL `order/<int:pk>/delete/` + cart button "Delete order"
+  shown when `not order_sent` (and the order is not settled). POST redirects to `pos_home`
+  (no HTMX partial — the cart ceases to exist).
+- `Order.delete()` already guards: DRAFT only, no KOTs, not `invoice_printed`, releases
+  drink reservations. **New requirement:** it must also purge the order's audit events —
+  `OrderAuditEvent.order` is `PROTECT` and events refuse instance deletion, so delete must
+  issue a queryset `.delete()` on `audit_events` (bypasses the instance guard deliberately;
+  one-line comment explaining why). Deletion of an unsent draft carries no audit-event
+  value; the CREATED/ITEM_ADDED events describe a draft that never became operational.
+- `discard_order()` / `pos_order_discard`: superseded by delete for every unsent draft.
+  Remove the POS discard path (view, URL, template button, service if unreferenced). The
+  `DISCARDED` status stays in the model and status choices for legacy rows.
+
+**2. Cancel only for sent orders**
+
+- `cancel_sent_order()`: eligibility becomes `not locked.kots.exists()` only — drop the
+  `invoice_printed` branch (post-settlement orders are blocked by the status check anyway).
+- Backoffice `order_cancel()`: reject DRAFT orders without KOTs
+  ("This order was never sent — delete it instead of cancelling."). The SUBMITTED-unpaid
+  branch stays as defence-in-depth (unreachable while settlement requires full payment).
+- `_ensure_editable()`: remove the `invoice_printed` lock — KOT existence is the only
+  draft lock. Remove the now-dead `invoice_printed` checks in `pos_order_add_item` and
+  `pos_order_clear`, in `Order.save()`'s draft-field guard, and in
+  `OrderItem.save()`/`delete()`. Keep the "printed receipt cannot be marked unprinted"
+  guard.
+- Templates: replace every `order_sent or order.invoice_printed` condition with
+  `order_sent` (guests.html lock badge/stepper, items.html edit buttons, totals.html
+  cancel section). `open_draft_orders()` "draft" filter drops `invoice_printed=False`.
+
+**3. Receipt prints at settlement, reprint from history**
+
+- Remove the cart Print/Reprint button (totals.html), `pos_order_print` view + URL, and
+  `claim_receipt_print()` (dead once drafts never print).
+- `settle_order()` sets `invoice_printed=True`, `invoice_printed_at`, `invoice_printed_by`
+  on the existing guarded save — settlement *is* the receipt event.
+- `pos_order_settle()` (view) calls `printing.print_receipt(order)` after
+  `services.settle_order()` returns; on failure it shows a warning ("Order settled, but the
+  receipt failed to print — reprint it from order history") and the sale stands. Never
+  blocks settlement.
+- Reprint stays as-is: `pos_order_history_print` (SUBMITTED orders, history detail).
+- Remove the now-dead cart receipt banners (`receipt_print_error` context handling).
+
+**4. Return only for paid orders**
+
+- Creation is already gated (`make_return` requires SUBMITTED + `is_paid`). Fix
+  `order_detail.html` so return drafts never get the generic "Cancel order" button
+  (the `or/and` precedence bug) — use nested `{% if %}` blocks.
+- New `submit_return(order, actor)` service:
+  - Locked DRAFT + `is_return` + `return_against` SUBMITTED; re-validate each line's
+    `return_against_item` reference against the source order.
+  - Restore stock: positive SLEs for stock-tracked drink lines
+    (`voucher_type="POS Return"` — parameterise `_restore_stock()`'s voucher type), using
+    the order's `stock_warehouse` snapshot copied at `make_return` time.
+  - Refund rows: mirror each source payment as a negative `OrderPayment`
+    (`amount=-source.amount`, `reference_no=""` — the unique constraint on
+    (mode, reference) must not collide with the original, and a refund is not the same
+    card reference). Requires the `OrderPayment` change below.
+  - `paid_amount` = negative refund total, `is_paid` stays False, `status=SUBMITTED` via
+    `_transition("_allow_submit")`, `submitted_at`, audit `RETURN_SUBMITTED`
+    (metadata: source order). Returns are immutable documents, not "paid sales" — revenue
+    queries filter `is_paid=True` and already exclude returns.
+- New backoffice `order_return_submit` view + URL + "Submit return" button (manager-only,
+  mirroring `order_return`'s guard) on DRAFT return orders.
+- Abandoning a return draft = deleting it (stage rule 1): a manager-only "Delete draft"
+  button on `order_detail.html` for any DRAFT order (return or not) posting to a new
+  backoffice `order_delete` view; `Order.delete()` guards apply.
+- Drawer effect: `expected_closing_amounts()` (staff/services.py) must subtract refunds.
+  Aggregate negative payment sums of SUBMITTED return orders submitted inside the shift
+  window (`status=SUBMITTED, is_return=True, submitted_at in period`) and add them to
+  `collect_submitted_payment_totals()` results per mode.
+
+**Model/migration change (OrderPayment):**
+
+- Drop the `orders_payment_amount_gt_zero` CheckConstraint via `makemigrations` (negative
+  refund rows are now valid on return orders).
+- `OrderPayment.save()`: allow `amount < 0` only when `order.is_return` (and order DRAFT —
+  the row is created inside `submit_return` before the guarded transition); normal orders
+  keep "greater than zero".
+
+#### Tests
+
+| File | Test | Asserts |
+|---|---|---|
+| apps/orders/tests/test_pos_views.py | `test_delete_unsent_draft` | POST delete removes the draft + items + audit events; redirect to pos_home |
+| | `test_delete_sent_draft_blocked` | KOT'd draft delete → ValidationError, order remains |
+| | `test_cancel_requires_kots` | `cancel_sent_order` on unsent draft raises; cart shows no Cancel button when `not order_sent` |
+| | `test_settle_marks_receipt_printed` | settle sets `invoice_printed*`; `print_receipt` called after settlement (patched), failure → warning + still settled |
+| | `test_no_print_button_in_cart` | totals.html has no print form for drafts |
+| apps/orders/tests/test_order.py | `test_submit_return_restores_drink_stock` | SLE with positive qty, voucher "POS Return"; bin/stock correct |
+| | `test_submit_return_creates_negative_refund_rows` | refund rows mirror source modes with negative amounts; `paid_amount` negative; status SUBMITTED; `RETURN_SUBMITTED` audit |
+| | `test_submit_return_requires_paid_source` | non-draft / non-return / unpaid source rejected |
+| | `test_negative_payment_only_on_returns` | OrderPayment.save() rejects negative on normal orders |
+| apps/orders/tests/test_backoffice_views.py | `test_return_draft_shows_submit_not_cancel` | return draft detail has Submit return + Delete, no Cancel order |
+| | `test_order_delete_backoffice` | manager deletes DRAFT; cashier blocked |
+| apps/staff/tests/ | `test_expected_closing_amounts_net_of_refunds` | submitted return's refund rows reduce expected drawer per mode |
+
+Existing tests to update: anything asserting the `invoice_printed` draft lock, `pos_order_print`,
+`claim_receipt_print`, `discard_order` POS path, or the discard button.
+
+#### Documentation (same task)
+
+- `docs/workflows/orders.md` — rewrite Cancellation/Discard/Return and Submission sections:
+  stage exits, settle-prints receipt, `submit_return`, no pre-payment printing.
+- `docs/architecture/state-machines.md` — Order state diagram gains RETURN draft submit and
+  delete-for-unsent; `invoice_printed` no longer a draft lock.
+- `docs/execution-flows/print-receipt.md` — now: auto-print at settle, reprint from history.
+- `docs/execution-flows/submit-order.md` — add receipt print step and the refund exclusion.
+- `docs/architecture/side-effects.md` — settlement gains receipt print + `invoice_printed`
+  write; return submission gains SLE restore + negative payment rows + drawer effect.
+- PLAN.md §3 table: Phase 7 note += stage exits §6.24; Phase 11 note += "submit-return core
+  pulled forward into §6.24 — GL reversal postings, wastage, partial returns remain".
