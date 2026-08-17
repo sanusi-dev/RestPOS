@@ -9,11 +9,18 @@ RestPOS is a restaurant POS and management system for a Nigerian restaurant, bui
 - Bar is a separate business entity sharing the same cashier — sales tracked separately per department (food vs drinks)
 
 **Build philosophy:**
-- Carbon copy of how ERPNext and URY implement each feature, ported to Django
-- Do not invent architecture — always check the reference codebase first
-- Deviations from reference must be justified and documented in `PLAN.md`
+- `FEATURES.md` is the product specification; `PLAN.md` is the roadmap plus decision-only
+  detailed plans for unbuilt work; `docs/` describes the implemented system
+- The project is NOT a replication of URY or ERPNext — `references/` is reference material only
+- For each new feature, follow the workflow in the "PLAN.md and FEATURES.md Protocol" section:
+  review comparable systems, research industry practice, propose a plan, iterate with the
+  developer, and record only the final agreed plan
 
-**Never agree with the user's claims based on confidence alone.** Verify against `references/erpnext-develop/`, `references/ury-develop/`, `FEATURES.md`, `PLAN.md`, and ERPNext/URY accounting logic. Push back when mistaken — even if the user says you previously agreed. If the user explicitly says "I know this isn't best practice but I want it anyway", respect the decision, proceed, and document the deviation in `PLAN.md §6.x Deviations from reference`.
+**Never agree with the user's claims based on confidence alone.** Verify against
+`FEATURES.md`, `PLAN.md`, `docs/`, `references/`, and the code. Push back when mistaken — even
+if the user says you previously agreed. If the user explicitly says "I know this isn't best
+practice but I want it anyway", respect the decision, proceed, and record the deviation in the
+feature's detailed plan in `PLAN.md`.
 
 ## Tech Stack
 
@@ -38,8 +45,8 @@ The system runs on the local network only. Django runs on the cashier desktop. A
 ```text
 RestPOS/
 ├── AGENTS.md                         ← this file
-├── PLAN.md                           ← feature implementation plans
-├── FEATURES.md                       ← feature spec from URY/ERPNext
+├── PLAN.md                           ← build sequence roadmap + decision-only detailed plans
+├── FEATURES.md                       ← product feature specification (what the system does)
 ├── references/                       ← READ ONLY — never modify (gitignored; clone with:
 │   │                                  git clone --depth 1 --branch develop https://github.com/frappe/erpnext.git references/erpnext-develop
 │   │                                  git clone --depth 1 --branch develop https://github.com/ury-erp/ury.git references/ury-develop)
@@ -48,22 +55,24 @@ RestPOS/
 ├── .venv/                            ← virtual environment
 ├── pyproject.toml                    ← dependencies (uv)
 ├── manage.py
-└── restpos/
-    ├── apps/
-    │   ├── menu/           ← menu items, categories, courses, pricing
-    │   ├── orders/         ← orders, order items, customer cards, KOT dispatch
-    │   ├── payments/       ← payment entries, modes, shift closing
-    │   ├── inventory/      ← stock ledger, ingredients, movements
-    │   ├── printing/       ← print agent client, ticket formatting, config
-    │   ├── reports/        ← daily P&L, sales reports, department split
-    │   ├── staff/          ← users, roles, shifts, cashier sessions
-    │   └── settings/      ← restaurant settings (singleton), production units, printer config
-    └── templates/
-        ├── pos/            ← cashier-facing POS screen
-        └── backoffice/     ← manager/owner back office
+├── apps/                             ← Django apps
+│   ├── utils/           ← BaseModel, styled forms
+│   ├── users/           ← CustomUser, roles
+│   ├── settings/        ← restaurant settings (singleton), production units, printer config
+│   ├── inventory/       ← stock ledger, items, warehouses, movements, reconciliations
+│   ├── menu/            ← menu items, categories, pricing, variants, add-ons
+│   ├── payments/        ← payment modes, GL mappings
+│   ├── staff/           ← shifts, opening/closing entries, cashier sessions
+│   ├── orders/          ← orders, order items, customer cards, KOT dispatch, returns
+│   └── web/             ← home, backoffice dashboard, middleware, context processors
+│   (planned: accounting, reports, printing — deferred: customers, coupons)
+├── restpos/                         ← project package (settings.py, urls.py, celery.py, wsgi.py)
+└── templates/
+    ├── pos/            ← cashier-facing POS screen
+    └── backoffice/     ← manager/owner back office
 ```
 
-Each app maps to a URY module. When creating a new app, check for a corresponding URY doctype folder first.
+App responsibilities and build order are in `PLAN.md §2`.
 
 ## Commands
 
@@ -102,22 +111,25 @@ App runs at http://localhost:8000
 
 ## Reference Codebase Navigation
 
-`references/` is READ ONLY: never write, edit, create, delete, or import from it. Use it only to read and port logic into Django. Always check the reference before implementing any feature.
+`references/` is READ ONLY: never write, edit, create, delete, or import from it. Use it as
+reference material when planning a feature — see the workflow in "PLAN.md and FEATURES.md
+Protocol". Never copy architecture from it blindly; weigh it against current industry
+practice and the developer's requirements.
 
 **Step 1 — Find the ERPNext doctype:**
 - `references/erpnext-develop/erpnext/accounts/doctype/` — financial documents
 - `references/erpnext-develop/erpnext/stock/doctype/` — inventory
 - `references/erpnext-develop/erpnext/selling/doctype/` — sales
 
-Read the `.json` (the `fields` array is the data model) and the `.py` (business logic: `validate`, `before_insert`, `on_submit`).
+Read the `.json` (the `fields` array is the data model) and the `.py` (business logic:
+`validate`, `before_insert`, `on_submit`).
 
 **Step 2 — Find the URY adaptation:**
 - `references/ury-develop/ury/ury/doctype/` — URY custom doctypes
-- `references/ury-develop/ury/ury_pos/api.py` — POS API (read fully before any POS endpoint)
+- `references/ury-develop/ury/ury_pos/api.py` — POS API (read before planning any POS work)
 - `references/ury-develop/ury/ury/hooks/` — document event handlers
 - `references/ury-develop/pos/src/` — React POS frontend (UI logic reference)
 - `references/ury-develop/mosaic/src/` — kitchen display (reference only)
-**Step 3 — Port to Django:** Translate doctype fields to a Django model. Apply URY restaurant logic as model methods or signals. Document deviations.
 
 ### Key Reference Files (read first)
 
@@ -134,27 +146,41 @@ Read the `.json` (the `fields` array is the data model) and the `.py` (business 
 
 ## PLAN.md and FEATURES.md Protocol
 
-`FEATURES.md` — feature spec from URY/ERPNext, by backend and frontend (UI/UX).
-`PLAN.md` — implementation plan per feature.
+`FEATURES.md` — the product specification: what the system does, organised by back office and
+POS surface. Planned and deferred features are marked as such.
+`PLAN.md` — the build sequence roadmap plus decision-only detailed plans for unbuilt phases.
+
+**New-feature workflow:**
+
+1. Review how the reference material (`references/`) and other comparable systems approach
+   the feature.
+2. Research current industry practice.
+3. Consider the model's knowledge and the developer's requirements.
+4. Propose an implementation plan.
+5. Review the proposal with the developer through an iterative discussion process.
+6. Produce a final, agreed-upon implementation plan.
+7. Add only the final plan to the documentation.
 
 Before implementing:
+
 1. Confirm the feature is in `FEATURES.md`.
-2. Read the plan in `PLAN.md`.
-3. Read the reference files the plan lists.
-4. Implement exactly as the plan describes.
-5. If the plan is missing or incomplete, stop and flag it — do not guess.
+2. Read the detailed plan in `PLAN.md` if one exists.
+3. Implement exactly as the plan describes.
+4. If the plan is missing or incomplete, stop and flag it — do not guess.
 
-When writing a `PLAN.md` entry for a new feature, include: ERPNext reference file(s) consulted, URY reference file(s) consulted, Django model fields (translated from doctype JSON), business logic rules (translated from doctype Python), HTMX frontend behaviour, and any deviations with reasons.
+A `PLAN.md` detailed plan contains only finalized implementation decisions: model fields,
+business rules, HTMX frontend behaviour, and tests. No reference commentary, no design
+discussion, no history.
 
-Keep `PLAN.md` synchronized in the same task whenever a change affects:
+Keep `PLAN.md` and `FEATURES.md` synchronized in the same task whenever a change affects:
 
 - Feature scope, including in-scope, deferred, or out-of-scope decisions
-- Phase status, completion evidence, dependencies, or the next planned phase
+- Phase status, completed work, or remaining work in the build sequence
 - Application architecture, cross-app dependencies, or implementation decisions
-- Deviations from the ERPNext or URY reference behavior
-- The planned next action or assumptions recorded in a detailed phase plan
+- Anything recorded in a detailed plan
 
-Do not update `PLAN.md` for every minor code edit when none of these planning details change. The `/docs` documentation rules below still apply whenever the implemented behavior changes.
+Do not update `PLAN.md` for every minor code edit when none of these planning details change.
+The `/docs` documentation rules below still apply whenever the implemented behavior changes.
 
 ## Documentation Maintenance
 
@@ -185,9 +211,9 @@ The documentation index in `docs/README.md` must remain accurate. Add new docume
 
 ### Printing
 
-Three Xprinter thermal printers on the local network, each with a static IP:
+Three Xprinter thermal printers on the local network, each with a fixed role:
 - Cashier printer — customer receipt (USB to desktop)
-- Kitchen printer — food order ticket, replaces URY's KOT display (LAN)
+- Kitchen printer — food order ticket (LAN)
 - Bar printer — drinks order ticket (LAN)
 
 A lightweight Python print agent runs as a background service on the cashier desktop. After an order is saved, Django sends a print job payload to the agent via HTTP on localhost. The agent formats ESC/POS commands and sends them to the correct printer IP. LAN printers are identified by static IP — not hostname or DHCP address.
@@ -236,7 +262,7 @@ Every menu item belongs to `FOOD` or `DRINKS`. A single order can contain both. 
 
 ### Document submit/cancel pattern
 
-Replicate ERPNext's immutable financial workflow in Django:
+Financial documents follow an immutable workflow:
 - Orders, payments, and stock ledger entries have a `status` field with choices `DRAFT`, `SUBMITTED`, `CANCELLED`.
 - Once submitted, records are never updated — only cancelled, which creates a reversal entry.
 - This gives an immutable audit trail.
@@ -251,6 +277,21 @@ menu, default warehouse, order-number behaviour) lives on `Restaurant`. Multi-br
 is deferred as separate paid work and is not half-supported now. Payment methods are
 managed via `ModeOfPayment.enabled` + `is_default` (exactly one default);
 `POSProfilePayment` no longer exists.
+
+### Backoffice UI conventions
+
+- **Sidebar structure:** Backoffice group (Manager/Admin only): Dashboard, Settings,
+  Inventory, Menu. POS sub-header (under Backoffice): Payments, Shifts. Quick Access group:
+  Launch POS, Sign out. The shift item is labelled **"Shifts"** (not "Staff") to avoid
+  colliding with the `settings:staff_list` role-assignment page (surfaced on the Settings
+  dashboard as the "User Roles" card).
+- **Main backoffice dashboard** (`/backoffice/dashboard/`) is a navigator, not a status
+  board: a "Your Shortcuts" row (4 quick-action buttons) + a "Masters & Setup" grid (grouped
+  link cards: Menu, POS, Inventory, Setup). No live operational panels or charts on Home —
+  those live on per-app dashboards (Staff dashboard for shifts, Inventory dashboard for low
+  stock). Analytics get a separate operations-dashboard page once orders and reports exist.
+- **Payment modes live under POS** (Payments in the sidebar), not under a general setup
+  area, because shift floats are the only consumer.
 
 ### Icons
 
@@ -353,8 +394,8 @@ GOOD: (no comment — standard Django pattern)
 - Use DaisyUI — Tailwind CSS only
 - Use `FloatField` for money
 - Use `CASCADE` delete on orders, payments, or stock ledger entries
-- Invent a data model without first checking the ERPNext reference doctype
-- Implement a POS API endpoint without first reading `ury_pos/api.py`
+- Plan a feature without reviewing the reference material and comparable systems first
+- Plan POS work without reviewing URY's POS API (`references/ury-develop/ury/ury_pos/api.py`)
 - Write more than one feature at a time — complete and confirm one before the next
 - Run Playwright or browser-based tests only when the user explicitly requests them
 

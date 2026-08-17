@@ -100,4 +100,6 @@ The current schema is the result of substantial cleanup migrations, not the olde
 - `menu/0006_remove_pricelist_menu_delete_itemprice_and_more.py`: remove legacy PriceList/ItemPrice models.
 - `payments/0003_alter_paymentglmapping_options_and_more.py` and `0004_modeofpayment_payments_one_default_mode.py`: current one-to-one GL mapping and one-default invariant.
 
-When a model appears to conflict with `FEATURES.md` or early `PLAN.md` sections, inspect the latest model and migrations first. Those older documents contain deferred or removed concepts and are not the live schema.
+When a model appears to conflict with `FEATURES.md` or `docs/archive/PLAN-history.md`,
+inspect the latest model and migrations first. The archive contains deferred or removed
+concepts and is not the live schema.

@@ -54,7 +54,7 @@ This is an inventory of difficult or incomplete areas for future maintenance. It
 - `web:pos_index` is shadowed by the earlier `/pos/` order include.
 - `assets/javascript/floor-plan.js` references missing table layout endpoints/models.
 - `app.js` and Chart.js are present/buildable but not used by the inspected active templates/source.
-- `FEATURES.md` and early `PLAN.md` sections mention removed Branch, POSProfile, taxes, customers, price lists, and related architecture. Use current models/views/services as the behavioral authority.
+- `docs/archive/PLAN-history.md` mentions removed Branch, POSProfile, taxes, customers, price lists, and related architecture. Use current models/views/services as the behavioral authority.
 - Some legacy templates use inline SVG/style conventions that differ from newer Hugeicons/Tailwind guidance.
 
 ## Refactoring Starting Points

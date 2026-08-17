@@ -26,7 +26,7 @@ Grouping is presentation-only. `guest_count` lives on the order; `customer_index
 
 ## Stage Exits — Delete, Cancel, Return
 
-Each order stage has exactly one exit (PLAN.md §6.24, deviation from ERPNext/URY):
+Each order stage has exactly one exit (FEATURES.md A6):
 
 1. **Draft, nothing sent** (no KOT) — **delete** freely. `Order.delete()` removes the draft, its item rows, and its audit events (the event rows are purged via the queryset because `OrderAuditEvent` refuses instance deletion), and releases drink reservations. The POS "Delete order" button posts to `pos_order_delete`; the backoffice "Delete draft" button posts to `order_delete` (manager-only). There is no cancellation path for unsent drafts — `cancel_order()` and `cancel_sent_order()` both reject them with "delete it instead".
 2. **Sent to kitchen/bar** (KOT exists) — **cancel only**, never delete. `cancel_sent_order()` (POS) or `cancel_order()` (backoffice) requires a reason, creates cancellation KOTs for each station, releases drink reservations, lands on the per-cashier cancel report, and preserves items/payments for audit.

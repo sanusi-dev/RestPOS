@@ -18,7 +18,7 @@
 
 ## Variants
 
-`ItemVariant` links a parent item to a variant item and requires the variant on at least one menu. The seed command puts variant items directly on the menu and omits the template line. The current POS has no variant selection endpoint or dialog; a parent selection workflow described in older `FEATURES.md` text is not present.
+`ItemVariant` links a parent item to a variant item and requires the variant on at least one menu. The seed command puts variant items directly on the menu and omits the template line. The current POS has no variant selection endpoint or dialog; a parent selection workflow is not implemented.
 
 ## Backoffice
 

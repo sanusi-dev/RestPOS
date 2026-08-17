@@ -6,11 +6,12 @@ single-location restaurant accounting practice. It does not change the current
 implementation or lock a future phase until the scope is approved.
 
 > **Approved 2026-08-16 (partial):** four of the eight capabilities were adopted into
-> `PLAN.md` §3 and §6.25–§6.28 as Phases 13–16 — opening balances & go-live setup, trial
-> balance & financial statements, cash shortage & excess posting, supplier payables &
-> invoices. The adopted scope is exactly what each `PLAN.md` stub describes; it is fixed, not
-> an upgrade/downgrade path, and no app setting controls it. The other four capabilities
-> (bank reconciliation, period lock, fixed assets, year-end closing) remain proposed only.
+> `PLAN.md` §3 build sequence and §4.1/§4.4/§4.5/§4.7 — opening balances & go-live setup,
+> trial balance & financial statements, cash shortage & excess posting, supplier payables &
+> invoices. The adopted scope is exactly what each `PLAN.md` detailed plan describes; it is
+> fixed, not an upgrade/downgrade path, and no app setting controls it. The other four
+> capabilities (bank reconciliation, period lock, fixed assets, year-end closing) remain
+> proposed only.
 
 The review excludes tax accounting, customer receivables, and credit sales as
 requested. Inventory-document GL and return/refund GL are already assigned to
