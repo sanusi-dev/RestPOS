@@ -20,9 +20,9 @@
 ## Model Save/Delete Effects
 
 - `Order.save()` fills `arrived_time` on insert, then creates `invoice_number` using `Restaurant.invoice_series_prefix`. It rejects bypassed lifecycle and historical edits.
-- `Order.delete()` locks the persisted row, checks draft/unprinted/unsent state, calls `release_drink_reservations()`, deletes child items, then deletes the model row.
+- `Order.delete()` locks the persisted row, checks draft/unprinted/unsent state, calls `release_drink_reservations()`, deletes child items and (via the queryset, bypassing the instance guard) its audit events, then deletes the model row.
 - `OrderItem.save()` snapshots name, department, and stock flag and calculates `amount = qty * rate`.
-- `OrderPayment.save()` normalizes references, checks amount precision, rejects duplicate non-cash references, and enforces draft/ticket/receipt editability.
+- `OrderPayment.save()` normalizes references, checks amount precision, allows negative amounts only on return orders, rejects duplicate non-cash references, and enforces draft/KOT editability.
 - `KOT.save()` and `KOTItem.save/delete()` protect ticket snapshots while allowing print/status updates through the service path.
 - `Item.save()` generates `ITEM-####` codes under a lock, converts variant templates to non-sellable/non-stock, and deletes add-on relationships when an item becomes non-sales.
 - `StockLedgerEntry._create_entry_locked()` both inserts the movement and updates the matching `Bin` snapshot/FIFO queue.
@@ -30,10 +30,11 @@
 ## Service Side Effects
 
 - Order line add/update/clear/cancel/discard/delete paths adjust `Bin.reserved_qty` for DRINKS.
-- Settlement creates `OrderPayment`, updates order totals/status, releases reservations, and creates negative POS SLE rows for drinks.
+- Settlement creates `OrderPayment`, updates order totals/status, sets `invoice_printed*` (the receipt event), releases reservations, and creates negative POS SLE rows for drinks; the view then calls `printing.print_receipt(order)` non-blockingly.
 - Cancelling submitted orders creates positive stock reversal SLE rows and cancellation KOTs.
+- Return submission restores drink stock with positive `POS Return` SLEs, creates negative refund `OrderPayment` rows mirroring the source payments, sets a negative `paid_amount`, and the refund rows reduce the shift-close expected drawer.
 - Creating tickets snapshots current order lines; printing changes only KOT print status after the print interface returns.
-- Shift close calculates payment totals from order payment rows and links the opening entry to the closing entry.
+- Shift close calculates payment totals from order payment rows (excluding returns) minus refunds, and links the opening entry to the closing entry.
 - Inventory submission creates SLE rows, updates Bins, and updates `Item.last_purchase_rate` where applicable.
 
 ## Frontend Event Effects
@@ -46,4 +47,4 @@
 
 ## Non-Transactional Side Effects
 
-Receipt claims commit before `printing.print_receipt()`. Ticket creation commits before each physical ticket attempt. Therefore database state can say "printed" or "pending" independently of a real device outcome. The current stub always succeeds, so real printer failure behavior is only represented by tests and the abstraction contract.
+Settlement commits before `printing.print_receipt()`, and print failures never roll the sale back. Ticket creation commits before each physical ticket attempt. Therefore database state can say "printed" or "pending" independently of a real device outcome. The current stub always succeeds, so real printer failure behavior is only represented by tests and the abstraction contract.

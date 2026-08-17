@@ -35,7 +35,7 @@ Cash may exceed the total and produces `Order.change_amount`. Any overpayment co
 
 ## Shift Closing
 
-`staff.services.expected_closing_amounts()` sums submitted order payments in the period and subtracts `Order.change_amount` for cash orders. The result is opening float plus net collected amount. `submit_closing_entry()` stores expected, counted, difference, and total short/excess values.
+`staff.services.expected_closing_amounts()` sums submitted order payments in the period and subtracts `Order.change_amount` for cash orders and the refund rows of returns submitted in the period (negative `OrderPayment` amounts mirror the source payments per mode). The result is opening float plus net collected amount. `submit_closing_entry()` stores expected, counted, difference, and total short/excess values.
 
 ## Current Non-Features
 

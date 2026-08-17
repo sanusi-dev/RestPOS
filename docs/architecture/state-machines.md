@@ -5,19 +5,22 @@
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT: create_draft_order
+    DRAFT --> [*]: delete (unsent draft)
     DRAFT --> SUBMITTED: settle_order
-    DRAFT --> CANCELLED: cancel_order / cancel_sent_order
-    DRAFT --> DISCARDED: discard_order
-    SUBMITTED --> CANCELLED: cancel_order if unpaid
+    DRAFT --> CANCELLED: cancel_order / cancel_sent_order if KOT sent
+    DRAFT --> DISCARDED: discard_order (legacy/seed only)
     SUBMITTED --> DRAFT: make_return creates a new return draft
+    DRAFT --> SUBMITTED: submit_return (return draft only)
     CANCELLED --> [*]
     DISCARDED --> [*]
+    SUBMITTED --> [*]: (returns immutable; refund flow only)
 ```
 
 - `Order.save()` blocks direct lifecycle changes and the services use `_transition()` flags for the intended transition.
-- Paid submitted orders cannot be cancelled; `make_return()` creates a separate negative draft instead.
-- Discard requires an empty, unprinted, unsent, unpaid draft.
-- `DRAFT` editing also stops after a KOT or receipt claim.
+- Paid submitted orders cannot be cancelled; `make_return()` creates a separate negative return draft and `submit_return()` submits it.
+- An unsent draft (no KOT) has exactly one exit: delete. `Order.delete()` removes the draft with its items and audit events.
+- Discard requires an empty, unprinted, unsent, unpaid draft and only survives for legacy seed data.
+- `DRAFT` editing stops only when a KOT exists; `invoice_printed` is no longer a draft lock.
 
 ## KOT and BOT
 
@@ -56,6 +59,6 @@ stateDiagram-v2
 ## Invalid Transitions to Watch
 
 - `settle_order()` rejects cancelled, submitted, empty, return, or no-active-shift orders.
-- `cancel_order()` rejects discarded orders and paid submitted orders.
-- `Order.delete()` rejects non-drafts, printed drafts, sent drafts, and audited rows may also be blocked by `OrderAuditEvent.PROTECT`.
+- `cancel_order()` rejects discarded orders, paid submitted orders, and unsent drafts (delete instead).
+- `Order.delete()` rejects non-drafts, printed drafts (legacy guard), and sent drafts; its audit-event purge is deliberate.
 - Inventory model saves can permit direct draft status flips without posting; use service paths when tracing actual ledger behavior.

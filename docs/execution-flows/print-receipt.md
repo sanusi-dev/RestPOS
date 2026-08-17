@@ -1,21 +1,23 @@
 # Execution Flow: Print Receipt
 
-## Draft Receipt
+## Settlement Receipt (auto-print)
 
 ```text
-Print Receipt button
-  -> templates/pos/partials/cart/totals.html
-  -> POST pos:pos_order_print
-  -> views_pos.pos_order_print()
-  -> atomic lock current draft
-  -> orders.services.claim_receipt_print()
-  -> mark invoice_printed and audit first claim
-  -> COMMIT
-  -> orders.printing.print_receipt(order)
-  -> cart partial with success or receipt_print_error
+Pay flow
+  -> POST pos:pos_order_settle
+  -> views_pos.pos_order_settle()
+  -> orders.services.settle_order()          (atomic, commits)
+  -> set invoice_printed / invoice_printed_at / invoice_printed_by
+  -> orders.printing.print_receipt(order)   (after commit)
+  -> success: "Order settled" message
+  -> failure: warning "receipt failed to print" — reprint from order history
 ```
 
-`claim_receipt_print()` returns `print` for the first claim and `reprint` afterward. The order must have at least one item. The print call occurs outside the transaction, so the database state is intentionally claimed first.
+Settlement *is* the receipt event: `settle_order()` marks the order printed on its guarded submit save, so no pre-payment receipt print exists and "receipt printed" implies "paid". The physical print runs *after* the settlement transaction — a printer failure never blocks or rolls back a sale.
+
+## Reprint from History
+
+`pos_order_history_print()` accepts any `SUBMITTED` order, calls the same print interface, and does not change `invoice_printed` metadata. It can run without an active shift. The drawer is re-rendered by HTMX.
 
 ## Current Device Behavior
 
@@ -23,8 +25,4 @@ Print Receipt button
 
 ## Failure Behavior Intended by the Interface
 
-If a future implementation returns `success=False`, the view leaves `invoice_printed=True`, renders a warning, and presents a reprint action. If the implementation raises instead of returning `PrintResult`, the view does not catch it and the request propagates the exception.
-
-## Historical Reprint
-
-`pos_order_history_print()` accepts any `SUBMITTED` order, calls the same print interface, and does not update receipt claim metadata. It can run without an active shift. The drawer is re-rendered by HTMX.
+If a future implementation returns `success=False`, the order stays settled and printed; only a warning is shown. Reprint is available from order history. If the implementation raises instead of returning `PrintResult`, the view does not catch it and the request propagates the exception.

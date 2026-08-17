@@ -29,13 +29,14 @@ This directory is the living technical map of the current RestPOS source tree. I
 
 - [POS](workflows/pos.md): cashier-facing surface, shift gate, catalog, cart, tickets, payment, and history.
 - [Shifts](workflows/shifts.md): opening balances, active shift rules, closing reconciliation, and cancellation.
-- [Orders](workflows/orders.md): draft lifecycle, guest grouping, tickets, cancellation, discard, returns, and audit events.
+- [Orders](workflows/orders.md): draft lifecycle, guest grouping, tickets, stage exits (delete/cancel/return), returns and refund submission, and audit events.
 - [Inventory](workflows/inventory.md): ledger, FIFO valuation, reservations, receipts, transfers, reconciliation, and every mutation path.
 - [Products and menu](workflows/products-and-menu.md): item flags, menus, prices, add-ons, variants, and POS catalog resolution.
 - [Payments](workflows/payments.md): payment master data, GL mappings, order payment rows, settlement validation, and cash change.
+- [Accounting scope recommendations](accounting-scope-recommendations.md): proposed accounting capabilities beyond the current Phase 8 scope, classified by implementation dependency and activation timing.
 - [Backoffice](workflows/backoffice.md): manager/owner pages and their create, submit, cancel, and filtering workflows.
 - [Authentication and access](workflows/auth.md): allauth, roles, middleware gates, and view-level permission checks.
-- [Receipts and printing](workflows/receipts-and-printing.md): receipt claims, KOT/BOT dispatch, retry behavior, and the current printer stub.
+- [Receipts and printing](workflows/receipts-and-printing.md): settlement receipt print, KOT/BOT dispatch, retry behavior, and the current printer stub.
 
 ## Execution Flows
 
@@ -66,6 +67,10 @@ These pages answer: "When I perform this action, what happens next?" Each one na
 - [Troubleshooting](debugging/troubleshooting.md): symptom-to-code tracing guide.
 - [Risks and complexity](risks-and-complexity.md): coupling, incomplete flows, bypasses, orphaned code, and future refactoring targets.
 - [Glossary](glossary.md): project domain terms and their actual model meanings.
+
+## Archive
+
+- [Implementation plan history](archive/PLAN-history.md): implemented phases and decisions, retained verbatim.
 
 ## Documentation Rules
 

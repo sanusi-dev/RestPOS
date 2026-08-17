@@ -220,13 +220,11 @@ class Order(BaseModel):
                 raise ValidationError("A printed receipt cannot be marked as unprinted.")
             if previous.status == DRAFT and not allow_cancellation:
                 draft_fields = ("order_type", "customer_name", "guest_count")
-                if any(getattr(self, field) != getattr(previous, field) for field in draft_fields):
-                    if previous.invoice_printed:
-                        raise ValidationError("This receipt has been printed. Draft edits are no longer allowed.")
-                    if self.kots.exists():
-                        raise ValidationError(
-                            "This order was sent to the kitchen or bar. Cancel it before making changes."
-                        )
+                if (
+                    any(getattr(self, field) != getattr(previous, field) for field in draft_fields)
+                    and self.kots.exists()
+                ):
+                    raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
         is_new = self._state.adding
         if is_new and not self.arrived_time:
             self.arrived_time = timezone.now()
@@ -267,6 +265,9 @@ class Order(BaseModel):
 
         services.release_drink_reservations(persisted)
         persisted.items.all().delete()
+        # Purge audit events via the queryset — the instance guard is deliberate
+        # for live orders, but a deleted draft has no audit value.
+        OrderAuditEvent.objects.filter(order=persisted).delete()
         return models.Model.delete(persisted, *args, **kwargs)
 
     def assign_order_number(self):
@@ -312,11 +313,9 @@ class Order(BaseModel):
 
     def _ensure_editable(self):
         """Reject edits after a kitchen or bar ticket has been created."""
-        persisted = type(self).objects.only("status", "invoice_printed").get(pk=self.pk) if self.pk else self
+        persisted = type(self).objects.only("status").get(pk=self.pk) if self.pk else self
         if persisted.status != DRAFT:
             raise ValidationError("Cannot modify a submitted or cancelled order.")
-        if persisted.invoice_printed:
-            raise ValidationError("This receipt has been printed. Draft edits are no longer allowed.")
         if self.pk and self.kots.exists():
             raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
 
@@ -490,7 +489,6 @@ class OrderPayment(BaseModel):
     class Meta:
         ordering = ["pk"]
         constraints = [
-            models.CheckConstraint(condition=Q(amount__gt=0), name="orders_payment_amount_gt_zero"),
             models.UniqueConstraint(
                 fields=["mode_of_payment", "reference_no"],
                 condition=~Q(reference_no=""),
@@ -506,8 +504,13 @@ class OrderPayment(BaseModel):
             amount = Decimal(str(self.amount))
         except (TypeError, ValueError, InvalidOperation) as exc:
             raise ValidationError("Payment amount must be a valid decimal.") from exc
-        if not amount.is_finite() or amount <= 0 or amount != amount.quantize(TWO_PLACES):
-            raise ValidationError("Payment amount must be finite and greater than zero.")
+        if not amount.is_finite() or amount != amount.quantize(TWO_PLACES):
+            raise ValidationError("Payment amount must be finite and valid to 2 decimal places.")
+        order = self.order if self.order_id else None
+        if order is None:
+            order = Order.objects.only("status", "is_return").get(pk=self.order_id)
+        if not order.is_return and amount <= 0:
+            raise ValidationError("Payment amount must be greater than zero.")
         self.amount = amount
         self.reference_no = (self.reference_no or "").strip()
         if self.mode_of_payment_id:
@@ -530,23 +533,23 @@ class OrderPayment(BaseModel):
         order = self.order if self.order_id else None
         if not order or not getattr(order, "_settling", False):
             # Outside the settlement flow, payments are immutable once the
-            # order leaves draft or a receipt/KOT has been printed.
-            order = Order.objects.only("status", "invoice_printed").get(pk=self.order_id)
+            # order leaves draft or a KOT has been created.
+            order = Order.objects.only("status", "is_return").get(pk=self.order_id)
             if order.status != DRAFT:
                 raise ValidationError("Payments on submitted or cancelled orders cannot be modified.")
-            if order.invoice_printed or order.kots.exists():
-                raise ValidationError("Payments cannot be edited after a receipt or KOT has been created.")
+            if order.kots.exists():
+                raise ValidationError("Payments cannot be edited after a KOT has been created.")
         try:
             super().save(*args, **kwargs)
         except IntegrityError as exc:
             raise ValidationError("This electronic payment reference has already been used.") from exc
 
     def delete(self, *args, **kwargs):
-        order = Order.objects.only("status", "invoice_printed").get(pk=self.order_id)
+        order = Order.objects.only("status").get(pk=self.order_id)
         if order.status != DRAFT:
             raise ValidationError("Payments on submitted or cancelled orders cannot be deleted.")
-        if order.invoice_printed or order.kots.exists():
-            raise ValidationError("Payments cannot be deleted after a receipt or KOT has been created.")
+        if order.kots.exists():
+            raise ValidationError("Payments cannot be deleted after a KOT has been created.")
         return super().delete(*args, **kwargs)
 
 

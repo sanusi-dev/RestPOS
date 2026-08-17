@@ -59,7 +59,7 @@ An order line snapshots the item department and stock flag. Only DRINKS lines ca
 
 ### Payment to shift
 
-`OrderPayment.mode_of_payment` -> `ModeOfPayment`; `POSOpeningEntry.opening_payments` and `POSClosingEntry.closing_payments` use the same payment master. Settlement accepts only enabled modes that were declared at shift opening and have a non-empty `PaymentGLMapping`. Closing aggregates order payment rows by mode and subtracts cash change.
+`OrderPayment.mode_of_payment` -> `ModeOfPayment`; `POSOpeningEntry.opening_payments` and `POSClosingEntry.closing_payments` use the same payment master. Settlement accepts only enabled modes that were declared at shift opening and have a non-empty `PaymentGLMapping`. Closing aggregates order payment rows by mode, subtracts cash change, and subtracts submitted return refunds per mode.
 
 ### Settings to stock routing
 
@@ -110,7 +110,7 @@ POS settlement
 Shift close
   -> orders.views_pos.pos_close_shift or staff.views.closing_entry_submit
   -> staff.services.submit_closing_entry
-  -> orders.submitted_in_shift and OrderPayment aggregation
+  -> orders.submitted_in_shift and OrderPayment aggregation, minus return refunds
   -> staff.ClosingPayment differences
   -> staff.POSClosingEntry submitted
   -> staff.POSOpeningEntry.closing_entry set

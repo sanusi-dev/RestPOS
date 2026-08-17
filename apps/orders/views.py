@@ -238,3 +238,42 @@ def order_return(request: HttpRequest, pk: int) -> HttpResponse:
         "Review and submit the return to process refunds.",
     )
     return redirect("orders:order_detail", pk=return_order.pk)
+
+
+@login_required
+@require_POST
+def order_return_submit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Submit a return draft, restoring stock and mirroring refunds. Manager only."""
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
+        messages.error(request, "Only managers can submit returns.")
+        return redirect("orders:order_detail", pk=pk)
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        services.submit_return(order, actor=user)
+    except ValidationError as e:
+        messages.error(request, str(e.messages[0]) if e.messages else "Return submission failed.")
+        return redirect("orders:order_detail", pk=order.pk)
+    messages.success(
+        request,
+        f"Return {order.invoice_number} submitted. Stock restored and refunds recorded.",
+    )
+    return redirect("orders:order_detail", pk=order.pk)
+
+
+@login_required
+@require_POST
+def order_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a draft order that was never sent. Manager only."""
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
+        messages.error(request, "Only managers can delete orders.")
+        return redirect("orders:order_detail", pk=pk)
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        order.delete()
+    except ValidationError as e:
+        messages.error(request, str(e.messages[0]) if e.messages else "Delete failed.")
+        return redirect("orders:order_detail", pk=order.pk)
+    messages.success(request, f"Order {order.invoice_number} deleted.")
+    return redirect("orders:order_list")

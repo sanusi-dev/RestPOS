@@ -16,7 +16,6 @@ from apps.users.models import CustomUser
 
 from ..services import (
     add_order_line,
-    claim_receipt_print,
     create_draft_order,
     create_tickets,
     dispatch_tickets,
@@ -150,14 +149,14 @@ class UpdateOrderMetaTest(OrderServiceTestBase):
         order.refresh_from_db()
         self.assertEqual(order.guest_count, 2)
 
-    def test_printed_order_rejects_edits(self):
+    def test_legacy_printed_draft_remains_editable(self):
         order = self._create_order()
         order.invoice_printed = True
         order.save(update_fields=["invoice_printed"])
-        with self.assertRaisesMessage(
-            ValidationError, "This receipt has been printed. Draft edits are no longer allowed."
-        ):
-            update_order_meta(order, guest_delta="1", actor=self.user)
+        result = update_order_meta(order, guest_delta="1", actor=self.user)
+        order.refresh_from_db()
+        self.assertEqual(order.guest_count, 2)
+        self.assertEqual(result, 2)
 
     def test_sent_order_rejects_edits(self):
         order = self._create_order()
@@ -221,31 +220,6 @@ class UpdateOrderItemTest(OrderServiceTestBase):
         update_order_item(order, order.items.get().pk, action="increment", actor=self.user)
         order.refresh_from_db()
         self.assertEqual(order.net_total, Decimal("1500"))
-
-
-class ClaimReceiptPrintTest(OrderServiceTestBase):
-    def test_first_print_claims_and_audits(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
-        action = claim_receipt_print(order, self.user)
-        order.refresh_from_db()
-        self.assertEqual(action, "print")
-        self.assertTrue(order.invoice_printed)
-        self.assertEqual(order.invoice_printed_by, self.user)
-        self.assertTrue(order.audit_events.filter(event_type="RECEIPT_PRINTED").exists())
-
-    def test_second_print_is_reprint_without_duplicate_audit(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
-        claim_receipt_print(order, self.user)
-        action = claim_receipt_print(order, self.user)
-        self.assertEqual(action, "reprint")
-        self.assertEqual(order.audit_events.filter(event_type="RECEIPT_PRINTED").count(), 1)
-
-    def test_empty_order_raises(self):
-        order = self._create_order()
-        with self.assertRaisesMessage(ValidationError, "Add at least one item before printing the receipt."):
-            claim_receipt_print(order, self.user)
 
 
 class DispatchTicketsTest(OrderServiceTestBase):

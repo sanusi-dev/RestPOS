@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
 
-from apps.orders.models import Order, OrderItem, OrderPayment
+from apps.orders.models import SUBMITTED, Order, OrderItem, OrderPayment
 from apps.payments.models import ModeOfPayment
 
 from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
@@ -53,20 +53,33 @@ def collect_submitted_payment_totals(submitted_orders, payment_rows):
 def expected_closing_amounts(open_shift, period_start, period_end):
     """Compute expected drawer amounts for each opening payment mode.
 
-    Expected = opening float + payments collected in the period. For cash,
-    change given back to customers is netted off the collected total.
+    Expected = opening float + payments collected in the period (cash change
+    netted off), minus refunds of returns submitted in the period.
     """
     submitted_orders = Order.objects.submitted_in_shift(open_shift, period_start, period_end)
     opening_payments = list(open_shift.opening_payments.select_related("mode_of_payment").all())
     collected_by_mode = collect_submitted_payment_totals(submitted_orders, opening_payments)
+    refunded_orders = Order.objects.filter(
+        opening_entry=open_shift,
+        status=SUBMITTED,
+        is_return=True,
+        submitted_at__gte=period_start,
+        submitted_at__lte=period_end,
+    )
+    refund_rows = OrderPayment.objects.filter(order__in=refunded_orders)
+    refund_by_mode = {
+        row["mode_of_payment_id"]: abs(row["total"] or Decimal("0"))
+        for row in refund_rows.values("mode_of_payment_id").annotate(total=Sum("amount")).order_by()
+    }
     rows = []
     for opening_payment in opening_payments:
         collected = collected_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
+        refunded = refund_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
         rows.append(
             {
                 "mode": opening_payment.mode_of_payment,
                 "opening_amount": opening_payment.opening_amount,
-                "expected_amount": opening_payment.opening_amount + collected,
+                "expected_amount": opening_payment.opening_amount + collected - refunded,
             }
         )
     return rows
@@ -149,10 +162,7 @@ def submit_closing_entry(closing):
     # Drafts block the close above; returns are excluded because they are
     # handled by the deferred refund flow rather than drawer sales.
     item_totals = (
-        OrderItem.objects.filter(order_id=OuterRef("pk"))
-        .values("order_id")
-        .annotate(total=Sum("qty"))
-        .values("total")
+        OrderItem.objects.filter(order_id=OuterRef("pk")).values("order_id").annotate(total=Sum("qty")).values("total")
     )
     order_totals = submitted_orders.aggregate(
         total_quantity=Sum(Subquery(item_totals)),

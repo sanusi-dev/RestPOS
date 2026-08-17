@@ -40,9 +40,11 @@ RestPOS/
 ├── AGENTS.md                         ← this file
 ├── PLAN.md                           ← feature implementation plans
 ├── FEATURES.md                       ← feature spec from URY/ERPNext
-├── references/                       ← READ ONLY — never modify
-│   ├── erpnext-develop/              ← ERPNext source (main branch)
-│   └── ury-develop/                  ← URY source (main branch)
+├── references/                       ← READ ONLY — never modify (gitignored; clone with:
+│   │                                  git clone --depth 1 --branch develop https://github.com/frappe/erpnext.git references/erpnext-develop
+│   │                                  git clone --depth 1 --branch develop https://github.com/ury-erp/ury.git references/ury-develop)
+│   ├── erpnext-develop/              ← ERPNext source (develop branch — the repo's default; there is no main)
+│   └── ury-develop/                  ← URY source (develop branch)
 ├── .venv/                            ← virtual environment
 ├── pyproject.toml                    ← dependencies (uv)
 ├── manage.py
@@ -114,8 +116,7 @@ Read the `.json` (the `fields` array is the data model) and the `.py` (business 
 - `references/ury-develop/ury/ury_pos/api.py` — POS API (read fully before any POS endpoint)
 - `references/ury-develop/ury/ury/hooks/` — document event handlers
 - `references/ury-develop/pos/src/` — React POS frontend (UI logic reference)
-- `references/ury-develop/URYMosaic/src/` — Vue kitchen display (reference only)
-
+- `references/ury-develop/mosaic/src/` — kitchen display (reference only)
 **Step 3 — Port to Django:** Translate doctype fields to a Django model. Apply URY restaurant logic as model methods or signals. Document deviations.
 
 ### Key Reference Files (read first)

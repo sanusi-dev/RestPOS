@@ -22,7 +22,7 @@
 | Mode of Payment | Configurable payment method master, such as Cash or Bank. |
 | GL Mapping | `PaymentGLMapping` account-name mapping required for settlement. |
 | Order | Operational POS document containing lines, payments, status, totals, and audit events. |
-| Draft | Editable order state before settlement, cancellation, discard, KOT, or receipt lock. |
+| Draft | Editable order state before settlement, a KOT, cancellation, or deletion. |
 | Order Item | Historical line snapshot with item, price, quantity, department, comments, and customer index. |
 | Customer Card | Ephemeral POS session selection represented by an integer customer index; not a customer model. |
 | Guest Count | `Order.guest_count`, from 1 to 50, used to render customer groups. |
@@ -30,10 +30,10 @@
 | KOT | Kitchen Order Ticket snapshot for FOOD or DRINKS station routing. |
 | BOT | Bar ticket; technically a `KOT` row with `ticket_type=bar`. |
 | Ticket Print Status | `PENDING`, `PRINTED`, or `CANCELLED`; independent from KOT lifecycle status. |
-| Receipt Claim | Database marking of `Order.invoice_printed` before the print interface is called. |
+| Receipt Print | `Order.invoice_printed*` written by `settle_order()`; the actual print runs non-blockingly after settlement. |
 | Settlement | `orders.services.settle_order()`, which validates payment/stock and submits an order atomically. |
-| Return | Negative draft order linked to an original submitted paid order; current refund submission is absent. |
-| Discard | Retained `DISCARDED` state for an empty untouched draft. |
+| Return | Negative draft order linked to an original submitted paid order; `submit_return()` restores stock and mirrors refund rows. |
+| Discard | Retained `DISCARDED` state for an empty untouched draft; legacy seed data only. |
 | Audit Event | Append-only `OrderAuditEvent` describing an order mutation or lifecycle event. |
 | POS History | `services.order_history_rows()` query and its cashier-facing filtered display. |
 | Full History | Restaurant-controlled access to returns, cancelled, discarded, and all status filters. |

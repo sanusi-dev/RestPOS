@@ -2,7 +2,7 @@
 
 ## Atomic Service Boundaries
 
-The following order functions are atomic: draft creation, metadata update, cart item update, receipt claim, settlement, cancellation, discard, line add/update/remove/clear, return creation, and ticket creation. Inventory document submit/cancel services, staff open/close services, and setup seed commands are also atomic.
+The following order functions are atomic: draft creation, metadata update, cart item update, settlement, cancellation, return creation, return submission, delete, line add/update/remove/clear, and ticket creation. Inventory document submit/cancel services, staff open/close services, and setup seed commands are also atomic.
 
 ## Locking Map
 
@@ -10,7 +10,7 @@ The following order functions are atomic: draft creation, metadata update, cart 
 |---|---|---|
 | Restaurant | one global mutex for open shift and draft-cap/config changes | `staff.services.open_shift`, `Order.create_draft_order`, `POSOpeningEntry.submit` |
 | POSOpeningEntry | active shift ownership, settlement, close, draft creation | order/staff views/services |
-| Order | serialize cart, settlement, KOT, cancellation, receipt claim | `orders.services` |
+| Order | serialize cart, settlement, KOT, cancellation, return submission, deletion | `orders.services` |
 | OrderSequence | unique sequential human order numbers | `Order.assign_order_number` |
 | Bin | reservations, FIFO queue, actual stock and valuation | order/inventory services |
 | KOT | independent print status dispatch/retry | `dispatch_tickets`, POS ticket view |
@@ -22,8 +22,9 @@ The following order functions are atomic: draft creation, metadata update, cart 
 - Settlement rolls back payment rows, order status, stock deduction, and reservation conversion together.
 - Add-on parent/add-on lines are one operation.
 - Inventory document posting rolls back all SLE and Bin changes if a later line fails.
+- Settlement commits before `print_receipt()`. A failed print does not roll back the settled, printed order.
+- Return submission rolls back stock restoration and refund rows together if any line fails.
 - KOT creation commits before printing; one ticket print transaction is independent of another.
-- Receipt claim commits before print. A failed print does not roll back the claim.
 - POS close GET is read-only; POS close POST can commit a draft closing entry before invalid form rendering.
 
 ## Bulk Operations

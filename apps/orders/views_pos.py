@@ -258,7 +258,6 @@ def _build_order_context(request, order):
         "kitchen_ticket_printed": bool(kitchen_ticket and kitchen_ticket.print_status == KOT_PRINTED),
         "bar_ticket_printed": bool(bar_ticket and bar_ticket.print_status == KOT_PRINTED),
         "can_reprint": user.is_manager or user.is_admin or user.is_superuser,
-        "receipt_printable": has_items,
         "has_items": has_items,
         "setup_error": setup_error,
         "pos_nav": "order",
@@ -648,9 +647,7 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
             is_return=False,
             opening_entry=shift,
         )
-        if order.invoice_printed:
-            error = "This receipt has been printed. Draft edits are no longer allowed."
-        elif order.kots.exists():
+        if order.kots.exists():
             error = "This order was sent to the kitchen or bar. Cancel it before making changes."
         else:
             item_id = 0
@@ -800,9 +797,7 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
             is_return=False,
             opening_entry=shift,
         )
-        if order.invoice_printed:
-            error = "This receipt has been printed. Draft edits are no longer allowed."
-        elif order.kots.exists():
+        if order.kots.exists():
             error = "This order was sent to the kitchen or bar. Use Cancel Order instead of Clear."
         else:
             services.clear_order_lines(order)
@@ -850,6 +845,8 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
             cards.pop(str(order.pk), None)
             request.session[SESSION_CARD_KEY] = cards
         messages.success(request, f"Order {order.invoice_number} settled.")
+        if not printing.print_receipt(order).success:
+            messages.warning(request, "The receipt failed to print — reprint it from order history.")
         return redirect("pos:pos_home")
 
     return render(
@@ -915,8 +912,8 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 @require_POST
-def pos_order_discard(request: HttpRequest, pk: int) -> HttpResponse:
-    """Discard an empty draft order that never got items, a receipt, or a ticket."""
+def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete an unsent draft order entirely, purging items and audit events."""
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
@@ -929,62 +926,17 @@ def pos_order_discard(request: HttpRequest, pk: int) -> HttpResponse:
                 is_return=False,
                 opening_entry=shift,
             )
-            services.discard_order(order, discarded_by=request.user)
+            order.delete()
     except ValidationError as e:
-        messages.error(request, str(e.messages[0]) if e.messages else "Discard failed.")
+        messages.error(request, str(e.messages[0]) if e.messages else "Delete failed.")
         return redirect("pos:pos_order_screen", pk=pk)
     request.session.pop(SESSION_ORDER_KEY, None)
     cards = request.session.get(SESSION_CARD_KEY, {})
     if isinstance(cards, dict):
         cards.pop(str(order.pk), None)
         request.session[SESSION_CARD_KEY] = cards
-    messages.success(request, f"Order {order.invoice_number} discarded.")
+    messages.success(request, f"Order {order.invoice_number} deleted.")
     return redirect("pos:pos_home")
-
-
-@login_required
-@require_POST
-def pos_order_print(request: HttpRequest, pk: int) -> HttpResponse:
-    """Print or reprint the receipt for the current draft order.
-
-    Claim the printed state in the database first, then print after commit so a
-    successful physical print cannot leave the order marked unprinted.
-    """
-    user = _authenticated_user(request)
-    feedback = {}
-    shift = _get_open_shift()
-    if shift is None:
-        return redirect("pos:pos_home")
-
-    with transaction.atomic():
-        order = get_object_or_404(
-            Order.objects.select_for_update(),
-            pk=pk,
-            status=DRAFT,
-            is_return=False,
-            opening_entry=shift,
-        )
-        try:
-            action = services.claim_receipt_print(order, user)
-        except ValidationError as e:
-            return _render_cart(
-                request,
-                order,
-                error=e.messages[0] if e.messages else "Unable to print the receipt.",
-            )
-
-    # Print outside the transaction: the printed state was claimed in the
-    # DB first, so a failed physical print still leaves the order marked
-    # printed rather than risking a duplicate print on retry.
-    result = printing.print_receipt(order)
-    if result.success:
-        messages.success(
-            request,
-            f"Receipt {'reprinted' if action == 'reprint' else 'printed'} successfully.",
-        )
-    else:
-        feedback = {"receipt_print_error": True, "receipt_print_action": action}
-    return _render_cart(request, order, catalog_oob=action == "print", **feedback)
 
 
 @login_required
