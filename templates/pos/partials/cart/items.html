@@ -31,7 +31,7 @@
       </div>
       <div class="flex shrink-0 items-center gap-3">
         <div class="flex items-center justify-center">
-          {% if not order_sent and not order.invoice_printed %}
+          {% if not order_sent %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 class="inline">
@@ -44,7 +44,7 @@
           </form>
           {% endif %}
           <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
-          {% if not order_sent and not order.invoice_printed %}
+          {% if not order_sent %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 class="inline">
@@ -60,7 +60,7 @@
        <div class="min-w-[5.5rem] text-right">
           <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
         </div>
-        {% if not order_sent and not order.invoice_printed %}
+        {% if not order_sent %}
         <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
               hx-target="#cart-panel" hx-swap="outerHTML"
               class="inline-flex">
@@ -102,7 +102,7 @@
       </div>
       <div class="flex shrink-0 items-center gap-3">
         <div class="flex items-center justify-center">
-          {% if not order_sent and not order.invoice_printed %}
+          {% if not order_sent %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 class="inline">
@@ -115,7 +115,7 @@
           </form>
           {% endif %}
           <span class="min-w-[1.5rem] text-center text-sm text-slate-900">{{ item.qty|floatformat:"-2" }}</span>
-          {% if not order_sent and not order.invoice_printed %}
+          {% if not order_sent %}
           <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
                 hx-target="#cart-panel" hx-swap="outerHTML"
                 class="inline">
@@ -131,7 +131,7 @@
         <div class="min-w-[5.5rem] text-right">
           <p class="whitespace-nowrap text-sm tabular-nums text-slate-900">₦{{ item.rate|intcomma }}</p>
         </div>
-        {% if not order_sent and not order.invoice_printed %}
+        {% if not order_sent %}
         <form hx-post="{% url 'pos:pos_order_update_item' order.pk item.pk %}"
               hx-target="#cart-panel" hx-swap="outerHTML"
               class="inline-flex">

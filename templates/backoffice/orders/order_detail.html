@@ -14,24 +14,36 @@
       {% if order.is_return %}
       <span class="inline-flex items-center px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Return order</span>
       {% endif %}
-      {% if order.status == "SUBMITTED" and not order.is_return %}
-        {% if user.is_manager or user.is_admin or user.is_superuser %}
+      {% if user.is_manager or user.is_admin or user.is_superuser %}
+        {% if order.status == "SUBMITTED" and not order.is_return %}
         <button onclick="Swal.fire({title:'Process Return?',text:'This creates a return draft with negative items and payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Create Return Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-amber-200 text-amber-600 text-sm font-semibold hover:bg-amber-50 transition-all">
           Create return
         </button>
         <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden">{% csrf_token %}</form>
-        {% endif %}
-      {% endif %}
-      {% if order.status == "DRAFT" or order.status == "SUBMITTED" and not order.is_paid and not order.is_return %}
-        {% if user.is_manager or user.is_admin or user.is_superuser %}
+        {% elif order.status == "DRAFT" and order.is_return %}
+        <button onclick="Swal.fire({title:'Submit Return?',text:'This restores drink stock and records the refunds against the source payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Submit Return'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-submit-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-all">
+          Submit return
+        </button>
+        <form id="return-submit-form" method="post" action="{% url 'orders:order_return_submit' order.pk %}" class="hidden">{% csrf_token %}</form>
+        <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
+          Delete draft
+        </button>
+        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden">{% csrf_token %}</form>
+        {% elif order.status == "DRAFT" and order.kots.exists and not order.is_return %}
         <button onclick="document.getElementById('cancel-dialog').classList.toggle('hidden')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
           Cancel order
         </button>
+        {% elif order.status == "DRAFT" and not order.is_return %}
+        <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
+          Delete draft
+        </button>
+        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden">{% csrf_token %}</form>
         {% endif %}
       {% endif %}
     </div>
   </div>
 
+  {% if order.status == "DRAFT" and order.kots.exists and not order.is_return %}
   <div id="cancel-dialog" class="hidden bg-white border border-red-200 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 mb-8" x-data="{ cancelReason: 'wrong_order' }">
     <div class="flex items-start justify-between gap-4 mb-5">
       <div>
@@ -53,6 +65,7 @@
       <button type="submit" class="h-[2.75rem] px-5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition-all">Confirm cancellation</button>
     </form>
   </div>
+{% endif %}
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 mb-6 relative overflow-hidden">
     <div class="absolute -right-10 -top-12 w-36 h-36 rounded-full bg-orange-100/60 blur-3xl pointer-events-none"></div>

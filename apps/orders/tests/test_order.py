@@ -15,7 +15,7 @@ from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 
-from ..models import DINE_IN, Order, OrderSequence
+from ..models import DINE_IN, Order, OrderAuditEvent, OrderItem, OrderPayment, OrderSequence
 from ..services import (
     add_order_line,
     cancel_order,
@@ -26,6 +26,7 @@ from ..services import (
     make_return,
     remove_order_line,
     settle_order,
+    submit_return,
     update_order_line_quantity,
 )
 
@@ -243,12 +244,14 @@ class OrderItemTest(OrderTestBase):
         with self.assertRaisesMessage(ValidationError, "snapshot is disabled"):
             update_order_line_quantity(order, order.items.get().pk, Decimal("2"))
 
-    def test_cannot_add_to_submitted_order(self):
-        from django.core.exceptions import ValidationError
-
-        with self.assertRaises(ValidationError):
-            order = self._create_and_print_order()
-            add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
+    def test_delete_unsent_draft_purges_items_and_audit_events(self):
+        order = self._create_order()
+        add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
+        order.audit("CREATED", actor=self.user)
+        order.delete()
+        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+        self.assertFalse(OrderItem.objects.filter(order_id=order.pk).exists())
+        self.assertFalse(OrderAuditEvent.objects.filter(order_id=order.pk).exists())
 
 
 class OrderSettleTest(OrderTestBase):
@@ -366,12 +369,13 @@ class OrderSettleTest(OrderTestBase):
         self.assertEqual(self.order.status, "DRAFT")
         self.assertEqual(self.order.payments.count(), 0)
 
-    def test_settle_dine_in_without_print(self):
+    def test_settle_marks_receipt_printed(self):
         order = self._create_order()
         add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
         settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "1500"}])
         self.assertEqual(order.status, "SUBMITTED")
-        self.assertFalse(order.invoice_printed)
+        self.assertTrue(order.invoice_printed)
+        self.assertIsNotNone(order.invoice_printed_at)
 
     def test_settle_takeaway_no_print_required(self):
         order = self._create_order(order_type="TAKE_AWAY")
@@ -436,12 +440,14 @@ class OrderCancelTest(OrderTestBase):
         """Cancelling a submitted order must keep payment rows — audit trail."""
         self.assertEqual(self.order.payments.count(), 0)
 
-    def test_cancel_draft_can_cancel(self):
+    def test_cancel_unsent_draft_requires_delete(self):
+        """An unsent draft is deleted, never cancelled — stage rule 1."""
         draft = self._create_order()
         add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
-        cancel_order(draft, "Changed mind")
+        with self.assertRaisesMessage(ValidationError, "never sent — delete it instead"):
+            cancel_order(draft, "Changed mind")
         draft.refresh_from_db()
-        self.assertEqual(draft.status, "CANCELLED")
+        self.assertEqual(draft.status, "DRAFT")
 
     def test_cancel_sent_order_releases_drink_reservation(self):
         order = self._create_order()
@@ -520,6 +526,10 @@ class OrderCancelTest(OrderTestBase):
         from django.core.exceptions import ValidationError
 
         draft = self._create_order()
+        add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
+        create_tickets(
+            draft,
+        )
         cancel_order(draft, "Changed mind")
         with self.assertRaisesMessage(ValidationError, "Only draft orders can be discarded."):
             discard_order(
@@ -641,6 +651,86 @@ class OrderReturnTest(OrderTestBase):
         )
         with self.assertRaises(ValidationError):
             settle_order(return_order, [{"mode_of_payment": self.cash.pk, "amount": "3500"}])
+
+
+class SubmitReturnTest(OrderTestBase):
+    def _settled_order(self):
+        order = self._create_order()
+        add_order_line(order, self.item, qty=2, rate=Decimal("1500"))
+        add_order_line(order, self.item2, qty=1, rate=Decimal("500"))
+        settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "3500"}])
+        return order
+
+    def test_submit_return_restores_drink_stock(self):
+        order = self._settled_order()
+        drink_balance = Bin.objects.get(item=self.item2, warehouse=self.warehouse).actual_qty
+        return_order = make_return(order)
+        submit_return(return_order, actor=self.user)
+        sle = StockLedgerEntry.objects.get(voucher_type="POS Return", voucher_no=str(return_order.pk), item=self.item2)
+        self.assertEqual(sle.actual_qty, Decimal("1"))
+        self.assertEqual(
+            Bin.objects.get(item=self.item2, warehouse=self.warehouse).actual_qty,
+            drink_balance + 1,
+        )
+
+    def test_submit_return_creates_negative_refund_rows(self):
+        order = self._settled_order()
+        return_order = make_return(order)
+        submit_return(return_order, actor=self.user)
+        return_order.refresh_from_db()
+        self.assertEqual(return_order.payments.count(), 1)
+        refund = return_order.payments.get()
+        self.assertEqual(refund.mode_of_payment, self.cash)
+        self.assertEqual(refund.amount, Decimal("-3500"))
+        self.assertEqual(refund.reference_no, "")
+        self.assertEqual(return_order.paid_amount, Decimal("-3500"))
+        self.assertFalse(return_order.is_paid)
+        self.assertEqual(return_order.status, "SUBMITTED")
+        self.assertTrue(return_order.audit_events.filter(event_type="RETURN_SUBMITTED").exists())
+
+    def test_submit_return_requires_draft(self):
+        order = self._settled_order()
+        return_order = make_return(order)
+        submit_return(return_order, actor=self.user)
+        with self.assertRaises(ValidationError):
+            submit_return(return_order, actor=self.user)
+
+    def test_submit_return_rejects_non_return_draft(self):
+        draft = self._create_order()
+        add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
+        with self.assertRaises(ValidationError):
+            submit_return(draft, actor=self.user)
+
+    def test_submit_return_requires_submitted_source(self):
+        source = self._create_order()
+        add_order_line(source, self.item, qty=1, rate=Decimal("1500"))
+        draft_return = Order.objects.create(
+            opening_entry=self.opening,
+            is_return=True,
+            return_against=source,
+        )
+        with self.assertRaisesMessage(ValidationError, "must reference a submitted non-return order"):
+            submit_return(draft_return, actor=self.user)
+
+
+class OrderPaymentValidationTest(OrderTestBase):
+    def test_negative_amount_rejected_on_normal_order(self):
+        order = self._create_order()
+        with self.assertRaisesMessage(ValidationError, "Payment amount must be greater than zero."):
+            OrderPayment.objects.create(order=order, mode_of_payment=self.cash, amount=Decimal("-3500"))
+
+    def test_negative_amount_allowed_on_return_draft(self):
+        source = self._create_order()
+        add_order_line(source, self.item, qty=2, rate=Decimal("1500"))
+        settle_order(source, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
+        return_order = make_return(source)
+        OrderPayment.objects.create(
+            order=return_order,
+            mode_of_payment=self.cash,
+            amount=Decimal("-3000"),
+            reference_no="",
+        )
+        self.assertEqual(return_order.payments.get().amount, Decimal("-3000"))
 
 
 class OrderRecalculateTest(OrderTestBase):

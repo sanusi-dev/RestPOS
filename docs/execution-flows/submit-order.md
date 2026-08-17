@@ -17,9 +17,11 @@ Pay button
   -> ticket guarantee: if no KOTs exist, create and dispatch them (see below)
   -> create OrderPayment rows
   -> set paid/change/is_paid/status/submitted_at
+  -> set invoice_printed / invoice_printed_at / invoice_printed_by
   -> convert DRINKS reservations to POS Order SLEs
   -> Order.audit("SUBMITTED")
   -> clear POS order/card session keys
+  -> print_receipt(order) — failure only warns; sale stands
   -> success message and redirect to POS home
 ```
 
@@ -39,6 +41,10 @@ A paid (SUBMITTED) order must always have a kitchen/bar ticket record for every 
 
 Payment inserts use nested savepoints to convert uniqueness errors to validation errors. Any later stock error rolls back payment rows, order status, totals, reservation conversion, and SLE creation. Audit event creation is inside the same transaction.
 
+## Return Submission
+
+A submitted return is a *separate* path (`orders.services.submit_return`), not a submission of the same document. It restores drink stock with positive SLEs (`voucher_type="POS Return"`), mirrors each source payment as a negative `OrderPayment` row, sets `paid_amount` to the negative refund total, keeps `is_paid=False`, transitions the return draft to `SUBMITTED`, and audits `RETURN_SUBMITTED`. Return documents stay out of paid-sales revenue queries (`is_paid=True` filters and `OrderQuerySet.submitted_in_shift` exclude them); at shift close their refund rows reduce the expected drawer per mode.
+
 ## Important Difference from Older Feature Text
 
-Settlement does not require receipt printing, does not create a separate food/drinks accounting split, and does not auto-print a post-payment receipt. The current code only submits one operational Order and its payment rows.
+Settlement does not create a separate food/drinks accounting split. The current code only submits one operational Order and its payment rows, and it auto-prints the receipt after settlement (non-blocking).

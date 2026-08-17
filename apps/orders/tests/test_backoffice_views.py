@@ -107,8 +107,14 @@ class OrderDetailTest(BackofficeViewTestBase):
 
 
 class OrderCancelTest(BackofficeViewTestBase):
-    def test_cancel_order_manager(self):
+    def _sent_order(self):
         order = self._create_order()
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
+        create_tickets(order, created_by=self.manager)
+        return order
+
+    def test_cancel_order_manager(self):
+        order = self._sent_order()
         response = self.client.post(
             reverse("orders:order_cancel", kwargs={"pk": order.pk}),
             {"cancel_reason": "wrong_order", "cancel_reason_note": "Test cancel"},
@@ -117,8 +123,19 @@ class OrderCancelTest(BackofficeViewTestBase):
         order.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
 
-    def test_cancel_order_no_reason(self):
+    def test_cancel_unsent_draft_rejected(self):
         order = self._create_order()
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
+        response = self.client.post(
+            reverse("orders:order_cancel", kwargs={"pk": order.pk}),
+            {"cancel_reason": "wrong_order", "cancel_reason_note": "Test"},
+        )
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "DRAFT")
+
+    def test_cancel_order_no_reason(self):
+        order = self._sent_order()
         response = self.client.post(
             reverse("orders:order_cancel", kwargs={"pk": order.pk}),
             {"cancel_reason": "", "cancel_reason_note": ""},
@@ -130,11 +147,34 @@ class OrderCancelTest(BackofficeViewTestBase):
     def test_cancel_order_cashier_blocked(self):
         self.client.logout()
         self.client.force_login(self.cashier_user)
-        order = self._create_order()
+        order = self._sent_order()
         response = self.client.post(
             reverse("orders:order_cancel", kwargs={"pk": order.pk}),
             {"cancel_reason": "wrong_order", "cancel_reason_note": "Test"},
         )
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "DRAFT")
+
+    def test_order_delete_backoffice_manager(self):
+        order = self._create_order()
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
+        response = self.client.post(reverse("orders:order_delete", kwargs={"pk": order.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+
+    def test_order_delete_backoffice_cashier_blocked(self):
+        self.client.logout()
+        self.client.force_login(self.cashier_user)
+        order = self._create_order()
+        add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
+        response = self.client.post(reverse("orders:order_delete", kwargs={"pk": order.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Order.objects.filter(pk=order.pk).exists())
+
+    def test_order_delete_sent_draft_blocked(self):
+        order = self._sent_order()
+        response = self.client.post(reverse("orders:order_delete", kwargs={"pk": order.pk}))
         self.assertEqual(response.status_code, 302)
         order.refresh_from_db()
         self.assertEqual(order.status, "DRAFT")
@@ -164,6 +204,41 @@ class OrderReturnTest(BackofficeViewTestBase):
         response = self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Order.objects.filter(is_return=True).exists())
+
+    def test_return_draft_shows_submit_not_cancel(self):
+        order = self._create_order()
+        self._settle_order(order)
+        self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        return_order = Order.objects.get(is_return=True)
+        response = self.client.get(reverse("orders:order_detail", kwargs={"pk": return_order.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Submit return")
+        self.assertContains(response, "Delete draft")
+        self.assertNotContains(response, "Cancel order")
+
+    def test_return_submit_view(self):
+        order = self._create_order()
+        self._settle_order(order)
+        self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        return_order = Order.objects.get(is_return=True)
+        response = self.client.post(reverse("orders:order_return_submit", kwargs={"pk": return_order.pk}))
+        self.assertEqual(response.status_code, 302)
+        return_order.refresh_from_db()
+        self.assertEqual(return_order.status, "SUBMITTED")
+        self.assertEqual(return_order.payments.count(), 1)
+        self.assertEqual(return_order.payments.get().amount, Decimal("-3000"))
+
+    def test_cashier_cannot_submit_return(self):
+        order = self._create_order()
+        self._settle_order(order)
+        self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        return_order = Order.objects.get(is_return=True)
+        self.client.logout()
+        self.client.force_login(self.cashier_user)
+        response = self.client.post(reverse("orders:order_return_submit", kwargs={"pk": return_order.pk}))
+        self.assertEqual(response.status_code, 302)
+        return_order.refresh_from_db()
+        self.assertEqual(return_order.status, "DRAFT")
 
     def test_return_requires_login(self):
         self.client.logout()

@@ -9,11 +9,9 @@ Printing is represented by a narrow interface in `apps/orders/printing.py`:
 
 Both functions currently return `PrintResult(success=True, ...)` without formatting or communicating with a device. `ProductionUnit` stores `printer_ip`, paper width, and cut mode, but those values are not consumed by the current print functions.
 
-## Receipt Claim
+## Receipt Print
 
-`pos_order_print()` calls `services.claim_receipt_print()` inside a transaction. The service locks the draft, requires at least one item, marks `invoice_printed`, stores time/user, and appends `RECEIPT_PRINTED`. The transaction commits before `printing.print_receipt(order)` runs.
-
-This ordering means a failed physical print leaves the order marked printed and the next action is a reprint. It intentionally prioritizes preventing a successful print from being followed by an unprinted database state. Because the current stub always succeeds, real failure behavior is not exercised outside tests.
+There is no pre-payment receipt print. `settle_order()` marks `invoice_printed`, `invoice_printed_at`, and `invoice_printed_by` on the settlement save; the view then calls `printing.print_receipt(order)` after the transaction commits. A failed physical print leaves the order settled and printed, and the cashier is told to reprint from order history. Because the current stub always succeeds, real failure behavior is not exercised outside tests.
 
 ## Ticket Dispatch
 
@@ -31,6 +29,6 @@ On a submitted order, the history detail screen shows a "Retry kitchen/bar ticke
 
 ## Templates
 
-Receipt/ticket controls are in `templates/pos/partials/cart/totals.html` and `templates/pos/order_history_detail.html`. There is no receipt template, ESC/POS formatter, print agent, printer client, or print job table in the current code.
+Receipt/ticket controls live in `templates/pos/partials/cart/totals.html` (send-to-kitchen, ticket retry/reprint, delete/cancel) and `templates/pos/order_history_detail.html` (receipt reprint and ticket retry/reprint). There is no receipt template, ESC/POS formatter, print agent, printer client, or print job table in the current code.
 
 ⚠️ Requires verification: the intended production printer topology in `AGENTS.md` and `FEATURES.md` is not implemented by the current runtime. Treat those files as design context, not an available integration.

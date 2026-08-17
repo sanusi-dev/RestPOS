@@ -23,7 +23,7 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Shift will not open | `pos_open_shift`, `staff.services.open_shift` | enabled modes -> Restaurant lock -> existing open shift -> opening form decimals |
 | Shift will not close | `pos_close_shift`, `submit_closing_entry` | open draft count -> closing rows -> active opening -> expected amounts |
 | Item missing from catalog | `_build_order_context`, active Menu | Restaurant.active_menu -> menu enabled -> MenuItem disabled -> filters -> Item flags |
-| Item visible but cannot add | `pos_order_add_item`, `Item._validate_pos_item` | item disabled/sales flag -> KOT/receipt lock -> active card -> stock reservation |
+| Item visible but cannot add | `pos_order_add_item`, `Item._validate_pos_item` | item disabled/sales flag -> KOT lock -> active card -> stock reservation |
 | Drink says unavailable | `drink_stock_available`, `reserve_drink_stock` | default warehouse -> Bin actual/reserved -> disabled warehouse -> reservation race |
 | Food sale changed stock | order audit and SLE voucher | search SLE voucher type `POS Order`; current code should only create it for DRINKS |
 | Quantity is wrong | `pos_order_update_item`, `update_order_item` | action/qty -> line lookup -> merge/delete -> reservation -> recalculate totals |
@@ -31,11 +31,11 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Payment not reflected | `pos_order_settle`, `settle_order` | POST field names -> mode enabled/opening declaration -> GL mapping -> payment row -> status |
 | Payment mode visible but rejected | `_get_settle_payment_modes` vs `_validate_payment_data` | global mapped set may differ from shift opening modes |
 | Order missing from history | `order_history_rows` | status/is_paid/is_return -> posting_date -> full-history permission -> filters/pagination |
-| Receipt appears printed but no paper | `claim_receipt_print`, `apps/orders/printing.py` | claim commits before stub/device call; inspect print implementation/result |
+| Receipt printed but no paper | `settle_order`, `apps/orders/printing.py` | settlement marks printed; inspect print implementation/result; reprint from history |
 | Ticket remains pending | `dispatch_tickets`, KOT row | ticket status -> print_status -> printer result/exception -> retry action |
 | Cancellation did not restore stock | `cancel_order`, `_restore_stock` | submitted status -> `stock_warehouse` snapshot -> reversal SLE voucher |
-| Shift totals are wrong | `expected_closing_amounts`, `submit_closing_entry` | submitted period rows -> payment sums -> cash change subtraction -> closing rows |
-| Return cannot complete | `make_return`, `settle_order` | return draft is created, but settlement explicitly rejects `is_return` |
+| Shift totals are wrong | `expected_closing_amounts`, `submit_closing_entry` | submitted period rows -> payment sums -> cash change subtraction -> refund subtraction -> closing rows |
+| Return cannot complete | `make_return`, `submit_return` | return submission revalidates lines, restores stock, mirrors refund rows |
 | Backoffice route unexpectedly accessible | middleware and view | `/backoffice/` role gate -> view-level manager/superuser checks |
 | Role appears stale | `CustomUser` cached properties and `users.signals` | group m2m change -> cache invalidation -> prefetched groups |
 | HTMX response does not update | template target and view fragment | `HX-Target` -> partial name -> swap mode -> target ID |
@@ -47,12 +47,13 @@ Use voucher types and relationships to find side effects:
 
 - POS drink issue: `StockLedgerEntry.voucher_type="POS Order"`, `voucher_no=Order.pk`.
 - POS cancellation reversal: `"POS Order Cancellation"`.
+- POS return reversal: `"POS Return"`.
 - Stock document: `"Stock Entry"` or `"Stock Entry Cancellation"`.
 - Reconciliation: `"Stock Reconciliation"` or cancellation.
 - Purchase receipt: `"Purchase Receipt"` or cancellation.
 - Human order number: `Order.order_number` and `OrderSequence.current_value`.
 - Shift membership: `Order.opening_entry_id`.
-- Receipt claim: `invoice_printed`, timestamp, and user.
+- Receipt-printed state: `invoice_printed`, timestamp, and user (written at settlement).
 
 ## Test Starting Points
 

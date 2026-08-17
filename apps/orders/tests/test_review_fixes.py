@@ -196,22 +196,6 @@ class InventorySubmittedImmutableTest(ReviewFixBase):
             entry.save()
 
 
-class ReceiptPrintClaimsBeforePrintTest(ReviewFixBase):
-    def test_print_marks_printed_even_if_agent_fails(self):
-        order = self._draft_order_with_item()
-        with patch(
-            "apps.orders.views_pos.printing.print_receipt",
-            return_value=PrintResult(success=False, ticket_type="receipt"),
-        ):
-            response = self.client.post(
-                reverse("pos:pos_order_print", kwargs={"pk": order.pk}),
-                HTTP_HX_REQUEST="true",
-            )
-        self.assertEqual(response.status_code, 200)
-        order.refresh_from_db()
-        self.assertTrue(order.invoice_printed)
-
-
 class CancellationTicketRetryTest(ReviewFixBase):
     def test_retry_pending_cancellation_ticket_on_cancelled_order(self):
         order = self._draft_order_with_item()

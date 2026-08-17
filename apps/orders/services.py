@@ -150,38 +150,11 @@ def update_order_item(order, order_item_pk, *, action="update", qty=None, actor=
 
 
 @transaction.atomic
-def claim_receipt_print(order, user):
-    """Claim a draft order's printed state before the physical print.
-
-    Returns "print" or "reprint" so callers can phrase their feedback.
-    """
-    locked = Order.objects.select_for_update().get(pk=order.pk)
-    if not locked.items.exists():
-        raise ValidationError("Add at least one item before printing the receipt.")
-    action = "reprint" if locked.invoice_printed else "print"
-    if not locked.invoice_printed:
-        locked.invoice_printed = True
-        locked.invoice_printed_at = timezone.now()
-        locked.invoice_printed_by = user
-        locked.save(
-            update_fields=[
-                "invoice_printed",
-                "invoice_printed_at",
-                "invoice_printed_by",
-                "updated_at",
-            ]
-        )
-        locked.audit("RECEIPT_PRINTED", actor=user)
-        order.refresh_from_db()
-    return action
-
-
-@transaction.atomic
 def settle_order(order, payments_data, cashier=None, opening_entry=None):
     """Process a normal POS payment and submit the order atomically.
 
     Lines, stock, shift ownership, and payments are validated before the
-    order becomes immutable.
+    order becomes immutable. Settlement doubles as the receipt event.
     """
     locked = Order.objects.select_for_update().get(pk=order.pk)
     if locked.status != DRAFT:
@@ -252,6 +225,9 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     locked.is_paid = True
     locked.status = SUBMITTED
     locked.submitted_at = timezone.now()
+    locked.invoice_printed = True
+    locked.invoice_printed_at = timezone.now()
+    locked.invoice_printed_by = cashier
     with _transition(locked, flag="_allow_submit"):
         locked.save()
     _convert_drink_reservations(locked, reservations_initialized=reservations_initialized)
@@ -275,6 +251,8 @@ def cancel_order(order, reason, cancelled_by=None, reason_note=""):
         raise ValidationError("Discarded orders cannot be cancelled.")
     if locked.status == SUBMITTED and locked.is_paid:
         raise ValidationError("Submitted paid orders cannot be cancelled; use the refund flow.")
+    if locked.status == DRAFT and not locked.kots.exists():
+        raise ValidationError("This order was never sent — delete it instead of cancelling.")
     if not reason or not reason.strip():
         raise ValidationError("A cancel reason is required.")
     reason = reason.strip()
@@ -316,8 +294,8 @@ def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
         raise ValidationError("Only draft orders can be cancelled from the POS.")
     if locked.is_paid:
         raise ValidationError("Paid orders cannot be cancelled from the POS.")
-    if not locked.kots.exists() and not locked.invoice_printed:
-        raise ValidationError("Only a printed or sent order can be cancelled here.")
+    if not locked.kots.exists():
+        raise ValidationError("Only a sent order can be cancelled here.")
     if reason not in dict(CANCEL_REASON_CHOICES):
         raise ValidationError("Choose a valid cancellation reason.")
 
@@ -519,6 +497,39 @@ def make_return(order):
     return_order.recalculate_totals()
     return_order.audit("RETURN_CREATED", actor=source.cashier, metadata={"source_order": source.pk})
     return return_order
+
+
+@transaction.atomic
+def submit_return(order, actor=None):
+    """Submit a return draft, restoring stock and mirroring refund payments."""
+    locked = Order.objects.select_for_update().prefetch_related("items").get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft returns can be submitted.")
+    if not locked.is_return:
+        raise ValidationError("Only return orders can be submitted through this flow.")
+    source = locked.return_against
+    if source is None or source.status != SUBMITTED or source.is_return:
+        raise ValidationError("A return must reference a submitted non-return order.")
+    for line in locked.items.select_related("item").all():
+        line.full_clean()
+
+    _restore_stock(locked, voucher_type="POS Return")
+    for payment in source.payments.select_related("mode_of_payment").all():
+        OrderPayment.objects.create(
+            order=locked,
+            mode_of_payment=payment.mode_of_payment,
+            amount=-payment.amount,
+            reference_no="",
+        )
+    locked.paid_amount = -(source.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0"))
+    locked.is_paid = False
+    locked.status = SUBMITTED
+    locked.submitted_at = timezone.now()
+    with _transition(locked, flag="_allow_submit"):
+        locked.save()
+    locked.audit("RETURN_SUBMITTED", actor=actor, metadata={"source_order": source.pk})
+    order.refresh_from_db()
+    return order
 
 
 @transaction.atomic
@@ -815,7 +826,7 @@ def open_draft_orders(shift, order_filter="all", order_search=""):
         )
     )
     if order_filter == "draft":
-        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=False, invoice_printed=False)
+        draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=False)
     elif order_filter == "sent":
         draft_orders_queryset = draft_orders_queryset.filter(has_sent_ticket=True)
     if order_search:
@@ -1047,8 +1058,8 @@ def _convert_drink_reservations(order, *, reservations_initialized):
         )
 
 
-def _restore_stock(order):
-    """Create positive stock ledger entries reversing a submitted order's deductions."""
+def _restore_stock(order, voucher_type="POS Order Cancellation"):
+    """Create positive stock ledger entries reversing an order's deductions."""
     voucher_no = str(order.pk)
     stock_items = order.items.select_related("item").filter(
         Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS")
@@ -1062,8 +1073,8 @@ def _restore_stock(order):
         StockLedgerEntry.create_entry(
             item=oi.item,
             warehouse=warehouse,
-            actual_qty=oi.qty,
-            voucher_type="POS Order Cancellation",
+            actual_qty=abs(oi.qty),
+            voucher_type=voucher_type,
             voucher_no=voucher_no,
             voucher_detail_no=str(oi.pk),
         )

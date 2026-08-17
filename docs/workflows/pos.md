@@ -30,7 +30,7 @@ The home surface lists `Order.objects.open_drafts(shift)`, enriched by `services
 
 ## Cart
 
-Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dialog. Cart quantity controls POST to `pos_order_update_item`; guest/order-type controls POST to `pos_order_update_meta`. The server locks order edits after a KOT or receipt claim, even if a stale browser sends a request. Cart responses replace `#cart-panel`, and successful mutations can refresh `#catalog-grid` out of band.
+Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dialog. Cart quantity controls POST to `pos_order_update_item`; guest/order-type controls POST to `pos_order_update_meta`. The server locks order edits after a KOT is created, even if a stale browser sends a request. Cart responses replace `#cart-panel`, and successful mutations can refresh `#catalog-grid` out of band.
 
 ## Send, Pay, Cancel, Discard
 
@@ -47,7 +47,7 @@ Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dial
 ## Important Current Gaps
 
 - There is no customer master or customer selection workflow; `customer_name` remains a text field and guest cards are order-local indices.
-- Settlement does not require receipt printing, despite older feature text describing that rule.
-- Return creation exists in backoffice, but returns cannot be settled or refunded.
+- Settlement auto-prints the receipt after commit; a printer failure warns but never blocks the sale.
+- Return drafts are created and submitted in backoffice; submission restores drink stock and mirrors refund rows.
 - Printing is simulated by `apps/orders/printing.py`.
 - The payment dialog may show an enabled mapped mode that was not declared at shift opening; settlement rejects it server-side.

@@ -72,11 +72,11 @@
 
 - URLs: `orders/urls.py` exposes backoffice orders/KOTs; `orders/pos_urls.py` exposes the complete POS route set under `/pos/`.
 - Models/forms: orders, lines, payments, KOT snapshots, audit events, and sequence counter are in `orders/models.py`; cancellation form is in `orders/forms.py`.
-- Services: `orders/services.py` owns draft/cart/settlement/cancel/discard/return flows, reservations, KOT creation/dispatch, and history query construction.
+- Services: `orders/services.py` owns draft/cart/settlement/cancel/delete/return (including `submit_return`), reservations, KOT creation/dispatch, and history query construction.
 - Printing: `orders/printing.py` is the current success-only print interface.
 - Templates/frontend: `templates/pos/*`, `templates/pos/partials/*`, and `templates/backoffice/orders/*`; `views_pos.py` selects inline fragments and `order-details-drawer.js` owns history drawer presentation.
 - Signals/startup: no order model signals or AppConfig startup behavior.
-- Side effects: order services write payment, stock, KOT, audit, reservation, print-claim, and session-related state.
+- Side effects: order services write payment, stock, KOT, audit, reservation, receipt-print, and session-related state.
 
 ### `apps.web`
 

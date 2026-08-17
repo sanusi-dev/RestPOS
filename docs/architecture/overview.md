@@ -48,7 +48,7 @@ flowchart TD
 
 ## Business Logic Placement
 
-- Order lifecycle, payment validation, drink reservation, ticket creation, and receipt claim logic: `apps/orders/services.py`.
+- Order lifecycle, payment validation, drink reservation, ticket creation, and receipt-print logic: `apps/orders/services.py`.
 - Order immutability, line snapshots, totals, and audit-event append rules: `apps/orders/models.py`.
 - Stock posting, FIFO queue updates, reversal entries, and inventory document lifecycle: `apps/inventory/services.py` and `apps/inventory/models.py`.
 - Shift opening/closing and payment reconciliation: `apps/staff/services.py` and `apps/staff/models.py`.

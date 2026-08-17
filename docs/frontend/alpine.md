@@ -10,7 +10,7 @@
 - `gates/no_shift.html`: opening form visibility, processing flag, and client-side opening total.
 - `close_shift.html`: counted/expected per-mode preview and total variance.
 - `payment/dialog.html`: entered payment total, processing state, remaining amount/change preview, and focus-managed modal.
-- `cart/totals.html`: action menu, clear confirmation, cancel dialog, discard dialog, and processing state.
+- `cart/totals.html`: action menu, clear confirmation, cancel dialog, delete dialog, and processing state.
 - `catalog/add_on_dialog.html`: selected add-on IDs, focus management, and removal on close.
 - `order_history.html`: selected order ID for row highlighting.
 

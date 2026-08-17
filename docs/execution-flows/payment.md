@@ -20,7 +20,7 @@ The dialog sends fields named `payment_<mode_id>` and optional `reference_<mode_
 
 `_validate_payment_data()` resolves each mode, checks enabled/opening declaration/GL mapping, normalizes references, enforces two-decimal finite amounts, and discards zero rows. At least one positive row is required.
 
-`settle_order()` locks the order, recalculates the rounded total, validates active shift/stock, creates `OrderPayment` rows, sets `paid_amount`, `change_amount`, `is_paid`, `status=SUBMITTED`, and `submitted_at`, then converts drink reservations to actual stock issues.
+`settle_order()` locks the order, recalculates the rounded total, validates active shift/stock, creates `OrderPayment` rows, sets `paid_amount`, `change_amount`, `is_paid`, `status=SUBMITTED`, `submitted_at`, and `invoice_printed*` (the receipt event), then converts drink reservations to actual stock issues. The view prints the receipt after settlement, non-blockingly.
 
 ## Frontend Result
 

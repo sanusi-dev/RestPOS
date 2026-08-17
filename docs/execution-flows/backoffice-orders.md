@@ -28,13 +28,13 @@ Cancel form
   -> redirect order detail with pending-print warnings
 ```
 
-Paid submitted orders are rejected and preserve their original data. Submitted unpaid orders restore drink stock through reversal SLEs. Existing payments are not deleted.
+Paid submitted orders are rejected and preserve their original data. Sent draft orders are the cancellable kind — cancel releases drink reservations and creates cancellation KOTs; a submitted (paid) order that was cancelled earlier restores drink stock through reversal SLEs. Existing payments are not deleted. An unsent draft is never cancelled; the backoffice deletes it instead (`orders.views.order_delete`, manager-only).
 
-## Return Creation
+## Return Creation and Submission
 
 `orders.views.order_return()` checks manager/admin/superuser and calls `make_return()`. The service locks the paid submitted source, rejects an existing active return, clones each line with negative quantity and `return_against_item`, assigns an order number, recalculates a negative total, and creates `RETURN_CREATED`.
 
-The resulting return is a draft, but `settle_order()` rejects returns and no refund endpoint exists. The backoffice message that asks the user to submit the return does not correspond to an available current route.
+The resulting return is a draft; `settle_order()` rejects returns. `orders.views.order_return_submit()` (manager-only) calls `submit_return()`, which re-validates each line, restores drink stock with `POS Return` SLEs, mirrors the source payments as negative refund rows, and marks the return `SUBMITTED` with the `RETURN_SUBMITTED` audit event. The detail page shows "Submit return" and "Delete draft" for a return draft.
 
 ## KOT Register
 

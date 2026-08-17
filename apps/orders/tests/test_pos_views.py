@@ -940,14 +940,42 @@ class POSSettleTest(POSViewTestBase):
         self.assertContains(response, f'name="payment_{self.cash.pk}"')
         self.assertNotContains(response, 'name="discount"')
 
-    def test_settle_dine_in_without_print(self):
+    def test_settle_dine_in_marks_receipt_printed(self):
         response = self.client.post(
             reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
         )
         self.assertEqual(response.status_code, 302)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "SUBMITTED")
-        self.assertFalse(self.order.invoice_printed)
+        self.assertTrue(self.order.invoice_printed)
+        self.assertIsNotNone(self.order.invoice_printed_at)
+
+    @patch("apps.orders.views_pos.printing.print_receipt")
+    def test_settle_prints_receipt_after_success(self, print_receipt):
+        print_receipt.return_value = PrintResult(success=True, ticket_type="receipt")
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+        self.assertEqual(response.status_code, 302)
+        print_receipt.assert_called_once()
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+        self.assertTrue(self.order.invoice_printed)
+
+    @patch("apps.orders.views_pos.printing.print_receipt")
+    def test_settle_receipt_failure_warns_but_sale_stands(self, print_receipt):
+        print_receipt.return_value = PrintResult(success=False, ticket_type="receipt")
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}),
+            {f"payment_{self.cash.pk}": "3000"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+        self.assertTrue(self.order.is_paid)
+        self.assertTrue(self.order.invoice_printed)
+        self.assertContains(response, "receipt failed to print")
 
     def test_settle_after_print(self):
         self.order.invoice_printed = True
@@ -1177,29 +1205,29 @@ class POSCancelTest(POSViewTestBase):
         empty.refresh_from_db()
         self.assertEqual(empty.status, "DRAFT")
 
-    def test_discard_empty_draft(self):
+    def test_delete_unsent_draft(self):
         self.client.post(reverse("pos:pos_order_new"), {"order_type": "DINE_IN", "guest_count": "1"})
         empty = Order.objects.filter(status="DRAFT").exclude(pk=self.order.pk).first()
         self.assertIsNotNone(empty)
-        response = self.client.post(
-            reverse("pos:pos_order_discard", kwargs={"pk": empty.pk}),
+        self.client.post(
+            reverse("pos:pos_order_add_item", kwargs={"pk": empty.pk}),
+            {"item_id": self.food_item.pk, "qty": "1"},
         )
+        response = self.client.post(reverse("pos:pos_order_delete", kwargs={"pk": empty.pk}))
         self.assertEqual(response.status_code, 302)
-        empty.refresh_from_db()
-        self.assertEqual(empty.status, "DISCARDED")
-        self.assertEqual(empty.discarded_by, self.user)
-        self.assertIsNotNone(empty.discarded_at)
+        self.assertRedirects(response, reverse("pos:pos_home"))
+        self.assertFalse(Order.objects.filter(pk=empty.pk).exists())
+        self.assertTrue(Order.objects.filter(pk=self.order.pk).exists())
 
-    def test_discard_order_with_items_rejected(self):
-        response = self.client.post(
-            reverse("pos:pos_order_discard", kwargs={"pk": self.order.pk}),
-        )
+    def test_delete_sent_draft_blocked(self):
+        response = self.client.post(reverse("pos:pos_order_delete", kwargs={"pk": self.order.pk}))
         self.assertEqual(response.status_code, 302)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "DRAFT")
+        self.assertEqual(self.order.items.count(), 1)
 
 
-class POSPrintTest(POSViewTestBase):
+class POSNoPrintTest(POSViewTestBase):
     def setUp(self):
         super().setUp()
         self._open_shift()
@@ -1210,84 +1238,25 @@ class POSPrintTest(POSViewTestBase):
             {"item_id": self.food_item.pk, "qty": "1"},
         )
 
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_print_marks_invoice_printed(self, print_receipt):
-        print_receipt.return_value = PrintResult(success=True, ticket_type="receipt")
-        response = self.client.post(
-            reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
-        )
+    def test_no_print_button_in_cart(self):
+        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
         self.assertEqual(response.status_code, 200)
-        print_receipt.assert_called_once_with(self.order)
-        self.order.refresh_from_db()
-        self.assertTrue(self.order.invoice_printed)
-        trigger = json.loads(response["HX-Trigger"])
-        self.assertEqual(trigger["showMessages"][0]["message"], "Receipt printed successfully.")
-        self.assertContains(response, "Reprint Receipt")
+        self.assertNotContains(response, "Print Receipt")
+        self.assertNotContains(response, "pos_order_print")
+        self.assertContains(response, "Send")
+        self.assertContains(response, "Delete Order")
 
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_print_freezes_item_changes(self, print_receipt):
-        print_receipt.return_value = PrintResult(success=True, ticket_type="receipt")
-        self.client.post(reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true")
-        response = self.client.post(
+    def test_draft_edit_allowed_without_kot(self):
+        self.client.post(
             reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}),
             {"item_id": self.food_item.pk, "qty": "1"},
             HTTP_HX_REQUEST="true",
         )
-        self.assertContains(response, "receipt has been printed")
+        self.order.refresh_from_db()
         self.assertEqual(self.order.items.count(), 1)
-
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_reprint_receipt_for_current_draft(self, print_receipt):
-        print_receipt.return_value = PrintResult(success=True, ticket_type="receipt")
-        self.order.invoice_printed = True
-        self.order.save(update_fields=["invoice_printed"])
-        response = self.client.post(
-            reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(self.order.invoice_printed)
-        trigger = json.loads(response["HX-Trigger"])
-        self.assertEqual(trigger["showMessages"][0]["message"], "Receipt reprinted successfully.")
-        self.assertContains(response, "Reprint Receipt")
-
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_failed_receipt_print_still_claims_printed_state(self, print_receipt):
-        """DB claim happens before the agent so a successful print cannot leave state unprinted."""
-        print_receipt.return_value = PrintResult(success=False, ticket_type="receipt")
-        response = self.client.post(
-            reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.order.refresh_from_db()
-        self.assertTrue(self.order.invoice_printed)
-        self.assertContains(response, "Receipt printing failed. Try again.")
-
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_failed_receipt_reprint_preserves_printed_state(self, print_receipt):
-        print_receipt.return_value = PrintResult(success=False, ticket_type="receipt")
-        self.order.invoice_printed = True
-        self.order.save(update_fields=["invoice_printed"])
-        response = self.client.post(
-            reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.order.refresh_from_db()
-        self.assertTrue(self.order.invoice_printed)
-        self.assertContains(response, "Receipt reprint failed. Try again.")
-
-    @patch("apps.orders.views_pos.printing.print_receipt")
-    def test_takeaway_can_print_receipt(self, print_receipt):
-        print_receipt.return_value = PrintResult(success=True, ticket_type="receipt")
-        self.order.order_type = TAKE_AWAY
-        self.order.save(update_fields=["order_type"])
-        response = self.client.post(
-            reverse("pos:pos_order_print", kwargs={"pk": self.order.pk}), HTTP_HX_REQUEST="true"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.order.refresh_from_db()
-        self.assertTrue(self.order.invoice_printed)
-        trigger = json.loads(response["HX-Trigger"])
-        self.assertEqual(trigger["showMessages"][0]["message"], "Receipt printed successfully.")
+        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
+        self.assertNotContains(response, "Locked")
+        self.assertContains(response, "Draft")
 
 
 class POSClearTest(POSViewTestBase):
@@ -1300,7 +1269,7 @@ class POSClearTest(POSViewTestBase):
             reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}), {"item_id": self.food_item.pk, "qty": "2"}
         )
 
-    def test_clear_is_blocked_after_receipt_print(self):
+    def test_clear_legacy_printed_draft_allowed(self):
         self.order.invoice_printed = True
         self.order.save(update_fields=["invoice_printed"])
         response = self.client.post(
@@ -1308,10 +1277,8 @@ class POSClearTest(POSViewTestBase):
         )
         self.assertEqual(response.status_code, 200)
         self.order.refresh_from_db()
-        self.assertEqual(self.order.items.count(), 1)
+        self.assertEqual(self.order.items.count(), 0)
         self.assertEqual(self.order.status, "DRAFT")
-        self.assertEqual(self.order.grand_total, Decimal("3000.00"))
-        self.assertTrue(self.order.invoice_printed)
 
     def test_clear_unsynced_items_no_kot(self):
         response = self.client.post(

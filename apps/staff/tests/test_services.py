@@ -104,6 +104,17 @@ class ExpectedClosingAmountsTest(TestCase):
         # 50000 float + 2000 paid − 500 change = 51500
         self.assertEqual(rows[self.cash.pk]["expected_amount"], Decimal("51500"))
 
+    def test_expected_closing_amounts_net_of_refunds(self):
+        """A submitted return's negative refund rows reduce the drawer per mode."""
+        from apps.orders.services import make_return, submit_return
+
+        order = self._settle(Decimal("3000"), self.cash)
+        return_order = make_return(order)
+        submit_return(return_order, actor=self.user)
+        rows = self._expected_rows()
+        # 50000 float + 3000 sale − 3000 refund = 50000
+        self.assertEqual(rows[self.cash.pk]["expected_amount"], Decimal("50000"))
+
 
 class SubmitClosingEntryTest(TestCase):
     @classmethod

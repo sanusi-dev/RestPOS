@@ -5,20 +5,20 @@
      >
   {% for mi in menu_items %}
   <button type="button" aria-label="{% if mi.stock_unavailable %}{{ mi.item.item_name }}: {{ mi.stock_message }}{% else %}Add {{ mi.item.item_name }}{% endif %}"
-        {% if mi.stock_unavailable or order_sent or order.invoice_printed %}disabled aria-disabled="true"{% endif %}
-        {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and not mi.item.add_ons.all %}
+        {% if mi.stock_unavailable or order_sent %}disabled aria-disabled="true"{% endif %}
+        {% if not mi.stock_unavailable and not order_sent and not mi.item.add_ons.all %}
         hx-post="{% url 'pos:pos_order_add_item' order.pk %}"
         hx-vals='{"item_id":"{{ mi.item.pk }}","qty":"1"}'
         hx-include="#catalog-search, #catalog-filter-state"
         hx-target="#cart-panel"
        hx-swap="outerHTML"
        {% endif %}
-       {% if not mi.stock_unavailable and not order_sent and not order.invoice_printed and mi.item.add_ons.all %}
+       {% if not mi.stock_unavailable and not order_sent and mi.item.add_ons.all %}
        hx-get="{% url 'pos:pos_order_add_on_dialog' order.pk mi.item.pk %}"
        hx-target="#add-on-dialog-container"
        hx-swap="innerHTML"
        {% endif %}
-         class="group flex min-h-[14.5rem] flex-col overflow-hidden rounded-xl bg-white text-left shadow-sm ring-1 ring-slate-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-600 {% if mi.stock_unavailable or order_sent or order.invoice_printed %}cursor-not-allowed grayscale opacity-55{% else %}cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] active:shadow-md{% endif %}">
+         class="group flex min-h-[14.5rem] flex-col overflow-hidden rounded-xl bg-white text-left shadow-sm ring-1 ring-slate-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-600 {% if mi.stock_unavailable or order_sent %}cursor-not-allowed grayscale opacity-55{% else %}cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.98] active:shadow-md{% endif %}">
       <div class="flex aspect-[794/727] w-full shrink-0 items-center justify-center overflow-hidden bg-slate-200">
        {% if mi.item.image %}
        <img src="{{ mi.item.image.url }}" alt="{{ mi.item_name }}" class="h-full w-full object-contain saturate-75" loading="lazy">

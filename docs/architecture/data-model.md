@@ -65,9 +65,9 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Order Entities
 
-- `Order`: one operational sale/return document. It owns totals, status, shift, cashier, print claim, warehouse snapshot, return linkage, and audit history.
+- `Order`: one operational sale/return document. It owns totals, status, shift, cashier, receipt-printed state, warehouse snapshot, return linkage, and audit history.
 - `OrderItem`: line snapshot with item name, rate, amount, department, stock flag, menu line, comments, customer index, and optional return source.
-- `OrderPayment`: payment line inside an order. It is protected from edits after the order is submitted, printed, or ticketed.
+- `OrderPayment`: payment line inside an order. Positive on sales; negative refund rows only on return orders. It is protected from edits after the order is submitted or ticketed.
 - `KOT`/`KOTItem`: immutable order-to-station snapshots; KOT print status is mutable for dispatch/retry.
 - `OrderAuditEvent`: append-only event row. It uses `PROTECT` from the order and refuses update/delete.
 - `OrderSequence`: locked counter used for human-facing order numbers.
