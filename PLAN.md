@@ -96,7 +96,8 @@ payment-allocation rows.
 4. COGS at settle from the FIFO outgoing values of the settle-time drink stock deductions.
 5. Inventory documents (purchase receipts, stock entries, reconciliations) post no GL
    initially.
-6. Return orders post no GL initially; refund GL arrives with refunds completion (§4.3).
+6. Return orders post no GL in the GL core; refund GL posts in refunds completion (§4.3),
+   within the same phase.
 7. Write-off is a manual journal-entry voucher type (`WRITE_OFF` + `write_off_amount`).
 8. Amendment chain (`amended_from`) applies to JournalEntry only.
 
@@ -182,9 +183,10 @@ resolved fiscal year.
 | `amended_from` | FK self, SET_NULL, null=True | amendment chain |
 
 Methods: `submit()` (atomic; rows may not mix debit and credit, no duplicate
-account+cost_center rows, difference 0, total > 0; posts one GLEntry per row), `cancel()`
-(atomic; mirrored negated entries, originals marked `is_cancelled`), `amend()` (only from
-CANCELLED; copies into a new DRAFT linked via `amended_from`).
+account+cost_center rows, difference 0, total > 0; posts one GLEntry per row; a
+`voucher_type=OPENING` entry sets `is_opening=True` automatically), `cancel()` (atomic;
+mirrored negated entries, originals marked `is_cancelled`), `amend()` (only from CANCELLED;
+copies into a new DRAFT linked via `amended_from`).
 
 **JournalEntryAccount**
 
@@ -203,8 +205,10 @@ CANCELLED; copies into a new DRAFT linked via `amended_from`).
   creating a missing leaf account under Assets (Cash/Bank by mode type).
 - `settings.Restaurant` gains nullable FKs: `default_income_account`,
   `default_expense_account`, `round_off_account`, `account_for_change_amount`,
-  `write_off_account`, `write_off_cost_center`, `cost_center`. Settlement enforces the ones
-  it needs; the settings form gains an Accounting section.
+  `write_off_account`, `write_off_cost_center`, `cost_center`, `wastage_account`
+  (consumed by §4.3), `cash_shortage_account`, `cash_over_short_account`,
+  `variance_approval_threshold` (Decimal, consumed by §4.5). Settlement enforces the
+  ones it needs; the settings form gains an Accounting section.
 - `settings.ProductionUnit.income_account`: FK LedgerAccount, null — the departmental split
   hook (Kitchen = FOOD income, Bar = DRINKS income).
 - `inventory.ItemGroup` gains `income_account` / `expense_account` FKs.
@@ -247,6 +251,16 @@ Cost of Goods Sold + Round Off; Equity → Owner's Equity. Creates Kitchen/Bar c
 current-year fiscal year, and wires production-unit income accounts, warehouse accounts,
 Restaurant defaults, and payment GL mappings.
 
+##### Activation and rollout
+
+- There is no accounting off-switch. Once the phase ships, order settlement posts GL —
+  settlement fails closed when the required account chain is missing (no silent
+  gap between sales and the books).
+- Go-live sequence: run `seed_chart_of_accounts` (idempotent) → run `seed_pos_setup`
+  (which now invokes the chart seed first) → configure the Restaurant accounting FKs in
+  settings → the data migration in `payments` converts existing `PaymentGLMapping` strings
+  to FK values during `migrate`. Checkout works only after this sequence completes.
+
 ##### Tests
 
 - `test_models.py` — account tree rules, fiscal year rules + `get_for`, cost center tree, GL
@@ -254,8 +268,8 @@ Restaurant defaults, and payment GL mappings.
 - `test_journal_entry.py` — balanced submit, unbalanced/mixed-row/duplicate rejections,
   frozen/disabled/group account rejections, cancel reversal, amend chain, write-off voucher.
 - `test_order_gl.py` — settle legs incl. departmental income split, change reduction,
-  rounding, COGS; cancel reversal; returns skip GL; missing account config raises; fiscal
-  year guard raises.
+  rounding, COGS; cancel reversal; missing account config raises; fiscal year guard raises.
+  (Return-order GL is covered by §4.3 tests.)
 - `test_payment_gl_mapping.py` — FK + leaf-only validation.
 - `test_views.py` — backoffice gate and CRUD flows.
 - Existing orders/staff suites gain a shared accounting setup helper because settlement now
@@ -263,43 +277,81 @@ Restaurant defaults, and payment GL mappings.
 
 ### 4.3 Refunds Completion (Phase 6)
 
-**Status:** planned (scope only; detailed decisions to be locked when Phase 6 starts).
+**Status:** planned — detailed decisions locked below.
 
 **Decisions:**
 
-- Submitted return orders post refund GL: reversal of the original payment legs (against the
-  refunded modes).
-- Non-restockable returned lines post their value to a wastage/returns expense account
-  instead of restoring stock.
-- Partial returns: a return draft's negative quantities can be reduced before submit; the
-  cumulative returned quantity may never exceed the source line.
+- **Refund GL on return submit.** `submit_return` posts refund GL inside its own atomic block
+  after the return flips SUBMITTED: mirror-negated entries of the source order's settle legs
+  (income, payment, round-off, COGS) for the refunded portion only, carrying the return's
+  invoice number as `voucher_no="Order"`. The mirror exactly negates the source set, so
+  balances cannot drift. Restockable lines restore the bin via the existing "POS Return" SLE;
+  the COGS leg reversal credits the warehouse account for the restored value.
+- **Wastage.** Return lines flagged not-restockable skip the SLE restore. Their value posts
+  Dr `Restaurant.wastage_account` / Cr the returned line's warehouse account at the settle-time
+  valuation rate, keeping the physical bar stock and its ledger value in agreement. New
+  `OrderItem.not_restockable` Boolean (default False), settable only on return drafts.
+- **Partial returns.** Partiality is the return draft's negative quantities: lines can be
+  reduced before submit (draft editing), and the existing cumulative-returned-quantity check
+  against `return_against_item` stays authoritative. After a return is SUBMITTED, a new return
+  draft may be created for the same source order (the one-active-return rule covers drafts
+  only), letting an order be refunded in several passes over time.
+- **Permissions.** Return creation and submission remain Manager/Admin only.
 
-**Models:** return lines reuse `OrderItem`/`OrderPayment` in `apps/orders`; wastage posting
-reuses GLEntry.
+**Tests:** `submit_return` posts mirrored refund GL; partial return posts only the refunded
+portion; not-restockable lines post wastage and skip the SLE; second return against the same
+source is allowed after the first is SUBMITTED; cumulative qty cap still enforced.
 
 ### 4.4 Opening Balances and Go-Live Setup (Phase 6)
 
-**Status:** planned.
+**Status:** planned — detailed decisions locked below.
 
 **Decisions:**
 
-- A single reviewed opening Journal Entry using the `OPENING` voucher type and `is_opening`.
-- One selected opening date, one balanced entry, a source/note per balance.
-- Protection against accidental duplicate opening sets.
-- Review + submit action before the opening becomes effective.
+- A single reviewed opening Journal Entry per fiscal year using the `OPENING` voucher type;
+  `submit()` sets `is_opening=True` automatically for that type.
+- One selected opening date (must fall inside the enabled fiscal year), one balanced entry, a
+  required source/note per balance row (row `remarks` non-empty).
+- Duplicate protection: `submit()` atomically rejects a second OPENING JournalEntry for the
+  same fiscal year. Amend flow: cancel + amend, never edit.
+- Review + submit action: the opening form reuses the Journal Entry form with the voucher type
+  locked to OPENING; a read-only review screen precedes the submit confirmation; once
+  submitted the entry is immutable like every JE.
+- No import wizard and no journal-import screen.
 - Go-live prerequisite when RestPOS is the accounting source of truth.
+
+**Tests:** OPENING submit sets `is_opening`; balanced-openings + remark requirements; second
+opening JE for the same fiscal year rejected; review screen requires explicit submit; amend
+chain works from a cancelled opening.
 
 ### 4.5 Cash Shortage and Excess Posting (Phase 6)
 
-**Status:** planned.
+**Status:** planned — detailed decisions locked below.
 
 **Decisions:**
 
-- Configurable ledger accounts: Cash Shortage Expense and Cash Over / Short Income.
-- When a submitted shift close has a non-zero approved variance, a variance posting linked to
-  the closing entry is created atomically with the approved close.
-- Immutable after posting; reversed if the closing entry is cancelled.
-- Material variances require manager approval or a required explanation.
+- **Accounts.** `Restaurant.cash_shortage_account` (expense) and
+  `Restaurant.cash_over_short_account` (income), both nullable. Variance posting is automatic
+  only when the account matching the variance sign is configured; otherwise the close shows
+  the variance as it does today and no posting occurs.
+- **Posting.** Inside `submit_closing_entry`'s atomic block, after the close flips SUBMITTED:
+  if `total_short_excess != 0` and the relevant account is set, create a JournalEntry
+  (`voucher_type=JOURNAL`) linked via new `POSClosingEntry.variance_journal_entry`
+  (OneToOne, SET_NULL). Legs: shortage → Dr shortage account / Cr cash account; excess → Dr
+  cash account / Cr over-short account. Cash account = the CASH `ModeOfPayment` GL mapping.
+- **Immutability and reversal.** The variance JE is a normal JournalEntry (immutable after
+  submit). Cancelling the closing entry reverses the variance JE (mirror negated), preserving
+  the close-cancel guards already in place (blocked when a newer open shift exists).
+- **Material variance approval.** New `Restaurant.variance_approval_threshold` (Decimal, null =
+  no approval gate). When the absolute variance exceeds the threshold, close submission
+  requires a non-empty `POSClosingEntry.variance_note` and a Manager/Admin actor; the closing
+  form shows the threshold warning before submit.
+- **Visibility.** The closing detail page shows the variance and the linked variance JE with
+  drill-down, whether or not automatic posting is active.
+
+**Tests:** shortage and excess postings with correct legs; unconfigured account skips posting
+but keeps the variance visible; threshold exceeded without note or without manager role is
+rejected; cancel reverses the variance JE; closing-cancel guard still applies.
 
 ### 4.6 Daily P&L (Phase 7)
 
