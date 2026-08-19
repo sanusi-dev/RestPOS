@@ -357,9 +357,7 @@ def post_refund_gl(return_order):
     ).exists():
         return  # idempotent
 
-    if not GLEntry.objects.filter(
-        voucher_type="Order", voucher_no=source.invoice_number, is_cancelled=False
-    ).exists():
+    if not GLEntry.objects.filter(voucher_type="Order", voucher_no=source.invoice_number, is_cancelled=False).exists():
         return
 
     settings = Restaurant.load()

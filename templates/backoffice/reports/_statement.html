@@ -1,0 +1,32 @@
+{% comment %}Three-column Daily P&L statement. Expects `rows` (LineSpec or DailyPnLLine).{% endcomment %}
+{% if preview_error %}
+  <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ preview_error }}</div>
+{% else %}
+<div class="overflow-x-auto">
+  <table class="min-w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-200">
+        <th class="py-2 pr-4 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Line</th>
+        <th class="py-2 px-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">Food</th>
+        <th class="py-2 px-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">Drinks</th>
+        <th class="py-2 px-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">Total</th>
+        <th class="py-2 pl-3 text-right text-xs font-bold uppercase tracking-wider text-gray-400">% gross</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in rows %}
+        <tr class="{% if line.is_memo %}bg-amber-50/60 italic text-amber-900{% elif line.section == 'GROSS_PROFIT' or line.section == 'NET_PROFIT' %}bg-gray-50 font-bold{% elif line.section == 'NET_SALES' %}border-t border-gray-200 font-semibold{% else %}text-gray-800{% endif %}">
+          <td class="py-2 pr-4 {% if line.section == 'DIRECT' or line.section == 'INDIRECT' or line.section == 'EMPLOYEE' %}pl-4 text-gray-600{% endif %}">
+            {{ line.label }}
+            {% if line.is_memo %}<span class="not-italic ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-600">memo</span>{% endif %}
+          </td>
+          <td class="py-2 px-3 text-right font-mono tabular-nums">{% if line.amount_food %}{{ line.amount_food }}{% else %}—{% endif %}</td>
+          <td class="py-2 px-3 text-right font-mono tabular-nums">{% if line.amount_drinks %}{{ line.amount_drinks }}{% else %}—{% endif %}</td>
+          <td class="py-2 px-3 text-right font-mono tabular-nums {% if line.section == 'NET_PROFIT' %}{% if line.amount_total >= 0 %}text-emerald-700{% else %}text-red-600{% endif %}{% endif %}">{{ line.amount_total }}</td>
+          <td class="py-2 pl-3 text-right font-mono tabular-nums text-gray-500">{{ line.percent_of_gross }}%</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

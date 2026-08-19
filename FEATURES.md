@@ -118,7 +118,7 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 49 | Department classification | Every item must be FOOD or DRINKS. Department drives ticket routing, drink stock validation, and per-line revenue tracking. |
 | 50 | Revenue split | Each order line snapshots its department, so food and drinks revenue can be summed independently of the single paid total. Separate income accounts per department (item group → production unit → default) arrive with the accounting phase — implemented. |
-| 51 | Departmental reports | Food and drinks revenue reported separately, including the daily P&L split (Planned). |
+| 51 | Departmental reports | Food and drinks revenue reported separately, including the daily P&L split (FOOD / DRINKS / TOTAL columns). |
 
 ## D. Architecture Constraints
 
@@ -139,7 +139,7 @@ Implementation status lives in `PLAN.md`.
 | 59 | Opening balances | **Implemented (Phase 6).** A reviewed opening journal entry for go-live, with duplicate protection. |
 | 60 | Cash variance posting | **Implemented (Phase 6).** Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
 | 61 | Supplier payables | **Implemented (Phase 2 / §4.1).** Supplier master, supplier invoices (stock and expense lines), supplier payments fully allocated to outstanding invoices, and accounts-payable balances per supplier. Invoices post Dr stock-in-hand/expense / Cr payable; payments post Dr payable / Cr cash-bank; cancellation reverses. |
-| 62 | Daily P&L | A daily profit & loss document: gross sales → COGS → direct expenses (electricity, materials) → gross profit → indirect expenses (rent, salaries, depreciation) → net profit, with amendments and the departmental split. |
+| 62 | Daily P&L | **Implemented (Phase 7).** A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (drinks FIFO only) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Kitchen consumption is shown beside FOOD sales as a memo, not in GP. Prime cost (drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
 | 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
 

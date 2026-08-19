@@ -278,7 +278,7 @@ def order_return_line_update(request: HttpRequest, pk: int, line_pk: int) -> Htt
     if qty_raw is not None and qty_raw != "":
         try:
             qty = Decimal(str(qty_raw))
-        except (InvalidOperation, TypeError, ValueError):
+        except InvalidOperation, TypeError, ValueError:
             messages.error(request, "Enter a valid quantity.")
             return redirect("orders:order_detail", pk=order.pk)
     not_restockable = None

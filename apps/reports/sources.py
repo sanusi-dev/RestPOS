@@ -1,0 +1,201 @@
+"""Source queries for Daily P&L: orders, stock, variance, meter, templates."""
+
+import calendar
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.db.models import Sum
+from django.utils import timezone
+
+from apps.inventory.models import StockLedgerEntry, StockReconciliation
+from apps.orders.models import SUBMITTED, Order, OrderItem
+from apps.staff.models import POSClosingEntry
+
+from .models import DRINKS, FOOD, DailyPnLCogsRow, PnLRecurringExpense
+
+TWO = Decimal("0.01")
+ZERO = Decimal("0")
+
+
+def business_day_window(business_date, start_hour):
+    """Return aware [start, end) covering business_date at start_hour."""
+    tz = timezone.get_current_timezone()
+    start = timezone.make_aware(datetime.combine(business_date, datetime.min.time().replace(hour=start_hour)), tz)
+    return start, start + timedelta(days=1)
+
+
+def order_datetime(order):
+    tz = timezone.get_current_timezone()
+    naive = datetime.combine(order.posting_date, order.posting_time)
+    if timezone.is_naive(naive):
+        return timezone.make_aware(naive, tz)
+    return naive
+
+
+def orders_in_window(start, end):
+    dates = {start.date(), (end - timedelta(microseconds=1)).date()}
+    dates.add(min(dates) - timedelta(days=1))
+    orders = list(Order.objects.filter(status=SUBMITTED, posting_date__in=dates))
+    return [o for o in orders if start <= order_datetime(o) < end]
+
+
+def sales_by_department(orders):
+    if not orders:
+        return ZERO, ZERO
+    rows = (
+        OrderItem.objects.filter(order_id__in=[o.pk for o in orders]).values("department").annotate(total=Sum("amount"))
+    )
+    by_dept = {row["department"]: row["total"] or ZERO for row in rows}
+    return by_dept.get(FOOD, ZERO), by_dept.get(DRINKS, ZERO)
+
+
+def round_off(orders):
+    return sum((o.rounding_adjustment for o in orders), ZERO).quantize(TWO)
+
+
+def _wastage_rate(return_order, line):
+    sle = (
+        StockLedgerEntry.objects.filter(
+            voucher_type="POS Return",
+            voucher_no=str(return_order.pk),
+            item=line.item,
+        )
+        .order_by("-pk")
+        .first()
+    )
+    if sle is not None:
+        return sle.incoming_rate
+    source_sle = (
+        StockLedgerEntry.objects.filter(
+            voucher_type="POS Order",
+            voucher_no=str(return_order.return_against_id),
+            item=line.item,
+            actual_qty__lt=0,
+        )
+        .order_by("-pk")
+        .first()
+    )
+    if source_sle is not None:
+        return source_sle.outgoing_rate
+    bin_obj = line.item.bins.filter(warehouse=return_order.stock_warehouse).first()
+    return bin_obj.valuation_rate if bin_obj else ZERO
+
+
+def drink_cogs(start, end, orders):
+    rows = []
+    total = ZERO
+    sales = StockLedgerEntry.objects.filter(
+        is_cancelled=False,
+        posting_datetime__gte=start,
+        posting_datetime__lt=end,
+        voucher_type="POS Order",
+        actual_qty__lt=0,
+        item__department=DRINKS,
+    ).select_related("item")
+    for sle in sales:
+        qty = abs(sle.actual_qty)
+        amount = (qty * sle.outgoing_rate).quantize(TWO)
+        total += amount
+        rows.append(
+            {
+                "item_name": sle.item.item_name,
+                "qty": qty,
+                "rate": sle.outgoing_rate,
+                "amount": amount,
+                "kind": DailyPnLCogsRow.SALE,
+            }
+        )
+    returns = StockLedgerEntry.objects.filter(
+        is_cancelled=False,
+        posting_datetime__gte=start,
+        posting_datetime__lt=end,
+        voucher_type="POS Return",
+        actual_qty__gt=0,
+        item__department=DRINKS,
+    ).select_related("item")
+    for sle in returns:
+        qty = sle.actual_qty
+        amount = (qty * sle.incoming_rate).quantize(TWO)
+        total -= amount
+        rows.append(
+            {
+                "item_name": sle.item.item_name,
+                "qty": qty,
+                "rate": sle.incoming_rate,
+                "amount": -amount,
+                "kind": DailyPnLCogsRow.RETURN,
+            }
+        )
+    for order in orders:
+        if not order.is_return:
+            continue
+        for line in order.items.select_related("item").filter(not_restockable=True, department=DRINKS):
+            rate = _wastage_rate(order, line)
+            qty = abs(line.qty)
+            amount = (qty * rate).quantize(TWO)
+            total += amount
+            rows.append(
+                {
+                    "item_name": line.item_name or line.item.item_name,
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": amount,
+                    "kind": DailyPnLCogsRow.WASTAGE,
+                }
+            )
+    return total.quantize(TWO), rows
+
+
+def kitchen_consumption(business_date):
+    recs = StockReconciliation.objects.filter(status="SUBMITTED", reason="CONSUMPTION", posting_date=business_date)
+    sles = StockLedgerEntry.objects.filter(
+        voucher_type="Stock Reconciliation",
+        voucher_no__in=[str(r.pk) for r in recs],
+        is_cancelled=False,
+        actual_qty__lt=0,
+    ).select_related("item")
+    rows = []
+    total = ZERO
+    for sle in sles:
+        qty = abs(sle.actual_qty)
+        amount = (qty * sle.outgoing_rate).quantize(TWO)
+        total += amount
+        rows.append({"item_name": sle.item.item_name, "qty": qty, "rate": sle.outgoing_rate, "amount": amount})
+    return total.quantize(TWO), rows
+
+
+def cash_variance(start, end, include):
+    if not include:
+        return ZERO
+    closings = POSClosingEntry.objects.filter(
+        status=POSClosingEntry.SUBMITTED,
+        period_end_date__gte=start,
+        period_end_date__lt=end,
+    )
+    native = sum((c.total_short_excess for c in closings), ZERO)
+    return (-native).quantize(TWO)
+
+
+def electricity(pnl, rate):
+    if pnl.electricity_opening is None and pnl.electricity_closing is None:
+        return ZERO
+    if pnl.electricity_opening is None or pnl.electricity_closing is None:
+        raise ValidationError("Enter both electricity readings, or leave both blank.")
+    if rate <= 0:
+        raise ValidationError("Set the electricity rate in P&L settings.")
+    units = pnl.electricity_closing - pnl.electricity_opening
+    return (units * rate).quantize(TWO)
+
+
+def recurring_amount(expense, business_date, gross_sales):
+    if expense.kind in {
+        PnLRecurringExpense.DIRECT_DAILY,
+        PnLRecurringExpense.INDIRECT_DAILY,
+        PnLRecurringExpense.EMPLOYEE_DAILY,
+    }:
+        return expense.amount.quantize(TWO)
+    if expense.kind in {PnLRecurringExpense.INDIRECT_MONTHLY, PnLRecurringExpense.EMPLOYEE_MONTHLY}:
+        days = calendar.monthrange(business_date.year, business_date.month)[1]
+        return (expense.amount / Decimal(days)).quantize(TWO)
+    return ((expense.percent / Decimal("100")) * gross_sales).quantize(TWO)

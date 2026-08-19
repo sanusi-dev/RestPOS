@@ -12,6 +12,7 @@ flowchart LR
     staff[staff]
     orders[orders]
     accounting[accounting]
+    reports[reports]
     web[web]
     utils[utils]
     settings --> inventory
@@ -43,6 +44,11 @@ flowchart LR
     orders --> utils
     settings --> utils
     accounting --> utils
+    reports --> orders
+    reports --> inventory
+    reports --> staff
+    reports --> accounting
+    reports --> utils
 ```
 
 ## Core Relationship Chains

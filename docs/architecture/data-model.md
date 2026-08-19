@@ -33,6 +33,9 @@ erDiagram
     STOCK_ENTRY ||--o{ STOCK_ENTRY_DETAIL : lines
     STOCK_RECONCILIATION ||--o{ STOCK_RECONCILIATION_ITEM : lines
     PURCHASE_RECEIPT ||--o{ PURCHASE_RECEIPT_ITEM : lines
+    DAILY_PNL ||--o{ DAILY_PNL_LINE : statement
+    DAILY_PNL ||--o{ DAILY_PNL_MATERIAL_QTY : consumes
+    DAILY_PNL ||--o{ DAILY_PNL_AD_HOC : extras
 ```
 
 ## Shared Conventions
@@ -90,6 +93,14 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 - `CostCenter`: flat tree (groups + leaves), stamped on GL entries and journal rows.
 - `GLEntry`: one side of a posting — exactly one non-zero debit/credit. Immutable after creation: `save()` blocks edits except the `is_cancelled` reversal flag, `delete()` raises. `post()` resolves the fiscal year from the posting date.- `JournalEntry`: manual voucher (JOURNAL/CASH/BANK/WRITE_OFF/OPENING), DRAFT → SUBMITTED → CANCELLED. `submit()` requires balance, unique account+cost-center rows, and a positive total; OPENING vouchers set `is_opening` and reject a second opening for the same fiscal year. `cancel()` posts mirrored negated GL rows and marks originals cancelled. `amend()` copies a CANCELLED entry into a new DRAFT linked via `amended_from`.
 - `JournalEntryAccount`: debit/credit row on a journal entry; one of debit/credit must be non-zero, leaf accounts only.
+
+## Reports Entities
+
+- `PnLConfiguration`: singleton (`load()` get-or-creates) for business-day start hour, electricity rate, daily depreciation, and whether to include cash variance.
+- `PnLMaterial` / `PnLRecurringExpense`: catalogs of consumables and remembered expense templates (daily, monthly ÷ days-in-month, % of gross, employee).
+- `DailyPnL`: one DRAFT and one SUBMITTED row per `business_date`. Management snapshot — submit does not post GL. `cancel()` is status-only; `amend()` copies inputs into a new draft.
+- `DailyPnLLine`: frozen statement rows written on submit (FOOD / DRINKS / TOTAL plus % of gross). Kitchen consumption and prime cost are memo lines (`is_memo`).
+- `DailyPnLMaterialQty` / `DailyPnLAdHoc`: draft inputs. `DailyPnLCogsRow` / `DailyPnLConsumptionRow`: drink COGS and kitchen-consumption breakups written on submit.
 
 ## Important Constraints and Methods
 
