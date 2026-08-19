@@ -23,15 +23,17 @@ from apps.orders.services import (
     settle_order,
     update_order_line_quantity,
 )
-from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 from apps.staff.services import submit_closing_entry
 
+from .accounting_setup import OrderAccountingMixin
+
 CustomUser = get_user_model()
 
 
-class ReviewFixBase(TestCase):
+class ReviewFixBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Review Co")
@@ -53,14 +55,13 @@ class ReviewFixBase(TestCase):
         cls.restaurant.default_warehouse = cls.bar
         cls.restaurant.store_warehouse = cls.store
         cls.restaurant.save()
+        cls._setup_accounting()
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
         if not cls.cash.is_default:
             ModeOfPayment.objects.exclude(pk=cls.cash.pk).filter(is_default=True).update(is_default=False)
             cls.cash.is_default = True
             cls.cash.save(update_fields=["is_default"])
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash"})
         cls.bank, _ = ModeOfPayment.objects.get_or_create(name="Bank Transfer", defaults={"type": "BANK"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.bank, defaults={"default_account": "Bank"})
         ProductionUnit.objects.get_or_create(
             department="FOOD",
             defaults={"name": "Kitchen", "warehouse": cls.kitchen_wh},

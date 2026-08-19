@@ -1,0 +1,60 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Chart of Accounts" section_url="accounting:chart_of_accounts" current_label=account.name %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ account.name }}</h1>
+      <p class="text-sm text-gray-500">
+        {% if account.is_group %}Group account{% else %}Leaf posting account{% endif %}
+        {% if account.root_type %} · {{ account.get_root_type_display }}{% endif %}
+      </p>
+    </div>
+    <a href="{% url 'accounting:account_update' account.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Edit</a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Parent</dt>
+        <dd class="text-base font-bold text-gray-900">{% if account.parent %}<a href="{% url 'accounting:account_detail' account.parent_id %}" class="text-orange-500 hover:text-orange-600">{{ account.parent.name }}</a>{% else %}Root{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Type</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.is_group|yesno:"Group,Leaf" }}{% if account.account_type %} · {{ account.get_account_type_display }}{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Report Type</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.get_report_type_display|default:"—" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Account Number</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.account_number|default:"—" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Freeze Account</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.freeze_account|yesno:"Yes,No" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Disabled</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.disabled|yesno:"Yes,No" }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  {% if account.is_group %}
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+      <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Children</h3></div>
+      <div class="divide-y divide-gray-50">
+        {% for child in account.children.all %}
+          {% include "backoffice/accounting/_account_row.html" with account=child depth=1 %}
+        {% empty %}
+          <div class="px-6 py-8 text-center text-sm text-gray-500">No child accounts.</div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

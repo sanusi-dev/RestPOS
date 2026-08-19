@@ -101,7 +101,7 @@ def _get_payment_modes():
 
 def _get_settle_payment_modes():
     """Return enabled payment modes that can be posted at checkout."""
-    return _get_payment_modes().filter(gl_mapping__isnull=False).exclude(gl_mapping__default_account="")
+    return _get_payment_modes().filter(gl_mapping__isnull=False, gl_mapping__default_account__isnull=False)
 
 
 def _get_catalog_filters(request):
@@ -451,7 +451,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                     closing.period_end_date = timezone.now()
                     closing.save(update_fields=["remarks", "period_end_date", "updated_at"])
                     closing.full_clean()
-                    submit_closing_entry(closing)
+                    submit_closing_entry(closing, actor=request.user)
                 except ValidationError as exc:
                     messages.error(request, exc.messages[0] if exc.messages else "Cannot close the shift.")
                 else:

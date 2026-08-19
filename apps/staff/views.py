@@ -357,6 +357,8 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             with transaction.atomic():
                 for _cp, form in form_data:
                     form.save()
+                closing.variance_note = request.POST.get("variance_note", "").strip()
+                closing.save(update_fields=["variance_note", "updated_at"])
             messages.success(request, f"Closing entry #{closing.pk} updated.")
             return redirect("staff:closing_entry_detail", pk=closing.pk)
         # Re-render with errors using the bound form_data.
@@ -404,7 +406,7 @@ def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("staff:closing_entry_detail", pk=closing.pk)
     try:
         closing.full_clean()
-        services.submit_closing_entry(closing)
+        services.submit_closing_entry(closing, actor=request.user)
     except ValidationError as e:
         messages.error(request, str(e))
         return redirect("staff:closing_entry_detail", pk=closing.pk)

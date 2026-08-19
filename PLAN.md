@@ -22,7 +22,7 @@ conventions are in `AGENTS.md`.
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
-| `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, cost centers | E #57–60 | planned |
+| `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, cost centers, supplier payables | E #57–61 | built |
 | `reports` | Daily P&L, sales reports, trial balance | E #62–63 | planned |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
@@ -41,11 +41,11 @@ phase completes before the next starts.
 | Phase | Apps involved | Features covered | Completed work | Remaining work | Detailed plan status | Progress status |
 |---|---|---|---|---|---|---|
 | 1 | settings | A1 | Restaurant singleton (company, invoice prefix, warehouses, draft cap, history toggle), production units with printer config, staff role assignment | — | n/a | Completed |
-| 2 | inventory | A3 | Item master with independent flags, groups, warehouses, immutable FIFO stock ledger, receipts/transfers/reconciliations, purchase receipts, bins, stock reports | Supplier payables (needs Phase 6 GL) | §4.1 | Completed |
+| 2 | inventory | A3 | Item master with independent flags, groups, warehouses, immutable FIFO stock ledger, receipts/transfers/reconciliations, purchase receipts, bins, stock reports, supplier payables (supplier master, invoices, payments, allocations) | — | n/a | Completed |
 | 3 | menu | A2 | Menu, menu items, specials, disable, images, variants, add-ons, seed command | — | n/a | Completed |
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
-| 6 | accounting | E #57–60 | — | GL core + order posting, refunds completion, opening balances, cash variance posting | §4.2–4.5 | Planned |
+| 6 | accounting | E #57–60 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
 | 7 | reports | E #62 | — | Daily P&L document with amendments and departmental split | §4.6 | Planned |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
@@ -65,8 +65,7 @@ nothing else. Completed-phase plans are retired; current product facts are in `F
 
 ### 4.1 Supplier Payables and Supplier Invoices (Phase 2)
 
-**Status:** planned. Implementation lands after Phase 6 GL posting is available, since
-invoice and payment posting depend on it.
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Decisions:**
 
@@ -78,13 +77,233 @@ invoice and payment posting depend on it.
   allocation rows.
 - Posting: purchases record Dr Stock-in-Hand / Cr Accounts Payable on the invoice; Dr
   Accounts Payable / Cr Bank (or Cash) on payment. Cancellation reverses posted entries.
+- No purchase orders in scope — this system has no PO document. The `PurchaseReceipt` is a
+  goods-received record, not a commitment; the payable source document is the
+  `SupplierInvoice` alone (ERPNext permits standalone supplier invoices, and URY has no
+  payables at all).
+- The supplier's AP balance lives **on the supplier**, maintained from the GL voucher rows
+  at submit/cancel (PaymentLedger-style rows, not summed from the ledger at read time).
+- **One default payable account** (`Restaurant.default_payable_account`) with an optional
+  per-supplier `payable_account` override — the single-location design does not need
+  ERPNext's per-company party accounts, and without a dedicated payable account the
+  seeded default would post Owner's Equity and corrupt the payable balance.
 
 **Models:** Supplier, SupplierInvoice, SupplierInvoiceItem, SupplierPayment,
-payment-allocation rows.
+SupplierPaymentAllocation.
+
+##### Models
+
+**Supplier**
+
+| Field | Type | Notes |
+|---|---|---|
+| `supplier_name` | CharField(200) unique | the supplier's name is the key |
+| `supplier_type` | choices Company/Individual, default Company | |
+| `contact_person` / `phone` / `email` | CharField(100) blank | |
+| `address` | TextField blank | |
+| `tax_id` | CharField(50) blank | supplier's TIN |
+| `payable_account` | FK LedgerAccount, PROTECT, null | per-supplier AP account override |
+| `is_default` | Boolean, default False | sole supplier used by quick entry |
+| `disabled` | Boolean, default False | blocked from new transactions; history retained |
+
+Validation: a supplier's `payable_account`, when set, must be a leaf, enabled, and not
+frozen (same rule as GL posting). `is_default` — saving a supplier with `is_default=True`
+clears the flag on all others (same pattern as the default payment mode). Disabled
+suppliers are excluded from transaction forms but keep their historical documents.
+
+**SupplierInvoice**
+
+| Field | Type | Notes |
+|---|---|---|
+| `invoice_number` | CharField(50) unique, editable=False | `{Restaurant.invoice_series_prefix}PINV-{pk}` |
+| `supplier` | FK Supplier, PROTECT | |
+| `posting_date` | DateField | default today; must fall in an enabled fiscal year |
+| `due_date` | DateField | default = posting_date; `>= posting_date` |
+| `bill_no` / `bill_date` | CharField(100) blank / DateField null | the supplier's own invoice reference |
+| `purchase_receipt` | FK PurchaseReceipt, SET_NULL, null, blank | optional link to the goods-received document |
+| `status` | DRAFT/SUBMITTED/CANCELLED | immutable workflow, like all financial documents |
+| `total` | Decimal(14,2), editable=False | recomputed from lines |
+| `outstanding_amount` | Decimal(14,2), editable=False | maintained by submit/cancel (PaymentLedger-style rows) |
+| `remarks` | TextField blank | |
+
+Line sources: an item line may carry `item_id` **or** a `source_receipt_line_id` pointing at a
+`PurchaseReceiptItem` (linked receipts use the receipt's quantities, no duplicate entry);
+expense lines carry neither. `supplier_name` text on the receipt is preserved for quick
+entry and does not create a `Supplier` automatically — the invoice form offers a
+"Quick add" for an inline-created supplier when the receipt has a free-text name and no
+linked Supplier yet. An invoice's `purchase_receipt` cannot change once submitted (same
+guard as `Order.stock_warehouse`).
+
+**SupplierInvoiceItem**
+
+| Field | Type | Notes |
+|---|---|---|
+| `invoice` | FK SupplierInvoice, CASCADE, related_name="items" | |
+| `item` | FK Item, PROTECT, null=True | required for stock lines |
+| `source_receipt_line` | FK PurchaseReceiptItem, SET_NULL, null, blank | link to the receipt line when using the linked-receipt source |
+| `expense_account` | FK LedgerAccount, PROTECT, null=True | required for expense lines |
+| `cost_center` | FK CostCenter, SET_NULL, null, blank | |
+| `description` | CharField(200) blank | |
+| `qty` | Decimal(10,2), default 1 | positive |
+| `rate` | Decimal(10,2) | `>= 0` |
+| `amount` | Decimal(14,2), editable=False | `qty * rate` |
+| `received_qty` / `amount_per_unit` | Decimal(10,2) / Decimal(10,2), editable=False | snapshot from `source_receipt_line` when linked |
+
+Validation: an item line requires an enabled stock + purchase item (`is_purchase_item`),
+`qty > 0`, `rate >= 0`. An expense line requires `expense_account` and a blank `item`.
+A line with `source_receipt_line` must match the invoice's supplier and be a submitted,
+non-cancelled receipt line; only one invoice line may reference a given receipt line
+(per-supplier). No line may mix item and expense account.
+
+**SupplierPayment**
+
+| Field | Type | Notes |
+|---|---|---|
+| `payment_number` | CharField(50) unique, editable=False | `{prefix}PAY-{pk}` |
+| `supplier` | FK Supplier, PROTECT | |
+| `posting_date` | DateField | default today; must fall in an enabled fiscal year |
+| `mode_of_payment` | FK ModeOfPayment, PROTECT | must be enabled and have a GL mapping |
+| `paid_amount` | Decimal(14,2) | `> 0`; total of allocation rows, allocated at submit |
+| `reference_no` / `reference_date` | CharField(50) blank / DateField null | cheque/bank reference |
+| `status` | DRAFT/SUBMITTED/CANCELLED | |
+| `remarks` | TextField blank | |
+
+A payment is fully allocated: `paid_amount` equals the sum of its allocation rows (the
+draft form adds rows from outstanding invoices and validates the totals match on submit —
+excess over outstanding is rejected, mirroring ERPNext's `difference_amount` check).
+Defaults: the CASH `ModeOfPayment` GL mapping for cash payments; BANK modes require a
+non-blank `reference_no`.
+
+**SupplierPaymentAllocation**
+
+| Field | Type | Notes |
+|---|---|---|
+| `payment` | FK SupplierPayment, CASCADE, related_name="allocations" | |
+| `invoice` | FK SupplierInvoice, PROTECT, related_name="allocations" | |
+| `outstanding_amount` | Decimal(14,2), editable=False | snapshot at creation |
+| `allocated_amount` | Decimal(14,2) | `> 0`, `<= outstanding_amount` at submit |
+
+The allocation row is the PaymentLedger-style outstanding record: posting creates
+rows on both sides of the ledger entry (`voucher_type="Supplier Payment"`,
+`voucher_no=payment.payment_number`) with an `against` that balances the invoice's
+`invoice_number`. Cancellation reverses the rows.
+
+##### Posting rules
+
+`accounting.services.post_supplier_invoice_gl(invoice)` runs inside the invoice's
+`submit()` atomic block; `post_supplier_payment_gl(payment)` inside the payment's.
+Both use the existing `GLEntry.post` (resolves the fiscal year from `posting_date`,
+fails closed when the payable chain is missing), and both are idempotent — a second
+submit returns without re-posting.
+
+**Supplier invoice** — `voucher_type="Supplier Invoice"`, `voucher_no=invoice_number`,
+resolved fiscal year, Restaurant cost center when set:
+
+| Leg | Dr | Cr | Amount | Account resolution |
+|---|---|---|---|---|
+| Stock-in-Hand | item lines | — | Σ line amounts | `Restaurant.default_stock_in_hand_account` (required). Do not reuse `ItemGroup.expense_account` — that field is COGS at sale. |
+| Expense | — | — | Σ expense-line amounts | line `expense_account` (required per line) |
+| Accounts Payable | — | payable | grand total | `supplier.payable_account` → `Restaurant.default_payable_account` (required) |
+
+The AP leg carries `against = invoice_number` of its payment row; stock/expense legs
+carry `against` = the AP account name. Cancellation posts mirrored negated rows with the
+original rows marked `is_cancelled` (identical to `reverse_order_gl`), plus the
+outstanding rows reversed. **No stock-ledger entries are posted by the invoice** — stock
+moves only on the receipt, which remains unchanged; the invoice is a pure liability
+document. Cancelling a submitted invoice is refused while submitted payment
+allocations exist — cancel those payments first, then the invoice.
+
+**Supplier payment** — `voucher_type="Supplier Payment"`, `voucher_no=payment_number`,
+resolved fiscal year, Restaurant cost center when set:
+
+| Leg | Dr | Cr | Amount | Account resolution |
+|---|---|---|---|---|
+| Accounts Payable | payable | — | total allocated | `supplier.payable_account` → `Restaurant.default_payable_account` (required) |
+| Cash / Bank | — | mode account | total allocated | `ModeOfPayment` GL mapping (required) |
+
+`against` on the AP side = the payment mode account name; on the cash side =
+"Accounts Payable" (balancing names). Cancellation reverses the posted rows and the
+outstanding rows.
+
+**Outstanding maintenance** (PaymentLedger-style): submitting an invoice creates a
+negative outstanding row (−total) for its own `invoice_number`; submitting a payment
+creates a positive allocation row per referenced invoice. `Supplier.outstanding_balance`
+sums the allocation rows on the supplier's invoices, so a cancelled payment or invoice
+restores the balance automatically. An invoice with `outstanding_amount == 0` after a
+payment is `Paid`; partially paid stays `PARTIAL`; a cancelled invoice returns to zero.
+
+##### Changes outside a new app
+
+- `settings.Restaurant` gains `default_payable_account` and
+  `default_stock_in_hand_account` (FK LedgerAccount, null), consumed by invoice/payment
+  posting; the settings form gains a "Payables" section. A data migration converts any
+  existing `supplier_name` text on `PurchaseReceipt` by creating matching `Supplier`
+  rows (name-matched, idempotent); existing receipts keep their text and gain the
+  optional link.
+- `apps/payments` is untouched — `ModeOfPayment` GL mappings already exist.
+- `apps/inventory` `PurchaseReceipt` stays untouched except the optional `supplier` FK.
+- No new apps. The feature lives in `apps/accounting` (models, services, views, forms,
+  urls, seeds, tests) — `apps/accounting/models.py` stays under 300 lines by splitting
+  the payables models into `apps/accounting/payables_models.py`; views split into
+  `payables_views.py`; templates under `templates/backoffice/accounting/payables/`.
+- `apps/accounting/urls.py` gains a `payables/` namespace; nav gains a **Payables**
+  group (Suppliers, Supplier Invoices, Supplier Payments) under Accounting.
+
+##### Frontend
+
+All pages extend the backoffice base; Manager/Admin only (same gate as accounting):
+
+- **Suppliers** — register list with outstanding balance column and quick-add inline
+  form; detail page shows documents (invoices, payments) and the balance; create/edit
+  form with `is_default` + `payable_account` fields.
+- **Supplier Invoices** — register (filters: status, supplier, date range); create/edit
+  form with line formset (item lines, expense lines, linked-receipt source picker) and
+  submit/cancel actions; detail page with GL drill-down.
+- **Supplier Payments** — create form with outstanding-invoice picker (rows auto-filled
+  from outstanding), allocated total vs paid amount validation; detail page shows the
+  allocations and linked GL.
+- **Dashboard cards** — the accounting dashboard gains "Payables" cards (total
+  outstanding, count of unpaid invoices) linking to the registers.
+
+##### Seeds
+
+`seed_chart_of_accounts` extends to create (idempotent) `Accounts Payable` under
+Liabilities (`root_type=LIABILITY`, `report_type=BALANCE_SHEET`, account_type
+"Payable") and `Stock in Hand` under Assets (`account_type=STOCK`, defaulting to the
+first warehouse's account when one exists), wiring `Restaurant.default_payable_account`
+and `Restaurant.default_stock_in_hand_account`.
+
+##### Activation and rollout
+
+- No payable off-switch. Once the phase ships, `SupplierInvoice` and `SupplierPayment`
+  submission fail closed when the payable/stock-in-hand chain is missing (same
+  fail-closed posture as order settlement).
+- Existing unpaid supplier balances import as opening payables (see §4.4 opening
+  JournalEntry) — the ledger does not reconstruct historical receipts.
+- Go-live sequence: run `seed_chart_of_accounts` (creates the payable accounts and
+  wires the Restaurant FKs) → configure any per-supplier `payable_account` overrides →
+  the data migration creates `Supplier` rows from existing receipt text during
+  `migrate`.
+
+##### Tests
+
+- `test_payables_models.py` — supplier validations (default flag, payable account
+  rules, disable); invoice line source rules; payment allocation rules (positive,
+  capped at outstanding, total = paid amount); invoice/payment status immutability.
+- `test_payables_gl.py` — invoice posting legs (stock + expense + AP), payment posting
+  legs, per-supplier `payable_account` override, missing-account config raises, fiscal
+  year guard, cancel reversals, idempotence.
+- `test_payables_outstanding.py` — invoice submit sets `outstanding_amount`; payment
+  allocates; partial payment leaves `PARTIAL`; full payment leaves `Paid`; cancellation
+  restores balances; `Supplier.outstanding_balance` reflects allocations.
+- `test_payables_views.py` — backoffice gate, CRUD flows, formset add/remove,
+  submit/cancel actions, outstanding-invoice picker.
+- `test_purchase_receipt.py` — gains a case for the optional `supplier` link and the
+  data-migration supplier creation.
 
 ### 4.2 Accounting / GL (Phase 6)
 
-**Status:** planned.
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Scope decisions (locked):**
 
@@ -248,8 +467,8 @@ cost centers are simple CRUD pages.
 `seed_chart_of_accounts` (idempotent): Assets → Cash Account, Bank Accounts → Electronic
 Account; Inventory stock leaves per warehouse; Income → Food Sales + Drinks Sales; Expenses →
 Cost of Goods Sold + Round Off; Equity → Owner's Equity. Creates Kitchen/Bar cost centers, the
-current-year fiscal year, and wires production-unit income accounts, warehouse accounts,
-Restaurant defaults, and payment GL mappings.
+current-year fiscal year, and fills production-unit income accounts, warehouse accounts,
+Restaurant defaults, and payment GL mappings only when those FKs are currently null.
 
 ##### Activation and rollout
 
@@ -277,16 +496,17 @@ Restaurant defaults, and payment GL mappings.
 
 ### 4.3 Refunds Completion (Phase 6)
 
-**Status:** planned — detailed decisions locked below.
+**Status:** complete — implemented and retired.
 
 **Decisions:**
 
 - **Refund GL on return submit.** `submit_return` posts refund GL inside its own atomic block
-  after the return flips SUBMITTED: mirror-negated entries of the source order's settle legs
-  (income, payment, round-off, COGS) for the refunded portion only, carrying the return's
-  invoice number as `voucher_no="Order"`. The mirror exactly negates the source set, so
-  balances cannot drift. Restockable lines restore the bin via the existing "POS Return" SLE;
-  the COGS leg reversal credits the warehouse account for the restored value.
+  after the return flips SUBMITTED. Legs are rebuilt from the returned lines (income per
+  returned amount, payment credits from the return's `OrderPayment` rows, drink COGS at the
+  source order's settle-time outgoing rate), carrying the return's invoice number as
+  `voucher_type="Order"`. The batch is plugged to the round-off account so it cannot drift.
+  Restockable drink lines restore the bin via the existing "POS Return" SLE. Refund payments
+  are proportional across the source net tenders (`refunded_total / source.grand_total`).
 - **Wastage.** Return lines flagged not-restockable skip the SLE restore. Their value posts
   Dr `Restaurant.wastage_account` / Cr the returned line's warehouse account at the settle-time
   valuation rate, keeping the physical bar stock and its ledger value in agreement. New
@@ -304,7 +524,7 @@ source is allowed after the first is SUBMITTED; cumulative qty cap still enforce
 
 ### 4.4 Opening Balances and Go-Live Setup (Phase 6)
 
-**Status:** planned — detailed decisions locked below.
+**Status:** complete — implemented and retired.
 
 **Decisions:**
 
@@ -326,7 +546,7 @@ chain works from a cancelled opening.
 
 ### 4.5 Cash Shortage and Excess Posting (Phase 6)
 
-**Status:** planned — detailed decisions locked below.
+**Status:** complete — implemented and retired.
 
 **Decisions:**
 

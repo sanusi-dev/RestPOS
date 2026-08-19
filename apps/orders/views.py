@@ -1,5 +1,7 @@
 """Backoffice views for the orders app — order and KOT management."""
 
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -25,6 +27,7 @@ from .models import (
     SUBMITTED,
     TICKET_TYPE_CHOICES,
     Order,
+    OrderItem,
 )
 
 
@@ -258,6 +261,38 @@ def order_return_submit(request: HttpRequest, pk: int) -> HttpResponse:
         request,
         f"Return {order.invoice_number} submitted. Stock restored and refunds recorded.",
     )
+    return redirect("orders:order_detail", pk=order.pk)
+
+
+@login_required
+@require_POST
+def order_return_line_update(request: HttpRequest, pk: int, line_pk: int) -> HttpResponse:
+    """Reduce qty, drop a line, or mark wastage on a return draft. Manager only."""
+    user = _authenticated_user(request)
+    if not (user.is_manager or user.is_admin or user.is_superuser):
+        messages.error(request, "Only managers can edit returns.")
+        return redirect("orders:order_detail", pk=pk)
+    order = get_object_or_404(Order, pk=pk)
+    qty_raw = request.POST.get("qty")
+    qty = None
+    if qty_raw is not None and qty_raw != "":
+        try:
+            qty = Decimal(str(qty_raw))
+        except (InvalidOperation, TypeError, ValueError):
+            messages.error(request, "Enter a valid quantity.")
+            return redirect("orders:order_detail", pk=order.pk)
+    not_restockable = None
+    if "not_restockable" in request.POST:
+        not_restockable = request.POST.getlist("not_restockable")[-1] in {"1", "on", "true", "True"}
+    try:
+        services.update_return_line(order, line_pk, qty=qty, not_restockable=not_restockable)
+    except ValidationError as e:
+        messages.error(request, str(e.messages[0]) if e.messages else "Could not update the return line.")
+        return redirect("orders:order_detail", pk=order.pk)
+    except OrderItem.DoesNotExist:
+        messages.error(request, "That return line was not found.")
+        return redirect("orders:order_detail", pk=order.pk)
+    messages.success(request, "Return draft updated.")
     return redirect("orders:order_detail", pk=order.pk)
 
 

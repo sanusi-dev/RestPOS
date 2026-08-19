@@ -154,7 +154,9 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     """Process a normal POS payment and submit the order atomically.
 
     Lines, stock, shift ownership, and payments are validated before the
-    order becomes immutable. Settlement doubles as the receipt event.
+    order becomes immutable. Settlement doubles as the receipt event. GL
+    posts at settle (Phase 6) and fails closed when the account chain is
+    missing.
     """
     locked = Order.objects.select_for_update().get(pk=order.pk)
     if locked.status != DRAFT:
@@ -231,6 +233,11 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     with _transition(locked, flag="_allow_submit"):
         locked.save()
     _convert_drink_reservations(locked, reservations_initialized=reservations_initialized)
+    # GL posts inside the same atomic block, after the order flips SUBMITTED
+    # and the drink deductions are written (Phase 6 §4.2).
+    from apps.accounting.services import post_order_gl
+
+    post_order_gl(locked)
     locked.audit("SUBMITTED", actor=cashier, metadata={"paid_amount": str(total_paid)})
     order.refresh_from_db()
 
@@ -266,6 +273,10 @@ def cancel_order(order, reason, cancelled_by=None, reason_note=""):
     locked.cancelled_at = timezone.now()
     if locked.status == SUBMITTED:
         _restore_stock(locked)
+        # Reverse any GL posted at settle (Phase 6 §4.2).
+        from apps.accounting.services import reverse_order_gl
+
+        reverse_order_gl(locked)
     else:
         release_drink_reservations(locked)
     cancellation_kots = _cancel_kots(locked)
@@ -464,11 +475,28 @@ def make_return(order):
         raise ValidationError("Cannot return a return order.")
     if not source.is_paid:
         raise ValidationError("Only paid orders can be returned.")
-    if source.return_orders.exclude(status=CANCELLED).exists():
+    # One active return draft at a time; submitted returns are settled, so a
+    # new draft may be created for a further partial refund (Phase 6 §4.3).
+    if source.return_orders.filter(status=DRAFT).exists():
         raise ValidationError("This order already has an active return.")
 
     # Mirror every source line as a negative-qty line (same price, same
     # guest tag) so the return totals are exact negatives of the sale.
+    # The mirrored qty is the *remaining returnable* amount — already
+    # submitted returns reduce it, so a second return draft starts from the
+    # remainder (Phase 6 §4.3 partial returns).
+    previously_returned = {}
+    returned_rows = (
+        OrderItem.objects.filter(
+            return_against_item_id__in=source.items.values_list("pk", flat=True),
+            order__is_return=True,
+        )
+        .exclude(order__status=CANCELLED)
+        .values("return_against_item_id")
+        .annotate(total=Sum("qty"))
+    )
+    for row in returned_rows:
+        previously_returned[row["return_against_item_id"]] = abs(row["total"] or Decimal("0"))
     return_order = Order.objects.create(
         order_type=source.order_type,
         customer_name=source.customer_name,
@@ -481,11 +509,14 @@ def make_return(order):
     )
     return_order.assign_order_number()
     for oi in source.items.all():
+        remaining = oi.qty - previously_returned.get(oi.pk, Decimal("0"))
+        if remaining <= 0:
+            continue
         OrderItem.objects.create(
             order=return_order,
             item=oi.item,
             item_name=oi.item_name,
-            qty=-oi.qty,
+            qty=-remaining,
             rate=oi.rate,
             department=oi.department,
             stock_item=oi.stock_item,
@@ -512,21 +543,31 @@ def submit_return(order, actor=None):
         raise ValidationError("A return must reference a submitted non-return order.")
     for line in locked.items.select_related("item").all():
         line.full_clean()
+    locked.recalculate_totals()
 
     _restore_stock(locked, voucher_type="POS Return")
-    for payment in source.payments.select_related("mode_of_payment").all():
+    refund_total = abs(locked.grand_total)
+    if refund_total == 0:
+        raise ValidationError("The return has no refundable value.")
+    shares = _refund_payment_shares(source, refund_total)
+    for payment, amount in shares:
         OrderPayment.objects.create(
             order=locked,
             mode_of_payment=payment.mode_of_payment,
-            amount=-payment.amount,
+            amount=-amount,
             reference_no="",
         )
-    locked.paid_amount = -(source.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0"))
+    locked.paid_amount = -sum((amount for _, amount in shares), Decimal("0"))
     locked.is_paid = False
     locked.status = SUBMITTED
     locked.submitted_at = timezone.now()
     with _transition(locked, flag="_allow_submit"):
         locked.save()
+    # Refund GL mirrors the source settle legs for the refunded portion
+    # (Phase 6 §4.3), inside the same atomic block.
+    from apps.accounting.services import post_refund_gl
+
+    post_refund_gl(locked)
     locked.audit("RETURN_SUBMITTED", actor=actor, metadata={"source_order": source.pk})
     order.refresh_from_db()
     return order
@@ -946,7 +987,7 @@ def _validate_payment_data(order, payments_data, opening_entry):
             mapping = mode.gl_mapping
         except PaymentGLMapping.DoesNotExist:
             raise ValidationError(f"Payment mode {mode.name} has no GL mapping.") from None
-        if not mapping.default_account.strip():
+        if not mapping.default_account_id:
             raise ValidationError(f"Payment mode {mode.name} has no GL mapping.")
 
         reference_no = str(entry.get("reference_no", "") or "").strip()
@@ -1058,8 +1099,76 @@ def _convert_drink_reservations(order, *, reservations_initialized):
         )
 
 
+def _refund_payment_shares(source, refund_total):
+    """Split a refund across source payment modes in proportion to net tenders."""
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.load()
+    change_account_id = settings.account_for_change_amount_id if settings else None
+    change_left = source.change_amount or Decimal("0")
+    nets = []
+    for payment in source.payments.select_related("mode_of_payment").all():
+        amount = payment.amount
+        if change_left and change_account_id:
+            mapping = PaymentGLMapping.objects.filter(mode_of_payment=payment.mode_of_payment).first()
+            if mapping and mapping.default_account_id == change_account_id:
+                cut = min(amount, change_left)
+                amount -= cut
+                change_left -= cut
+        if amount:
+            nets.append((payment, amount))
+    net_sum = sum((net for _, net in nets), Decimal("0"))
+    if net_sum <= 0:
+        raise ValidationError("The source order has no net payments to refund.")
+    source_total = source.grand_total or Decimal("0")
+    if source_total <= 0:
+        raise ValidationError("The source order has no refundable value.")
+    ratio = refund_total / source_total
+    target = (net_sum * ratio).quantize(TWO_PLACES)
+    shares = []
+    remaining = target
+    for index, (payment, net) in enumerate(nets):
+        if index == len(nets) - 1:
+            share = remaining
+        else:
+            share = (target * net / net_sum).quantize(TWO_PLACES)
+            remaining -= share
+        if share:
+            shares.append((payment, share))
+    return shares
+
+
+@transaction.atomic
+def update_return_line(order, line_pk, *, qty=None, not_restockable=None):
+    """Edit a return-draft line: reduce qty, drop the line, or mark wastage."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT or not locked.is_return:
+        raise ValidationError("Only return drafts can be edited.")
+    line = locked.items.select_related("item").get(pk=line_pk)
+    if qty is not None:
+        qty = Decimal(str(qty))
+        if qty == 0:
+            line.delete()
+            locked.recalculate_totals()
+            order.refresh_from_db()
+            return order
+        if qty > 0:
+            qty = -qty
+        line.qty = qty
+    if not_restockable is not None:
+        line.not_restockable = bool(not_restockable)
+    line.save()
+    locked.recalculate_totals()
+    order.refresh_from_db()
+    return order
+
+
 def _restore_stock(order, voucher_type="POS Order Cancellation"):
-    """Create positive stock ledger entries reversing an order's deductions."""
+    """Create positive stock ledger entries reversing an order's deductions.
+
+    Return lines marked ``not_restockable`` skip the restore; their value posts
+    as wastage instead.
+    """
     voucher_no = str(order.pk)
     stock_items = order.items.select_related("item").filter(
         Q(department="DRINKS") | Q(department__isnull=True, item__department="DRINKS")
@@ -1069,7 +1178,9 @@ def _restore_stock(order, voucher_type="POS Order Cancellation"):
     if not order.stock_warehouse_id:
         raise ValidationError("This order has no stock warehouse snapshot for reversal.")
     warehouse = order.stock_warehouse
-    for oi in stock_items.only("item__is_stock_item", "qty"):
+    for oi in stock_items.only("item__is_stock_item", "qty", "not_restockable"):
+        if oi.not_restockable:
+            continue
         StockLedgerEntry.create_entry(
             item=oi.item,
             warehouse=warehouse,

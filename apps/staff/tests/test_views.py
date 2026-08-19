@@ -4,7 +4,9 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.payments.models import ModeOfPayment
+from apps.accounting.tests.helpers import setup_chart_of_accounts
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.settings.models import Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
@@ -18,8 +20,12 @@ class StaffViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
+        cls.restaurant = Restaurant.objects.create(company="Staff Views Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.cash_mode = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank_mode = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
+        PaymentGLMapping.objects.create(mode_of_payment=cls.cash_mode, default_account=cls.accounts["cash"])
+        PaymentGLMapping.objects.create(mode_of_payment=cls.bank_mode, default_account=cls.accounts["bank"])
         cls.entry = POSOpeningEntry.objects.create(
             cashier=cls.user,
             posting_date="2026-07-24",

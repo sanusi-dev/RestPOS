@@ -5,7 +5,7 @@
 The `payments` app owns payment master data only:
 
 - `ModeOfPayment`: name, type (`CASH`, `BANK`, `GENERAL`, `PHONE`), enabled flag, and default flag.
-- `PaymentGLMapping`: one-to-one mapping to a non-empty account name.
+- `PaymentGLMapping`: one-to-one mapping to a leaf `LedgerAccount` (Phase 6 FK; previously a name string).
 
 Sale payment rows are `orders.OrderPayment`, linked to an Order and ModeOfPayment. There is no external payment gateway, refund model, or separate payment-entry document.
 
@@ -35,7 +35,7 @@ Cash may exceed the total and produces `Order.change_amount`. Any overpayment co
 
 ## Shift Closing
 
-`staff.services.expected_closing_amounts()` sums submitted order payments in the period and subtracts `Order.change_amount` for cash orders and the refund rows of returns submitted in the period (negative `OrderPayment` amounts mirror the source payments per mode). The result is opening float plus net collected amount. `submit_closing_entry()` stores expected, counted, difference, and total short/excess values.
+`staff.services.expected_closing_amounts()` sums submitted order payments in the period and subtracts `Order.change_amount` for cash orders and the refund rows of returns submitted in the period (negative `OrderPayment` amounts are proportional to the source net tenders per mode). The result is opening float plus net collected amount. `submit_closing_entry()` stores expected, counted, difference, and total short/excess values.
 
 ## Current Non-Features
 

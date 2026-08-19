@@ -43,7 +43,7 @@ Payment inserts use nested savepoints to convert uniqueness errors to validation
 
 ## Return Submission
 
-A submitted return is a *separate* path (`orders.services.submit_return`), not a submission of the same document. It restores drink stock with positive SLEs (`voucher_type="POS Return"`), mirrors each source payment as a negative `OrderPayment` row, sets `paid_amount` to the negative refund total, keeps `is_paid=False`, transitions the return draft to `SUBMITTED`, and audits `RETURN_SUBMITTED`. Return documents stay out of paid-sales revenue queries (`is_paid=True` filters and `OrderQuerySet.submitted_in_shift` exclude them); at shift close their refund rows reduce the expected drawer per mode.
+A submitted return is a *separate* path (`orders.services.submit_return`), not a submission of the same document. It restores drink stock with positive SLEs (`voucher_type="POS Return"`) unless the line is marked not restockable, writes negative `OrderPayment` rows proportional to the source net tenders, sets `paid_amount` to the negative refund total, keeps `is_paid=False`, transitions the return draft to `SUBMITTED`, and audits `RETURN_SUBMITTED`. Return documents stay out of paid-sales revenue queries (`is_paid=True` filters and `OrderQuerySet.submitted_in_shift` exclude them); at shift close their refund rows reduce the expected drawer per mode.
 
 ## Important Difference from Older Feature Text
 

@@ -18,6 +18,7 @@ urlpatterns = [
     path("backoffice/payments/", include("apps.payments.urls")),
     path("backoffice/staff/", include("apps.staff.urls")),
     path("backoffice/orders/", include("apps.orders.urls")),
+    path("backoffice/accounting/", include("apps.accounting.urls")),
     path("pos/", include("apps.orders.pos_urls")),
     path("", include("apps.web.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

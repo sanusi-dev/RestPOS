@@ -5,6 +5,8 @@ from django.urls import reverse
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.users.models import CustomUser
 
+from .helpers import create_payment_accounts
+
 
 class PaymentsViewTestBase(TestCase):
     @classmethod
@@ -14,12 +16,13 @@ class PaymentsViewTestBase(TestCase):
         )
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
         cls.user.groups.add(mgr)
+        cls.accounts = create_payment_accounts()
         # Use test-only names so we don't conflict with the seed migration's defaults.
         cls.cash = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
         cls.mapping = PaymentGLMapping.objects.create(
             mode_of_payment=cls.cash,
-            default_account="Cash in Hand",
+            default_account=cls.accounts["cash"],
         )
 
     def setUp(self):
@@ -82,7 +85,7 @@ class TestModeOfPaymentViews(PaymentsViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Cash")
         # Should show the GL mapping for this mode
-        self.assertContains(response, "Cash in Hand")
+        self.assertContains(response, "Cash in Hand (payments test)")
 
     def test_mode_detail_404(self):
         response = self.client.get(reverse("payments:mode_detail", kwargs={"pk": 9999}))
@@ -107,7 +110,7 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
     def test_gl_mapping_list_200(self):
         response = self.client.get(reverse("payments:gl_mapping_list"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Cash in Hand")
+        self.assertContains(response, "Cash in Hand (payments test)")
 
     def test_gl_mapping_create_get(self):
         response = self.client.get(reverse("payments:gl_mapping_create"))
@@ -119,18 +122,18 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
             reverse("payments:gl_mapping_create"),
             data={
                 "mode_of_payment": self.bank.pk,
-                "default_account": "Bank Clearing",
+                "default_account": self.accounts["bank"].pk,
             },
         )
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
-        self.assertTrue(PaymentGLMapping.objects.filter(default_account="Bank Clearing").exists())
+        self.assertTrue(PaymentGLMapping.objects.filter(default_account=self.accounts["bank"]).exists())
 
     def test_gl_mapping_create_post_no_company(self):
         response = self.client.post(
             reverse("payments:gl_mapping_create"),
             data={
                 "mode_of_payment": self.bank.pk,
-                "default_account": "Bank Clearing",
+                "default_account": self.accounts["bank"].pk,
             },
         )
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
@@ -156,12 +159,12 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
             reverse("payments:gl_mapping_update", kwargs={"pk": self.mapping.pk}),
             data={
                 "mode_of_payment": self.cash.pk,
-                "default_account": "Cash in Drawer",
+                "default_account": self.accounts["bank"].pk,
             },
         )
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
         self.mapping.refresh_from_db()
-        self.assertEqual(self.mapping.default_account, "Cash in Drawer")
+        self.assertEqual(self.mapping.default_account, self.accounts["bank"])
 
     def test_gl_mapping_delete_post(self):
         pk = self.mapping.pk

@@ -1,5 +1,6 @@
 from django import forms
 
+from apps.accounting.models import CostCenter, LedgerAccount
 from apps.inventory.models import Warehouse
 from apps.menu.models import Menu
 from apps.utils.forms import active_choices
@@ -48,7 +49,7 @@ class SettingsModelForm(forms.ModelForm):
 
 
 class RestaurantForm(SettingsModelForm):
-    """The single settings record: identity, menu, stock, and POS behaviour."""
+    """The single settings record: identity, menu, stock, POS behaviour, and accounting."""
 
     class Meta:
         model = Restaurant
@@ -61,6 +62,21 @@ class RestaurantForm(SettingsModelForm):
             "default_warehouse",
             "max_open_drafts",
             "pos_allow_full_history",
+            # Accounting (Phase 6)
+            "default_income_account",
+            "default_expense_account",
+            "round_off_account",
+            "account_for_change_amount",
+            "write_off_account",
+            "wastage_account",
+            "cash_shortage_account",
+            "cash_over_short_account",
+            "cost_center",
+            "write_off_cost_center",
+            "variance_approval_threshold",
+            # Payables (Phase 2 §4.1)
+            "default_payable_account",
+            "default_stock_in_hand_account",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -73,6 +89,25 @@ class RestaurantForm(SettingsModelForm):
         self.fields["store_warehouse"].queryset = active_choices(
             Warehouse, self.instance.store_warehouse_id, disabled=False
         )
+        for field_name in (
+            "default_income_account",
+            "default_expense_account",
+            "round_off_account",
+            "account_for_change_amount",
+            "write_off_account",
+            "wastage_account",
+            "cash_shortage_account",
+            "cash_over_short_account",
+            "default_payable_account",
+            "default_stock_in_hand_account",
+        ):
+            self.fields[field_name].queryset = active_choices(
+                LedgerAccount, getattr(self.instance, f"{field_name}_id"), disabled=False, is_group=False
+            )
+        for field_name in ("cost_center", "write_off_cost_center"):
+            self.fields[field_name].queryset = active_choices(
+                CostCenter, getattr(self.instance, f"{field_name}_id"), disabled=False
+            )
 
 
 class ProductionUnitForm(SettingsModelForm):
@@ -86,9 +121,13 @@ class ProductionUnitForm(SettingsModelForm):
             "printer_ip",
             "printer_paper_width",
             "printer_cut_mode",
+            "income_account",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
         self.fields["warehouse"].help_text = "FOOD uses Kitchen; DRINKS uses the Bar / POS sales warehouse."
+        self.fields["income_account"].queryset = active_choices(
+            LedgerAccount, self.instance.income_account_id, disabled=False, is_group=False
+        )

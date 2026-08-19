@@ -8,14 +8,16 @@ from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order
 from apps.orders.services import add_order_line, create_tickets, settle_order
-from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
+
+from .accounting_setup import OrderAccountingMixin
 
 CustomUser = get_user_model()
 
 
-class BackofficeViewTestBase(TestCase):
+class BackofficeViewTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -28,10 +30,10 @@ class BackofficeViewTestBase(TestCase):
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.manager = CustomUser.objects.create_user(
             username="manager", password="testpass123", is_staff=True, is_superuser=True
@@ -215,6 +217,22 @@ class OrderReturnTest(BackofficeViewTestBase):
         self.assertContains(response, "Submit return")
         self.assertContains(response, "Delete draft")
         self.assertNotContains(response, "Cancel order")
+
+    def test_return_draft_can_reduce_qty(self):
+        order = self._create_order()
+        self._settle_order(order)
+        self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        return_order = Order.objects.get(is_return=True)
+        line = return_order.items.first()
+        response = self.client.post(
+            reverse("orders:order_return_line_update", kwargs={"pk": return_order.pk, "line_pk": line.pk}),
+            {"qty": "1"},
+        )
+        self.assertEqual(response.status_code, 302)
+        line.refresh_from_db()
+        self.assertEqual(line.qty, Decimal("-1"))
+        return_order.refresh_from_db()
+        self.assertEqual(abs(return_order.grand_total), Decimal("1500"))
 
     def test_return_submit_view(self):
         order = self._create_order()

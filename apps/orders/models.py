@@ -390,6 +390,10 @@ class OrderItem(BaseModel):
         blank=True,
         related_name="return_items",
     )
+    not_restockable = models.BooleanField(
+        default=False,
+        help_text="Return lines only: when set, the returned stock is not restored (wastage).",
+    )
 
     class Meta:
         ordering = ["pk"]
@@ -400,6 +404,10 @@ class OrderItem(BaseModel):
             ),
             models.CheckConstraint(condition=Q(rate__gte=0), name="orders_item_rate_gte_zero"),
             models.CheckConstraint(condition=Q(customer_index__gte=1), name="orders_item_customer_gte_one"),
+            models.CheckConstraint(
+                condition=~Q(not_restockable=True) | Q(return_against_item__isnull=False),
+                name="orders_item_not_restockable_return_only",
+            ),
         ]
 
     def __str__(self):
@@ -440,12 +448,16 @@ class OrderItem(BaseModel):
         if self.order_id:
             order = Order.objects.get(pk=self.order_id)
             self._validate_return_line(order)
+            if self.not_restockable and not (order.is_return and order.status == DRAFT):
+                raise ValidationError({"not_restockable": "Only return drafts can mark lines as not restockable."})
 
     def save(self, *args, **kwargs):
         if self.order_id:
             order = Order.objects.get(pk=self.order_id)
             order._ensure_editable()
             self._validate_return_line(order)
+            if self.not_restockable and not (order.is_return and order.status == DRAFT):
+                raise ValidationError("Only return drafts can mark lines as not restockable.")
         if not self.item_name and self.item_id:
             self.item_name = self.item.item_name
         if self.item_id and not self.department:

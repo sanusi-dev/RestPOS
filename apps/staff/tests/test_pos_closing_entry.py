@@ -4,8 +4,10 @@ from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.test import TestCase
 
+from apps.accounting.tests.helpers import setup_chart_of_accounts
 from apps.orders.models import Order
-from apps.payments.models import ModeOfPayment
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.settings.models import Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
@@ -17,8 +19,12 @@ class POSClosingEntryTestBase(TestCase):
         cls.user = CustomUser.objects.create_user(
             username="cashier@test.com", password="testpass123", email="cashier@test.com"
         )
+        cls.restaurant = Restaurant.objects.create(company="Closing Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.cash_mode = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank_mode = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
+        PaymentGLMapping.objects.create(mode_of_payment=cls.cash_mode, default_account=cls.accounts["cash"])
+        PaymentGLMapping.objects.create(mode_of_payment=cls.bank_mode, default_account=cls.accounts["bank"])
         cls.opening = POSOpeningEntry.objects.create(
             cashier=cls.user,
             posting_date="2026-07-24",

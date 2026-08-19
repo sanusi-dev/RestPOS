@@ -45,6 +45,121 @@ class Restaurant(BaseModel):
         help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
     )
 
+    # Accounting (Phase 6) — settlement enforces the accounts it needs.
+    default_income_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default income account",
+        help_text="Fallback income account for orders (item group and production unit accounts take precedence).",
+    )
+    default_expense_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default expense account",
+        help_text="Fallback expense account for COGS when the item group has none.",
+    )
+    round_off_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Round-off account",
+    )
+    account_for_change_amount = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Account for change amount",
+        help_text="The cash account whose settle-time payment rows are reduced by the change given.",
+    )
+    write_off_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Write-off account",
+    )
+    write_off_cost_center = models.ForeignKey(
+        "accounting.CostCenter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Write-off cost center",
+    )
+    cost_center = models.ForeignKey(
+        "accounting.CostCenter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default cost center",
+        help_text="Cost center stamped on order GL postings.",
+    )
+    wastage_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Wastage account",
+        help_text="Expense account for non-restockable returned drinks.",
+    )
+    cash_shortage_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Cash shortage account",
+    )
+    cash_over_short_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Cash over/short account",
+    )
+    variance_approval_threshold = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Variance approval threshold",
+        help_text="Absolute cash variance that requires a manager note to close. Blank = no approval gate.",
+    )
+
+    # Payables (Phase 2 §4.1) — supplier invoice/payment posting enforces these.
+    default_payable_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default payable account",
+        help_text="Accounts-payable account credited by supplier invoices and debited by supplier payments.",
+    )
+    default_stock_in_hand_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default stock-in-hand account",
+        help_text="Stock account debited by supplier invoice stock lines when the item group has no expense account.",
+    )
+
     class Meta:
         ordering = ["company"]
 
@@ -141,6 +256,15 @@ class ProductionUnit(BaseModel):
     printer_ip = models.CharField(max_length=50, blank=True)
     printer_paper_width = models.CharField(max_length=10, choices=PAPER_WIDTH_CHOICES, default=WIDTH_80MM)
     printer_cut_mode = models.CharField(max_length=15, choices=CUT_MODE_CHOICES, default=FULL_CUT)
+    income_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Income account",
+        help_text="Departmental income hook — Kitchen = FOOD income, Bar = DRINKS income.",
+    )
 
     class Meta:
         ordering = ["name"]

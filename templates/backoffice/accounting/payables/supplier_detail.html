@@ -1,0 +1,115 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Payables" section_url="accounting:supplier_list" current_label=supplier.supplier_name %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ supplier.supplier_name }}</h1>
+      <p class="text-sm text-gray-500">{{ supplier.get_supplier_type_display }}{% if supplier.tax_id %} · TIN {{ supplier.tax_id }}{% endif %}</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'accounting:supplier_update' supplier.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Edit</a>
+      <a href="{% url 'accounting:supplier_invoice_create' %}" class="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">New Invoice</a>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Outstanding Balance</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ supplier.outstanding_balance }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Contact</dt>
+        <dd class="text-sm font-medium text-gray-700">{{ supplier.contact_person|default:"—" }}{% if supplier.phone %} · {{ supplier.phone }}{% endif %}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Email</dt>
+        <dd class="text-sm font-medium text-gray-700">{{ supplier.email|default:"—" }}</dd>
+      </div>
+      {% if supplier.payable_account %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Payable Account</dt>
+          <dd class="text-sm font-medium text-gray-700">{{ supplier.payable_account.name }}</dd>
+        </div>
+      {% endif %}
+      {% if supplier.address %}
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Address</dt>
+          <dd class="text-sm font-medium text-gray-700">{{ supplier.address }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Invoices</h3></div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Outstanding</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for invoice in invoices %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4"><a href="{% url 'accounting:supplier_invoice_detail' invoice.pk %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ invoice.invoice_number }}</a></td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ invoice.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ invoice.total }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ invoice.outstanding_amount }}</td>
+              <td class="px-6 py-4">
+                {% if invoice.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+                {% elif invoice.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">{{ invoice.payment_status }}</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No invoices yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Payments</h3></div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Payment</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for payment in payments %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4"><a href="{% url 'accounting:supplier_payment_detail' payment.pk %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ payment.payment_number }}</a></td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ payment.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ payment.mode_of_payment.name }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ payment.paid_amount }}</td>
+              <td class="px-6 py-4">
+                {% if payment.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+                {% elif payment.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No payments yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

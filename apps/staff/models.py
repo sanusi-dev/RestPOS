@@ -190,6 +190,17 @@ class POSClosingEntry(BaseModel):
     net_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     grand_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     total_short_excess = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
+    variance_note = models.TextField(
+        blank=True,
+        help_text="Required when the absolute variance exceeds the configured approval threshold.",
+    )
+    variance_journal_entry = models.OneToOneField(
+        "accounting.JournalEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cash_variance_closing",
+    )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     remarks = models.TextField(blank=True)
     cancelled_by = models.ForeignKey(
@@ -246,6 +257,11 @@ class POSClosingEntry(BaseModel):
             raise ValidationError(
                 "Cannot cancel this closing entry — a new shift is open. Close or cancel the new shift first."
             )
+        # Reverse the variance JournalEntry posted at close (Phase 6 §4.5).
+        if self.variance_journal_entry_id:
+            journal = self.variance_journal_entry
+            if journal.status == journal.SUBMITTED:
+                journal.cancel()
         self.status = self.CANCELLED
         self.cancelled_at = timezone.now()
         if by_user is not None:

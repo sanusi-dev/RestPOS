@@ -14,6 +14,6 @@ class ModeOfPaymentAdmin(admin.ModelAdmin):
 @admin.register(PaymentGLMapping)
 class PaymentGLMappingAdmin(admin.ModelAdmin):
     list_display = ("mode_of_payment", "default_account", "created_at")
-    list_select_related = ("mode_of_payment",)
-    search_fields = ("mode_of_payment__name", "default_account")
+    list_select_related = ("mode_of_payment", "default_account")
+    search_fields = ("mode_of_payment__name", "default_account__name")
     ordering = ("mode_of_payment__name",)

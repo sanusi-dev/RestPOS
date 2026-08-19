@@ -385,6 +385,27 @@ GOOD: (no comment — standard Django pattern)
 
 **Smell test:** Before writing any comment/docstring/commit, ask "Would a competent Django developer need this to understand or use the code?" If no → delete. If yes → one line.
 
+## Git Commit Behavior
+
+You must always commit changes **atomically**. Do not lump unrelated modifications into a single commit.
+
+### Definition of Atomic Commit
+
+Each commit must represent exactly ONE single, logical task, feature, bug fix, or refactor. A commit must do one thing, do it completely, and leave the repository in a working, compilable state.
+
+### Execution Rules
+
+Whenever the user instructs you to commit, stage modifications, or finalize a task, adhere to the following workflow:
+
+1. **Group by Context:** Analyze the modified files. Separate structural logic fixes, visual styling updates, dependency changes, and documentation cleanups into distinct buckets.
+2. **Isolate Changes:** Stage only the specific files (or specific hunks/lines using interactive staging if multiple changes exist in one file) belonging to that specific bucket.
+3. **Commit Separately:** Run separate commit commands for each isolated logical unit.
+4. **No Monolithic Commits:** Never bundle unrelated fixes (e.g., fixing an accounting bug and updating a button color) into one commit message.
+
+### Commit Message Format
+
+Use clean, concise, descriptive imperative-mood commit messages (or follow Conventional Commits standard if specified by the repo, e.g., `fix: resolve broken income account fallback chain`). The repo's specified format in the "Documentation & Commit Standards" section above takes precedence: `<type>: <what changed>` with types feat/fix/refactor/style/chore/docs, subject max 50 chars, no full stop.
+
 ## Hard Rules — Never Do
 
 - Modify anything inside `references/`

@@ -43,6 +43,12 @@
         {% if field.name == "active_menu" %}
           <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider pt-6 border-t border-gray-100">Menu &amp; Stock</h3>
         {% endif %}
+        {% if field.name == "default_income_account" %}
+          <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider pt-6 border-t border-gray-100">Accounting</h3>
+        {% endif %}
+        {% if field.name == "default_payable_account" %}
+          <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider pt-6 border-t border-gray-100">Payables</h3>
+        {% endif %}
 
         {% if field.widget_type == "checkbox" %}
           <div>

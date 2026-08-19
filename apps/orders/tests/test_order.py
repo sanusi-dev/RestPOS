@@ -29,11 +29,12 @@ from ..services import (
     submit_return,
     update_order_line_quantity,
 )
+from .accounting_setup import OrderAccountingMixin
 
 CustomUser = get_user_model()
 
 
-class OrderTestBase(TestCase):
+class OrderTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -53,10 +54,10 @@ class OrderTestBase(TestCase):
         Bin.objects.create(item=cls.item, warehouse=cls.warehouse, actual_qty=Decimal("100"))
         Bin.objects.create(item=cls.item2, warehouse=cls.warehouse, actual_qty=Decimal("100"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
         cls.sequence, _ = OrderSequence.objects.get_or_create(name="order", defaults={"current_value": 0})
         cls.opening = POSOpeningEntry.objects.create(cashier=cls.user)
@@ -261,7 +262,9 @@ class OrderSettleTest(OrderTestBase):
 
     def _add_bank_mode(self):
         bank, _ = ModeOfPayment.objects.get_or_create(name="Bank", defaults={"type": "BANK"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=bank, defaults={"default_account": "Bank Account"})
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=bank, defaults={"default_account": self.accounts["bank"]}
+        )
         OpeningPayment.objects.get_or_create(
             opening_entry=self.opening,
             mode_of_payment=bank,

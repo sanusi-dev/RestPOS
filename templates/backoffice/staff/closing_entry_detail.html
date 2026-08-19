@@ -67,6 +67,12 @@
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Short/Excess</dt>
           <dd class="text-base font-mono font-bold {% if closing.total_short_excess < 0 %}text-red-600{% elif closing.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ closing.total_short_excess }}</dd>
         </div>
+        {% if closing.variance_journal_entry %}
+          <div>
+            <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Variance Journal Entry</dt>
+            <dd><a href="{% url 'accounting:journal_entry_detail' closing.variance_journal_entry_id %}" class="text-base font-bold text-orange-500 hover:text-orange-600">Journal #{{ closing.variance_journal_entry_id }}</a></dd>
+          </div>
+        {% endif %}
       {% endif %}
       {% if closing.remarks %}
         <div class="sm:col-span-2">
@@ -123,8 +129,15 @@
             </tbody>
           </table>
         </div>
-        <div class="px-6 py-4 bg-gray-50/30 border-t border-gray-100 text-xs text-gray-500">
-          Tip: enter the counted amount for each method. <span class="font-mono font-semibold">Expected</span> = opening + collected sales (collected is added in Phase 7). The difference is computed on submit.
+        <div class="px-6 py-4 bg-gray-50/30 border-t border-gray-100 space-y-4">
+          <div class="flex flex-col gap-1.5">
+            <label for="id_variance_note" class="text-sm font-bold text-gray-700">Variance note</label>
+            <textarea name="variance_note" id="id_variance_note" rows="2" class="w-full rounded-xl border border-gray-300 bg-white/50 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25">{{ closing.variance_note }}</textarea>
+            <p class="text-xs text-gray-500">Required when the short/excess exceeds the configured approval threshold.</p>
+          </div>
+          <p class="text-xs text-gray-500">
+            Tip: enter the counted amount for each method. <span class="font-mono font-semibold">Expected</span> = opening + collected sales. The difference is computed on submit.
+          </p>
         </div>
       </form>
     {% else %}
