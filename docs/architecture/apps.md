@@ -12,6 +12,7 @@
 | `apps.staff` | opening/closing shift documents and drawer reconciliation | `models.py`, `services.py`, `views.py` | users, payments, orders, settings, accounting (variance JE) |
 | `apps.orders` | orders, order lines/payments, KOT/BOT snapshots, POS orchestration | `models.py`, `services.py`, `views_pos.py`, `views.py` | inventory, menu, payments, settings, staff, users, accounting (order GL) |
 | `apps.accounting` | chart of accounts, GL entries, journal entries, fiscal years, cost centers | `models.py`, `services.py`, `views.py` | orders, payments, settings, inventory (read-side) |
+| `apps.reports` | Daily P&L snapshot and P&L settings | `models.py`, `services.py`, `views.py` | orders, inventory, staff, accounting (fiscal year), settings |
 | `apps.web` | landing, role redirect, shared middleware/context/template tags | `views.py`, `middleware.py`, `context_processors.py` | users, inventory navigation |
 | `apps.utils` | timestamp base model and styled forms | `models.py`, `forms.py` | Django only |
 
@@ -87,6 +88,14 @@
 - Templates/frontend: `templates/backoffice/accounting/*`; the chart of accounts is a recursive tree with expand/collapse, opening journals go through a read-only review screen before submit, journal entries use the standard formset add/remove pattern, and GL entries are a filtered read-only table.
 - Side effects: `GLEntry` is immutable — reversal postings mark originals cancelled and write mirror rows. `reverse_order_gl` posts reversal rows on the day they occur (today, or the refund's posting date when passed), never on the original sale date. `JournalEntry.submit()` posts to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft.
 - Management: `accounting/management/commands/seed_chart_of_accounts.py` idempotently seeds the chart, cost centers, and current fiscal year, and fills Restaurant/warehouse/production-unit/payment GL FKs only when they are currently null.
+
+### `apps.reports`
+
+- URLs: `reports/urls.py` exposes the Daily P&L register, draft/detail/submit/cancel/amend, HTMX preview and formset row endpoints, and P&L settings under `/backoffice/reports/`, all behind the manager gate.
+- Models/forms: `PnLConfiguration` singleton, `PnLMaterial`, `PnLRecurringExpense` in `reports/models.py`; `DailyPnL` and snapshot/input children in `reports/pnl_models.py`.
+- Services: `reports/services.py` builds the three-column statement (`compute_daily_pnl`) and freezes it on submit (`submit_daily_pnl`). Submit does not post GL. Source queries live in `reports/sources.py`.
+- Templates/frontend: `templates/backoffice/reports/*`; the statement partial is shared by draft preview and submitted detail.
+- Side effects: none on other apps. Recurring rates are snapshotted onto the submitted document so later settings edits do not rewrite history.
 
 ### `apps.web`
 

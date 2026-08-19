@@ -16,10 +16,15 @@ Requests under `/backoffice/` are redirected to the POS unless the user has `has
 | Staff | `apps.staff.urls` | opening/closing documents |
 | Orders | `apps.orders.urls` | order register, KOT register, cancel, return |
 | Accounting | `apps.accounting.urls` | chart of accounts, journal entries, GL entries, fiscal years, cost centers |
+| Reports | `apps.reports.urls` | Daily P&L register, draft/submit/cancel/amend, P&L settings |
 
 ## Accounting Operations
 
 All accounting pages are manager/admin-only (the view gate raises 403 directly, in addition to the middleware route gate). The chart of accounts is a tree page with a create/edit form per account; the account form enforces group/leaf and root-type rules via `LedgerAccount.clean()`. Journal entries use a prefixed inline formset of account rows (HTMX row add/remove endpoints that rebuild the posted formset and re-render the accounts partial, per the inventory formset pattern); an empty formset is rejected. Drafts are edited and submitted from the detail page, where submit/cancel/amend are confirmation-aware POSTs. `JournalEntry.submit()` posts balanced rows to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft. GL entries are read-only with account/voucher-type/cancelled filters. Fiscal years and cost centers are simple CRUD pages. All accounting models are registered in Django admin (`accounting/admin.py`); `GLEntry` and `JournalEntryAccount` are fully read-only there, and journal entries cannot be deleted from admin.
+
+## Daily P&L Operations
+
+All reports pages are manager/admin-only (view 403 plus the middleware route gate). P&L settings hold the business-day start hour, electricity rate, depreciation, cash-variance toggle, material catalog, and recurring expense templates. Creating a Daily P&L saves a draft for one business date (one draft / one submitted per date). The draft form accepts meter readings, material quantities, ad-hoc expenses, and an optional employee-cost override; HTMX "Refresh preview" saves the draft and returns the three-column statement partial. Submit freezes lines and totals inside one atomic block and does not post GL. Cancel leaves the snapshot on file; Amend copies inputs into a new draft that recomputes.
 
 ## Inventory Operations
 
@@ -39,7 +44,9 @@ Restaurant and ProductionUnit changes are manager/admin-only at view level. Rest
 
 ## Reporting Surfaces
 
-There is no reports app. Current aggregates are:
+`apps.reports` owns the Daily P&L document (Phase 7). Sales reports, trial balance, and the formal GL P&L remain Phase 8.
+
+Current aggregates elsewhere:
 
 - order dashboard: today count, paid count, cancelled count, revenue, recent orders, pending tickets;
 - inventory dashboard: counts and bins at/below safety stock;

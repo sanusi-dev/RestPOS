@@ -23,7 +23,7 @@ conventions are in `AGENTS.md`.
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
 | `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, cost centers, supplier payables | E #57–61 | built |
-| `reports` | Daily P&L, sales reports, trial balance | E #62–63 | planned |
+| `reports` | Daily P&L, sales reports, trial balance | E #62–63 | built (Daily P&L); sales reports planned |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
 | `coupons` | Coupon codes, pricing rules, cashier discount | F #66 | deferred |
@@ -46,7 +46,7 @@ phase completes before the next starts.
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
 | 6 | accounting | E #57–60 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
-| 7 | reports | E #62 | — | Daily P&L document with amendments and departmental split | §4.6 | Planned |
+| 7 | reports | E #62 | Daily P&L document with amendments and departmental split | — | n/a | Completed |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
 | — | customers | F #65 | Free-text customer name on orders | Customer master, groups, credit limits, POS search/create | deferred by design | Deferred |
@@ -575,21 +575,32 @@ rejected; cancel reverses the variance JE; closing-cancel guard still applies.
 
 ### 4.6 Daily P&L (Phase 7)
 
-**Status:** planned (scope only; detailed decisions to be locked when Phase 7 starts).
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
-**Decisions:**
+**Scope:** a submitted Daily P&L document for one restaurant business day. It is a management
+snapshot, not the formal accounting P&L (that is Phase 8, a query over `GLEntry`). Submitting
+a Daily P&L **does not post GL**.
 
-- A `DailyP&L` document per day: gross sales → COGS → direct expenses (electricity meter
-  readings, materials/consumables, ad-hoc) → gross profit → indirect expenses (rent,
-  insurance, depreciation, employee costs) → net profit. Every line shows naira and % of
-  gross sales.
-- COGS: drinks follow actual POS stock deductions and valuation; food has no BOM-derived cost
-  — Kitchen consumption reconciliations are reported alongside FOOD sales for comparison.
-- Amendment (`amended_from`) reversal chain for corrected submissions.
-- Extended-hours day boundary for venues operating past midnight.
-- Departmental FOOD/DRINKS split of the P&L.
+**App:** `apps.reports`. Manager/Admin only. Sidebar group **Reports** with Daily P&L and P&L
+Settings.
 
-**Models:** DailyP&L, P&LLineItem, P&LAmendment.
+**Statement:** three columns FOOD / DRINKS / TOTAL; percents of gross sales. Gross sales →
+round-off → net sales → drink FIFO COGS → kitchen consumption (memo) → direct expenses
+(electricity, materials, daily-fixed, ad-hoc) → gross profit → prime cost (memo) →
+indirects (employee, templates, depreciation, cash variance, ad-hoc) → net profit.
+
+**Models:** `PnLConfiguration` singleton, `PnLMaterial`, `PnLRecurringExpense`, `DailyPnL`,
+`DailyPnLMaterialQty`, `DailyPnLAdHoc`, `DailyPnLLine`, `DailyPnLCogsRow`,
+`DailyPnLConsumptionRow`. One DRAFT and one SUBMITTED per `business_date`. Amend copies
+inputs into a new draft; cancel does not post GL.
+
+**Window:** `[business_date + start_hour, next day + start_hour)`. Orders by
+`posting_date`+`posting_time`; consumption recs by `posting_date`; cash variance by
+`POSClosingEntry.period_end_date`.
+
+**Computation:** submit snapshots settings and live sources; does not post `GLEntry`. Drink
+COGS from FIFO SLEs; food never in COGS; kitchen consumption is memo only. Employee templates
+or a per-day override. Electricity optional (blank = ₦0).
 
 ### 4.7 Reports (Phase 8)
 

@@ -64,8 +64,10 @@ RestPOS/
 │   ├── payments/        ← payment modes, GL mappings
 │   ├── staff/           ← shifts, opening/closing entries, cashier sessions
 │   ├── orders/          ← orders, order items, customer cards, KOT dispatch, returns
+│   ├── accounting/      ← chart of accounts, GL, journals, fiscal years, payables
+│   ├── reports/         ← Daily P&L document and P&L settings
 │   └── web/             ← home, backoffice dashboard, middleware, context processors
-│   (planned: accounting, reports, printing — deferred: customers, coupons)
+│   (planned: printing — deferred: customers, coupons)
 ├── restpos/                         ← project package (settings.py, urls.py, celery.py, wsgi.py)
 └── templates/
     ├── pos/            ← cashier-facing POS screen
