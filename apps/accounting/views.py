@@ -306,7 +306,7 @@ def gl_entry_list(request: HttpRequest) -> HttpResponse:
     voucher_type = request.GET.get("voucher_type")
     include_cancelled = request.GET.get("include_cancelled") == "1"
     if account_id:
-        qs = qs.filter(account_id=account_id)
+        qs = qs.filter(account_id=int(account_id))
     if voucher_type:
         qs = qs.filter(voucher_type=voucher_type)
     if not include_cancelled:
