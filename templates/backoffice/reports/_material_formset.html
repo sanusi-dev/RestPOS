@@ -1,0 +1,45 @@
+<div id="pnl-materials-container">
+  {{ materials.management_form }}
+  {% if show_errors and materials.non_form_errors %}
+    <div class="px-6 py-3 bg-red-50 border-b border-red-100 text-sm text-red-700">{{ materials.non_form_errors }}</div>
+  {% endif %}
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Material</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row_form in materials %}
+          <tr>
+            {% for hidden in row_form.hidden_fields %}{{ hidden }}{% endfor %}
+            <td class="px-6 py-3">{{ row_form.material }}{% if show_errors and row_form.material.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.material.errors|join:", " }}</p>{% endif %}</td>
+            <td class="px-6 py-3">{{ row_form.qty }}{% if show_errors and row_form.qty.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.qty.errors|join:", " }}</p>{% endif %}</td>
+            <td class="px-6 py-3 text-right">
+              {% if pnl %}
+                <button type="button" class="text-xs font-semibold text-red-500 hover:text-red-700"
+                  hx-post="{% url 'reports:daily_pnl_material_remove' pnl.pk forloop.counter0 %}"
+                  hx-include="closest form"
+                  hx-target="#pnl-materials-container"
+                  hx-swap="outerHTML">Remove</button>
+              {% endif %}
+              {% if row_form.DELETE %}{{ row_form.DELETE }}{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pnl %}
+    <div class="px-6 py-3 border-t border-gray-100">
+      <button type="button" class="text-sm font-semibold text-orange-600 hover:text-orange-700"
+        hx-post="{% url 'reports:daily_pnl_material_add' pnl.pk %}"
+        hx-include="closest form"
+        hx-target="#pnl-materials-container"
+        hx-swap="outerHTML">Add material</button>
+    </div>
+  {% endif %}
+</div>

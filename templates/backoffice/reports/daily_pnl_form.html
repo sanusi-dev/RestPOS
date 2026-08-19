@@ -1,0 +1,78 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Reports" root_url="reports:daily_pnl_list" section_label="Daily P&L" section_url="reports:daily_pnl_list" current_label="Form" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}New Daily P&amp;L{% else %}Draft {{ pnl.business_date|date:"M j, Y" }}{% endif %}</h1>
+      <p class="text-sm text-gray-500">{% if is_create %}Pick the business date, then enter meter readings and extras.{% else %}Save the draft, refresh the preview, then submit from the detail page.{% endif %}</p>
+    </div>
+    {% if not is_create %}
+      <div class="flex items-center gap-2">
+        <form method="post" action="{% url 'reports:daily_pnl_submit' pnl.pk %}" data-confirm-title="Submit this Daily P&L?" data-confirm-body="Totals freeze. Nothing posts to the general ledger." data-confirm-button="Submit">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700">Submit</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+
+  <form method="post" id="pnl-draft-form" class="space-y-6">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% for field in form %}
+          {% include "backoffice/components/form_field.html" with field=field show_errors=show_errors %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if not is_create %}
+      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-100">
+          <h3 class="text-base font-bold text-gray-900">Materials consumed</h3>
+        </div>
+        {% include "backoffice/reports/_material_formset.html" %}
+      </div>
+
+      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-100">
+          <h3 class="text-base font-bold text-gray-900">Ad-hoc expenses</h3>
+        </div>
+        {% include "backoffice/reports/_adhoc_formset.html" %}
+      </div>
+
+      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-base font-bold text-gray-900">Preview</h3>
+          <button type="button" class="px-4 py-2 rounded-xl text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100"
+            hx-post="{% url 'reports:daily_pnl_preview' pnl.pk %}"
+            hx-include="closest form"
+            hx-target="#pnl-preview"
+            hx-swap="innerHTML">Refresh preview</button>
+        </div>
+        <div id="pnl-preview">
+          {% if preview %}
+            {% include "backoffice/reports/_statement.html" with rows=preview.lines %}
+          {% else %}
+            <p class="text-sm text-gray-500">Save or refresh to see today's statement.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="flex items-center justify-end gap-3 pt-2">
+      <a href="{% url 'reports:daily_pnl_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancel</a>
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">
+        {% if is_create %}Create draft{% else %}Save draft{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

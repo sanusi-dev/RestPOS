@@ -79,6 +79,22 @@
     <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Supplier payments</span>
   </a>
 </li>
+<li>
+  <a href="{% url 'reports:daily_pnl_list' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/reports' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="h-5 w-5 shrink-0">{% hgi_stroke name="analytics-01" size="20" color="currentColor" stroke_width="2" %}</span>
+    Reports
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'reports:daily_pnl_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'daily_pnl_list daily_pnl_detail daily_pnl_create daily_pnl_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Daily P&amp;L</span>
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'reports:pnl_settings' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'pnl_settings' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>P&amp;L settings</span>
+  </a>
+</li>
 <li class="px-4 py-3 mt-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
   <span>POS</span>
 </li>
