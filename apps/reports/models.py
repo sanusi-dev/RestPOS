@@ -9,7 +9,7 @@ from apps.utils.models import BaseModel
 
 FOOD = "FOOD"
 DRINKS = "DRINKS"
-DEPARTMENT_CHOICES = [
+DEPARTMENT_CHOICES: list[tuple[str, str]] = [
     (FOOD, "Food"),
     (DRINKS, "Drinks"),
 ]
