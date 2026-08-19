@@ -10,6 +10,7 @@ urlpatterns = [
     path("", view=views.accounting_dashboard, name="dashboard"),
     # Chart of Accounts
     path("chart-of-accounts/", view=views.chart_of_accounts, name="chart_of_accounts"),
+    path("chart-of-accounts/<int:pk>/children/", view=views.account_children, name="account_children"),
     path("chart-of-accounts/create/", view=views.account_create, name="account_create"),
     path("chart-of-accounts/<int:pk>/", view=views.account_detail, name="account_detail"),
     path("chart-of-accounts/<int:pk>/edit/", view=views.account_update, name="account_update"),
@@ -23,6 +24,7 @@ urlpatterns = [
         name="journal_entry_account_remove",
     ),
     path("journal-entries/<int:pk>/", view=views.journal_entry_detail, name="journal_entry_detail"),
+    path("journal-entries/<int:pk>/review/", view=views.journal_entry_review, name="journal_entry_review"),
     path("journal-entries/<int:pk>/edit/", view=views.journal_entry_update, name="journal_entry_update"),
     path("journal-entries/<int:pk>/submit/", view=views.journal_entry_submit, name="journal_entry_submit"),
     path("journal-entries/<int:pk>/cancel/", view=views.journal_entry_cancel, name="journal_entry_cancel"),

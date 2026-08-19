@@ -201,7 +201,7 @@ resolved fiscal year, Restaurant cost center when set:
 
 | Leg | Dr | Cr | Amount | Account resolution |
 |---|---|---|---|---|
-| Stock-in-Hand | item lines | — | Σ line amounts | `item.item_group.expense_account` → `Restaurant.default_stock_in_hand_account` (required) |
+| Stock-in-Hand | item lines | — | Σ line amounts | `Restaurant.default_stock_in_hand_account` (required). Do not reuse `ItemGroup.expense_account` — that field is COGS at sale. |
 | Expense | — | — | Σ expense-line amounts | line `expense_account` (required per line) |
 | Accounts Payable | — | payable | grand total | `supplier.payable_account` → `Restaurant.default_payable_account` (required) |
 
@@ -210,7 +210,8 @@ carry `against` = the AP account name. Cancellation posts mirrored negated rows 
 original rows marked `is_cancelled` (identical to `reverse_order_gl`), plus the
 outstanding rows reversed. **No stock-ledger entries are posted by the invoice** — stock
 moves only on the receipt, which remains unchanged; the invoice is a pure liability
-document.
+document. Cancelling a submitted invoice is refused while submitted payment
+allocations exist — cancel those payments first, then the invoice.
 
 **Supplier payment** — `voucher_type="Supplier Payment"`, `voucher_no=payment_number`,
 resolved fiscal year, Restaurant cost center when set:
@@ -466,8 +467,8 @@ cost centers are simple CRUD pages.
 `seed_chart_of_accounts` (idempotent): Assets → Cash Account, Bank Accounts → Electronic
 Account; Inventory stock leaves per warehouse; Income → Food Sales + Drinks Sales; Expenses →
 Cost of Goods Sold + Round Off; Equity → Owner's Equity. Creates Kitchen/Bar cost centers, the
-current-year fiscal year, and wires production-unit income accounts, warehouse accounts,
-Restaurant defaults, and payment GL mappings.
+current-year fiscal year, and fills production-unit income accounts, warehouse accounts,
+Restaurant defaults, and payment GL mappings only when those FKs are currently null.
 
 ##### Activation and rollout
 
@@ -500,11 +501,12 @@ Restaurant defaults, and payment GL mappings.
 **Decisions:**
 
 - **Refund GL on return submit.** `submit_return` posts refund GL inside its own atomic block
-  after the return flips SUBMITTED: mirror-negated entries of the source order's settle legs
-  (income, payment, round-off, COGS) for the refunded portion only, carrying the return's
-  invoice number as `voucher_no="Order"`. The mirror exactly negates the source set, so
-  balances cannot drift. Restockable lines restore the bin via the existing "POS Return" SLE;
-  the COGS leg reversal credits the warehouse account for the restored value.
+  after the return flips SUBMITTED. Legs are rebuilt from the returned lines (income per
+  returned amount, payment credits from the return's `OrderPayment` rows, drink COGS at the
+  source order's settle-time outgoing rate), carrying the return's invoice number as
+  `voucher_type="Order"`. The batch is plugged to the round-off account so it cannot drift.
+  Restockable drink lines restore the bin via the existing "POS Return" SLE. Refund payments
+  are proportional across the source net tenders (`refunded_total / source.grand_total`).
 - **Wastage.** Return lines flagged not-restockable skip the SLE restore. Their value posts
   Dr `Restaurant.wastage_account` / Cr the returned line's warehouse account at the settle-time
   valuation rate, keeping the physical bar stock and its ledger value in agreement. New

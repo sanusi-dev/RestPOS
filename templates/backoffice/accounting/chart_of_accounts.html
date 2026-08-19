@@ -23,9 +23,6 @@
     <div class="divide-y divide-gray-50">
       {% for root in roots %}
         {% include "backoffice/accounting/_account_row.html" with account=root depth=0 %}
-        {% for child in root.children.all %}
-          {% include "backoffice/accounting/_account_row.html" with account=child depth=1 %}
-        {% endfor %}
       {% empty %}
         <div class="px-6 py-10 text-center text-sm text-gray-500">
           No accounts yet. <a href="{% url 'accounting:account_create' %}" class="text-orange-500 font-semibold">Create the first account</a>, or run <code class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">seed_chart_of_accounts</code>.

@@ -115,16 +115,36 @@
           <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Qty</th>
           <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Rate</th>
           <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Amount</th>
+          {% if order.status == "DRAFT" and order.is_return %}<th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Return</th>{% endif %}
         </tr></thead>
         <tbody class="divide-y divide-gray-50">
           {% for item in order.items.all %}
           <tr class="hover:bg-gray-50/60 transition-colors">
-            <td class="px-6 py-4"><p class="text-sm font-semibold text-gray-900">{{ item.item_name }}</p>{% if item.comments %}<p class="text-xs text-gray-400 mt-0.5">{{ item.comments }}</p>{% endif %}</td>
+            <td class="px-6 py-4"><p class="text-sm font-semibold text-gray-900">{{ item.item_name }}</p>{% if item.comments %}<p class="text-xs text-gray-400 mt-0.5">{{ item.comments }}</p>{% endif %}{% if item.not_restockable %}<p class="text-[11px] font-bold uppercase tracking-wider text-amber-600 mt-1">Wastage — not restocked</p>{% endif %}</td>
             <td class="px-6 py-4 text-sm text-gray-500">{% if item.department %}{{ item.get_department_display }}{% else %}{{ item.item.get_department_display }}{% endif %}</td>
             <td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td>
             <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
             <td class="px-6 py-4 text-right text-sm text-gray-500">₦{{ item.rate|intcomma }}</td>
             <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ item.amount|intcomma }}</td>
+            {% if order.status == "DRAFT" and order.is_return %}
+            <td class="px-6 py-4 text-right">
+              <form method="post" action="{% url 'orders:order_return_line_update' order.pk item.pk %}" class="flex flex-col items-end gap-2">
+                {% csrf_token %}
+                <div class="flex items-center gap-2">
+                  <label class="sr-only" for="return-qty-{{ item.pk }}">Return qty</label>
+                  <input id="return-qty-{{ item.pk }}" type="number" name="qty" min="0" step="0.01" value="{{ item.qty|stringformat:'f'|cut:'-' }}" class="w-20 h-9 rounded-lg border border-gray-200 px-2 text-right text-sm font-semibold text-gray-900">
+                  <button type="submit" class="h-9 px-3 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-orange-500 transition-colors">Update</button>
+                </div>
+                {% if item.department == "DRINKS" or item.item.department == "DRINKS" %}
+                <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
+                  <input type="hidden" name="not_restockable" value="0">
+                  <input type="checkbox" name="not_restockable" value="1" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" {% if item.not_restockable %}checked{% endif %} onchange="this.form.submit()">
+                  Don't restock (wastage)
+                </label>
+                {% endif %}
+              </form>
+            </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>

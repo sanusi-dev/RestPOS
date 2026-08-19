@@ -12,6 +12,11 @@ urlpatterns = [
     path("<int:pk>/delete/", view=views.order_delete, name="order_delete"),
     path("<int:pk>/return/", view=views.order_return, name="order_return"),
     path("<int:pk>/return/submit/", view=views.order_return_submit, name="order_return_submit"),
+    path(
+        "<int:pk>/return/lines/<int:line_pk>/",
+        view=views.order_return_line_update,
+        name="order_return_line_update",
+    ),
     path("kots/", view=views.kot_list, name="kot_list"),
     path("kots/<int:pk>/", view=views.kot_detail, name="kot_detail"),
 ]

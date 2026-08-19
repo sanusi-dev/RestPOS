@@ -117,16 +117,26 @@ def _income_legs(order, rows):
 
 
 def _payment_legs(order, settings):
-    """Build payment GL rows (debits), reducing change on the cash account."""
-    account_for_change = settings.account_for_change_amount if settings else None
+    """Build payment GL rows (debits), reducing change once on the change account."""
+    change_left = order.change_amount or Decimal("0")
+    change_account = None
+    if change_left:
+        change_account = _resolve_required_account(
+            settings.account_for_change_amount if settings else None,
+            label="The change account",
+        )
     rows = []
     for payment in order.payments.select_related("mode_of_payment").all():
         account = _resolve_payment_account(payment.mode_of_payment)
         amount = payment.amount
-        if account_for_change and account.pk == account_for_change.pk:
-            amount -= order.change_amount
+        if change_left and account.pk == change_account.pk:
+            reduction = min(amount, change_left)
+            amount -= reduction
+            change_left -= reduction
         if amount != 0:
             rows.append({"account": account, "debit": amount})
+    if change_left:
+        raise ValidationError("Change could not be applied to a matching payment account.")
     return rows
 
 
@@ -194,7 +204,14 @@ def _merge_rows(rows):
                 "debit": row.get("debit", Decimal("0")),
                 "credit": row.get("credit", Decimal("0")),
             }
-    return [row for row in merged.values() if row["debit"] or row["credit"]]
+    result = []
+    for row in merged.values():
+        net = (row["debit"] or Decimal("0")) - (row["credit"] or Decimal("0"))
+        if net > 0:
+            result.append({**row, "debit": net, "credit": Decimal("0")})
+        elif net < 0:
+            result.append({**row, "debit": Decimal("0"), "credit": -net})
+    return result
 
 
 @transaction.atomic
@@ -275,50 +292,60 @@ def reverse_order_gl(order, posting_date=None):
 
 
 # ---------------------------------------------------------------------------
-# Refund GL (Phase 6 §4.3)
+# Refund GL
 # ---------------------------------------------------------------------------
 
 
-def _refund_ratio(source, return_order):
-    """Return the fraction of the source order being refunded (0 < ratio <= 1)."""
-    source_total = source.grand_total or Decimal("1")
-    refund_total = abs(return_order.grand_total)
-    if refund_total == 0:
-        raise ValidationError("The return has no refundable value.")
-    ratio = (refund_total / source_total).quantize(Decimal("0.000001"))
-    if ratio > Decimal("1"):
-        raise ValidationError("Refund value exceeds the source order total.")
-    return ratio
+def _is_drink_line(line):
+    return (line.department or getattr(line.item, "department", None)) == "DRINKS"
 
 
-def _return_line_rate(return_order, line):
-    """Best-available valuation rate for a return line (settle-time outgoing)."""
+def _settle_time_rate(source_order, item):
+    """Outgoing FIFO rate from the source order's settle-time stock deductions."""
     from apps.inventory.models import StockLedgerEntry
 
-    sle = (
+    sles = list(
         StockLedgerEntry.objects.filter(
-            voucher_type="POS Return",
-            voucher_no=str(return_order.pk),
-            item=line.item,
+            voucher_type="POS Order",
+            voucher_no=str(source_order.pk),
+            item=item,
+            actual_qty__lt=0,
         )
-        .order_by("-pk")
-        .first()
     )
-    if sle is not None:
-        return sle.incoming_rate
-    bin_obj = line.item.bins.filter(warehouse=return_order.stock_warehouse).first()
-    return bin_obj.valuation_rate if bin_obj else Decimal("0")
+    if not sles:
+        raise ValidationError(f"Settle-time valuation rate for {item.item_name} cannot be resolved.")
+    qty = sum((abs(sle.actual_qty) for sle in sles), Decimal("0"))
+    value = sum((abs(sle.actual_qty) * sle.outgoing_rate for sle in sles), Decimal("0"))
+    if qty <= 0:
+        raise ValidationError(f"Settle-time valuation rate for {item.item_name} cannot be resolved.")
+    return value / qty
+
+
+def _plug_round_off(rows, settings):
+    """Put any debit/credit remainder on the round-off account so the batch balances."""
+    debit = sum((row.get("debit") or Decimal("0") for row in rows), Decimal("0"))
+    credit = sum((row.get("credit") or Decimal("0") for row in rows), Decimal("0"))
+    diff = (debit - credit).quantize(TWO_PLACES)
+    if not diff:
+        return rows
+    account = _resolve_required_account(
+        settings.round_off_account if settings else None,
+        label="The round-off account",
+    )
+    if diff > 0:
+        rows.append({"account": account, "credit": diff})
+    else:
+        rows.append({"account": account, "debit": -diff})
+    return rows
 
 
 @transaction.atomic
 def post_refund_gl(return_order):
-    """Post mirror-negated GL entries for the refunded portion of a return.
+    """Post refund GL rebuilt from the returned lines, payments, and wastage.
 
-    Mirrors the source order's settle legs scaled by the refund ratio, carrying
-    the return's invoice number as voucher_no="Order". Restockable lines are
-    restored via the existing "POS Return" SLE; the COGS leg reversal credits
-    the warehouse account for the restored value. Non-restockable lines post
-    wastage: Dr wastage account / Cr warehouse account at settle-time rate.
+    Income reverses per returned line. Payment credits follow the return's
+    OrderPayment rows. Drink lines reverse COGS at the settle-time outgoing
+    rate; not-restockable drink lines also post Dr wastage / Cr warehouse.
     """
     if return_order.status != SUBMITTED or not return_order.is_return:
         raise ValidationError("Only submitted return orders can be posted to the GL.")
@@ -330,69 +357,88 @@ def post_refund_gl(return_order):
     ).exists():
         return  # idempotent
 
+    if not GLEntry.objects.filter(
+        voucher_type="Order", voucher_no=source.invoice_number, is_cancelled=False
+    ).exists():
+        return
+
     settings = Restaurant.load()
     if settings is None:
         raise ValidationError("Restaurant settings are not configured.")
-
-    ratio = _refund_ratio(source, return_order)
-    source_gl = GLEntry.objects.filter(
-        voucher_type="Order",
-        voucher_no=source.invoice_number,
-        is_cancelled=False,
-    )
-    if not source_gl.exists():
-        # The source was never posted (e.g. pre-GL order) — nothing to mirror.
-        return
-
     cost_center = settings.cost_center if settings.cost_center_id else None
-    rows = []
-    for gl in source_gl:
-        rows.append(
-            {
-                "account": gl.account,
-                "cost_center": gl.cost_center or cost_center,
-                "debit": (gl.credit * ratio).quantize(TWO_PLACES),
-                "credit": (gl.debit * ratio).quantize(TWO_PLACES),
-                "against": gl.against,
-            }
-        )
+    lines = list(return_order.items.select_related("item__item_group", "item").all())
+    if not lines:
+        raise ValidationError("The return has no refundable value.")
 
-    # Wastage: non-restockable return lines post Dr wastage / Cr warehouse at
-    # the settle-time valuation rate (the value stays out of stock).
-    wastage_account = settings.wastage_account if settings.wastage_account_id else None
-    not_restockable_lines = list(return_order.items.select_related("item").filter(not_restockable=True))
-    if not_restockable_lines:
-        if wastage_account is None:
-            raise ValidationError("The wastage account is not configured.")
+    rows = []
+    income_rows = _income_legs(return_order, _order_lines_with_accounts(return_order))
+    for row in income_rows:
+        amount = abs(row.get("credit") or row.get("debit") or Decimal("0"))
+        if amount:
+            rows.append({"account": row["account"], "debit": amount, "cost_center": cost_center})
+
+    for payment in return_order.payments.select_related("mode_of_payment").all():
+        amount = abs(payment.amount)
+        if amount:
+            rows.append(
+                {
+                    "account": _resolve_payment_account(payment.mode_of_payment),
+                    "credit": amount,
+                    "cost_center": cost_center,
+                }
+            )
+
+    default_expense = settings.default_expense_account if settings else None
+    warehouse_account = None
+    wastage_account = None
+    drink_returns = [line for line in lines if _is_drink_line(line)]
+    if drink_returns:
         warehouse_account = _resolve_required_account(
             return_order.stock_warehouse.account if return_order.stock_warehouse_id else None,
             label="The warehouse account",
         )
-        for line in not_restockable_lines:
-            value = (abs(line.qty) * _return_line_rate(return_order, line)).quantize(TWO_PLACES)
+    if any(line.not_restockable for line in drink_returns):
+        wastage_account = _resolve_required_account(
+            settings.wastage_account if settings else None,
+            label="The wastage account",
+        )
+
+    for line in drink_returns:
+        rate = _settle_time_rate(source, line.item)
+        value = (abs(line.qty) * rate).quantize(TWO_PLACES)
+        if not value:
+            continue
+        expense = _expense_account_for(line.item.item_group) or default_expense
+        expense = _resolve_required_account(expense, label="The default expense account")
+        rows.append({"account": expense, "credit": value, "cost_center": cost_center})
+        rows.append({"account": warehouse_account, "debit": value, "cost_center": cost_center})
+        if line.not_restockable:
             rows.append(
                 {
                     "account": wastage_account,
-                    "cost_center": cost_center,
                     "debit": value,
+                    "cost_center": cost_center,
                     "against": warehouse_account.name,
                 }
             )
             rows.append(
                 {
                     "account": warehouse_account,
-                    "cost_center": cost_center,
                     "credit": value,
+                    "cost_center": cost_center,
                     "against": wastage_account.name,
                 }
             )
 
-    rows = _merge_rows(rows)
+    rows = _plug_round_off(_merge_rows(rows), settings)
     if not rows:
         return
+    against = ", ".join(row["account"].name for row in rows if row.get("credit"))
+    for row in rows:
+        row.setdefault("against", against)
     GLEntry.post(
         posting_date=return_order.posting_date,
-        rows=rows,
+        rows=_merge_rows(rows),
         voucher_type="Order",
         voucher_no=return_order.invoice_number,
         remarks=f"Refund of {source.invoice_number}",
@@ -539,12 +585,7 @@ def post_supplier_invoice_gl(invoice):
     expense_rows = []
     for line in invoice.items.select_related("item__item_group", "expense_account").all():
         if line.item_id:
-            group = line.item.item_group
-            account = None
-            if group is not None and group.expense_account_id:
-                account = group.expense_account
-            if account is None:
-                account = settings.default_stock_in_hand_account if settings else None
+            account = settings.default_stock_in_hand_account if settings else None
             account = _resolve_required_account(account, label="The default stock-in-hand account")
             stock_total += line.amount
             stock_rows.append({"account": account, "debit": line.amount, "cost_center": cost_center})

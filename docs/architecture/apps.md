@@ -77,16 +77,16 @@
 - Printing: `orders/printing.py` is the current success-only print interface.
 - Templates/frontend: `templates/pos/*`, `templates/pos/partials/*`, and `templates/backoffice/orders/*`; `views_pos.py` selects inline fragments and `order-details-drawer.js` owns history drawer presentation.
 - Signals/startup: no order model signals or AppConfig startup behavior.
-- Side effects: order services write payment, stock, KOT, audit, reservation, receipt-print, and session-related state. Since Phase 6, settlement also posts GL (income, payment, round-off, COGS) via `accounting.services.post_order_gl`, and returns post mirrored refund GL via `post_refund_gl`.
+- Side effects: order services write payment, stock, KOT, audit, reservation, receipt-print, and session-related state. Since Phase 6, settlement also posts GL (income, payment, round-off, COGS) via `accounting.services.post_order_gl`, and returns post refund GL rebuilt from the returned lines via `post_refund_gl`.
 
 ### `apps.accounting`
 
 - URLs: `accounting/urls.py` exposes the dashboard, chart of accounts, journal entries, read-only GL entries, fiscal years, and cost centers under `/backoffice/accounting/`, all behind the manager gate.
 - Models/forms: `LedgerAccount`, `FiscalYear`, `CostCenter`, `GLEntry`, `JournalEntry`, `JournalEntryAccount` in `accounting/models.py`; forms in `accounting/forms.py` (journal rows use an inline formset).
 - Services: `accounting/services.py` owns order settle GL (`post_order_gl`), cancellation reversal (`reverse_order_gl`), refund GL (`post_refund_gl`), and shift-close cash variance posting (`post_cash_variance_gl`).
-- Templates/frontend: `templates/backoffice/accounting/*`; the chart of accounts is a tree page, journal entries use the standard formset add/remove pattern, and GL entries are a filtered read-only table.
+- Templates/frontend: `templates/backoffice/accounting/*`; the chart of accounts is a recursive tree with expand/collapse, opening journals go through a read-only review screen before submit, journal entries use the standard formset add/remove pattern, and GL entries are a filtered read-only table.
 - Side effects: `GLEntry` is immutable — reversal postings mark originals cancelled and write mirror rows. `reverse_order_gl` posts reversal rows on the day they occur (today, or the refund's posting date when passed), never on the original sale date. `JournalEntry.submit()` posts to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft.
-- Management: `accounting/management/commands/seed_chart_of_accounts.py` idempotently seeds the chart, cost centers, current fiscal year, and wires Restaurant/warehouse/production-unit/payment GL FKs.
+- Management: `accounting/management/commands/seed_chart_of_accounts.py` idempotently seeds the chart, cost centers, and current fiscal year, and fills Restaurant/warehouse/production-unit/payment GL FKs only when they are currently null.
 
 ### `apps.web`
 

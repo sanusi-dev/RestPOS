@@ -138,8 +138,8 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
 class OpeningEntryTest(JournalEntryTestBase):
     def test_opening_submit_sets_is_opening(self):
         journal = self._journal(voucher_type=JournalEntry.OPENING)
-        self._row(journal, self.cash, debit=Decimal("5000"))
-        self._row(journal, self.sales, credit=Decimal("5000"))
+        self._row(journal, self.cash, debit=Decimal("5000"), remarks="Cash count")
+        self._row(journal, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
         journal.submit()
         journal.refresh_from_db()
         self.assertTrue(journal.is_opening)
@@ -148,13 +148,13 @@ class OpeningEntryTest(JournalEntryTestBase):
 
     def test_second_opening_for_same_fiscal_year_rejected(self):
         journal = self._journal(voucher_type=JournalEntry.OPENING)
-        self._row(journal, self.cash, debit=Decimal("5000"))
-        self._row(journal, self.sales, credit=Decimal("5000"))
+        self._row(journal, self.cash, debit=Decimal("5000"), remarks="Cash count")
+        self._row(journal, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
         journal.submit()
 
         second = self._journal(voucher_type=JournalEntry.OPENING)
-        self._row(second, self.cash, debit=Decimal("100"))
-        self._row(second, self.sales, credit=Decimal("100"))
+        self._row(second, self.cash, debit=Decimal("100"), remarks="Cash count")
+        self._row(second, self.sales, credit=Decimal("100"), remarks="Retained earnings")
         with self.assertRaisesMessage(ValidationError, "already exists for fiscal year"):
             second.submit()
 
@@ -162,6 +162,24 @@ class OpeningEntryTest(JournalEntryTestBase):
         journal = self._journal(voucher_type=JournalEntry.OPENING)
         self._row(journal, self.cash, debit=Decimal("5000"))
         self._row(journal, self.sales, credit=Decimal("5000"))
+        with self.assertRaisesMessage(ValidationError, "source or note"):
+            journal.submit()
+
+        journal2 = self._journal(voucher_type=JournalEntry.OPENING)
+        self._row(journal2, self.cash, debit=Decimal("5000"), remarks="Cash count")
+        self._row(journal2, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
+        journal2.submit()
+        journal2.refresh_from_db()
+        self.assertTrue(journal2.is_opening)
+
+    def test_cancelled_opening_can_be_amended_and_resubmitted(self):
+        journal = self._journal(voucher_type=JournalEntry.OPENING)
+        self._row(journal, self.cash, debit=Decimal("5000"), remarks="Cash count")
+        self._row(journal, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
         journal.submit()
-        journal.refresh_from_db()
-        self.assertTrue(journal.is_opening)
+        journal.cancel()
+        copy = journal.amend()
+        copy.submit()
+        copy.refresh_from_db()
+        self.assertEqual(copy.status, JournalEntry.SUBMITTED)
+        self.assertTrue(copy.is_opening)

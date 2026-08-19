@@ -97,7 +97,7 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(invoice.outstanding_amount, Decimal("200"))
         entries = GLEntry.objects.filter(voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number)
         self.assertEqual(entries.count(), 2)
-        stock = entries.get(account=self.accounts["cogs"])
+        stock = entries.get(account=self.accounts["stock_in_hand"])
         self.assertEqual(stock.debit, Decimal("200"))
         payable = entries.get(account=self.accounts["payable"])
         self.assertEqual(payable.credit, Decimal("200"))
@@ -177,7 +177,7 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         )
         self.assertEqual(reversals.count(), 2)
         # Reversal rows mirror the originals: stock now credited, payable debited.
-        self.assertEqual(reversals.get(account=self.accounts["cogs"]).credit, Decimal("200"))
+        self.assertEqual(reversals.get(account=self.accounts["stock_in_hand"]).credit, Decimal("200"))
         self.assertEqual(reversals.get(account=self.accounts["payable"]).debit, Decimal("200"))
 
     def test_cancel_twice_is_idempotent(self):

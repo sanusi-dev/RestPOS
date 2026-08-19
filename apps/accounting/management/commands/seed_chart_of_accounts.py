@@ -159,10 +159,14 @@ class Command(BaseCommand):
 
         # Wire production units, warehouses, and the Restaurant singleton.
         for unit in ProductionUnit.objects.all():
+            if unit.income_account_id:
+                continue
             if unit.department == ProductionUnit.FOOD:
                 unit.income_account = food_sales
             elif unit.department == ProductionUnit.DRINKS:
                 unit.income_account = drinks_sales
+            else:
+                continue
             unit.save(update_fields=["income_account", "updated_at"])
 
         # Inventory stock leaves per warehouse (credited at settle-time COGS).
@@ -244,7 +248,7 @@ class Command(BaseCommand):
                 ("default_payable_account", payable_account),
                 ("default_stock_in_hand_account", stock_in_hand),
             ]:
-                if getattr(restaurant, f"{field}_id") != value.pk:
+                if getattr(restaurant, f"{field}_id") is None:
                     setattr(restaurant, field, value)
                     changed.append(field)
             if changed:
@@ -257,7 +261,7 @@ class Command(BaseCommand):
                 mode_of_payment=mode,
                 defaults={"default_account": account},
             )
-            if not created and mapping.default_account_id != account.pk:
+            if not created and mapping.default_account_id is None:
                 mapping.default_account = account
                 mapping.save(update_fields=["default_account", "updated_at"])
 

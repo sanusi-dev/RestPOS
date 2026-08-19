@@ -123,12 +123,17 @@ class SupplierPaymentAllocationForm(PayablesModelForm):
         model = SupplierPaymentAllocation
         fields = ["invoice", "allocated_amount"]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, supplier_id=None, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only submitted invoices with outstanding balance are allocatable.
-        self.fields["invoice"].queryset = SupplierInvoice.objects.filter(
+        invoices = SupplierInvoice.objects.filter(
             status=SupplierInvoice.SUBMITTED, outstanding_amount__gt=0
         ).select_related("supplier")
+        payment = getattr(self.instance, "payment", None)
+        if supplier_id is None and payment is not None:
+            supplier_id = payment.supplier_id
+        if supplier_id:
+            invoices = invoices.filter(supplier_id=supplier_id)
+        self.fields["invoice"].queryset = invoices
         self.fields["invoice"].label = "Invoice"
         self.fields["invoice"].help_text = "Only submitted invoices with an outstanding balance are listed."
         self.fields["allocated_amount"].help_text = "Must not exceed the invoice's outstanding amount."

@@ -76,8 +76,28 @@ def accounting_dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 def chart_of_accounts(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
-    roots = LedgerAccount.objects.filter(parent__isnull=True).prefetch_related("children")
+    roots = (
+        LedgerAccount.objects.filter(parent__isnull=True)
+        .prefetch_related("children__children__children")
+        .order_by("name")
+    )
     return render(request, "backoffice/accounting/chart_of_accounts.html", {"roots": roots})
+
+
+@login_required
+def account_children(request: HttpRequest, pk: int) -> HttpResponse:
+    """HTMX fragment of one account's children for expand/collapse."""
+    _require_manager(request)
+    account = get_object_or_404(
+        LedgerAccount.objects.prefetch_related("children__children"),
+        pk=pk,
+    )
+    depth = int(request.GET.get("depth", "1"))
+    return render(
+        request,
+        "backoffice/accounting/_account_children.html",
+        {"account": account, "depth": depth},
+    )
 
 
 @login_required
@@ -214,10 +234,28 @@ def journal_entry_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+def journal_entry_review(request: HttpRequest, pk: int) -> HttpResponse:
+    """Read-only review screen that must precede submitting an opening entry."""
+    _require_manager(request)
+    journal = get_object_or_404(JournalEntry.objects.select_related("amended_from"), pk=pk)
+    if journal.voucher_type != JournalEntry.OPENING or journal.status != JournalEntry.DRAFT:
+        return redirect("accounting:journal_entry_detail", pk=journal.pk)
+    journal._recompute_totals()
+    rows = journal.accounts.select_related("account", "cost_center").all()
+    return render(
+        request,
+        "backoffice/accounting/journal_entry_review.html",
+        {"journal": journal, "rows": rows},
+    )
+
+
+@login_required
 @require_POST
 def journal_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     _require_manager(request)
     journal = get_object_or_404(JournalEntry, pk=pk)
+    if journal.voucher_type == JournalEntry.OPENING and request.POST.get("confirmed") != "1":
+        return redirect("accounting:journal_entry_review", pk=journal.pk)
     try:
         journal.submit()
     except ValidationError as e:

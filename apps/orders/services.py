@@ -543,16 +543,21 @@ def submit_return(order, actor=None):
         raise ValidationError("A return must reference a submitted non-return order.")
     for line in locked.items.select_related("item").all():
         line.full_clean()
+    locked.recalculate_totals()
 
     _restore_stock(locked, voucher_type="POS Return")
-    for payment in source.payments.select_related("mode_of_payment").all():
+    refund_total = abs(locked.grand_total)
+    if refund_total == 0:
+        raise ValidationError("The return has no refundable value.")
+    shares = _refund_payment_shares(source, refund_total)
+    for payment, amount in shares:
         OrderPayment.objects.create(
             order=locked,
             mode_of_payment=payment.mode_of_payment,
-            amount=-payment.amount,
+            amount=-amount,
             reference_no="",
         )
-    locked.paid_amount = -(source.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0"))
+    locked.paid_amount = -sum((amount for _, amount in shares), Decimal("0"))
     locked.is_paid = False
     locked.status = SUBMITTED
     locked.submitted_at = timezone.now()
@@ -1094,11 +1099,75 @@ def _convert_drink_reservations(order, *, reservations_initialized):
         )
 
 
+def _refund_payment_shares(source, refund_total):
+    """Split a refund across source payment modes in proportion to net tenders."""
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.load()
+    change_account_id = settings.account_for_change_amount_id if settings else None
+    change_left = source.change_amount or Decimal("0")
+    nets = []
+    for payment in source.payments.select_related("mode_of_payment").all():
+        amount = payment.amount
+        if change_left and change_account_id:
+            mapping = PaymentGLMapping.objects.filter(mode_of_payment=payment.mode_of_payment).first()
+            if mapping and mapping.default_account_id == change_account_id:
+                cut = min(amount, change_left)
+                amount -= cut
+                change_left -= cut
+        if amount:
+            nets.append((payment, amount))
+    net_sum = sum((net for _, net in nets), Decimal("0"))
+    if net_sum <= 0:
+        raise ValidationError("The source order has no net payments to refund.")
+    source_total = source.grand_total or Decimal("0")
+    if source_total <= 0:
+        raise ValidationError("The source order has no refundable value.")
+    ratio = refund_total / source_total
+    target = (net_sum * ratio).quantize(TWO_PLACES)
+    shares = []
+    remaining = target
+    for index, (payment, net) in enumerate(nets):
+        if index == len(nets) - 1:
+            share = remaining
+        else:
+            share = (target * net / net_sum).quantize(TWO_PLACES)
+            remaining -= share
+        if share:
+            shares.append((payment, share))
+    return shares
+
+
+@transaction.atomic
+def update_return_line(order, line_pk, *, qty=None, not_restockable=None):
+    """Edit a return-draft line: reduce qty, drop the line, or mark wastage."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT or not locked.is_return:
+        raise ValidationError("Only return drafts can be edited.")
+    line = locked.items.select_related("item").get(pk=line_pk)
+    if qty is not None:
+        qty = Decimal(str(qty))
+        if qty == 0:
+            line.delete()
+            locked.recalculate_totals()
+            order.refresh_from_db()
+            return order
+        if qty > 0:
+            qty = -qty
+        line.qty = qty
+    if not_restockable is not None:
+        line.not_restockable = bool(not_restockable)
+    line.save()
+    locked.recalculate_totals()
+    order.refresh_from_db()
+    return order
+
+
 def _restore_stock(order, voucher_type="POS Order Cancellation"):
     """Create positive stock ledger entries reversing an order's deductions.
 
-    Return lines marked ``not_restockable`` are skipped — their value is
-    written off via the wastage GL leg instead (Phase 6 §4.3).
+    Return lines marked ``not_restockable`` skip the restore; their value posts
+    as wastage instead.
     """
     voucher_no = str(order.pk)
     stock_items = order.items.select_related("item").filter(

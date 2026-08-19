@@ -1,0 +1,80 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Journal Entries" section_url="accounting:journal_entry_list" current_label="Review opening entry" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <p class="text-xs font-bold text-orange-500 uppercase tracking-[0.2em] mb-2">Opening balances</p>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Review journal entry #{{ journal.pk }}</h1>
+      <p class="text-sm text-gray-500 mt-1">Read-only check before this opening entry posts to the ledger.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{% url 'accounting:journal_entry_update' journal.pk %}" class="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">Back to edit</a>
+      <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="confirmed" value="1">
+        <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Confirm submit</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="bg-amber-50 border border-amber-100 rounded-[1.5rem] p-5 mb-6">
+    <p class="text-sm font-semibold text-amber-900">Once submitted this opening entry cannot be edited. Cancel and amend to correct it.</p>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Posting date</dt>
+        <dd class="text-base font-bold text-gray-900">{{ journal.posting_date|date:"M j, Y" }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total debit</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ journal.total_debit }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total credit</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ journal.total_credit }}</dd>
+      </div>
+      {% if journal.remark %}
+        <div class="sm:col-span-3">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remark</dt>
+          <dd class="text-sm font-medium text-gray-700">{{ journal.remark }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Rows</h3></div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cost center</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Source / note</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in rows %}
+            <tr>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ row.account.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ row.cost_center.name|default:"—" }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ row.debit }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ row.credit }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">{{ row.remarks|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No rows.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

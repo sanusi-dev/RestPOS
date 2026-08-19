@@ -206,6 +206,8 @@ class SupplierInvoice(BaseModel):
             return
         if locked.status != self.SUBMITTED:
             raise ValidationError("Only submitted supplier invoices can be cancelled.")
+        if locked.allocations.filter(payment__status=SupplierPayment.SUBMITTED).exists():
+            raise ValidationError("Cancel the supplier payment(s) allocated to this invoice first.")
         cancel_supplier_invoice_gl(locked)
         locked.outstanding_amount = Decimal("0")
         locked.status = self.CANCELLED
@@ -220,7 +222,9 @@ class SupplierInvoice(BaseModel):
     @property
     def payment_status(self):
         """Unpaid / Partly Paid / Paid derived from outstanding vs total."""
-        if self.status != self.SUBMITTED or self.outstanding_amount == 0:
+        if self.status != self.SUBMITTED:
+            return "Unpaid"
+        if self.outstanding_amount == 0:
             return "Paid"
         if self.outstanding_amount < self.total:
             return "Partly Paid"
@@ -268,6 +272,13 @@ class SupplierInvoiceItem(BaseModel):
 
     class Meta:
         ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_receipt_line"],
+                condition=models.Q(source_receipt_line__isnull=False),
+                name="accounting_invoice_item_unique_receipt_line",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.description or self.item} x{self.qty}"
@@ -303,6 +314,9 @@ class SupplierInvoiceItem(BaseModel):
                 raise ValidationError(
                     {"source_receipt_line": "The receipt's supplier must match the invoice supplier."}
                 )
+            clash = type(self).objects.filter(source_receipt_line_id=line.pk).exclude(pk=self.pk).exists()
+            if clash:
+                raise ValidationError({"source_receipt_line": "This receipt line is already on an invoice."})
 
     def save(self, *args, **kwargs):
         if self.invoice_id:
@@ -355,6 +369,13 @@ class SupplierInvoiceItem(BaseModel):
                 raise ValidationError("Expense rate cannot be negative.")
         else:
             raise ValidationError("Choose an item or an expense account for the line.")
+        if self.source_receipt_line_id:
+            line = self.source_receipt_line
+            if line.purchase_receipt.status != "SUBMITTED":
+                raise ValidationError({"source_receipt_line": "The source receipt must be submitted."})
+            clash = type(self).objects.filter(source_receipt_line_id=line.pk).exclude(pk=self.pk).exists()
+            if clash:
+                raise ValidationError({"source_receipt_line": "This receipt line is already on an invoice."})
 
 
 class SupplierPayment(BaseModel):
@@ -439,8 +460,15 @@ class SupplierPayment(BaseModel):
             total_allocated += alloc.allocated_amount
         if total_allocated != locked.paid_amount:
             raise ValidationError("The total allocated amount must equal the paid amount.")
+        invoice_ids = sorted({alloc.invoice_id for alloc in allocations})
+        invoices = {
+            invoice.pk: invoice
+            for invoice in SupplierInvoice.objects.select_for_update().filter(pk__in=invoice_ids).order_by("pk")
+        }
         for alloc in allocations:
-            invoice = alloc.invoice
+            invoice = invoices[alloc.invoice_id]
+            if invoice.supplier_id != locked.supplier_id:
+                raise ValidationError("Allocated invoices must belong to the payment's supplier.")
             if invoice.status != SupplierInvoice.SUBMITTED:
                 raise ValidationError("Only submitted supplier invoices can be paid.")
             if alloc.allocated_amount > invoice.outstanding_amount:
@@ -542,6 +570,8 @@ class SupplierPaymentAllocation(BaseModel):
             raise ValidationError(
                 {"allocated_amount": "Allocated amount cannot exceed the invoice's outstanding amount."}
             )
+        if self.payment_id and self.invoice_id and self.invoice.supplier_id != self.payment.supplier_id:
+            raise ValidationError({"invoice": "Allocated invoices must belong to the payment's supplier."})
 
     def validate_for_submission(self):
         if self.invoice.status != SupplierInvoice.SUBMITTED:
@@ -552,3 +582,5 @@ class SupplierPaymentAllocation(BaseModel):
             raise ValidationError(
                 f"Allocated amount cannot exceed the outstanding amount of {self.invoice.invoice_number}."
             )
+        if self.invoice.supplier_id != self.payment.supplier_id:
+            raise ValidationError("Allocated invoices must belong to the payment's supplier.")

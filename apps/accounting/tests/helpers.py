@@ -107,6 +107,13 @@ def setup_chart_of_accounts(restaurant):
         report_type=LedgerAccount.BALANCE_SHEET,
         account_type=LedgerAccount.ACCOUNT_TYPE_EQUITY,
     )
+    stock_in_hand = LedgerAccount.objects.create(
+        name=f"Stock in Hand {restaurant.pk}",
+        parent=assets,
+        root_type=LedgerAccount.ASSET,
+        report_type=LedgerAccount.BALANCE_SHEET,
+        account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
+    )
     kitchen_cc = CostCenter.objects.create(name=f"Kitchen {restaurant.pk}")
     bar_cc = CostCenter.objects.create(name=f"Bar {restaurant.pk}")
 
@@ -127,7 +134,7 @@ def setup_chart_of_accounts(restaurant):
     restaurant.cash_over_short_account = round_off
     restaurant.cost_center = kitchen_cc
     restaurant.default_payable_account = payable
-    restaurant.default_stock_in_hand_account = cogs
+    restaurant.default_stock_in_hand_account = stock_in_hand
     restaurant.save()
 
     return {
@@ -142,6 +149,7 @@ def setup_chart_of_accounts(restaurant):
         "drinks_sales": drinks_sales,
         "expenses": expenses,
         "cogs": cogs,
+        "stock_in_hand": stock_in_hand,
         "round_off": round_off,
         "equity": equity,
         "owner_equity": owner_equity,

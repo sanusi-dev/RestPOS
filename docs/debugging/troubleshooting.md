@@ -35,7 +35,7 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Ticket remains pending | `dispatch_tickets`, KOT row | ticket status -> print_status -> printer result/exception -> retry action |
 | Cancellation did not restore stock | `cancel_order`, `_restore_stock` | submitted status -> `stock_warehouse` snapshot -> reversal SLE voucher |
 | Shift totals are wrong | `expected_closing_amounts`, `submit_closing_entry` | submitted period rows -> payment sums -> cash change subtraction -> refund subtraction -> closing rows |
-| Return cannot complete | `make_return`, `submit_return` | return submission revalidates lines, restores stock, mirrors refund rows |
+| Return cannot complete | `make_return`, `submit_return` | return submission revalidates lines, restores stock, writes proportional refund rows |
 | Backoffice route unexpectedly accessible | middleware and view | `/backoffice/` role gate -> view-level manager/superuser checks |
 | Role appears stale | `CustomUser` cached properties and `users.signals` | group m2m change -> cache invalidation -> prefetched groups |
 | HTMX response does not update | template target and view fragment | `HX-Target` -> partial name -> swap mode -> target ID |

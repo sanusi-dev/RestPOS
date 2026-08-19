@@ -218,6 +218,22 @@ class OrderReturnTest(BackofficeViewTestBase):
         self.assertContains(response, "Delete draft")
         self.assertNotContains(response, "Cancel order")
 
+    def test_return_draft_can_reduce_qty(self):
+        order = self._create_order()
+        self._settle_order(order)
+        self.client.post(reverse("orders:order_return", kwargs={"pk": order.pk}))
+        return_order = Order.objects.get(is_return=True)
+        line = return_order.items.first()
+        response = self.client.post(
+            reverse("orders:order_return_line_update", kwargs={"pk": return_order.pk, "line_pk": line.pk}),
+            {"qty": "1"},
+        )
+        self.assertEqual(response.status_code, 302)
+        line.refresh_from_db()
+        self.assertEqual(line.qty, Decimal("-1"))
+        return_order.refresh_from_db()
+        self.assertEqual(abs(return_order.grand_total), Decimal("1500"))
+
     def test_return_submit_view(self):
         order = self._create_order()
         self._settle_order(order)

@@ -76,6 +76,14 @@ class ChartOfAccountsViewTest(AccountingViewTestBase):
         response = self.client.get(reverse("accounting:account_detail", args=[self.assets.pk]))
         self.assertContains(response, child.name)
 
+    def test_chart_shows_nested_leaves(self):
+        self.client.force_login(self.admin)
+        bank = LedgerAccount.objects.create(name="Bank Accounts", parent=self.assets, is_group=True)
+        leaf = LedgerAccount.objects.create(name="Electronic Account", parent=bank)
+        response = self.client.get(reverse("accounting:chart_of_accounts"))
+        self.assertContains(response, bank.name)
+        self.assertContains(response, leaf.name)
+
 
 class JournalEntryViewTest(AccountingViewTestBase):
     def test_create_journal_entry(self):
@@ -109,6 +117,29 @@ class JournalEntryViewTest(AccountingViewTestBase):
         JournalEntryAccount.objects.create(journal_entry=journal, account=self.cash, debit=Decimal("100"))
         JournalEntryAccount.objects.create(journal_entry=journal, account=self.sales, credit=Decimal("100"))
         response = self.client.post(reverse("accounting:journal_entry_submit", args=[journal.pk]))
+        journal.refresh_from_db()
+        self.assertEqual(journal.status, JournalEntry.SUBMITTED)
+        self.assertRedirects(response, reverse("accounting:journal_entry_detail", args=[journal.pk]))
+
+    def test_opening_submit_requires_review_confirmation(self):
+        self.client.force_login(self.admin)
+        journal = JournalEntry.objects.create(voucher_type=JournalEntry.OPENING, posting_date=date(2026, 5, 1))
+        JournalEntryAccount.objects.create(
+            journal_entry=journal, account=self.cash, debit=Decimal("100"), remarks="Cash count"
+        )
+        JournalEntryAccount.objects.create(
+            journal_entry=journal, account=self.sales, credit=Decimal("100"), remarks="Equity"
+        )
+        response = self.client.post(reverse("accounting:journal_entry_submit", args=[journal.pk]))
+        self.assertRedirects(response, reverse("accounting:journal_entry_review", args=[journal.pk]))
+        journal.refresh_from_db()
+        self.assertEqual(journal.status, JournalEntry.DRAFT)
+
+        review = self.client.get(reverse("accounting:journal_entry_review", args=[journal.pk]))
+        self.assertEqual(review.status_code, 200)
+        self.assertContains(review, "Confirm submit")
+
+        response = self.client.post(reverse("accounting:journal_entry_submit", args=[journal.pk]), {"confirmed": "1"})
         journal.refresh_from_db()
         self.assertEqual(journal.status, JournalEntry.SUBMITTED)
         self.assertRedirects(response, reverse("accounting:journal_entry_detail", args=[journal.pk]))

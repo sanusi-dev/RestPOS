@@ -34,7 +34,7 @@ Paid submitted orders are rejected and preserve their original data. Sent draft 
 
 `orders.views.order_return()` checks manager/admin/superuser and calls `make_return()`. The service locks the paid submitted source, rejects an existing active return, clones each line with negative quantity and `return_against_item`, assigns an order number, recalculates a negative total, and creates `RETURN_CREATED`.
 
-The resulting return is a draft; `settle_order()` rejects returns. `orders.views.order_return_submit()` (manager-only) calls `submit_return()`, which re-validates each line, restores drink stock with `POS Return` SLEs, mirrors the source payments as negative refund rows, and marks the return `SUBMITTED` with the `RETURN_SUBMITTED` audit event. The detail page shows "Submit return" and "Delete draft" for a return draft.
+The resulting return is a draft; `settle_order()` rejects returns. Managers can reduce qty, drop lines, or mark drink lines as wastage on the draft (`order_return_line_update`). `orders.views.order_return_submit()` (manager-only) calls `submit_return()`, which re-validates each line, restores drink stock with `POS Return` SLEs (skipping wastage lines), writes proportional negative refund payment rows, and marks the return `SUBMITTED` with the `RETURN_SUBMITTED` audit event. The detail page shows "Submit return" and "Delete draft" for a return draft.
 
 ## KOT Register
 

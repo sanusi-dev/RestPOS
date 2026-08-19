@@ -289,8 +289,13 @@ class GLEntry(BaseModel):
 
         ``rows`` is an iterable of dicts with account / debit / credit /
         against. The fiscal year is resolved from the posting date and must
-        cover it. Returns the created entries.
+        cover it. The batch must balance. Returns the created entries.
         """
+        rows = list(rows)
+        total_debit = sum((row.get("debit") or Decimal("0") for row in rows), Decimal("0"))
+        total_credit = sum((row.get("credit") or Decimal("0") for row in rows), Decimal("0"))
+        if total_debit.quantize(Decimal("0.01")) != total_credit.quantize(Decimal("0.01")):
+            raise ValidationError("GL batch is not balanced (total debit must equal total credit).")
         with transaction.atomic():
             fiscal_year = FiscalYear.get_for(posting_date)
             created = []
@@ -420,15 +425,20 @@ class JournalEntry(BaseModel):
             raise ValidationError("The journal entry total must be greater than zero.")
         if locked.voucher_type == self.WRITE_OFF and not locked.write_off_amount:
             raise ValidationError({"write_off_amount": "Write-off entries require a write-off amount."})
-        # Duplicate-protection: one reviewed opening entry per fiscal year.
         if locked.voucher_type == self.OPENING:
+            for row in rows:
+                if not (row.remarks or "").strip():
+                    raise ValidationError("Every opening-balance row needs a source or note.")
             fiscal_year = FiscalYear.get_for(locked.posting_date)
             dup_entry = (
-                GLEntry.objects.filter(
-                    is_opening=True,
-                    fiscal_year=fiscal_year,
+                type(self)
+                .objects.filter(
+                    voucher_type=self.OPENING,
+                    status=self.SUBMITTED,
+                    posting_date__gte=fiscal_year.year_start_date,
+                    posting_date__lte=fiscal_year.year_end_date,
                 )
-                .exclude(voucher_no=str(locked.pk))
+                .exclude(pk=locked.pk)
                 .exists()
             )
             if dup_entry:
