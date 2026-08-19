@@ -1,7 +1,10 @@
 """Shared form base classes for the backoffice design system."""
 
+import urllib.parse
+
 from django import forms
 from django.db.models import Q
+from django.http import QueryDict
 
 TAILWIND_INPUT_CLASS = (
     "w-full rounded-xl border border-gray-300 bg-white/50 px-4 py-2.5 text-sm "
@@ -75,3 +78,53 @@ class StyledModelForm(forms.ModelForm):
             return self._meta.model._meta.get_field(name)
         except Exception:
             return None
+
+
+def add_formset_row(formset_class, prefix, post_data):
+    """Return a bound formset with one extra (empty) row appended."""
+    post_data = post_data.copy()
+    total_forms = int(post_data.get(f"{prefix}-TOTAL_FORMS", 0))
+
+    empty_form = formset_class(prefix=prefix).empty_form
+    line_fields = list(empty_form.fields.keys())
+    pk_field = empty_form._meta.model._meta.pk.name
+    if pk_field not in line_fields:
+        line_fields.append(pk_field)
+
+    for field in line_fields:
+        post_data[f"{prefix}-{total_forms}-{field}"] = ""
+
+    post_data[f"{prefix}-TOTAL_FORMS"] = str(total_forms + 1)
+
+    return formset_class(post_data, prefix=prefix)
+
+
+def remove_formset_row(formset_class, prefix, post_data, index):
+    """Return a bound formset with the row at `index` dropped."""
+    total_forms = int(post_data.get(f"{prefix}-TOTAL_FORMS", 0))
+
+    empty_form = formset_class(prefix=prefix).empty_form
+    line_fields = list(empty_form.fields.keys())
+    pk_field = empty_form._meta.model._meta.pk.name
+    if pk_field not in line_fields:
+        line_fields.append(pk_field)
+
+    new_data = {}
+    new_index = 0
+
+    for i in range(total_forms):
+        if i == index:
+            continue
+        for field in line_fields:
+            new_data[f"{prefix}-{new_index}-{field}"] = post_data.get(f"{prefix}-{i}-{field}", "")
+        new_index += 1
+
+    new_data[f"{prefix}-TOTAL_FORMS"] = str(new_index)
+    new_data[f"{prefix}-INITIAL_FORMS"] = post_data.get(f"{prefix}-INITIAL_FORMS", "0")
+    new_data[f"{prefix}-MIN_NUM_FORMS"] = post_data.get(f"{prefix}-MIN_NUM_FORMS", "0")
+    new_data[f"{prefix}-MAX_NUM_FORMS"] = post_data.get(f"{prefix}-MAX_NUM_FORMS", "1000")
+
+    encoded = urllib.parse.urlencode(new_data, doseq=True)
+    rebuilt = QueryDict(encoded, mutable=True)
+
+    return formset_class(rebuilt, prefix=prefix)

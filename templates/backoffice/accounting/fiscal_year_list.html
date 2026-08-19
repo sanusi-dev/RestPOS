@@ -1,0 +1,50 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Fiscal Years" section_url="accounting:fiscal_year_list" current_label="Register" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Fiscal Years</h1>
+      <p class="text-sm text-gray-500">Enabled years must not overlap; posting dates must fall inside a year</p>
+    </div>
+    <a href="{% url 'accounting:fiscal_year_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      New Fiscal Year
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Start</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">End</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Short Year</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          <th class="px-6 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for year in years %}
+          <tr class="hover:bg-orange-50/30">
+            <td class="px-6 py-4 text-sm font-bold text-gray-900">{{ year.name }}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">{{ year.year_start_date|date:"M j, Y" }}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">{{ year.year_end_date|date:"M j, Y" }}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">{{ year.is_short_year|yesno:"Yes,No" }}</td>
+            <td class="px-6 py-4">
+              {% if year.disabled %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">Disabled</span>
+              {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Enabled</span>{% endif %}
+            </td>
+            <td class="px-6 py-4 text-right"><a href="{% url 'accounting:fiscal_year_update' year.pk %}" class="text-xs font-semibold text-gray-400 hover:text-orange-600">Edit</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No fiscal years yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

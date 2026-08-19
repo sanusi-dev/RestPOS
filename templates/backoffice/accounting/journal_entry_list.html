@@ -1,0 +1,53 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Journal Entries" section_url="accounting:journal_entry_list" current_label="Register" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Journal Entries</h1>
+      <p class="text-sm text-gray-500">Manual vouchers — balanced before submission, immutable after</p>
+    </div>
+    <a href="{% url 'accounting:journal_entry_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      New Journal Entry
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">#</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Voucher</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Posting Date</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Amended From</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for entry in entries %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4"><a href="{% url 'accounting:journal_entry_detail' entry.pk %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">#{{ entry.pk }}</a></td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ entry.get_voucher_type_display }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ entry.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ entry.total_debit }}</td>
+              <td class="px-6 py-4">
+                {% if entry.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+                {% elif entry.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if entry.amended_from %}Amendment of <a href="{% url 'accounting:journal_entry_detail' entry.amended_from_id %}" class="text-orange-500 font-semibold">#{{ entry.amended_from_id }}</a>{% else %}—{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No journal entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

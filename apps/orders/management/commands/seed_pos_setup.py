@@ -17,10 +17,14 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        from apps.accounting.management.commands.seed_chart_of_accounts import Command as ChartSeed
         from apps.inventory.models import Warehouse
         from apps.menu.models import Menu, MenuItem
-        from apps.payments.models import ModeOfPayment, PaymentGLMapping
+        from apps.payments.models import ModeOfPayment
         from apps.settings.models import ProductionUnit, Restaurant
+
+        # The chart of accounts must exist before payment GL mappings are FK'd.
+        ChartSeed().handle()
 
         restaurant = Restaurant.load()
         if restaurant is None:
@@ -40,11 +44,6 @@ class Command(BaseCommand):
         if not ModeOfPayment.objects.filter(is_default=True).exists():
             cash.is_default = True
             cash.save(update_fields=["is_default", "updated_at"])
-        for mode in [cash, electronic]:
-            PaymentGLMapping.objects.get_or_create(
-                mode_of_payment=mode,
-                defaults={"default_account": f"{mode.name} Account"},
-            )
 
         changed = []
         if restaurant.default_warehouse_id != warehouses["Bar"].pk:

@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.accounting.tests.helpers import setup_chart_of_accounts
 from apps.orders.models import Order
 from apps.orders.services import add_order_line, settle_order
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
@@ -20,9 +21,12 @@ class OpenShiftTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
         cls.card, _ = ModeOfPayment.objects.get_or_create(name="Card", defaults={"type": "BANK", "enabled": True})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.card, defaults={"default_account": "Bank Account"})
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=cls.card, defaults={"default_account": cls.accounts["bank"]}
+        )
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
 
     def test_opens_shift_with_float_and_remarks(self):
@@ -51,9 +55,10 @@ class ExpectedClosingAmountsTest(TestCase):
         from apps.menu.models import Menu, MenuItem
 
         cls.restaurant = Restaurant.objects.create(company="Test Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Kitchen")
+        cls.warehouse = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         cls.item = Item.objects.create(
             item_name="Jollof Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_sales_item=True
         )
@@ -65,10 +70,8 @@ class ExpectedClosingAmountsTest(TestCase):
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
         cls.card, _ = ModeOfPayment.objects.get_or_create(name="Card", defaults={"type": "BANK", "enabled": True})
-        for mode in (cls.cash, cls.card):
-            PaymentGLMapping.objects.get_or_create(
-                mode_of_payment=mode, defaults={"default_account": f"{mode.name} Account"}
-            )
+        for mode, account in ((cls.cash, cls.accounts["cash"]), (cls.card, cls.accounts["bank"])):
+            PaymentGLMapping.objects.get_or_create(mode_of_payment=mode, defaults={"default_account": account})
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
         cls.opening = POSOpeningEntry.objects.create(cashier=cls.user)
         OpeningPayment.objects.create(
@@ -123,9 +126,10 @@ class SubmitClosingEntryTest(TestCase):
         from apps.menu.models import Menu, MenuItem
 
         cls.restaurant = Restaurant.objects.create(company="Test Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
-        cls.warehouse = Warehouse.objects.create(name="Kitchen")
+        cls.warehouse = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         cls.item = Item.objects.create(
             item_name="Jollof Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_sales_item=True
         )
@@ -136,7 +140,9 @@ class SubmitClosingEntryTest(TestCase):
         cls.restaurant.save()
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=cls.cash, defaults={"default_account": cls.accounts["cash"]}
+        )
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
         cls.opening = POSOpeningEntry.objects.create(cashier=cls.user)
         OpeningPayment.objects.create(

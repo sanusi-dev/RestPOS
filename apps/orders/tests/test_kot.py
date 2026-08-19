@@ -5,14 +5,15 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
-from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 
 from ..models import Order
 from ..services import add_order_line, cancel_order, create_tickets, remove_order_line
+from .accounting_setup import OrderAccountingMixin
 
 
-class KOTTestBase(TestCase):
+class KOTTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -31,10 +32,10 @@ class KOTTestBase(TestCase):
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
         MenuItem.objects.create(menu=cls.menu, item=cls.drink_item, rate=Decimal("500"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.bar_warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         cls.kitchen = ProductionUnit.objects.create(name="Kitchen", warehouse=cls.kitchen_warehouse, department="FOOD")
         cls.bar = ProductionUnit.objects.create(name="Bar", warehouse=cls.bar_warehouse, department="DRINKS")
         Bin.objects.create(item=cls.drink_item, warehouse=cls.bar_warehouse, actual_qty=Decimal("100"))

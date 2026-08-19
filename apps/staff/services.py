@@ -138,10 +138,20 @@ def open_shift(cashier, opening_amounts, remarks=""):
 
 
 @transaction.atomic
-def submit_closing_entry(closing):
-    """Compute expected amounts, validate, and close the opening entry."""
+def submit_closing_entry(closing, actor=None):
+    """Compute expected amounts, validate, and close the opening entry.
+
+    When the reconciliation has a short/excess variance, a JournalEntry posts
+    atomically against the configured shortage/over-short account (Phase 6
+    §4.5). A variance beyond the approval threshold requires a manager note.
+    """
     if closing.status != POSClosingEntry.DRAFT:
         return
+    from apps.settings.models import Restaurant
+
+    settings = Restaurant.objects.select_for_update().first()
+    if settings is None:
+        raise ValidationError("Restaurant settings are not configured.")
     locked = POSClosingEntry.objects.select_for_update().select_related("opening_entry").get(pk=closing.pk)
     opening = POSOpeningEntry.objects.select_for_update().get(pk=locked.opening_entry_id)
     if not opening.is_open:
@@ -195,6 +205,18 @@ def submit_closing_entry(closing):
             ]
         )
     locked.total_short_excess = sum((cp.difference for cp in closing_payments), Decimal("0"))
+
+    # Material variance approval gate (Phase 6 §4.5): an absolute variance
+    # beyond the configured threshold requires a manager note.
+    threshold = settings.variance_approval_threshold
+    if threshold is not None and abs(locked.total_short_excess) > threshold:
+        is_manager_actor = actor is not None and (actor.is_manager or actor.is_admin or actor.is_superuser)
+        if not locked.variance_note.strip() or not is_manager_actor:
+            raise ValidationError(
+                "The cash variance exceeds the approval threshold. "
+                "A manager must provide a variance note to close the shift."
+            )
+
     locked.status = POSClosingEntry.SUBMITTED
     locked.save(
         update_fields=[
@@ -203,6 +225,7 @@ def submit_closing_entry(closing):
             "net_total",
             "grand_total",
             "total_short_excess",
+            "variance_note",
             "status",
             "updated_at",
         ]
@@ -211,4 +234,14 @@ def submit_closing_entry(closing):
     opening.closing_entry = locked
     opening.period_end_date = locked.period_end_date
     opening.save(update_fields=["closing_entry", "period_end_date", "updated_at"])
+
+    # Variance GL posts atomically with the close (Phase 6 §4.5); the linked
+    # JournalEntry is immutable and reverses when the close is cancelled.
+    if locked.total_short_excess:
+        from apps.accounting.services import post_cash_variance_gl
+
+        journal = post_cash_variance_gl(locked)
+        if journal is not None:
+            locked.variance_journal_entry = journal
+            locked.save(update_fields=["variance_journal_entry", "updated_at"])
     closing.refresh_from_db()

@@ -34,6 +34,22 @@ class ItemGroup(BaseModel):
 
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    income_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Income account",
+    )
+    expense_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Expense account",
+    )
 
     class Meta:
         ordering = ["name"]
@@ -47,6 +63,15 @@ class Warehouse(BaseModel):
 
     name = models.CharField(max_length=100, unique=True)
     disabled = models.BooleanField(default=False)
+    account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Account",
+        help_text="Credited with the stock value of settle-time drink deductions.",
+    )
 
     class Meta:
         ordering = ["name"]
@@ -593,6 +618,15 @@ class PurchaseReceipt(BaseModel):
     """
 
     supplier_name = models.CharField(max_length=200)
+    supplier = models.ForeignKey(
+        "accounting.Supplier",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchase_receipts",
+        verbose_name="Supplier",
+        help_text="Optional link to the Supplier master; the receipt keeps its free-text name for quick entry.",
+    )
     supplier_delivery_note = models.CharField(max_length=100, blank=True)
     posting_date = models.DateField(default=timezone.now)
     warehouse = models.ForeignKey(

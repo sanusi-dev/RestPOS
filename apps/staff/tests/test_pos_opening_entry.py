@@ -3,7 +3,9 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.payments.models import ModeOfPayment
+from apps.accounting.tests.helpers import setup_chart_of_accounts
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.settings.models import Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
@@ -15,8 +17,12 @@ class POSOpeningEntryTestBase(TestCase):
         cls.user = CustomUser.objects.create_user(
             username="cashier@test.com", password="testpass123", email="cashier@test.com"
         )
+        cls.restaurant = Restaurant.objects.create(company="Opening Co")
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.cash_mode = ModeOfPayment.objects.create(name="Test Cash", type="CASH")
         cls.bank_mode = ModeOfPayment.objects.create(name="Test Bank", type="BANK")
+        PaymentGLMapping.objects.create(mode_of_payment=cls.cash_mode, default_account=cls.accounts["cash"])
+        PaymentGLMapping.objects.create(mode_of_payment=cls.bank_mode, default_account=cls.accounts["bank"])
         cls.entry = POSOpeningEntry.objects.create(
             cashier=cls.user,
             posting_date="2026-07-24",

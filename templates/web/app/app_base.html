@@ -58,6 +58,27 @@
     Kitchen &amp; Bar tickets
   </a>
 </li>
+<li>
+  <a href="{% url 'accounting:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/accounting' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+    Accounting
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'accounting:supplier_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_list supplier_detail supplier_create supplier_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Suppliers</span>
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'accounting:supplier_invoice_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_invoice_list supplier_invoice_detail supplier_invoice_create supplier_invoice_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Supplier invoices</span>
+  </a>
+</li>
+<li class="ml-8">
+  <a href="{% url 'accounting:supplier_payment_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_payment_list supplier_payment_detail supplier_payment_create supplier_payment_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Supplier payments</span>
+  </a>
+</li>
 <li class="px-4 py-3 mt-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
   <span>POS</span>
 </li>

@@ -1,0 +1,77 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Payables" section_url="accounting:supplier_payment_list" current_label="Supplier Payments" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Supplier Payments</h1>
+      <p class="text-sm text-gray-500">Payments to suppliers, fully allocated to outstanding invoices</p>
+    </div>
+    <a href="{% url 'accounting:supplier_payment_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      New Supplier Payment
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
+    <form method="get" class="flex flex-wrap items-center gap-3" x-data>
+      <label for="status-filter" class="text-sm font-semibold text-gray-700">Status:</label>
+      <select id="status-filter" name="status"
+              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+              x-on:change="$el.form.submit()">
+        <option value="">All</option>
+        <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+        <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+        <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+      </select>
+      <label for="supplier-filter" class="text-sm font-semibold text-gray-700">Supplier:</label>
+      <select id="supplier-filter" name="supplier"
+              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
+              x-on:change="$el.form.submit()">
+        <option value="">All</option>
+        {% for supplier in suppliers %}
+          <option value="{{ supplier.pk }}" {% if selected_supplier == supplier.pk|stringformat:"s" %}selected{% endif %}>{{ supplier.supplier_name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Filter</button>
+    </form>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Payment</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Supplier</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for payment in payments %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4"><a href="{% url 'accounting:supplier_payment_detail' payment.pk %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ payment.payment_number }}</a></td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ payment.supplier.supplier_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ payment.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ payment.mode_of_payment.name }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ payment.paid_amount }}</td>
+              <td class="px-6 py-4">
+                {% if payment.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+                {% elif payment.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No supplier payments yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,3 +1,4 @@
+from apps.accounting.models import LedgerAccount
 from apps.utils.forms import StyledModelForm, active_choices
 
 from .models import ModeOfPayment, PaymentGLMapping
@@ -24,4 +25,7 @@ class PaymentGLMappingForm(PaymentsModelForm):
         # (now disabled) one visible when editing.
         self.fields["mode_of_payment"].queryset = active_choices(
             ModeOfPayment, self.instance.mode_of_payment_id, enabled=True
+        )
+        self.fields["default_account"].queryset = active_choices(
+            LedgerAccount, self.instance.default_account_id, disabled=False, is_group=False
         )

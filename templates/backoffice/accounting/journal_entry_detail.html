@@ -1,0 +1,114 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Journal Entries" section_url="accounting:journal_entry_list" current_label="Journal #"|add:journal.pk|stringformat:"s" %}
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Journal Entry #{{ journal.pk }}</h1>
+      <p class="text-sm text-gray-500">{{ journal.get_voucher_type_display }} · {{ journal.posting_date|date:"M j, Y" }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if journal.status == "DRAFT" %}
+        <a href="{% url 'accounting:journal_entry_update' journal.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Edit</a>
+        <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline" data-confirm-title="Submit this journal entry?" data-confirm-body="This posts the entry to the general ledger. It becomes immutable." data-confirm-button="Submit">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Submit</button>
+        </form>
+      {% elif journal.status == "SUBMITTED" %}
+        <form method="post" action="{% url 'accounting:journal_entry_cancel' journal.pk %}" class="inline" data-confirm-title="Cancel this journal entry?" data-confirm-body="This posts mirrored reversal entries to the general ledger." data-confirm-button="Cancel">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
+        </form>
+      {% else %}
+        <form method="post" action="{% url 'accounting:journal_entry_amend' journal.pk %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Amend</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
+        <dd>
+          {% if journal.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
+          {% elif journal.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Debit</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ journal.total_debit }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Credit</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ journal.total_credit }}</dd>
+      </div>
+      {% if journal.difference %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Difference</dt>
+          <dd class="text-base font-mono font-bold text-red-600">{{ journal.difference }}</dd>
+        </div>
+      {% endif %}
+      {% if journal.write_off_amount %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Write-off Amount</dt>
+          <dd class="text-base font-mono font-bold text-gray-900">{{ journal.write_off_amount }}</dd>
+        </div>
+      {% endif %}
+      {% if journal.reference_no %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Reference</dt>
+          <dd class="text-base font-bold text-gray-900">{{ journal.reference_no }}{% if journal.reference_date %} ({{ journal.reference_date|date:"M j, Y" }}){% endif %}</dd>
+        </div>
+      {% endif %}
+      {% if journal.amended_from %}
+        <div>
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Amended From</dt>
+          <dd class="text-base font-bold text-gray-900"><a href="{% url 'accounting:journal_entry_detail' journal.amended_from_id %}" class="text-orange-500">#{{ journal.amended_from_id }}</a></dd>
+        </div>
+      {% endif %}
+      {% if journal.remark %}
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remark</dt>
+          <dd class="text-sm font-medium text-gray-700">{{ journal.remark }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Rows</h3></div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cost Center</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Remarks</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in rows %}
+            <tr>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ row.account.name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-600">{{ row.cost_center.name|default:"—" }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ row.debit }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ row.credit }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ row.remarks }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No rows.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

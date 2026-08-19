@@ -9,7 +9,7 @@ from django.test import TestCase
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import DINE_IN, KOT_PRINT_PENDING, KOT_PRINTED, TAKE_AWAY, Order
-from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 from apps.users.models import CustomUser
@@ -23,9 +23,10 @@ from ..services import (
     update_order_item,
     update_order_meta,
 )
+from .accounting_setup import OrderAccountingMixin
 
 
-class OrderServiceTestBase(TestCase):
+class OrderServiceTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -45,10 +46,10 @@ class OrderServiceTestBase(TestCase):
         Bin.objects.create(item=cls.item, warehouse=cls.warehouse, actual_qty=Decimal("100"))
         Bin.objects.create(item=cls.item2, warehouse=cls.warehouse, actual_qty=Decimal("100"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
         cls.opening = POSOpeningEntry.objects.create(cashier=cls.user)
         OpeningPayment.objects.create(

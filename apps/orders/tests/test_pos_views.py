@@ -19,11 +19,12 @@ from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
 from ..services import add_order_line, create_tickets, settle_order
+from .accounting_setup import OrderAccountingMixin
 
 CustomUser = get_user_model()
 
 
-class POSViewTestBase(TestCase):
+class POSViewTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -48,12 +49,12 @@ class POSViewTestBase(TestCase):
         Bin.objects.create(item=cls.food_item, warehouse=cls.warehouse, actual_qty=Decimal("100"))
         Bin.objects.create(item=cls.drink_item, warehouse=cls.warehouse, actual_qty=Decimal("2"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.cash.is_default = True
         cls.cash.save(update_fields=["is_default"])
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         ProductionUnit.objects.create(name="Bar", warehouse=cls.warehouse, department="DRINKS")
         cls.user = CustomUser.objects.create_user(username="cashier", password="testpass123")
@@ -917,7 +918,9 @@ class POSSettleTest(POSViewTestBase):
 
     def _add_bank_mode(self):
         bank, _ = ModeOfPayment.objects.get_or_create(name="Bank", defaults={"type": "BANK"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=bank, defaults={"default_account": "Bank Account"})
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=bank, defaults={"default_account": self.accounts["bank"]}
+        )
         OpeningPayment.objects.create(
             opening_entry=self.order.opening_entry,
             mode_of_payment=bank,

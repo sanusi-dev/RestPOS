@@ -8,14 +8,16 @@ from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order
 from apps.orders.services import add_order_line, create_tickets, settle_order
-from apps.payments.models import ModeOfPayment, PaymentGLMapping
+from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
+
+from .accounting_setup import OrderAccountingMixin
 
 CustomUser = get_user_model()
 
 
-class BackofficeViewTestBase(TestCase):
+class BackofficeViewTestBase(OrderAccountingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
@@ -28,10 +30,10 @@ class BackofficeViewTestBase(TestCase):
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
         cls.cash, _ = ModeOfPayment.objects.get_or_create(name="Cash", defaults={"type": "CASH"})
-        PaymentGLMapping.objects.get_or_create(mode_of_payment=cls.cash, defaults={"default_account": "Cash Account"})
         cls.restaurant.active_menu = cls.menu
         cls.restaurant.default_warehouse = cls.warehouse
         cls.restaurant.save()
+        cls._setup_accounting()
         ProductionUnit.objects.create(name="Kitchen", warehouse=cls.warehouse, department="FOOD")
         cls.manager = CustomUser.objects.create_user(
             username="manager", password="testpass123", is_staff=True, is_superuser=True

@@ -68,14 +68,20 @@ class ModeOfPayment(BaseModel):
 
 
 class PaymentGLMapping(BaseModel):
-    """Maps a ModeOfPayment to a General Ledger account name."""
+    """Maps a ModeOfPayment to a General Ledger account."""
 
     mode_of_payment = models.OneToOneField(
         ModeOfPayment,
         on_delete=models.PROTECT,
         related_name="gl_mapping",
     )
-    default_account = models.CharField(max_length=200)
+    default_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        related_name="payment_gl_mappings",
+        verbose_name="Default account",
+        help_text="Leaf ledger account debited/credited when this mode is used.",
+    )
 
     class Meta:
         ordering = ["mode_of_payment__name"]
@@ -85,5 +91,7 @@ class PaymentGLMapping(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.mode_of_payment_id and not self.default_account:
-            raise ValidationError({"default_account": "A default GL account name is required for the mapping."})
+        if self.mode_of_payment_id and not self.default_account_id:
+            raise ValidationError({"default_account": "A default GL account is required for the mapping."})
+        if self.default_account_id and not self.default_account.is_leaf:
+            raise ValidationError({"default_account": "Only leaf accounts can be mapped to payment modes."})

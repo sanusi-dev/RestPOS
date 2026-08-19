@@ -29,7 +29,11 @@
           All goods are received into the configured central Store warehouse.
         </div>
         {% for field in form %}
-          {% if field.name == "remarks" %}
+          {% if field.name == "supplier" %}
+            <div class="sm:col-span-2">
+              {% include "backoffice/components/form_field.html" with field=field %}
+            </div>
+          {% elif field.name == "remarks" %}
             <div class="sm:col-span-2">
               {% include "backoffice/components/form_field.html" with field=field %}
             </div>
