@@ -5,12 +5,13 @@
 | App | Owns | Important implementation | Depends on |
 |---|---|---|---|
 | `apps.users` | `CustomUser`, roles, profile/avatar, auth customization | `models.py`, `signals.py`, `forms.py`, `adapter.py` | allauth, Django auth |
-| `apps.settings` | singleton restaurant configuration and production stations | `Restaurant`, `ProductionUnit`, `views.py` | inventory, menu, users |
-| `apps.inventory` | item master, warehouses, bins, FIFO ledger, stock documents | `models.py`, `services.py`, `views.py` | settings, menu through validation |
+| `apps.settings` | singleton restaurant configuration and production stations | `Restaurant`, `ProductionUnit`, `views.py` | inventory, menu, users, accounting (GL FKs) |
+| `apps.inventory` | item master, warehouses, bins, FIFO ledger, stock documents | `models.py`, `services.py`, `views.py` | settings, menu through validation, accounting (GL FKs) |
 | `apps.menu` | menus, priced menu lines, add-ons, variant links | `models.py`, `views.py`, `management/commands/seed_menu_catalog.py` | inventory |
-| `apps.payments` | payment method master and GL mapping | `models.py`, `views.py`, `forms.py` | no project domain app except shared forms |
-| `apps.staff` | opening/closing shift documents and drawer reconciliation | `models.py`, `services.py`, `views.py` | users, payments, orders, settings |
-| `apps.orders` | orders, order lines/payments, KOT/BOT snapshots, POS orchestration | `models.py`, `services.py`, `views_pos.py`, `views.py` | inventory, menu, payments, settings, staff, users |
+| `apps.payments` | payment method master and GL mapping | `models.py`, `views.py`, `forms.py` | accounting (LedgerAccount FK) |
+| `apps.staff` | opening/closing shift documents and drawer reconciliation | `models.py`, `services.py`, `views.py` | users, payments, orders, settings, accounting (variance JE) |
+| `apps.orders` | orders, order lines/payments, KOT/BOT snapshots, POS orchestration | `models.py`, `services.py`, `views_pos.py`, `views.py` | inventory, menu, payments, settings, staff, users, accounting (order GL) |
+| `apps.accounting` | chart of accounts, GL entries, journal entries, fiscal years, cost centers | `models.py`, `services.py`, `views.py` | orders, payments, settings, inventory (read-side) |
 | `apps.web` | landing, role redirect, shared middleware/context/template tags | `views.py`, `middleware.py`, `context_processors.py` | users, inventory navigation |
 | `apps.utils` | timestamp base model and styled forms | `models.py`, `forms.py` | Django only |
 
@@ -66,7 +67,7 @@
 - Services: `staff/services.py` owns opening, closing-draft creation, expected totals, payment aggregation, and close submission.
 - Templates/frontend: `templates/backoffice/staff/*` and `templates/pos/close_shift.html`; POS close uses Alpine previews and HTMX submission.
 - Signals: no staff model signals.
-- Side effects: close submission aggregates orders/payments and links the opening to the closing; canceling a close does not reopen the opening.
+- Side effects: close submission aggregates orders/payments and links the opening to the closing; canceling a close does not reopen the opening. Since Phase 6, a short/excess variance posts a linked JournalEntry atomically with the close (when the matching account is configured), and canceling a close reverses that journal.
 
 ### `apps.orders`
 
@@ -76,7 +77,16 @@
 - Printing: `orders/printing.py` is the current success-only print interface.
 - Templates/frontend: `templates/pos/*`, `templates/pos/partials/*`, and `templates/backoffice/orders/*`; `views_pos.py` selects inline fragments and `order-details-drawer.js` owns history drawer presentation.
 - Signals/startup: no order model signals or AppConfig startup behavior.
-- Side effects: order services write payment, stock, KOT, audit, reservation, receipt-print, and session-related state.
+- Side effects: order services write payment, stock, KOT, audit, reservation, receipt-print, and session-related state. Since Phase 6, settlement also posts GL (income, payment, round-off, COGS) via `accounting.services.post_order_gl`, and returns post mirrored refund GL via `post_refund_gl`.
+
+### `apps.accounting`
+
+- URLs: `accounting/urls.py` exposes the dashboard, chart of accounts, journal entries, read-only GL entries, fiscal years, and cost centers under `/backoffice/accounting/`, all behind the manager gate.
+- Models/forms: `LedgerAccount`, `FiscalYear`, `CostCenter`, `GLEntry`, `JournalEntry`, `JournalEntryAccount` in `accounting/models.py`; forms in `accounting/forms.py` (journal rows use an inline formset).
+- Services: `accounting/services.py` owns order settle GL (`post_order_gl`), cancellation reversal (`reverse_order_gl`), refund GL (`post_refund_gl`), and shift-close cash variance posting (`post_cash_variance_gl`).
+- Templates/frontend: `templates/backoffice/accounting/*`; the chart of accounts is a tree page, journal entries use the standard formset add/remove pattern, and GL entries are a filtered read-only table.
+- Side effects: `GLEntry` is immutable — reversal postings mark originals cancelled and write mirror rows. `reverse_order_gl` posts reversal rows on the day they occur (today, or the refund's posting date when passed), never on the original sale date. `JournalEntry.submit()` posts to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft.
+- Management: `accounting/management/commands/seed_chart_of_accounts.py` idempotently seeds the chart, cost centers, current fiscal year, and wires Restaurant/warehouse/production-unit/payment GL FKs.
 
 ### `apps.web`
 
@@ -89,7 +99,7 @@
 ### `apps.utils`
 
 - URLs/views/templates: none; it is a shared code package, not a separately installed app.
-- Models/forms: `BaseModel`, `StyledModelForm`, `active_choices`, and Tailwind widget constants in `utils/models.py` and `utils/forms.py`.
+- Models/forms: `BaseModel`, `StyledModelForm`, `active_choices`, `add_formset_row`/`remove_formset_row` (HTMX formset row endpoints rebuild bound formsets from posted data), and Tailwind widget constants in `utils/models.py` and `utils/forms.py`.
 - Side effects: form initialization styles widgets and preserves current disabled choices in select querysets.
 
 ## Management Commands and Background Work
@@ -97,7 +107,8 @@
 - `users`: `promote_user_to_superuser` changes a named user's Django superuser/staff flags.
 - `menu`: `seed_menu_catalog [--force]` seeds items, variants, menu lines, add-ons, and the active menu in one transaction.
 - `inventory`: `backfill_item_images` assigns the default media image to items with no image.
-- `orders`: `seed_pos_setup` creates the Restaurant/warehouse/payment/production-unit configuration chain and invokes menu seeding when needed.
+- `orders`: `seed_pos_setup` creates the Restaurant/warehouse/payment/production-unit configuration chain, invokes the chart-of-accounts seed first, and seeds the menu when needed.
+- `accounting`: `seed_chart_of_accounts` seeds the chart, cost centers, current fiscal year, and GL wiring (idempotent).
 - `web`: `bootstrap_celery_tasks [--remove-stale]` synchronizes `settings.SCHEDULED_TASKS` to django-celery-beat; `send_test_email` exercises the configured email backend.
 - Celery is initialized in `restpos/celery.py` and points at Redis, but no project `tasks.py` module was found and `SCHEDULED_TASKS` is empty. There is no active periodic ticket or notification worker.
 

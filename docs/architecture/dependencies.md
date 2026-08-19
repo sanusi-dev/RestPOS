@@ -11,6 +11,7 @@ flowchart LR
     payments[payments]
     staff[staff]
     orders[orders]
+    accounting[accounting]
     web[web]
     utils[utils]
     settings --> inventory
@@ -28,6 +29,10 @@ flowchart LR
     orders --> settings
     orders --> staff
     orders --> users
+    orders --> accounting
+    payments --> accounting
+    settings --> accounting
+    inventory --> accounting
     web --> users
     web --> inventory
     users --> utils
@@ -37,6 +42,7 @@ flowchart LR
     staff --> utils
     orders --> utils
     settings --> utils
+    accounting --> utils
 ```
 
 ## Core Relationship Chains
@@ -59,7 +65,11 @@ An order line snapshots the item department and stock flag. Only DRINKS lines ca
 
 ### Payment to shift
 
-`OrderPayment.mode_of_payment` -> `ModeOfPayment`; `POSOpeningEntry.opening_payments` and `POSClosingEntry.closing_payments` use the same payment master. Settlement accepts only enabled modes that were declared at shift opening and have a non-empty `PaymentGLMapping`. Closing aggregates order payment rows by mode, subtracts cash change, and subtracts submitted return refunds per mode.
+`OrderPayment.mode_of_payment` -> `ModeOfPayment`; `POSOpeningEntry.opening_payments` and `POSClosingEntry.closing_payments` use the same payment master. Settlement accepts only enabled modes that were declared at shift opening and have a `PaymentGLMapping` pointing at a leaf account. Closing aggregates order payment rows by mode, subtracts cash change, and subtracts submitted return refunds per mode.
+
+### Order to GL
+
+`settle_order` calls `accounting.services.post_order_gl` inside its atomic block after the order flips SUBMITTED and drink deductions are written. Income resolves ItemGroup → ProductionUnit → Restaurant default; COGS uses the FIFO outgoing value of the settle-time drink SLEs against the warehouse account. Returns post mirrored refund GL via `post_refund_gl`; non-restockable lines post wastage. The variance JE on shift close flows through `staff.services.submit_closing_entry` → `accounting.services.post_cash_variance_gl`.
 
 ### Settings to stock routing
 
@@ -103,6 +113,7 @@ POS settlement
   -> payments.ModeOfPayment and PaymentGLMapping validation
   -> inventory.Bin locks and StockLedgerEntry for drinks
   -> orders.OrderPayment, Order status, audit event
+  -> accounting.services.post_order_gl (income, payment, round-off, COGS)
   -> POS home redirect
 ```
 
@@ -113,5 +124,6 @@ Shift close
   -> orders.submitted_in_shift and OrderPayment aggregation, minus return refunds
   -> staff.ClosingPayment differences
   -> staff.POSClosingEntry submitted
+  -> accounting.services.post_cash_variance_gl (shortage/excess JournalEntry, when configured)
   -> staff.POSOpeningEntry.closing_entry set
 ```

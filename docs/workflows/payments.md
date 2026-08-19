@@ -5,7 +5,7 @@
 The `payments` app owns payment master data only:
 
 - `ModeOfPayment`: name, type (`CASH`, `BANK`, `GENERAL`, `PHONE`), enabled flag, and default flag.
-- `PaymentGLMapping`: one-to-one mapping to a non-empty account name.
+- `PaymentGLMapping`: one-to-one mapping to a leaf `LedgerAccount` (Phase 6 FK; previously a name string).
 
 Sale payment rows are `orders.OrderPayment`, linked to an Order and ModeOfPayment. There is no external payment gateway, refund model, or separate payment-entry document.
 

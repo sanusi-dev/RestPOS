@@ -54,7 +54,7 @@ Implementation status lives in `PLAN.md`.
 | 14 | Stock ledger entries | Immutable signed records of every stock movement with running balance and FIFO valuation. Cancellation posts reversals, never edits. |
 | 15 | Stock entries | Manual movements: Material Receipt (into the Store) and Material Transfer (Store → Kitchen or Bar) only. Transfers value at the source outgoing rate and cannot drive source stock negative. |
 | 16 | Stock reconciliation | The one-sided adjustment workflow for physical counts, kitchen consumption, waste/damage, and corrections. Every reconciliation requires a reason. Consumption adjustments are restricted to the Kitchen warehouse and FOOD items. |
-| 17 | Purchase receipts | Supplier goods received into the Store. Supplier is a free-text name. Lines require stock + purchase eligible items. |
+| 17 | Purchase receipts | Supplier goods received into the Store. Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. |
 | 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation. Drives POS drink availability and reservations. |
 | 19 | Stock reports | A stock ledger report (movement audit trail) and a stock balance report (opening/received/issued/closing) in the back office. |
 
@@ -63,7 +63,7 @@ Implementation status lives in `PLAN.md`.
 | # | Feature | What it does |
 |---|---|---|
 | 20 | Payment modes | Configurable payment types: Cash, Bank, General, Phone. Each can be enabled or disabled; exactly one is the default. |
-| 21 | GL account mapping | Each mode maps to a ledger account name. Settlement rejects orders paid with a mode that has no mapping. |
+| 21 | GL account mapping | Each mode maps to a ledger account. Settlement rejects orders paid with a mode that has no mapping. |
 | 22 | Change | Only cash modes dispense change. Overpayment on electronic modes is rejected. |
 
 ### A5. Shift Management
@@ -117,7 +117,7 @@ Implementation status lives in `PLAN.md`.
 | # | Feature | What it does |
 |---|---|---|
 | 49 | Department classification | Every item must be FOOD or DRINKS. Department drives ticket routing, drink stock validation, and per-line revenue tracking. |
-| 50 | Revenue split | Each order line snapshots its department, so food and drinks revenue can be summed independently of the single paid total. Separate income accounts per department arrive with the accounting phase (Planned). |
+| 50 | Revenue split | Each order line snapshots its department, so food and drinks revenue can be summed independently of the single paid total. Separate income accounts per department (item group → production unit → default) arrive with the accounting phase — implemented. |
 | 51 | Departmental reports | Food and drinks revenue reported separately, including the daily P&L split (Planned). |
 
 ## D. Architecture Constraints
@@ -134,11 +134,11 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it will do |
 |---|---|---|
-| 57 | Accounting / GL | Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), fiscal years, and cost centers. GL posts at order settlement (income, payment, rounding, COGS) and reverses at cancellation. |
-| 58 | Refunds completion | Refund GL reversal postings, wastage posting for non-restockable items, and partial returns. |
-| 59 | Opening balances | A reviewed opening journal entry for go-live, with duplicate protection. |
-| 60 | Cash variance posting | Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
-| 61 | Supplier payables | Supplier master, supplier invoices, supplier payments, and accounts-payable balances. |
+| 57 | Accounting / GL | **Implemented (Phase 6).** Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), fiscal years, and cost centers. GL posts at order settlement (income, payment, rounding, COGS) and reverses at cancellation. |
+| 58 | Refunds completion | **Implemented (Phase 6).** Refund GL reversal postings, wastage posting for non-restockable items, and partial returns. |
+| 59 | Opening balances | **Implemented (Phase 6).** A reviewed opening journal entry for go-live, with duplicate protection. |
+| 60 | Cash variance posting | **Implemented (Phase 6).** Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
+| 61 | Supplier payables | **Implemented (Phase 2 / §4.1).** Supplier master, supplier invoices (stock and expense lines), supplier payments fully allocated to outstanding invoices, and accounts-payable balances per supplier. Invoices post Dr stock-in-hand/expense / Cr payable; payments post Dr payable / Cr cash-bank; cancellation reverses. |
 | 62 | Daily P&L | A daily profit & loss document: gross sales → COGS → direct expenses (electricity, materials) → gross profit → indirect expenses (rent, salaries, depreciation) → net profit, with amendments and the departmental split. |
 | 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
