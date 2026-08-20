@@ -134,6 +134,23 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
             journal2 = self._journal()
             journal2.amend()
 
+    def test_amend_rejected_when_amendment_already_exists(self):
+        journal = self._journal()
+        self._row(journal, self.cash, debit=Decimal("100"))
+        self._row(journal, self.sales, credit=Decimal("100"))
+        journal.submit()
+        journal.cancel()
+        copy = journal.amend()
+        with self.assertRaisesMessage(ValidationError, "already been amended"):
+            journal.amend()
+        # The cancelled amendment can be amended once, forming a linear chain.
+        copy.submit()
+        copy.cancel()
+        amendment2 = copy.amend()
+        self.assertEqual(amendment2.amended_from, copy)
+        with self.assertRaisesMessage(ValidationError, "already been amended"):
+            copy.amend()
+
 
 class OpeningEntryTest(JournalEntryTestBase):
     def test_opening_submit_sets_is_opening(self):

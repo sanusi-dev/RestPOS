@@ -514,6 +514,8 @@ class JournalEntry(BaseModel):
         persisted = type(self).objects.only("status").get(pk=self.pk)
         if persisted.status != self.CANCELLED:
             raise ValidationError("Only cancelled journal entries can be amended.")
+        if self.amendments.exists():
+            raise ValidationError("This journal entry has already been amended.")
         copy = JournalEntry.objects.create(
             voucher_type=self.voucher_type,
             posting_date=self.posting_date,

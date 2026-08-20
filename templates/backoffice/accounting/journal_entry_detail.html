@@ -26,10 +26,16 @@
           <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
         </form>
       {% else %}
-        <form method="post" action="{% url 'accounting:journal_entry_amend' journal.pk %}" class="inline">
-          {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Amend</button>
-        </form>
+        {% with existing_amendment=journal.amendments.first %}
+        {% if existing_amendment %}
+          <a href="{% url 'accounting:journal_entry_detail' existing_amendment.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">View amendment #{{ existing_amendment.pk }}</a>
+        {% else %}
+          <form method="post" action="{% url 'accounting:journal_entry_amend' journal.pk %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Amend</button>
+          </form>
+        {% endif %}
+        {% endwith %}
       {% endif %}
     </div>
   </div>

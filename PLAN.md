@@ -405,7 +405,8 @@ Methods: `submit()` (atomic; rows may not mix debit and credit, no duplicate
 account+cost_center rows, difference 0, total > 0; posts one GLEntry per row; a
 `voucher_type=OPENING` entry sets `is_opening=True` automatically), `cancel()` (atomic;
 mirrored negated entries, originals marked `is_cancelled`), `amend()` (only from CANCELLED;
-copies into a new DRAFT linked via `amended_from`).
+copies into a new DRAFT linked via `amended_from`; rejected if an amendment already exists,
+so a cancelled entry has at most one amendment).
 
 **JournalEntryAccount**
 
