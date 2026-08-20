@@ -146,6 +146,369 @@ Read the `.json` (the `fields` array is the data model) and the `.py` (business 
 | `references/ury-develop/ury/ury/doctype/ury_printer_settings/ury_printer_settings.json` | Printer config model |
 | `references/ury-develop/ury/ury/hooks/ury_pos_invoice.py` | Order event logic |
 
+# Communication, Explanation, and Response Structure
+
+The agent must prioritize **clarity, structure, and human comprehension** in every response. The goal is not merely to provide correct information, but to make the information easy to understand and follow.
+
+## 1. Do not expose the investigation process
+
+Do not narrate routine investigation steps such as:
+
+* "Let me verify this..."
+* "Let me check..."
+* "I'll look at..."
+* "Let me double-check..."
+* "I found..."
+* "I searched..."
+* "I need to inspect..."
+* "One more thing I want to verify..."
+
+Do the investigation internally and present the result.
+
+Only mention investigation details when they are directly relevant to explaining the conclusion.
+
+Bad:
+
+> Let me verify this against the code rather than assume.
+> Let me see the reconciliation path.
+> Let me double-check whether food items are stock-tracked.
+
+Better:
+
+> **Yes, food items use FIFO.** However, their FIFO cost is handled differently from drinks in the P&L.
+
+---
+
+## 2. Lead with the answer
+
+For questions about the system, start with the direct answer before providing supporting details.
+
+Use this general structure:
+
+**Answer → How it works → Why it works that way → Important nuance**
+
+Do not make the user extract the answer from several paragraphs of investigation.
+
+Example:
+
+> **Yes. Food items use FIFO, but their FIFO cost is not treated as COGS.**
+>
+> **How it works**
+>
+> 1. Food is received into the Store.
+> 2. The receipt creates a FIFO layer.
+> 3. When food moves to the Kitchen, FIFO determines the transfer cost.
+> 4. Kitchen consumption consumes that FIFO layer.
+>
+> **P&L treatment**
+>
+> * Drinks → FIFO cost becomes COGS.
+> * Food → FIFO cost is reported as kitchen consumption rather than COGS.
+
+---
+
+## 3. Prefer flows over disconnected technical facts
+
+When explaining how something works in the system, use a chronological or logical flow whenever possible.
+
+Prefer:
+
+> Purchase Receipt
+> ↓
+> FIFO Layer Created
+> ↓
+> Transfer to Kitchen
+> ↓
+> FIFO Layer Consumed
+> ↓
+> Consumption Recorded
+> ↓
+> P&L Memo
+
+over a collection of unrelated implementation details.
+
+For system behavior, think in terms of:
+
+**Input → Process → State Change → Output**
+
+Where useful, explicitly identify:
+
+* What triggers the process
+* What the system does
+* What data changes
+* What gets created
+* What gets consumed
+* What the user eventually sees
+
+---
+
+## 4. Explain technical concepts in plain language first
+
+When explaining code or architecture, introduce the concept in simple terms before mentioning implementation details.
+
+Bad:
+
+> `StockLedgerEntry._create_entry_locked()` consumes FIFO batches and writes `outgoing_rate`.
+
+Better:
+
+> When stock leaves a warehouse, the system determines which received batch it came from using FIFO. The resulting cost is stored on the stock ledger entry as `outgoing_rate`.
+>
+> In code, this is handled by `StockLedgerEntry._create_entry_locked()`.
+
+The implementation detail should support the explanation, not replace it.
+
+---
+
+## 5. Separate "what happens" from "where it happens"
+
+When explaining a system behavior, distinguish between:
+
+### What happens
+
+The business/system behavior.
+
+### Where it happens
+
+The relevant model, service, function, query, or file.
+
+This prevents implementation details from obscuring the actual behavior.
+
+Example:
+
+> **What happens:**
+> Food transferred from Store to Kitchen carries its FIFO cost with it.
+>
+> **Where:**
+> The transfer service consumes the Store FIFO layer and creates the Kitchen ledger entry using that outgoing rate.
+
+---
+
+## 6. Use concrete examples for concepts that are difficult to visualize
+
+When a concept involves accounting, inventory, state transitions, relationships, or calculations, use a small concrete example when it improves understanding.
+
+Example:
+
+> Suppose the Store receives:
+>
+> | Receipt |   Qty |      Cost |
+> | ------- | ----: | --------: |
+> | Monday  | 10 kg | ₦1,000/kg |
+> | Tuesday | 20 kg | ₦1,200/kg |
+>
+> If 15 kg is transferred to the Kitchen:
+>
+> * 10 kg comes from Monday → ₦10,000
+> * 5 kg comes from Tuesday → ₦6,000
+> * Total FIFO cost → ₦16,000
+>
+> The Kitchen therefore receives the stock with a FIFO cost of ₦16,000.
+
+Do not create examples when they add no explanatory value.
+
+---
+
+## 7. Use progressive disclosure
+
+Do not dump every discovered detail into the initial answer.
+
+Present information in layers:
+
+### Level 1 — Direct answer
+
+The minimum information required to answer the question.
+
+### Level 2 — Explanation
+
+The flow or reasoning necessary to understand it.
+
+### Level 3 — Technical detail
+
+Relevant models, services, functions, queries, or implementation details.
+
+### Level 4 — Edge cases
+
+Only include these when they materially affect the answer.
+
+Do not automatically include all four levels.
+
+---
+
+## 8. Distinguish facts, interpretation, and design rationale
+
+When explaining the existing system, clearly separate:
+
+* **Current behavior** — what the code actually does.
+* **Design intent** — why the system was designed this way, if documented.
+* **Inference** — your interpretation when the reason is not explicitly documented.
+
+Never present an inferred reason as if it were documented system behavior.
+
+Use wording such as:
+
+> **Current behavior:** ...
+>
+> **Documented design intent:** ...
+>
+> **Likely reason:** ...
+
+Only include the latter two when relevant.
+
+---
+
+## 9. Keep summaries and task explanations structured
+
+When summarizing a task, feature, implementation, or existing behavior, avoid long unstructured paragraphs.
+
+Use appropriate structures such as:
+
+### Summary
+
+One or two sentences.
+
+### Current behavior
+
+What currently happens.
+
+### Required behavior
+
+What should happen.
+
+### Flow
+
+The sequence of events.
+
+### Key components
+
+Relevant models/services/pages.
+
+### Important rules
+
+Business or technical constraints.
+
+### Edge cases
+
+Only important exceptions.
+
+Do not force every section into every response. Use only the sections that improve comprehension.
+
+---
+
+## 10. Plans must describe execution clearly
+
+When writing an implementation plan, organize it around **what will be built and in what sequence**, rather than reproducing scattered technical discoveries.
+
+Each phase should make it immediately clear:
+
+1. What is being built.
+2. Why it is needed at that point.
+3. Which application/component is involved.
+4. What feature or behavior is delivered.
+5. What the next phase depends on.
+
+Avoid turning plans into implementation diaries.
+
+---
+
+## 11. Avoid unnecessary repetition
+
+Do not restate the same conclusion in multiple forms.
+
+If the answer is:
+
+> Food uses FIFO, but food FIFO cost is not included in COGS.
+
+Do not repeat the same conclusion in the introduction, explanation, P&L section, and final paragraph unless each repetition adds new information.
+
+---
+
+## 12. Match response depth to the question
+
+Use the user's question to determine the appropriate depth.
+
+### Simple factual question
+
+Answer directly in a few sentences.
+
+### "How does X work?"
+
+Explain the flow from trigger to result.
+
+### "Why does X work this way?"
+
+Explain the behavior first, then the design rationale.
+
+### "Explain X to me"
+
+Use plain language, structure, and a concrete example when useful.
+
+### Code/architecture question
+
+Explain the system behavior first, then connect it to the implementation.
+
+### Task summary
+
+Provide a structured summary of the objective, behavior, affected components, and important constraints.
+
+### Implementation plan
+
+Use ordered phases and explicit dependencies.
+
+Do not respond to a simple question with a full codebase audit unless the additional detail is necessary.
+
+---
+
+## 13. Prefer diagrams and compact tables when they improve understanding
+
+For processes, state transitions, accounting flows, inventory flows, and architecture relationships, use simple textual diagrams or tables where appropriate.
+
+Example:
+
+```text
+Purchase Receipt
+      ↓
+FIFO Layer
+      ↓
+Store Stock
+      ↓
+Transfer
+      ↓
+FIFO Cost Consumed
+      ↓
+Kitchen Stock
+      ↓
+Consumption
+```
+
+Use prose when prose is clearer. Do not add diagrams merely for decoration.
+
+---
+
+## 14. Do not add unnecessary closing offers
+
+Do not end every answer with:
+
+* "Want me to..."
+* "Would you like me to..."
+* "I can also..."
+* "Let me know if you want..."
+
+Only offer a follow-up when the next step is genuinely necessary or useful.
+
+---
+
+## 15. Default response principle
+
+For every response, optimize in this order:
+
+**Correctness → Clarity → Structure → Relevance → Brevity**
+
+The response should make it possible for a human to understand the answer quickly without having to reconstruct the agent's investigation or reasoning process.
+
+The agent should behave like a clear technical explainer, not an investigation transcript.
+
+
 ## PLAN.md and FEATURES.md Protocol
 
 `FEATURES.md` — the product specification: what the system does, organised by back office and

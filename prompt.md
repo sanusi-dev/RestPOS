@@ -1,79 +1,418 @@
-Before making any changes to `plan.md`, first review and update `features.md` to ensure that every feature currently implemented or introduced in the codebase is documented.
+I need you to walk me through **exactly how inventory stock movement works in this codebase**, from the moment stock is added to the system until it is eventually deducted, including the relationship between stock entries, Stock Ledger Entries (SLE), stock queues, FIFO, bin balances, transfers, and purchase receipts.
 
-### `features.md` requirements
+The goal is not just to understand the business logic. I want to understand **the actual implementation down to the code level**.
 
-`features.md` should become a concise feature specification document.
+### 1. Start with the inventory architecture
 
-- Remove any references to URY, ERPNext, or any other external system.
-- Remove the introductory note that says the project is derived from URY or ERPNext.
-- Keep the project scope section brief and include only the information required for agents and future contributors to understand the project.
-- Rewrite all features as finalized decisions rather than brainstorming notes.
-- Avoid implementation history, design discussions, and references to where a feature originated.
-- The document should describe **what the system does**, not **how the design decisions were reached**.
+First, identify and explain all the models, services, functions, signals, repositories, or other components involved in inventory stock management.
 
-### `plan.md` requirements
+For each important component, explain:
 
-`plan.md` has become inconsistent and disorganized. Information is duplicated, scattered across sections, and mixed with content that belongs in other documents.
+* What it represents
+* Why it exists
+* What other components it interacts with
+* Which component is the source of truth for each type of inventory information
+* Where stock quantities, valuation, and FIFO information are persisted
 
-Refactor `plan.md` into a much simpler structure containing only the following sections:
+Show the relevant file paths and code sections as you explain them.
 
-1. Project overview
-2. Application architecture
-3. Build sequence (a high-level implementation roadmap)
+### 2. Explain stock addition from beginning to end
 
-Any information that already exists in `agents.md` should be removed from `plan.md`.
+Trace what happens when inventory enters the system.
 
-Review whether the following sections should remain in `plan.md`:
+Cover at least:
 
-- Project overview
-- Application architecture
-- Cross-cutting UI conventions
+* Purchase Receipt
+* Stock Entry for receipt/addition
+* Stock Entry for transfer
+* Any other mechanism that can increase stock
 
-If any of them would be better placed in `agents.md`, move them there. In particular, determine whether the cross-cutting UI conventions section is still necessary and justify keeping or removing it.
+For each flow, trace the execution **chronologically through the actual code**:
 
-### Build sequence structure
+```text
+User action
+    ↓
+View
+    ↓
+Service
+    ↓
+model operations
+    ↓
+SLE creation
+    ↓
+Bin update
+    ↓
+Stock queue/FIFO update
+```
 
-The build sequence should be presented as a table with the following columns:
+Do not assume this sequence is correct. Determine the actual sequence from the code.
 
-| Column | Description |
-| --- | --- |
-| Phase | Development phase |
-| Apps involved | Django apps affected |
-| Features covered | Related entries from `features.md` |
-| Completed work | Brief summary of what has already been implemented |
-| Remaining work | Brief summary of what still needs to be be implemented |
-| Detailed plan status | What has and has not been formally planned |
-| Progress status | `Completed`, `Planned`, or `Under implementation` |
+For every step, identify:
 
-### New implementation workflow
+* The function/method being called
+* The file where it is located
+* Important parameters passed
+* Database records created or modified
+* Why the operation happens at that point
 
-The project is no longer attempting to replicate URY or ERPNext.
+### 3. Explain Stock Ledger Entries (SLE) in detail
 
-Those systems should now be treated only as reference material.
+Explain exactly what an SLE represents in this codebase.
 
-Going forward, the workflow for implementing new features should be:
+Cover:
 
-1. Review how URY, ERPNext, and other comparable systems approach the feature.
-2. Research current industry practices.
-3. Consider the model's knowledge and the developer's requirements.
-4. Propose an implementation plan.
-5. Review the proposal with the developer through an iterative discussion process.
-6. Produce a final, agreed-upon implementation plan.
-7. Add only that final plan to the documentation.
+* The SLE model
+* Every important field
+* How positive and negative quantities are represented
+* How incoming and outgoing stock are recorded
+* How valuation/rate/value is recorded
+* How timestamps/order are determined
+* How SLEs are linked to their source transactions
+* Whether SLEs are immutable or can be modified/reposted
+* How cancellations/reversals work
+* How historical SLEs affect current stock
 
-### Detailed implementation plans
+Then trace several concrete examples through the code.
 
-Detailed implementation plans require a complete rewrite.
+### 4. Explain stock deduction
 
-They should no longer contain unnecessary contextual information such as:
+Trace exactly what happens when stock is consumed.
 
-- "This approach follows ERPNext."
-- "This implementation is based on URY."
-- References to Toast, ERP systems, or other products.
-- Historical design discussions.
-- Decision-making commentary.
+Include:
 
-The detailed plan should contain only the finalized implementation decisions that will be used during development.
+* Sales
+* Stock transfers
+* Stock issues
+* Any other stock deduction mechanism in the codebase
 
-The documentation should be treated as production documentation, not as a design notebook.
-Also, get rid of that implementation history, after this rewrite we should a less bulky version of plan.md so that we dont need to abstract away some contents
+Explain the complete chain from the transaction to the final stock deduction.
+
+I specifically want to understand **how the system decides which stock is being deducted**.
+
+For example:
+
+```text
+Available stock:
+Receipt A → 10 units @ ₦100
+Receipt B → 15 units @ ₦120
+Receipt C → 20 units @ ₦130
+
+Sale → 18 units
+
+Which quantities are deducted?
+Which receipt layers are affected?
+Where is this information stored?
+How it is stored in the ui
+What happens to the remaining quantities?
+```
+
+Use an example like this and map every step to the actual implementation.
+
+### 5. Explain the stock queue
+
+Identify exactly what the codebase means by **stock queue**.
+
+Explain:
+
+* What model/data structure represents it
+* What each queue entry represents
+* When entries are created
+* When they are consumed
+* When they are modified
+* How quantities are tracked
+* How the queue relates to SLE
+* How the queue relates to Bin
+* How the queue relates to FIFO
+
+Determine whether the queue is:
+
+* The actual source of truth for FIFO
+* A derived structure
+* A cache
+* A valuation mechanism
+* Or something else
+
+Do not infer this from naming. Determine it from the implementation.
+
+### 6. Explain FIFO completely
+
+Trace the actual FIFO implementation.
+
+Explain:
+
+* How receipt layers are created
+* How they are ordered
+* How the oldest layer is identified
+* How a deduction consumes a layer
+* What happens when one layer is insufficient
+* How multiple layers are consumed
+* How remaining quantities are persisted
+* How valuation is calculated
+* What happens when stock is returned
+* What happens when a transaction is cancelled
+* What happens when historical transactions are inserted or changed
+
+Use a detailed numerical example and show the state of the FIFO layers after every transaction.
+
+### 7. Explain Bin stock
+
+Explain exactly what **Bin** represents in this implementation.
+
+Cover:
+
+* The Bin model
+* Its important fields
+* How it is created
+* How it is updated
+* What triggers updates
+* Whether it stores current quantity, projected quantity, valuation, or something else
+* How its values relate to SLE
+* How its values relate to FIFO/stock queues
+* Whether Bin can be rebuilt from SLE
+* What happens if Bin becomes inconsistent with the ledger
+
+Then trace an actual stock addition and deduction and show the Bin values before and after each operation.
+
+### 8. Compare SLE, Bin, Stock Queue, FIFO, and source transactions
+
+Give me a clear distinction between these concepts.
+
+Use a table such as:
+
+| Component | Purpose | Source of truth? | Stores quantity? | Stores valuation? | Used for FIFO? | Updated when? |
+| --------- | ------- | ---------------- | ---------------- | ----------------- | -------------- | ------------- |
+
+Then explain the relationships between them.
+
+I want to eliminate any confusion about why the system needs all of these structures instead of simply calculating stock directly from transactions.
+
+### 9. Trace Purchase Receipt specifically
+
+Walk through a **Purchase Receipt** from creation to final inventory state.
+
+Show:
+
+```text
+Purchase Receipt
+    ↓
+Purchase Receipt Items
+    ↓
+Stock transaction
+    ↓
+SLE
+    ↓
+Bin
+    ↓
+FIFO / Stock Queue
+```
+
+Again, verify the actual sequence from the code rather than assuming it.
+
+Explain what happens if:
+
+* A purchase receipt is cancelled
+* A purchase receipt is amended
+* Part of the received quantity is later sold
+* The entire quantity is later sold
+* The purchase receipt is created after other transactions already exist
+
+### 10. Trace Stock Entry specifically
+
+Explain every relevant Stock Entry type separately.
+
+At minimum:
+
+* Material receipt/addition
+* Material issue/deduction
+* Transfer
+
+For transfers, explain **both sides of the transfer**.
+
+For example:
+
+```text
+Warehouse A
+    ↓
+Transfer
+    ↓
+Warehouse B
+```
+
+Explain:
+
+* What happens to Warehouse A's stock
+* What happens to Warehouse B's stock
+* How many SLEs are created
+* How FIFO layers move between warehouses
+* Whether the original receipt layer is preserved
+* Whether a new FIFO layer is created at the destination
+* How Bin records change
+* How the system prevents stock from being duplicated during transfer
+
+### 11. Trace cancellation and reversal
+
+Explain how cancellation works at the inventory level.
+
+I want to understand:
+
+* Whether the original SLE is deleted
+* Whether a reversal SLE is created
+* How the reversal affects Bin
+* How the reversal affects FIFO/stock queue
+* How historical stock calculations behave
+* How the system prevents double-counting
+
+Use a concrete example:
+
+```text
+Receipt: +100
+Sale:    -30
+Cancel receipt: +?
+```
+
+Show the exact resulting SLEs, Bin balance, and FIFO state.
+
+Also identify any subtle cases where a reversal can affect historical stock calculations or FIFO valuation incorrectly.
+
+### 12. Trace one complete lifecycle
+
+After explaining the individual components, trace one item through its entire lifecycle.
+
+For example:
+
+```text
+Purchase 100 units
+        ↓
+Receive 100
+        ↓
+Transfer 40 to Warehouse B
+        ↓
+Sell 20 from Warehouse A
+        ↓
+Sell 10 from Warehouse B
+        ↓
+Receive another 50
+        ↓
+Sell 80
+        ↓
+Cancel one transaction
+```
+
+At every stage show:
+
+* SLE records
+* Bin quantity
+* FIFO/stock queue layers
+* Quantity remaining
+* Which receipt layers were consumed
+* The resulting valuation where applicable
+
+### 13. Explain the actual code, not just the concepts
+
+For every important behavior, point me to the actual implementation.
+
+Use this format where useful:
+
+```text
+Behavior:
+    FIFO deduction
+
+Implemented in:
+    path/to/file.py
+
+Entry point:
+    function_name()
+
+Calls:
+    function_a()
+        → function_b()
+            → function_c()
+
+Database changes:
+    Model A: created
+    Model B: updated
+    Model C: created
+
+Why:
+    Explanation
+```
+
+Quote only the relevant small portions of code when necessary. Do not dump entire files.
+
+If a function calls another function, follow the call chain until we reach the actual database mutation or core inventory calculation.
+
+### 14. Identify hidden or non-obvious behavior
+
+While investigating, explicitly point out:
+
+* Implicit behavior
+* Django signals
+* Model `save()` overrides
+* Managers/querysets
+* Transactions
+* Database constraints
+* Background jobs
+* Event handlers
+* Cached/derived values
+* Any code that updates inventory indirectly
+* Any places where the same inventory quantity can be changed through different paths
+
+I especially want to know about behavior that is easy to miss when reading the main service functions.
+
+### 15. Identify inconsistencies and risks
+
+Do not assume the implementation is correct.
+
+If you find:
+
+* Inconsistent stock calculations
+* Possible race conditions
+* FIFO inconsistencies
+* SLE/Bin synchronization problems
+* Cancellation/reversal problems
+* Duplicate stock updates
+* Missing transaction boundaries
+* Incorrect handling of historical transactions
+* Possible negative stock problems
+* Valuation inconsistencies
+
+point them out explicitly.
+
+For each issue, explain the exact code path that creates the risk.
+
+### 16. Final mental model
+
+Finish with a concise mental model of the entire inventory system.
+
+I should be able to answer these questions after reading your explanation:
+
+1. **Where does stock physically enter the system?**
+2. **What record represents that event?**
+3. **What creates the SLE?**
+4. **What updates the Bin?**
+5. **What creates the FIFO/stock queue layer?**
+6. **When stock is sold, what code finds the stock to deduct?**
+7. **How does FIFO determine which layer is consumed?**
+8. **Where is the remaining quantity stored?**
+9. **How does a transfer move stock between warehouses?**
+10. **How do cancellation and reversal affect every inventory structure?**
+11. **Which structure is authoritative when two structures disagree?**
+12. **Can the entire current inventory state be reconstructed from the ledger?**
+
+### Important instructions
+
+* **Base the explanation strictly on the codebase.**
+* Do not give me a generic explanation of inventory systems unless it is necessary to explain something found in the code.
+* Do not skip intermediate functions just because they appear obvious.
+* Follow the actual call chain.
+* Use file paths, class names, function names, and model names throughout.
+* Distinguish clearly between **what the code actually does** and **what you think it should do**.
+* If something cannot be determined from the available code, say so explicitly.
+* If there are multiple inventory paths that behave differently, explain each one separately.
+* Use concrete quantities and ledger examples whenever they make the flow easier to understand.
+* Start from the lowest-level architecture and progressively build toward the complete inventory lifecycle.
+* Do not try to explain the entire codebase at once if that would make the explanation difficult to follow. Break it into logical sections and build the mental model progressively.
+
+
+
+Put your reponse in a .md file
