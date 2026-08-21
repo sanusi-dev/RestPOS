@@ -7,7 +7,7 @@ stateDiagram-v2
     [*] --> DRAFT: create_draft_order
     DRAFT --> [*]: delete (unsent draft)
     DRAFT --> SUBMITTED: settle_order
-    DRAFT --> CANCELLED: cancel_order / cancel_sent_order if KOT sent
+    DRAFT --> CANCELLED: cancel_sent_order if KOT sent
     DRAFT --> DISCARDED: discard_order (legacy/seed only)
     SUBMITTED --> DRAFT: make_return creates a new return draft
     DRAFT --> SUBMITTED: submit_return (return draft only)
@@ -59,6 +59,6 @@ stateDiagram-v2
 ## Invalid Transitions to Watch
 
 - `settle_order()` rejects cancelled, submitted, empty, return, or no-active-shift orders.
-- `cancel_order()` rejects discarded orders, paid submitted orders, and unsent drafts (delete instead).
+- `cancel_sent_order()` rejects discarded orders, paid orders, and unsent drafts (delete instead). Submitted orders are never cancelled — they leave the lifecycle only through the return flow (`make_return()` → `submit_return()`).
 - `Order.delete()` rejects non-drafts, printed drafts (legacy guard), and sent drafts; its audit-event purge is deliberate.
 - Inventory model saves can permit direct draft status flips without posting; use service paths when tracing actual ledger behavior.

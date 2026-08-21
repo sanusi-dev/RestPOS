@@ -9,7 +9,7 @@ from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 
 from ..models import Order
-from ..services import add_order_line, cancel_order, create_tickets, remove_order_line
+from ..services import add_order_line, cancel_sent_order, create_tickets, remove_order_line
 from .accounting_setup import OrderAccountingMixin
 
 
@@ -162,7 +162,7 @@ class KOTGenerationTest(KOTTestBase):
         create_tickets(
             self.order,
         )
-        cancel_order(self.order, "Test reason")
+        cancel_sent_order(self.order, "Test reason")
         cancel_kot = self.order.kots.filter(type="Cancelled").first()
         self.assertTrue(cancel_kot.kot_number.startswith("CNCL-KOT-"))
 
