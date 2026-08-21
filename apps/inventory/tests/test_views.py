@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.accounting.payables_models import Supplier
 from apps.inventory.models import (
     UOM,
     Item,
@@ -412,6 +413,64 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         receipt = PurchaseReceipt.objects.filter(supplier_name="ABC Suppliers").first()
         self.assertIsNotNone(receipt)
         self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+
+    def test_purchase_receipt_create_with_supplier_master_and_no_name(self):
+        supplier = Supplier.objects.create(supplier_name="Master Foods Ltd")
+        response = self.client.post(
+            reverse("inventory:purchase_receipt_create"),
+            {
+                "supplier": str(supplier.pk),
+                "supplier_delivery_note": "DN-001",
+                "posting_date": "2025-01-15",
+                "remarks": "",
+                "items-TOTAL_FORMS": "0",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+            },
+        )
+        receipt = PurchaseReceipt.objects.filter(supplier=supplier).first()
+        self.assertIsNotNone(receipt)
+        self.assertEqual(receipt.supplier_name, "Master Foods Ltd")
+        self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+
+    def test_purchase_receipt_create_free_text_name_wins_over_master(self):
+        supplier = Supplier.objects.create(supplier_name="Master Foods Ltd")
+        response = self.client.post(
+            reverse("inventory:purchase_receipt_create"),
+            {
+                "supplier_name": "Typo Corp",
+                "supplier": str(supplier.pk),
+                "supplier_delivery_note": "DN-001",
+                "posting_date": "2025-01-15",
+                "remarks": "",
+                "items-TOTAL_FORMS": "0",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+            },
+        )
+        receipt = PurchaseReceipt.objects.filter(supplier=supplier).first()
+        self.assertIsNotNone(receipt)
+        self.assertEqual(receipt.supplier_name, "Typo Corp")
+        self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+
+    def test_purchase_receipt_create_requires_name_when_no_master(self):
+        response = self.client.post(
+            reverse("inventory:purchase_receipt_create"),
+            {
+                "supplier_delivery_note": "",
+                "posting_date": "2025-01-15",
+                "remarks": "",
+                "items-TOTAL_FORMS": "0",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This field is required")
+        self.assertFalse(PurchaseReceipt.objects.exists())
 
     def test_purchase_receipt_create_rolls_back_parent_when_formset_save_fails(self):
         with (

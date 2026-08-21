@@ -45,7 +45,7 @@ Supports `MATERIAL_RECEIPT` and `MATERIAL_TRANSFER`. Receipts land at `Restauran
 
 ### Purchase Receipt
 
-`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Submission also updates `Item.last_purchase_rate`.
+`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Submission also updates `Item.last_purchase_rate`. The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own.
 
 ### Stock Reconciliation
 
