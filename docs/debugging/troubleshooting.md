@@ -33,7 +33,7 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Order missing from history | `order_history_rows` | status/is_paid/is_return -> posting_date -> full-history permission -> filters/pagination |
 | Receipt printed but no paper | `settle_order`, `apps/orders/printing.py` | settlement marks printed; inspect print implementation/result; reprint from history |
 | Ticket remains pending | `dispatch_tickets`, KOT row | ticket status -> print_status -> printer result/exception -> retry action |
-| Cancellation did not restore stock | `cancel_order`, `_restore_stock` | submitted status -> `stock_warehouse` snapshot -> reversal SLE voucher |
+| Cancellation did not restore stock | `cancel_sent_order`, `_restore_stock` | draft sent status -> `stock_warehouse` snapshot -> reservation release, cancellation KOTs |
 | Shift totals are wrong | `expected_closing_amounts`, `submit_closing_entry` | submitted period rows -> payment sums -> cash change subtraction -> refund subtraction -> closing rows |
 | Return cannot complete | `make_return`, `submit_return` | return submission revalidates lines, restores stock, writes proportional refund rows |
 | Backoffice route unexpectedly accessible | middleware and view | `/backoffice/` role gate -> view-level manager/superuser checks |

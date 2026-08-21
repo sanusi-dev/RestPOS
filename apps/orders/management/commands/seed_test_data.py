@@ -341,7 +341,8 @@ class Command(BaseCommand):
                 self._backdate_order(order, day, rng)
             if offset % 3 == 0:
                 order = self._make_order(shift, cashier, food_items, drink_items, rng)
-                orders_services.cancel_order(
+                orders_services.create_tickets(order, created_by=cashier)
+                orders_services.cancel_sent_order(
                     order,
                     "wrong_order",
                     cancelled_by=cashier,
@@ -383,7 +384,8 @@ class Command(BaseCommand):
             self._pay_and_settle(order, open_shift, cashier, cash_mode, electronic_mode, rng, allow_electronic)
 
         cancelled = self._make_order(open_shift, cashier, food_items, drink_items, rng)
-        orders_services.cancel_order(
+        orders_services.create_tickets(cancelled, created_by=cashier)
+        orders_services.cancel_sent_order(
             cancelled,
             "customer_changed_mind",
             cancelled_by=cashier,

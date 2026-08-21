@@ -21,14 +21,14 @@ Cancel form
   -> orders.views.order_cancel()
   -> require manager/admin/superuser
   -> POSOrderCancelForm validation
-  -> orders.services.cancel_order()
-  -> order lock, stock reversal/reservation release, cancellation KOTs
+  -> orders.services.cancel_sent_order()
+  -> order lock, reservation release, cancellation KOTs
   -> commit
   -> services.dispatch_tickets()
   -> redirect order detail with pending-print warnings
 ```
 
-Paid submitted orders are rejected and preserve their original data. Sent draft orders are the cancellable kind — cancel releases drink reservations and creates cancellation KOTs; a submitted (paid) order that was cancelled earlier restores drink stock through reversal SLEs. Existing payments are not deleted. An unsent draft is never cancelled; the backoffice deletes it instead (`orders.views.order_delete`, manager-only).
+Only sent draft orders are cancellable — cancel releases drink reservations and creates cancellation KOTs. Submitted orders are never cancelled; they leave the lifecycle only through the return flow (`make_return()` → `submit_return()`), and an unsent draft is never cancelled; the backoffice deletes it instead (`orders.views.order_delete`, manager-only).
 
 ## Return Creation and Submission
 

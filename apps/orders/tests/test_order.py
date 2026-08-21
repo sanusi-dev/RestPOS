@@ -18,7 +18,6 @@ from apps.staff.models import OpeningPayment, POSOpeningEntry
 from ..models import DINE_IN, Order, OrderAuditEvent, OrderItem, OrderPayment, OrderSequence
 from ..services import (
     add_order_line,
-    cancel_order,
     cancel_sent_order,
     clear_order_lines,
     create_tickets,
@@ -419,10 +418,10 @@ class OrderCancelTest(OrderTestBase):
         Bin.objects.filter(item=self.item, warehouse=self.warehouse).update(actual_qty=Decimal("10"))
         settle_order(self.order, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
         with self.assertRaises(ValidationError):
-            cancel_order(self.order, "Test reason")
+            cancel_sent_order(self.order, "Test reason")
 
     def test_cancel_sets_status(self):
-        cancel_order(self.order, "Test reason")
+        cancel_sent_order(self.order, "Test reason")
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "CANCELLED")
         self.assertEqual(self.order.cancel_reason, "other")
@@ -432,10 +431,10 @@ class OrderCancelTest(OrderTestBase):
         from django.core.exceptions import ValidationError
 
         with self.assertRaises(ValidationError):
-            cancel_order(self.order, "")
+            cancel_sent_order(self.order, "")
 
     def test_cancel_creates_cancel_kot(self):
-        cancel_order(self.order, "Test reason")
+        cancel_sent_order(self.order, "Test reason")
         cancel_kots = self.order.kots.filter(type="Cancelled")
         self.assertTrue(cancel_kots.exists())
 
@@ -448,7 +447,7 @@ class OrderCancelTest(OrderTestBase):
         draft = self._create_order()
         add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
         with self.assertRaisesMessage(ValidationError, "never sent — delete it instead"):
-            cancel_order(draft, "Changed mind")
+            cancel_sent_order(draft, "Changed mind")
         draft.refresh_from_db()
         self.assertEqual(draft.status, "DRAFT")
 
@@ -533,7 +532,7 @@ class OrderCancelTest(OrderTestBase):
         create_tickets(
             draft,
         )
-        cancel_order(draft, "Changed mind")
+        cancel_sent_order(draft, "Changed mind")
         with self.assertRaisesMessage(ValidationError, "Only draft orders can be discarded."):
             discard_order(
                 draft,

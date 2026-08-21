@@ -243,22 +243,19 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
 
 
 @transaction.atomic
-def cancel_order(order, reason, cancelled_by=None, reason_note=""):
-    """Cancel an order through the immutable document workflow.
+def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
+    """Cancel a sent draft order (KOT exists), releasing reservations and tickets.
 
-    Payment rows are preserved for audit — the cancelled order retains its
-    original items, payments, and totals. Shift close (Phase 7) excludes
-    cancelled orders by filtering on status != CANCELLED.
+    Submitted orders are never cancelled — they leave the lifecycle only
+    through the return flow (``make_return`` / ``submit_return``). Payment
+    rows are preserved for audit on the cancelled order.
     """
     locked = Order.objects.select_for_update().get(pk=order.pk)
-    if locked.status == CANCELLED:
-        order.refresh_from_db()
-        return []
-    if locked.status == DISCARDED:
-        raise ValidationError("Discarded orders cannot be cancelled.")
-    if locked.status == SUBMITTED and locked.is_paid:
-        raise ValidationError("Submitted paid orders cannot be cancelled; use the refund flow.")
-    if locked.status == DRAFT and not locked.kots.exists():
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be cancelled.")
+    if locked.is_paid:
+        raise ValidationError("Paid orders cannot be cancelled; use the refund flow.")
+    if not locked.kots.exists():
         raise ValidationError("This order was never sent — delete it instead of cancelling.")
     if not reason or not reason.strip():
         raise ValidationError("A cancel reason is required.")
@@ -267,48 +264,6 @@ def cancel_order(order, reason, cancelled_by=None, reason_note=""):
     if reason not in dict(CANCEL_REASON_CHOICES):
         reason_note = reason_note or reason
         reason = CANCEL_REASON_OTHER
-    locked.cancel_reason = reason
-    locked.cancel_reason_note = reason_note
-    locked.cancelled_by = cancelled_by
-    locked.cancelled_at = timezone.now()
-    if locked.status == SUBMITTED:
-        _restore_stock(locked)
-        # Reverse any GL posted at settle (Phase 6 §4.2).
-        from apps.accounting.services import reverse_order_gl
-
-        reverse_order_gl(locked)
-    else:
-        release_drink_reservations(locked)
-    cancellation_kots = _cancel_kots(locked)
-    locked.status = CANCELLED
-    with _transition(locked, flag="_allow_cancellation"):
-        locked.save(
-            update_fields=[
-                "status",
-                "cancel_reason",
-                "cancel_reason_note",
-                "cancelled_by",
-                "cancelled_at",
-                "updated_at",
-            ]
-        )
-    locked.audit("CANCELLED", actor=cancelled_by, metadata={"reason": reason})
-    order.refresh_from_db()
-    return cancellation_kots
-
-
-@transaction.atomic
-def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
-    """Cancel an unpaid order after its kitchen or bar tickets were sent."""
-    locked = Order.objects.select_for_update().get(pk=order.pk)
-    if locked.status != DRAFT:
-        raise ValidationError("Only draft orders can be cancelled from the POS.")
-    if locked.is_paid:
-        raise ValidationError("Paid orders cannot be cancelled from the POS.")
-    if not locked.kots.exists():
-        raise ValidationError("Only a sent order can be cancelled here.")
-    if reason not in dict(CANCEL_REASON_CHOICES):
-        raise ValidationError("Choose a valid cancellation reason.")
 
     locked.status = CANCELLED
     locked.cancel_reason = reason

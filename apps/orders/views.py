@@ -154,7 +154,7 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, "Choose a cancellation reason before cancelling the order.")
         return redirect("orders:order_detail", pk=order.pk)
     try:
-        cancellation_kots = services.cancel_order(
+        cancellation_kots = services.cancel_sent_order(
             order,
             form.cleaned_data["cancel_reason"],
             cancelled_by=user,
