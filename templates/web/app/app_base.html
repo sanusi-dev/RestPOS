@@ -1,4 +1,12 @@
 {% extends "web/base.html" %}
+{% block navbar_actions %}
+  {% if user.is_authenticated %}
+  <a href="{% url 'account_logout' %}" data-logout-link class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+    <span class="flex size-5 items-center justify-center">{% hgi_stroke name="logout-01" size="19" color="currentColor" stroke_width="2" %}</span>
+    <span class="hidden sm:inline">Sign out</span>
+  </a>
+  {% endif %}
+{% endblock %}
 {% block mobile_nav_items %}
   {{ block.super }}
   {% partial app-nav-menu-items %}
@@ -12,103 +20,127 @@
 </li>
 <li>
   <a href="{% url 'web:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/dashboard' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="home-01" size="20" color="currentColor" stroke_width="2" %}</span>
     Dashboard
   </a>
 </li>
-<li>
-  <a href="{% url 'settings:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/settings' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-    Settings
-  </a>
+<li x-data="{ settingsOpen: {% if '/backoffice/settings' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="settingsOpen = !settingsOpen" :aria-expanded="settingsOpen.toString()" aria-controls="settings-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/settings' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="setting-06" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">Settings</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="settingsOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="settings-submenu" x-show="settingsOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li>
+      <a href="{% url 'settings:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'dashboard' and '/backoffice/settings' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+        <span class="h-1.5 w-1.5 rounded-full bg-current"></span>Settings overview
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'settings:restaurant_settings' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'restaurant_settings' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+        <span class="h-1.5 w-1.5 rounded-full bg-current"></span>Restaurant settings
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'settings:staff_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'staff_list' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+        <span class="h-1.5 w-1.5 rounded-full bg-current"></span>User roles
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'settings:production_unit_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'production_unit' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
+        <span class="h-1.5 w-1.5 rounded-full bg-current"></span>Production units
+      </a>
+    </li>
+  </ul>
 </li>
-<li>
-  <a href="{% url 'inventory:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/inventory' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-    Inventory
-  </a>
+<li x-data="{ inventoryOpen: {% if '/backoffice/inventory' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="inventoryOpen = !inventoryOpen" :aria-expanded="inventoryOpen.toString()" aria-controls="inventory-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/inventory' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="folder-01" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">Inventory</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="inventoryOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="inventory-submenu" x-show="inventoryOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'inventory:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'dashboard' and '/backoffice/inventory' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Inventory overview</a></li>
+    <li><a href="{% url 'inventory:item_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'item_' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Items</a></li>
+    <li><a href="{% url 'inventory:warehouse_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'warehouse_' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Warehouses</a></li>
+    <li><a href="{% url 'inventory:stock_balance_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'stock_balance' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Stock balance</a></li>
+    <li><a href="{% url 'inventory:stock_ledger_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'stock_ledger' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Stock ledger</a></li>
+    <li><a href="{% url 'inventory:stock_entry_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'stock_entry' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Stock entries</a></li>
+    <li><a href="{% url 'inventory:reconciliation_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'reconciliation' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Reconciliations</a></li>
+    <li><a href="{% url 'inventory:purchase_receipt_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'purchase_receipt' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Purchase receipts</a></li>
+  </ul>
 </li>
-<li class="ml-8">
-  <a href="{% url 'inventory:item_group_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'item_group' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
-    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Item groups</span>
-    <span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">{{ item_group_count|default:"0" }}</span>
-  </a>
+<li x-data="{ menuOpen: {% if '/backoffice/menu' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen.toString()" aria-controls="menu-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/menu' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="menu-restaurant" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">Menu</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="menuOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="menu-submenu" x-show="menuOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'menu:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'dashboard' and '/backoffice/menu' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Menu overview</a></li>
+    <li><a href="{% url 'menu:menu_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'menu_' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Menus</a></li>
+    <li><a href="{% url 'menu:menu_item_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'menu_item' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Menu items</a></li>
+    <li><a href="{% url 'menu:add_on_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if 'add_on' in request.resolver_match.url_name %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Add-ons</a></li>
+  </ul>
 </li>
-<li>
-  <a href="{% url 'menu:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/menu' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-    Menu
-  </a>
+<li x-data="{ ordersOpen: {% if '/backoffice/orders' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="ordersOpen = !ordersOpen" :aria-expanded="ordersOpen.toString()" aria-controls="orders-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/orders' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="invoice-01" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">Orders</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="ordersOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="orders-submenu" x-show="ordersOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'orders:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'dashboard' and '/backoffice/orders' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Orders overview</a></li>
+    <li><a href="{% url 'orders:order_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Order register</a></li>
+    <li><a href="{% url 'orders:kot_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'kot_list' or request.resolver_match.url_name == 'kot_detail' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Kitchen &amp; Bar tickets</a></li>
+  </ul>
 </li>
-<li>
-  <a href="{% url 'orders:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/orders' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-    Orders
-  </a>
-</li>
-<li class="ml-8">
-  <a href="{% url 'orders:order_list' %}" class="group flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' %}text-orange-600 bg-orange-50/60{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}">
-    <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-    Order register
-  </a>
-</li>
-<li class="ml-8">
-  <a href="{% url 'orders:kot_list' %}" class="group flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'kot_list' or request.resolver_match.url_name == 'kot_detail' %}text-orange-600 bg-orange-50/60{% else %}text-gray-500 hover:text-gray-900 hover:bg-white{% endif %}">
-    <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-    Kitchen &amp; Bar tickets
-  </a>
-</li>
-<li>
-  <a href="{% url 'accounting:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/accounting' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-    Accounting
-  </a>
-</li>
-<li class="ml-8">
+<li x-data="{ accountingOpen: {% if '/backoffice/accounting' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="accountingOpen = !accountingOpen" :aria-expanded="accountingOpen.toString()" aria-controls="accounting-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/accounting' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="coins-01" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">Accounting</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="accountingOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="accounting-submenu" x-show="accountingOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'accounting:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'dashboard' and '/backoffice/accounting' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Accounting overview</a></li>
+    <li>
   <a href="{% url 'accounting:supplier_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_list supplier_detail supplier_create supplier_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
     <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Suppliers</span>
   </a>
 </li>
-<li class="ml-8">
+<li>
   <a href="{% url 'accounting:supplier_invoice_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_invoice_list supplier_invoice_detail supplier_invoice_create supplier_invoice_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
     <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Supplier invoices</span>
   </a>
 </li>
-<li class="ml-8">
+<li>
   <a href="{% url 'accounting:supplier_payment_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'supplier_payment_list supplier_payment_detail supplier_payment_create supplier_payment_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
     <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Supplier payments</span>
   </a>
+    </li>
+  </ul>
 </li>
-<li>
-  <a href="{% url 'reports:daily_pnl_list' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/reports' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+<li x-data="{ reportsOpen: {% if '/backoffice/reports' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="reportsOpen = !reportsOpen" :aria-expanded="reportsOpen.toString()" aria-controls="reports-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/reports' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
     <span class="h-5 w-5 shrink-0">{% hgi_stroke name="analytics-01" size="20" color="currentColor" stroke_width="2" %}</span>
-    Reports
-  </a>
+    <span class="flex-1">Reports</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="reportsOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="reports-submenu" x-show="reportsOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'reports:daily_pnl_list' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'daily_pnl_list daily_pnl_detail daily_pnl_create daily_pnl_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Daily P&amp;L</a></li>
+    <li><a href="{% url 'reports:pnl_settings' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'pnl_settings' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>P&amp;L settings</a></li>
+  </ul>
 </li>
-<li class="ml-8">
-  <a href="{% url 'reports:daily_pnl_list' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name in 'daily_pnl_list daily_pnl_detail daily_pnl_create daily_pnl_update' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
-    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Daily P&amp;L</span>
-  </a>
-</li>
-<li class="ml-8">
-  <a href="{% url 'reports:pnl_settings' %}" class="group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if request.resolver_match.url_name == 'pnl_settings' %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}">
-    <span class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>P&amp;L settings</span>
-  </a>
-</li>
-<li class="px-4 py-3 mt-2 text-xs font-bold text-gray-400 uppercase tracking-widest">
-  <span>POS</span>
-</li>
-<li>
-  <a href="{% url 'payments:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/payments' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-    Payments
-  </a>
-</li>
-<li>
-  <a href="{% url 'staff:dashboard' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/backoffice/staff' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-    Shifts
-  </a>
+<li x-data="{ posOpen: {% if '/backoffice/payments' in request.path or '/backoffice/staff' in request.path %}true{% else %}false{% endif %} }">
+  <button type="button" @click="posOpen = !posOpen" :aria-expanded="posOpen.toString()" aria-controls="pos-submenu" class="group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100 {% if '/backoffice/payments' in request.path or '/backoffice/staff' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="dashboard-square-01" size="20" color="currentColor" stroke_width="2" %}</span>
+    <span class="flex-1">POS</span>
+    <span class="flex size-4 items-center justify-center transition-transform" :class="posOpen ? 'rotate-180' : ''">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+  </button>
+  <ul id="pos-submenu" x-show="posOpen" x-transition.opacity class="ml-8 mt-1 flex flex-col gap-1 border-l border-gray-200 pl-2">
+    <li><a href="{% url 'payments:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if '/backoffice/payments' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Payments</a></li>
+    <li><a href="{% url 'staff:dashboard' %}" class="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-100 {% if '/backoffice/staff' in request.path %}bg-orange-50/60 text-orange-600{% else %}text-gray-500 hover:bg-white hover:text-gray-900{% endif %}"><span class="h-1.5 w-1.5 rounded-full bg-current"></span>Shifts</a></li>
+  </ul>
 </li>
 {% endif %}
 {% if not user.is_anonymous %}
@@ -117,14 +149,8 @@
 </li>
 <li>
   <a href="{% url 'web:pos_index' %}" class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-100 {% if '/pos' in request.path %}bg-orange-50 text-orange-600 shadow-sm shadow-orange-500/10{% else %}text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm{% endif %}">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+    <span class="shrink-0 transition-transform group-hover:scale-110">{% hgi_stroke name="dashboard-square-01" size="20" color="currentColor" stroke_width="2" %}</span>
     Launch POS
-  </a>
-</li>
-<li>
-  <a href="{% url 'account_logout' %}" data-logout-link class="group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-all duration-100 mt-2">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-    Sign out
   </a>
 </li>
 {% endif %}
@@ -133,18 +159,18 @@
   {% block notifications %}
   {% endblock %}
 
-  <div id="htmx-error" class="max-w-7xl mx-auto rounded-xl p-4 mt-6 mx-4 sm:mx-8 bg-red-50 text-red-800 border border-red-200 shadow-sm flex justify-between hidden" role="alert">
+  <div id="htmx-error" class="max-w-screen-2xl mx-auto rounded-xl p-4 mt-6 mx-4 sm:mx-8 bg-red-50 text-red-800 border border-red-200 shadow-sm flex justify-between hidden" role="alert">
     <span class="flex items-center gap-2 font-medium">
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>{% hgi_stroke name="grid" size="20" color="currentColor" stroke_width="2" %}</span>
         An error occurred while loading the content. Please try again.
     </span>
     <button class="inline-flex items-center p-1 rounded-md hover:bg-red-100 transition-colors" onclick="this.parentElement.classList.add('hidden')">
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      <span>{% hgi_stroke name="cancel-01" size="20" color="currentColor" stroke_width="2" %}</span>
     </button>
   </div>
 
   <section class="section py-8 flex-grow" hx-on::response-error="document.getElementById('htmx-error').classList.remove('hidden')">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
+    <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row gap-8">
 
       <div class="w-64 hidden lg:flex lg:flex-col lg:sticky lg:top-28 lg:self-start shrink-0">
         <div class="bg-white border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] p-4">

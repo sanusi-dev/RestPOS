@@ -3,7 +3,7 @@ from typing import cast
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -38,17 +38,9 @@ from .models import (
 
 @login_required
 def inventory_dashboard(request: HttpRequest) -> HttpResponse:
-    low_stock_bins = (
-        Bin.objects.select_related("item", "warehouse")
-        .filter(actual_qty__lte=models.F("item__safety_stock"), item__safety_stock__gt=0)
-        .order_by("item__item_name")
-    )
     context = {
         "item_count": Item.objects.count(),
-        "warehouse_count": Warehouse.objects.count(),
         "uom_count": UOM.objects.count(),
-        "stock_entry_count": StockEntry.objects.count(),
-        "low_stock_bins": low_stock_bins,
     }
     return render(request, "backoffice/inventory/dashboard.html", context)
 
@@ -251,9 +243,14 @@ def item_list(request: HttpRequest) -> HttpResponse:
         items = items.filter(Q(item_name__icontains=q) | Q(item_code__icontains=q))
 
     item_groups = ItemGroup.objects.all().order_by("name")
+    template = (
+        "backoffice/inventory/item_list.html#items_table"
+        if request.headers.get("HX-Request")
+        else "backoffice/inventory/item_list.html"
+    )
     return render(
         request,
-        "backoffice/inventory/item_list.html",
+        template,
         {
             "items": items,
             "item_groups": item_groups,
