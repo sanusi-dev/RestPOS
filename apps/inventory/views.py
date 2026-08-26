@@ -243,9 +243,14 @@ def item_list(request: HttpRequest) -> HttpResponse:
         items = items.filter(Q(item_name__icontains=q) | Q(item_code__icontains=q))
 
     item_groups = ItemGroup.objects.all().order_by("name")
+    template = (
+        "backoffice/inventory/item_list.html#items_table"
+        if request.headers.get("HX-Request")
+        else "backoffice/inventory/item_list.html"
+    )
     return render(
         request,
-        "backoffice/inventory/item_list.html",
+        template,
         {
             "items": items,
             "item_groups": item_groups,
