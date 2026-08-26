@@ -20,11 +20,23 @@ from apps.settings.models import Restaurant
 class PurchaseReceiptTest(TestCase):
     @classmethod
     def setUpTestData(cls):
+        from apps.accounting.tests.helpers import setup_chart_of_accounts
+
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Stock")
         cls.store = Warehouse.objects.create(name="Store")
         cls.other = Warehouse.objects.create(name="Other")
-        Restaurant.objects.create(company="Test", store_warehouse=cls.store)
+        cls.restaurant = Restaurant.objects.create(company="Test", store_warehouse=cls.store)
+        # Chart + fiscal year + warehouse/GRNI wiring for GL postings
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
+        cls.store.account = (
+            cls.accounts["stock_in_hand"] if "stock_in_hand" in cls.accounts else cls.accounts.get("cogs")
+        )
+        cls.store.save(update_fields=["account", "updated_at"])
+        cls.other.account = (
+            cls.accounts["stock_in_hand"] if "stock_in_hand" in cls.accounts else cls.accounts.get("cogs")
+        )
+        cls.other.save(update_fields=["account", "updated_at"])
         cls.item = Item.objects.create(
             item_name="Rice",
             item_group=cls.group,
@@ -88,7 +100,9 @@ class PurchaseReceiptTest(TestCase):
         submit_purchase_receipt(receipt)
         # Consuming only the second line makes cancellation fail after the
         # first reversal would otherwise succeed; the whole cancellation must roll back.
-        StockLedgerEntry.create_entry(second_item, self.store, -2, "Consumption", "1")
+        StockLedgerEntry.create_entry(
+            item=second_item, warehouse=self.store, quantity=Decimal("-2"), voucher_type="Consumption", voucher_no="1"
+        )
 
         with self.assertRaisesMessage(ValidationError, "Insufficient stock"):
             cancel_purchase_receipt(receipt)
@@ -97,17 +111,23 @@ class PurchaseReceiptTest(TestCase):
         self.assertEqual(receipt.status, "SUBMITTED")
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("2"))
         self.assertFalse(StockLedgerEntry.objects.filter(voucher_type="Purchase Receipt Cancellation").exists())
-        self.assertFalse(
-            StockLedgerEntry.objects.filter(
-                voucher_type="Purchase Receipt", voucher_no=str(receipt.pk), is_cancelled=True
-            ).exists()
-        )
+        self.assertFalse(StockLedgerEntry.objects.filter(reversal_of_sle__isnull=False).exists())
 
-    def test_cancel_consumes_current_fifo_and_preserves_remaining_valuation(self):
+    def test_cancel_at_current_wac_with_variance(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
         submit_purchase_receipt(receipt)
-        StockLedgerEntry.create_entry(self.item, self.store, 2, "Later Receipt", "1", rate=Decimal("200"))
+        StockLedgerEntry.create_entry(
+            item=self.item,
+            warehouse=self.store,
+            quantity=Decimal("2"),
+            voucher_type="Later Receipt",
+            voucher_no="1",
+            unit_rate=Decimal("200"),
+        )
+        # Bin now 4 @ WAC (2*100+2*200)/4=150
+        before_wac = Bin.objects.get(item=self.item, warehouse=self.store).valuation_rate
+        self.assertEqual(before_wac, Decimal("150"))
 
         cancel_purchase_receipt(receipt)
 
@@ -115,7 +135,11 @@ class PurchaseReceiptTest(TestCase):
         reversal = StockLedgerEntry.objects.get(
             voucher_type="Purchase Receipt Cancellation", voucher_no=str(receipt.pk)
         )
-        self.assertEqual(reversal.outgoing_rate, Decimal("100"))
+        # Reversal at current WAC before cancel (150), not original 100
+        self.assertEqual(reversal.unit_rate, Decimal("150"))
+        self.assertEqual(reversal.variance_type, "CANCELLATION_WAC")
+        self.assertEqual(reversal.variance_amount, Decimal("100"))  # 2*(150-100)
+        self.assertEqual(reversal.reversal_of_sle_id is not None, True)
         self.assertEqual(stock_bin.actual_qty, Decimal("2"))
-        self.assertEqual(stock_bin.valuation_rate, Decimal("200"))
-        self.assertEqual(stock_bin.stock_value, Decimal("400"))
+        self.assertEqual(stock_bin.valuation_rate, Decimal("150"))
+        self.assertEqual(stock_bin.stock_value, Decimal("300"))

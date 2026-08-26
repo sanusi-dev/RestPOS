@@ -54,30 +54,30 @@
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Balance</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Val. Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Value Δ</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Voucher</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cancelled</th>
+            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Variance</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           {% for sle in entries %}
-            <tr class="hover:bg-gray-50/50 transition-colors {% if sle.is_cancelled %}opacity-50{% endif %}">
-              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.posting_datetime|date:"Y-m-d H:i" }}</td>
+            <tr class="hover:bg-gray-50/50 transition-colors {% if sle.reversal_of_sle_id %}opacity-50{% endif %}">
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.posting_datetime|date:"Y-m-d H:i" }}<br><span class="text-xs text-gray-400">{{ sle.posting_date }}</span></td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ sle.item.item_name }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ sle.warehouse.name }}</td>
-              <td class="px-6 py-4 text-sm font-semibold {% if sle.actual_qty >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ sle.actual_qty }}</td>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ sle.qty_after_transaction }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.valuation_rate }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.voucher_type }} #{{ sle.voucher_no }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if sle.is_cancelled %}Yes{% else %}No{% endif %}</td>
+              <td class="px-6 py-4 text-sm font-semibold {% if sle.quantity >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ sle.quantity }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.unit_rate }}</td>
+              <td class="px-6 py-4 text-sm font-semibold {% if sle.stock_value_change >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ sle.stock_value_change }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ sle.voucher_type }} #{{ sle.voucher_no }}{% if sle.voucher_detail_no %}<span class="text-xs text-gray-400">:{{ sle.voucher_detail_no }}</span>{% endif %}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if sle.variance_amount %}{{ sle.variance_type }} {{ sle.variance_amount }}{% else %}—{% endif %}{% if sle.reversal_of_sle_id %}<br><span class="text-xs text-gray-400">↩ #{{ sle.reversal_of_sle_id }}</span>{% endif %}</td>
             </tr>
           {% empty %}
             <tr>
               <td colspan="8" class="px-6 py-16 text-center text-gray-500">
                 <div class="flex flex-col items-center gap-2">
                   <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                    <span>{% hgi_stroke name="book-open-01" size="24" color="currentColor" stroke_width="1.5" %}</span>
                   </div>
                   <span class="font-medium mt-2 text-gray-600">No ledger entries.</span>
                 </div>

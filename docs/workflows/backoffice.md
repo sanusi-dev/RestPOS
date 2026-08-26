@@ -49,7 +49,7 @@ Restaurant and ProductionUnit changes are manager/admin-only at view level. Rest
 Current aggregates elsewhere:
 
 - order dashboard: today count, paid count, cancelled count, revenue, recent orders, pending tickets;
-- inventory dashboard: counts and bins at/below safety stock;
+- inventory dashboard: catalog, stock, and purchasing navigation with item, warehouse, UOM, and stock-entry counts;
 - stock ledger and balance filtered lists;
 - staff closing totals and per-mode variance;
 - POS history query with date/status/payment/order-type filters.

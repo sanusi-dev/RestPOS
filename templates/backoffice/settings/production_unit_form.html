@@ -1,82 +1,57 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Settings" root_url="settings:dashboard" section_label="Production units" section_url="settings:production_unit_list" current_label=is_create|yesno:"New unit,Edit unit" %}
 
-  <nav class="flex mb-6" aria-label="Breadcrumb">
-    <ol class="inline-flex items-center space-x-1 md:space-x-3">
-      <li class="inline-flex items-center">
-        <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          Settings
-        </a>
-      </li>
-      <li>
-        <div class="flex items-center">
-          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <a href="{% url 'settings:production_unit_list' %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">Production Units</a>
-        </div>
-      </li>
-      <li aria-current="page">
-        <div class="flex items-center">
-          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">{% if is_create %}New Production Unit{% else %}Edit Production Unit{% endif %}</span>
-        </div>
-      </li>
-    </ol>
-  </nav>
-
-  <div class="mb-5">
-    <h1 class="text-xl font-extrabold text-gray-900 tracking-tight">
-      {% if is_create %}New Production Unit{% else %}Edit Production Unit{% endif %}
-    </h1>
+  <div class="mb-8 border-b border-gray-200 pb-6">
+    <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Operations setup</p>
+    <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{% if is_create %}Create production unit{% else %}Edit production unit{% endif %}</h1>
+    <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Define where a station works and how its production tickets are routed.</p>
   </div>
 
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
-    {% partialdef form inline %}
-    <form method="post" class="space-y-6">
-      {% csrf_token %}
-      {% if form.non_field_errors %}
-        <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">
-          {{ form.non_field_errors }}
-        </div>
-      {% endif %}
+  {% partialdef form inline %}
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
+    {% endif %}
 
-      <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider">Production Unit</h3>
-
-      {% for field in form %}
-        {% if field.name == "printer_ip" %}
-          <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider pt-6 border-t border-gray-100">Printer Configuration</h3>
-        {% endif %}
-        {% if field.widget_type == "checkbox" %}
-          <div>
-            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">{{ field }} {{ field.label }}</label>
-            {% if field.errors %}
-              <p class="text-xs font-semibold text-red-500 mt-1">{{ field.errors|join:", " }}</p>
-            {% elif field.help_text %}
-              <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
-            {% endif %}
-          </div>
-        {% else %}
-          <div class="flex flex-col gap-1.5">
-            <label for="{{ field.id_for_label }}" class="text-sm font-bold text-gray-700">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}
-              <p class="text-xs font-semibold text-red-500">{{ field.errors|join:", " }}</p>
-            {% elif field.help_text %}
-              <p class="text-xs text-gray-500">{{ field.help_text }}</p>
-            {% endif %}
-          </div>
-        {% endif %}
-      {% endfor %}
-
-      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-        <a href="{% url 'settings:production_unit_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
-        <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">
-          {% if is_create %}Create Production Unit{% else %}Save Changes{% endif %}
-        </button>
+    <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="store-01" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div><h2 class="text-sm font-extrabold text-gray-900">Station details</h2><p class="mt-1 text-xs text-gray-500">Identify the unit and connect it to the correct department and warehouse.</p></div>
       </div>
-    </form>
-    {% endpartialdef %}
-  </div>
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        {% for field in form %}
+          {% if field.name == "name" or field.name == "department" or field.name == "warehouse" or field.name == "income_account" %}
+            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="printer" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div><h2 class="text-sm font-extrabold text-gray-900">Ticket routing</h2><p class="mt-1 text-xs text-gray-500">Configure the printer and ticket behavior for this production station.</p></div>
+      </div>
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        {% for field in form %}
+          {% if field.name == "printer_ip" or field.name == "printer_paper_width" or field.name == "printer_cut_mode" or field.name == "block_takeaway_kot" %}
+            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
+      <a href="{% url 'settings:production_unit_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
+      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+        <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
+        {% if is_create %}Create unit{% else %}Save changes{% endif %}
+      </button>
+    </div>
+  </form>
+  {% endpartialdef %}
 </div>
 {% endblock %}

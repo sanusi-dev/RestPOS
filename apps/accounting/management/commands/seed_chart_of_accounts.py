@@ -215,6 +215,25 @@ class Command(BaseCommand):
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
+        grni_account = LedgerAccount.objects.get_or_create(
+            name="Stock Received But Not Billed",
+            defaults={
+                "parent": liabilities,
+                "is_group": False,
+                "root_type": LedgerAccount.LIABILITY,
+                "report_type": LedgerAccount.BALANCE_SHEET,
+            },
+        )[0]
+        variance_account = LedgerAccount.objects.get_or_create(
+            name="Inventory Price Variance",
+            defaults={
+                "parent": expenses,
+                "is_group": False,
+                "root_type": LedgerAccount.EXPENSE,
+                "report_type": LedgerAccount.PROFIT_AND_LOSS,
+                "account_type": LedgerAccount.ACCOUNT_TYPE_EXPENSE,
+            },
+        )[0]
         stock_in_hand = LedgerAccount.objects.filter(
             parent=stock_group,
             is_group=False,
@@ -247,6 +266,8 @@ class Command(BaseCommand):
                 ("cost_center", kitchen_cc),
                 ("default_payable_account", payable_account),
                 ("default_stock_in_hand_account", stock_in_hand),
+                ("stock_received_but_not_billed_account", grni_account),
+                ("inventory_price_variance_account", variance_account),
             ]:
                 if getattr(restaurant, f"{field}_id") is None:
                     setattr(restaurant, field, value)
@@ -271,3 +292,5 @@ class Command(BaseCommand):
         self.stdout.write(f"  Electronic account: {electronic_account.name}")
         self.stdout.write(f"  Income: {food_sales.name} / {drinks_sales.name}")
         self.stdout.write(f"  Cost centers: {kitchen_cc.name} / {bar_cc.name}")
+        self.stdout.write(f"  GRNI: {grni_account.name}")
+        self.stdout.write(f"  Variance: {variance_account.name}")

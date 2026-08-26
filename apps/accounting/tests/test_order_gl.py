@@ -145,23 +145,25 @@ class OrderSettleGLTest(OrderGLTestBase):
         self.assertEqual(round_entry.credit, Decimal("0.50"))
 
     def test_cogs_posts_for_drink_order(self):
-        # Build a FIFO queue so the settle-time deduction has a real outgoing value.
+        # Seed WAC so settle-time deduction has a real value.
+        # Bin starts with 100 @ 0 (from setUp), so adding 100 @ 300 blends to WAC 150.
         StockLedgerEntry.create_entry(
             item=self.drink,
             warehouse=self.bar_wh,
-            actual_qty=Decimal("100"),
+            quantity=Decimal("100"),
             voucher_type="Purchase Receipt",
             voucher_no="PR-1",
-            rate=Decimal("300"),
+            unit_rate=Decimal("300"),
         )
         order = self._create_order()
         add_order_line(order, self.drink, qty=2, rate=Decimal("500"), menu_item=self.drink_mi)
         self._settle(order)
         entries = self._order_gl(order)
         cogs_entry = entries.get(account=self.accounts["cogs"])
-        self.assertEqual(cogs_entry.debit, Decimal("600"))  # 2 × 300
+        # WAC after seed: (100*0 + 100*300)/200 = 150, so 2 × 150 = 300
+        self.assertEqual(cogs_entry.debit, Decimal("300"))
         stock_entry = entries.get(account=self.bar_wh.account)
-        self.assertEqual(stock_entry.credit, Decimal("600"))
+        self.assertEqual(stock_entry.credit, Decimal("300"))
 
     def test_missing_income_account_raises(self):
         # Clear both the item-group override and the Restaurant default so the

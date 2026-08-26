@@ -61,23 +61,23 @@ def _wastage_rate(return_order, line):
             voucher_no=str(return_order.pk),
             item=line.item,
         )
-        .order_by("-pk")
+        .order_by("-posting_date", "-posting_datetime", "-pk")
         .first()
     )
     if sle is not None:
-        return sle.incoming_rate
+        return sle.unit_rate
     source_sle = (
         StockLedgerEntry.objects.filter(
             voucher_type="POS Order",
             voucher_no=str(return_order.return_against_id),
             item=line.item,
-            actual_qty__lt=0,
+            quantity__lt=0,
         )
-        .order_by("-pk")
+        .order_by("-posting_date", "-posting_datetime", "-pk")
         .first()
     )
     if source_sle is not None:
-        return source_sle.outgoing_rate
+        return source_sle.unit_rate
     bin_obj = line.item.bins.filter(warehouse=return_order.stock_warehouse).first()
     return bin_obj.valuation_rate if bin_obj else ZERO
 
@@ -85,44 +85,45 @@ def _wastage_rate(return_order, line):
 def drink_cogs(start, end, orders):
     rows = []
     total = ZERO
+    # Business period is by posting_date (business date), not posting_datetime (audit).
+    start_date = start.date()
+    end_date = end.date()
     sales = StockLedgerEntry.objects.filter(
-        is_cancelled=False,
-        posting_datetime__gte=start,
-        posting_datetime__lt=end,
+        posting_date__gte=start_date,
+        posting_date__lt=end_date,
         voucher_type="POS Order",
-        actual_qty__lt=0,
+        quantity__lt=0,
         item__department=DRINKS,
     ).select_related("item")
     for sle in sales:
-        qty = abs(sle.actual_qty)
-        amount = (qty * sle.outgoing_rate).quantize(TWO)
+        qty = abs(sle.quantity)
+        amount = (qty * sle.unit_rate).quantize(TWO)
         total += amount
         rows.append(
             {
                 "item_name": sle.item.item_name,
                 "qty": qty,
-                "rate": sle.outgoing_rate,
+                "rate": sle.unit_rate,
                 "amount": amount,
                 "kind": DailyPnLCogsRow.SALE,
             }
         )
     returns = StockLedgerEntry.objects.filter(
-        is_cancelled=False,
-        posting_datetime__gte=start,
-        posting_datetime__lt=end,
+        posting_date__gte=start_date,
+        posting_date__lt=end_date,
         voucher_type="POS Return",
-        actual_qty__gt=0,
+        quantity__gt=0,
         item__department=DRINKS,
     ).select_related("item")
     for sle in returns:
-        qty = sle.actual_qty
-        amount = (qty * sle.incoming_rate).quantize(TWO)
+        qty = sle.quantity
+        amount = (qty * sle.unit_rate).quantize(TWO)
         total -= amount
         rows.append(
             {
                 "item_name": sle.item.item_name,
                 "qty": qty,
-                "rate": sle.incoming_rate,
+                "rate": sle.unit_rate,
                 "amount": -amount,
                 "kind": DailyPnLCogsRow.RETURN,
             }
@@ -152,16 +153,15 @@ def kitchen_consumption(business_date):
     sles = StockLedgerEntry.objects.filter(
         voucher_type="Stock Reconciliation",
         voucher_no__in=[str(r.pk) for r in recs],
-        is_cancelled=False,
-        actual_qty__lt=0,
+        quantity__lt=0,
     ).select_related("item")
     rows = []
     total = ZERO
     for sle in sles:
-        qty = abs(sle.actual_qty)
-        amount = (qty * sle.outgoing_rate).quantize(TWO)
+        qty = abs(sle.quantity)
+        amount = (qty * sle.unit_rate).quantize(TWO)
         total += amount
-        rows.append({"item_name": sle.item.item_name, "qty": qty, "rate": sle.outgoing_rate, "amount": amount})
+        rows.append({"item_name": sle.item.item_name, "qty": qty, "rate": sle.unit_rate, "amount": amount})
     return total.quantize(TWO), rows
 
 

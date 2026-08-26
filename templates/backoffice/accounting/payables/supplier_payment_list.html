@@ -10,7 +10,7 @@
       <p class="text-sm text-gray-500">Payments to suppliers, fully allocated to outstanding invoices</p>
     </div>
     <a href="{% url 'accounting:supplier_payment_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      <span>{% hgi_stroke name="add-01" size="16" color="currentColor" stroke_width="2" %}</span>
       New Supplier Payment
     </a>
   </div>

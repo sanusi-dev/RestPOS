@@ -771,6 +771,20 @@ Whenever the user instructs you to commit, stage modifications, or finalize a ta
 
 Use clean, concise, descriptive imperative-mood commit messages (or follow Conventional Commits standard if specified by the repo, e.g., `fix: resolve broken income account fallback chain`). The repo's specified format in the "Documentation & Commit Standards" section above takes precedence: `<type>: <what changed>` with types feat/fix/refactor/style/chore/docs, subject max 50 chars, no full stop.
 
+## Git Worktrees — Multi-Agent / Multi-Harness Isolation
+
+One working directory can only have one branch checked out — `git checkout` in any harness moves the branch for every harness sharing that directory.
+
+When multiple agents or harnesses need different branches concurrently (e.g., OpenCode on `feat/pwac` while another harness is on `main`), use `git worktree` instead of switching the shared checkout:
+
+```bash
+git worktree add ../RestPOS-main main
+git worktree add ../RestPOS-pwac feat/pwac-inventory-costing
+# each harness points at its own directory; switching in one does not affect the other
+```
+
+Rule: before creating or switching branches, check `git branch --show-current` and whether another agent is active on a different branch. If so, create a worktree for your work rather than checking out in the shared directory.
+
 ## Hard Rules — Never Do
 
 - Modify anything inside `references/`

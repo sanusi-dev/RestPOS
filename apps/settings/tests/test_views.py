@@ -38,7 +38,7 @@ class TestDashboardView(SettingsViewTestBase):
     def test_dashboard_200(self):
         response = self.client.get(reverse("settings:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Restaurant Settings")
+        self.assertContains(response, "Restaurant settings")
 
 
 class TestRestaurantSettingsView(SettingsViewTestBase):
@@ -58,7 +58,7 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
     def test_get_200_no_config(self):
         response = self.client.get(reverse("settings:restaurant_settings"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create Settings")
+        self.assertContains(response, "Create settings")
 
     def test_post_creates_singleton(self):
         response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
@@ -136,12 +136,10 @@ class TestProductionUnitViews(SettingsViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Kitchen")
 
-    def test_list_filter_by_department(self):
+    def test_list_does_not_filter_by_department(self):
         unit_url = reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk})
         response = self.client.get(reverse("settings:production_unit_list"), {"department": "DRINKS"})
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, unit_url)
-        response = self.client.get(reverse("settings:production_unit_list"), {"department": "FOOD"})
         self.assertContains(response, unit_url)
 
     def test_create_get(self):
@@ -203,7 +201,7 @@ class TestStaffManagementViews(TestCase):
     def test_staff_list_200(self):
         response = self.client.get(reverse("settings:staff_list"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Staff Management")
+        self.assertContains(response, "User roles")
 
     def test_staff_list_shows_users(self):
         response = self.client.get(reverse("settings:staff_list"))
@@ -277,6 +275,13 @@ class TestStaffManagementViews(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "cashier@test.com")
         self.assertNotContains(response, "newbie@test.com")
+
+    def test_staff_list_htmx_search_returns_rows_only(self):
+        response = self.client.get(reverse("settings:staff_list"), {"search": "cashier"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cashier@test.com")
+        self.assertNotContains(response, "app-content")
+        self.assertNotContains(response, "User roles")
 
     def test_staff_list_pagination(self):
         for i in range(25):

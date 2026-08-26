@@ -666,10 +666,13 @@ class SubmitReturnTest(OrderTestBase):
     def test_submit_return_restores_drink_stock(self):
         order = self._settled_order()
         drink_balance = Bin.objects.get(item=self.item2, warehouse=self.warehouse).actual_qty
+        # Capture WAC before return for variance check
+        wac_before = Bin.objects.get(item=self.item2, warehouse=self.warehouse).valuation_rate
         return_order = make_return(order)
         submit_return(return_order, actor=self.user)
         sle = StockLedgerEntry.objects.get(voucher_type="POS Return", voucher_no=str(return_order.pk), item=self.item2)
-        self.assertEqual(sle.actual_qty, Decimal("1"))
+        self.assertEqual(sle.quantity, Decimal("1"))
+        self.assertEqual(sle.unit_rate, wac_before)
         self.assertEqual(
             Bin.objects.get(item=self.item2, warehouse=self.warehouse).actual_qty,
             drink_balance + 1,

@@ -160,6 +160,29 @@ class Restaurant(BaseModel):
         help_text="Stock account debited by supplier invoice stock lines when the item group has no expense account.",
     )
 
+    # Inventory costing (PWAC D4/D5) — GRN accrual and cancellation drift.
+    stock_received_but_not_billed_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Stock received but not billed (GRNI)",
+        help_text="Liability account credited by goods receipts and debited by linked supplier invoices.",
+    )
+    inventory_price_variance_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Inventory price variance account",
+        help_text=(
+            "Expense account for cancellation WAC drift "
+            "(receipt cancellations only; sale-return variance posts to COGS)."
+        ),
+    )
+
     class Meta:
         ordering = ["company"]
 

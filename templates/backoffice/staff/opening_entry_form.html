@@ -17,7 +17,7 @@
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3 relative z-10">
         <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>{% hgi_stroke name="clock-03" size="16" color="currentColor" stroke_width="2" %}</span>
         </div>
         <h3 class="text-base font-bold text-gray-900">Opening Float</h3>
       </div>
@@ -51,7 +51,7 @@
   {% else %}
     <div class="bg-white border border-red-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-10 text-center">
       <div class="mx-auto w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
-        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" /></svg>
+        <span>{% hgi_stroke name="alert-02" size="24" color="currentColor" stroke_width="2" %}</span>
       </div>
       <h3 class="text-lg font-bold text-gray-900 mb-2">No payment methods configured</h3>
         {% if form.non_field_errors %}

@@ -102,27 +102,34 @@ class ItemAdmin(admin.ModelAdmin):
 
 @admin.register(Bin)
 class BinAdmin(admin.ModelAdmin):
-    list_display = ("item", "warehouse", "actual_qty", "reserved_qty", "valuation_rate", "stock_value")
+    list_display = ("item", "warehouse", "actual_qty", "reserved_qty", "valuation_rate", "display_stock_value")
     list_filter = ("warehouse",)
     list_select_related = ("item", "warehouse")
     search_fields = ("item__item_name", "item__item_code", "warehouse__name")
+
+    @admin.display(description="Stock value")
+    def display_stock_value(self, obj):
+        return obj.stock_value
 
 
 @admin.register(StockLedgerEntry)
 class StockLedgerEntryAdmin(admin.ModelAdmin):
     list_display = (
         "posting_datetime",
+        "posting_date",
         "item",
         "warehouse",
-        "actual_qty",
-        "qty_after_transaction",
-        "valuation_rate",
+        "quantity",
+        "unit_rate",
+        "stock_value_change",
+        "variance_type",
+        "variance_amount",
         "voucher_type",
         "voucher_no",
-        "is_cancelled",
+        "reversal_of_sle",
     )
-    list_filter = ("voucher_type", "is_cancelled", "warehouse", "item")
-    list_select_related = ("item", "warehouse")
+    list_filter = ("voucher_type", "variance_type", "warehouse", "item")
+    list_select_related = ("item", "warehouse", "reversal_of_sle")
     search_fields = ("item__item_name", "item__item_code", "voucher_no", "warehouse__name")
     ordering = ("-posting_datetime",)
 

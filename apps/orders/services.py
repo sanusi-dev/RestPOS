@@ -1044,12 +1044,13 @@ def _convert_drink_reservations(order, *, reservations_initialized):
         StockLedgerEntry._create_entry_locked(
             item=oi.item,
             warehouse=order.stock_warehouse,
-            actual_qty=-oi.qty,
+            quantity=-oi.qty,
             voucher_type="POS Order",
             voucher_no=voucher_no,
             voucher_detail_no=str(oi.pk),
             prevent_negative=True,
-            rate=Decimal("0"),
+            unit_rate=None,
+            posting_date=order.posting_date,
             bin_obj=bins[oi.item_id],
         )
 
@@ -1118,11 +1119,27 @@ def update_return_line(order, line_pk, *, qty=None, not_restockable=None):
     return order
 
 
-def _restore_stock(order, voucher_type="POS Order Cancellation"):
+def _original_cogs_rate(source_order, item):
+    """Return the WAC at which the source order's drink was issued (sale-time WAC)."""
+    sles = StockLedgerEntry.objects.filter(
+        voucher_type="POS Order",
+        voucher_no=str(source_order.pk),
+        item=item,
+        quantity__lt=0,
+    )
+    total_qty = sum((abs(s.quantity) for s in sles), Decimal("0"))
+    total_value = sum((abs(s.quantity) * s.unit_rate for s in sles), Decimal("0"))
+    if total_qty == 0:
+        return Decimal("0")
+    return total_value / total_qty
+
+
+def _restore_stock(order, voucher_type="POS Return"):
     """Create positive stock ledger entries reversing an order's deductions.
 
     Return lines marked ``not_restockable`` skip the restore; their value posts
-    as wastage instead.
+    as wastage instead. Restores are at current WAC; variance vs original COGS
+    is recorded for audit (SALE_RETURN).
     """
     voucher_no = str(order.pk)
     stock_items = order.items.select_related("item").filter(
@@ -1133,16 +1150,28 @@ def _restore_stock(order, voucher_type="POS Order Cancellation"):
     if not order.stock_warehouse_id:
         raise ValidationError("This order has no stock warehouse snapshot for reversal.")
     warehouse = order.stock_warehouse
+    # For variance we need source order's sale-time WAC.
+    source = getattr(order, "return_against", None)
     for oi in stock_items.only("item__is_stock_item", "qty", "not_restockable"):
         if oi.not_restockable:
             continue
+        # Current WAC before restore — need bin's current valuation.
+        bin_obj = Bin.objects.filter(item=oi.item, warehouse=warehouse).first()
+        current_wac = bin_obj.valuation_rate if bin_obj and bin_obj.valuation_rate else Decimal("0")
+        orig_rate = _original_cogs_rate(source, oi.item) if source else Decimal("0")
+        qty = abs(oi.qty)
+        variance = qty * (current_wac - orig_rate) if source and current_wac != orig_rate else Decimal("0")
+        variance_type = "SALE_RETURN" if variance != 0 else ""
         StockLedgerEntry.create_entry(
             item=oi.item,
             warehouse=warehouse,
-            actual_qty=abs(oi.qty),
+            quantity=qty,
             voucher_type=voucher_type,
             voucher_no=voucher_no,
             voucher_detail_no=str(oi.pk),
+            posting_date=order.posting_date,
+            variance_amount=variance,
+            variance_type=variance_type,
         )
 
 

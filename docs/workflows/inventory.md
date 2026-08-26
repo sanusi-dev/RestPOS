@@ -2,17 +2,16 @@
 
 ## Inventory Architecture
 
-Inventory has a current-state layer (`Bin`) and an append-only movement layer (`StockLedgerEntry`). Documents are draft containers; their service functions are what post movements. The ledger uses signed quantities and a serialized FIFO queue.
+Inventory has a current-state layer (`Bin` — current WAC) and an append-only movement layer (`StockLedgerEntry` — audit). Documents are draft containers; their service functions are what post movements. The ledger uses Perpetual Weighted-Average Cost (PWAC): Bin holds the single WAC, SLE records the movement's rate and value change.
 
 ```mermaid
 flowchart LR
     Source[Receipt, transfer, reconciliation, POS drink sale]
     Service[Atomic posting service]
-    SLE[StockLedgerEntry]
-    Bin[Bin actual/reserved/valuation]
+    SLE[StockLedgerEntry — qty, unit_rate, value change]
+    Bin[Bin actual/reserved/WAC]
     Source --> Service --> SLE
     Service --> Bin
-    SLE --> Bin
 ```
 
 ## Every Production Inventory Mutation
@@ -33,9 +32,9 @@ FOOD POS sales intentionally do not reserve or deduct stock. Kitchen consumption
 
 `Bin` is unique per item/warehouse. DRINKS draft lines reserve `actual_qty - reserved_qty`; the order pins the configured Bar/POS warehouse on first reservation. Add, increase, decrease, remove, clear, draft cancel, draft discard, and draft deletion synchronize reservations. Settlement subtracts the order-owned reservation before creating the actual issue.
 
-## FIFO Posting
+## PWAC Posting
 
-`StockLedgerEntry._create_entry_locked()` locks a Bin, loads the latest non-cancelled SLE queue, appends incoming `[qty, rate]` batches, or consumes oldest batches for issues. It records incoming/outgoing/valuation rates, running quantity, stock value, and the serialized queue. `prevent_negative=True` rejects a source issue that would make actual quantity negative.
+`StockLedgerEntry._create_entry_locked()` locks a Bin, reads its current WAC, then: inbound `qty > 0` blends `new_wac = (old_qty*old_wac + qty*actual)/new_qty` and records `stock_value_change = qty*actual`; outbound `qty < 0` uses current WAC (`value_change = qty*WAC`, WAC unchanged). It records `quantity`, `unit_rate`, `stock_value_change`, `posting_date` (business date, informational), and `variance` on reversals. `InsufficientStock` rejects any move that would make actual quantity negative. No queue, no replay; `posting_date` never affects valuation.
 
 ## Documents
 
@@ -53,7 +52,7 @@ The user enters a count. Submission locks bins and posts `count - actual` only. 
 
 ## Reversal and Immutability
 
-Document cancellations call `_reverse_voucher()`, which locks original non-cancelled SLEs and bins, posts inverse movements, and marks original rows cancelled. Parent document saves reject most post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct document status changes can bypass service posting. This is a major tracing risk.
+Document cancellations create reversal SLEs at current WAC with `reversal_of_sle` linking back to the original, never editing it. Purchase receipt cancellation is blocked when a submitted invoice (or allocated payment) exists; allowed cancellations compute `variance = qty*(current_wac − original_rate)` as `CANCELLATION_WAC` to the variance account. Transfer cancellation reverses at dest current WAC (net zero). Parent document saves reject post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct status changes can bypass service posting.
 
 ## Backoffice Surface
 
