@@ -11,8 +11,8 @@ from .models import (
 )
 
 TAILWIND_INPUT_CLASS = (
-    "w-full rounded-xl border border-gray-300 px-4 py-3 text-sm "
-    "focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 "
+    "w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm "
+    "focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400/20 "
     "bg-white/50 transition-shadow"
 )
 
@@ -33,6 +33,8 @@ class SettingsModelForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if "address" in self.fields:
+            self.fields["address"].widget.attrs["rows"] = 4
         for field in self.fields.values():
             if isinstance(field.widget, forms.CheckboxInput) and not field.widget.attrs.get("class"):
                 field.widget.attrs["class"] = TAILWIND_CHECKBOX_CLASS
@@ -81,6 +83,13 @@ class RestaurantForm(SettingsModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs["placeholder"] = "e.g. Main Kitchen"
+        self.fields["department"].choices = [
+            ("", "Select department..."),
+            *self.fields["department"].choices,
+        ]
+        self.fields["block_takeaway_kot"].help_text = "Prevent this station from receiving tickets marked for takeaway."
+        self.fields["printer_ip"].widget.attrs["placeholder"] = "e.g. 192.168.1.51"
         self.fields["max_open_drafts"].required = False
         self.fields["active_menu"].queryset = active_choices(Menu, self.instance.active_menu_id, enabled=True)
         self.fields["default_warehouse"].queryset = active_choices(

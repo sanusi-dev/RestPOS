@@ -2,28 +2,7 @@
 {% block app %}
 <div class="w-full">
 
-  <nav class="flex mb-6" aria-label="Breadcrumb">
-    <ol class="inline-flex items-center space-x-1 md:space-x-3">
-      <li class="inline-flex items-center">
-        <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          Settings
-        </a>
-      </li>
-      <li>
-        <div class="flex items-center">
-          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <a href="{% url 'settings:production_unit_list' %}" class="ml-1 text-sm font-medium text-gray-500 hover:text-orange-500 transition-colors md:ml-2">Production Units</a>
-        </div>
-      </li>
-      <li aria-current="page">
-        <div class="flex items-center">
-          <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          <span class="ml-1 text-sm font-semibold text-gray-900 md:ml-2">{{ production_unit.name }}</span>
-        </div>
-      </li>
-    </ol>
-  </nav>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Settings" root_url="settings:dashboard" section_label="Production Units" section_url="settings:production_unit_list" current_label=production_unit.name %}
 
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
@@ -32,7 +11,7 @@
     </div>
     <div class="flex items-center gap-3">
       <a href="{% url 'settings:production_unit_update' production_unit.pk %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all duration-300">
-        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+        <span class="text-gray-400">{% hgi_stroke name="pencil-edit-01" size="16" color="currentColor" stroke_width="2" %}</span>
         Edit
       </a>
       <button hx-post="{% url 'settings:production_unit_delete' production_unit.pk %}"
@@ -44,7 +23,7 @@
               data-confirm-color="#dc2626"
               data-confirm-btn="Yes, delete"
               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold shadow-sm hover:bg-red-50 transition-all duration-300">
-        <svg class="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        <span class="text-red-400">{% hgi_stroke name="delete-01" size="16" color="currentColor" stroke_width="2" %}</span>
         Delete
       </button>
     </div>
