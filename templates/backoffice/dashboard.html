@@ -1,122 +1,56 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-<div class="w-full">
-  <div class="mb-8">
-    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Dashboard</h1>
-    <p class="mt-2 text-sm font-medium text-gray-500">Quick access and the most-used backoffice modules</p>
-  </div>
-
-  {# ERPNext Home pattern: "Your Shortcuts" row of quick-action buttons #}
-  <section class="mb-10">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Your Shortcuts</h2>
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <a href="{% url 'staff:opening_entry_create' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-100/50 rounded-full blur-2xl -mr-6 -mt-6 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center gap-3 relative z-10">
-          <div class="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          </div>
-          <span class="text-sm font-bold text-gray-900">Open Shift</span>
-        </div>
+<div class="w-full space-y-8">
+  <section>
+    <div class="mb-4 flex items-end justify-between gap-4">
+      <div>
+      <p class="text-xs font-bold uppercase tracking-[0.18em] text-orange-500">Quick links</p>
+      <h2 class="mt-1 text-xl font-extrabold tracking-tight text-gray-900">Frequently used</h2>
+      </div>
+      <a href="{% url 'web:pos_index' %}" class="hidden items-center gap-1.5 text-sm font-bold text-gray-500 transition hover:text-orange-600 sm:inline-flex">
+        Launch POS <span class="flex size-4 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="15" color="currentColor" stroke_width="2" %}</span>
       </a>
-
-      <a href="{% url 'menu:menu_item_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-20 h-20 bg-rose-100/50 rounded-full blur-2xl -mr-6 -mt-6 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center gap-3 relative z-10">
-          <div class="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm text-rose-500 ring-1 ring-gray-100">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-          </div>
-          <span class="text-sm font-bold text-gray-900">Menu Items</span>
-        </div>
+    </div>
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <a href="{% url 'staff:opening_entry_create' %}" class="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_5px_24px_rgb(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_10px_30px_rgb(0,0,0,0.07)]">
+        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="play-circle-02" size="22" color="currentColor" stroke_width="2" %}</span>
+        <span><strong class="block text-sm font-bold text-gray-900">Open a shift</strong><span class="mt-0.5 block text-xs text-gray-500">Set the opening float</span></span>
       </a>
-
-      <a href="{% url 'inventory:item_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-20 h-20 bg-orange-100/50 rounded-full blur-2xl -mr-6 -mt-6 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center gap-3 relative z-10">
-          <div class="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm text-orange-500 ring-1 ring-gray-100">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-          </div>
-          <span class="text-sm font-bold text-gray-900">Items</span>
-        </div>
+      <a href="{% url 'inventory:purchase_receipt_create' %}" class="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_5px_24px_rgb(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_10px_30px_rgb(0,0,0,0.07)]">
+        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="package-add" size="22" color="currentColor" stroke_width="2" %}</span>
+        <span><strong class="block text-sm font-bold text-gray-900">Receive stock</strong><span class="mt-0.5 block text-xs text-gray-500">Record a purchase receipt</span></span>
       </a>
-
-      <a href="{% url 'inventory:stock_ledger_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-20 h-20 bg-amber-100/50 rounded-full blur-2xl -mr-6 -mt-6 transition-opacity group-hover:opacity-100 opacity-0"></div>
-        <div class="flex items-center gap-3 relative z-10">
-          <div class="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm text-amber-500 ring-1 ring-gray-100">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-          </div>
-          <span class="text-sm font-bold text-gray-900">Stock Ledger</span>
-        </div>
+      <a href="{% url 'reports:daily_pnl_create' %}" class="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_5px_24px_rgb(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_10px_30px_rgb(0,0,0,0.07)]">
+        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="analytics-01" size="22" color="currentColor" stroke_width="2" %}</span>
+        <span><strong class="block text-sm font-bold text-gray-900">Prepare daily P&amp;L</strong><span class="mt-0.5 block text-xs text-gray-500">Build the management snapshot</span></span>
+      </a>
+      <a href="{% url 'accounting:journal_entry_create' %}" class="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_5px_24px_rgb(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-gray-200 hover:shadow-[0_10px_30px_rgb(0,0,0,0.07)]">
+        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="file-add" size="22" color="currentColor" stroke_width="2" %}</span>
+        <span><strong class="block text-sm font-bold text-gray-900">New journal entry</strong><span class="mt-0.5 block text-xs text-gray-500">Record an adjustment</span></span>
       </a>
     </div>
   </section>
 
-  {# ERPNext Home pattern: "Reports & Masters" grid of grouped link cards #}
   <section>
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Masters &amp; Setup</h2>
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-
-      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-        <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center shadow-sm">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+    <div class="mb-4">
+      <p class="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Everything in one place</p>
+      <h2 class="mt-1 text-xl font-extrabold tracking-tight text-gray-900">Modules &amp; setup</h2>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {% for module in modules %}
+      <article class="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] transition hover:border-gray-200 hover:shadow-[0_10px_30px_rgb(0,0,0,0.07)]">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <span class="flex size-10 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name=module.icon size="20" color="currentColor" stroke_width="2" %}</span>
+            <div><h3 class="text-base font-extrabold text-gray-900">{{ module.title }}</h3><p class="mt-0.5 text-xs text-gray-400">{{ module.description }}</p></div>
           </div>
-          <h3 class="text-base font-bold text-gray-900">Menu</h3>
+          <a href="{% url module.url %}" aria-label="Open {{ module.title }}" class="flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-50 hover:text-orange-600">{% hgi_stroke name="arrow-up-right-01" size="17" color="currentColor" stroke_width="2" %}</a>
         </div>
-        <ul class="divide-y divide-gray-50 bg-white/30">
-          <li><a href="{% url 'menu:menu_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Menus</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'menu:menu_item_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Menu Items</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'menu:add_on_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Add-ons</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'menu:variant_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Variants</span><span aria-hidden="true">→</span></a></li>
-        </ul>
-      </div>
-
-      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-        <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-          </div>
-          <h3 class="text-base font-bold text-gray-900">POS</h3>
+        <div class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-100 pt-4 text-sm">
+          {% for link in module.links %}<a href="{% url link.url %}" class="group/link flex items-center gap-2 py-1 font-semibold text-gray-600 transition hover:text-orange-600"><span class="flex size-4 items-center justify-center text-gray-300 group-hover/link:text-orange-500">{% hgi_stroke name="arrow-right-01" size="13" color="currentColor" stroke_width="2" %}</span>{{ link.label }}</a>{% endfor %}
         </div>
-        <ul class="divide-y divide-gray-50 bg-white/30">
-          <li><a href="{% url 'staff:opening_entry_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Opening Entries</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'staff:closing_entry_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Closing Entries</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'payments:mode_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Payment Modes</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'payments:gl_mapping_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>GL Mappings</span><span aria-hidden="true">→</span></a></li>
-        </ul>
-      </div>
-
-      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-        <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-          </div>
-          <h3 class="text-base font-bold text-gray-900">Inventory</h3>
-        </div>
-        <ul class="divide-y divide-gray-50 bg-white/30">
-          <li><a href="{% url 'inventory:item_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Items</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'inventory:warehouse_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Warehouses</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'inventory:uom_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Units of Measure</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'inventory:item_group_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Item Groups</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'inventory:stock_entry_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Stock Entries</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'inventory:stock_ledger_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Stock Ledger</span><span aria-hidden="true">→</span></a></li>
-        </ul>
-      </div>
-
-      <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-        <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center shadow-sm">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          </div>
-          <h3 class="text-base font-bold text-gray-900">Setup</h3>
-        </div>
-        <ul class="divide-y divide-gray-50 bg-white/30">
-          <li><a href="{% url 'settings:restaurant_settings' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>Restaurant Settings</span><span aria-hidden="true">→</span></a></li>
-          <li><a href="{% url 'settings:staff_list' %}" class="flex items-center justify-between p-4 text-sm font-semibold text-gray-700 hover:bg-white hover:text-orange-500 transition-colors"><span>User Roles</span><span aria-hidden="true">→</span></a></li>
-        </ul>
-      </div>
-
+      </article>
+      {% endfor %}
     </div>
   </section>
 </div>

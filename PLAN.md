@@ -636,3 +636,44 @@ or a per-day override. Electricity optional (blank = ₦0).
 - `apps/orders/printing.py` stub is replaced by the real client.
 
 **Models:** PrintJob, PrinterConfig (or ProductionUnit fields, per the final design).
+
+### 4.9 Perpetual Weighted-Average Cost — FIFO → PWAC (Phase 2 rework)
+
+**Status:** decision-locked (D1–D8), ready to build. Implement per `docs/pwac-implementation-plan.md`.
+
+**Decisions (D1–D8):**
+
+- **D1 — Backdated receipts = full WAC blend at actual cost.** Any receipt blends:
+  `new_wac = (old_qty×old_wac + qty×actual)/(old_qty+qty)`. No variance at receipt; `posting_date` is audit only.
+- **D2 — Wastage = no warehouse.** Keep `WASTE_DAMAGE` as `StockReconciliation.reason` on a real warehouse, valued at current WAC → existing `Restaurant.wastage_account`.
+- **D3 — Opening stock entered rate seeds WAC.** `OPENING_STOCK` posts at user `valuation_rate`; if `Bin qty==0` and the adjustment adds stock, require `valuation_rate` to seed WAC; else current WAC.
+- **D4 — GRN at receipt (accrual).** Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ receipt rate. Invoice *must* link to receipt via `SupplierInvoice.purchase_receipt`; invoice posts `Dr GRNI / Cr Payable` @ same rate. No unlinked `Dr SIH / Cr Payable` path. Random market purchase without formal receipt uses `StockEntry MATERIAL_RECEIPT` → `Dr SIH / Cr Cash-or-Expense` directly (no GRNI, no invoice).
+- **D5 — Dedicated variance account** `Restaurant.inventory_price_variance_account` for **cancellation WAC drift only**. Sale-return variance posts to **COGS**: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative. No `PURCHASE_PRICE` variance type.
+- **D6 — Block receipt cancel if downstream financial doc active** — `SupplierInvoice(status=SUBMITTED, purchase_receipt=receipt)` OR `SupplierPayment` allocation against that invoice. Cancel chain: `Payment → Invoice → Receipt`.
+- **D7 — Clean slate migration.** No production data. `RunPython` wipes `StockLedgerEntry` + `Bin` (FIFO snapshots) + drops `stock_value, stock_queue, is_cancelled, qty_after_transaction` columns. Docs stay; bins rebuild.
+- **D8 — Backdated threshold** is report-only: `posting_date < created_at::date` labels "late entry" for humans; no valuation branch.
+
+**Target model:**
+
+- `StockBin`: `item_id, warehouse_id, actual_qty, valuation_rate (=wac), reserved_qty`. `stock_value` derived as `actual_qty × valuation_rate`; `stock_queue` removed.
+- `StockLedgerEntry` (append-only): `item, warehouse, voucher_type, voucher_no, voucher_detail_no, posting_date, quantity (signed), unit_rate, stock_value_change (signed), variance_amount, variance_type (CANCELLATION_WAC | SALE_RETURN), reversal_of_sle_id (FK nullable), posting_datetime (auto_now_add)`.
+- Dropped from SLE: `stock_queue, incoming_rate, outgoing_rate, valuation_rate, stock_value, qty_after_transaction, is_cancelled`.
+
+**Business rules:**
+
+- Sale/consumption/waste: current WAC, outbound `unit_rate=wac`, `stock_value_change=−qty×wac`, WAC unchanged. Negative stock prohibited everywhere.
+- Transfer A→B: source `−qty×source_wac`, dest `+qty×source_wac` then dest recalculates WAC; net 0. Cancel: dest `−qty×dest_current_wac`, source `+qty×dest_current_wac`, source recalculates; net 0.
+- Reconciliation: `OPENING_STOCK` or `qty==0` + `+qty` → require entered `valuation_rate` to seed WAC; else current WAC.
+- Receipt cancellation (D6): blocked if downstream invoice/payment active; else `Cr SIH @ current WAC / Dr GRNI @ original` → diff to `variance_amount` (`CANCELLATION_WAC`) → `inventory_price_variance_account`. No partial.
+- Sale cancellation/return: `+qty×current WAC` back to Bin; diff vs original COGS → Dr/Cr COGS (sale-return variance in COGS, not variance account).
+- Future-dated transactions rejected: `posting_date > today → ValidationError`.
+
+**GL entries:**
+
+- Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ `qty×rate`.
+- Linked invoice: `Dr GRNI / Cr Payable` @ same rate (rate equality enforced; no variance branch). Expense lines on a linked invoice → `Dr Expense / Cr Payable` (not part of GRNI).
+- Stock-entry market purchase (`MATERIAL_RECEIPT`): `Dr SIH / Cr Cash-or-Expense` directly — no GRNI, no invoice.
+- Receipt cancellation: `Cr SIH @ current WAC / Dr GRNI @ original` → difference to variance account (`CANCELLATION_WAC`).
+- Sale-return variance: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative.
+
+**Settings:** `Restaurant.stock_received_but_not_billed_account` (GRNI, liability) + `Restaurant.inventory_price_variance_account` (expense). Seed defaults in `seed_chart_of_accounts`; forms validate required when inventory active.

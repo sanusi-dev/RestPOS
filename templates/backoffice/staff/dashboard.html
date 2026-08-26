@@ -12,7 +12,7 @@
       <div class="flex items-center justify-between mb-4 relative z-10">
         <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Opening Entries</h3>
         <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>{% hgi_stroke name="clock-03" size="20" color="currentColor" stroke_width="2" %}</span>
         </div>
       </div>
       <div class="relative z-10">
@@ -26,7 +26,7 @@
       <div class="flex items-center justify-between mb-4 relative z-10">
         <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Closing Entries</h3>
         <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-500 ring-1 ring-gray-100">
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+          <span>{% hgi_stroke name="checkmark-circle-01" size="20" color="currentColor" stroke_width="2" %}</span>
         </div>
       </div>
       <div class="relative z-10">
@@ -40,7 +40,7 @@
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>{% hgi_stroke name="clock-03" size="16" color="currentColor" stroke_width="2" %}</span>
         </div>
         <h3 class="text-base font-bold text-gray-900">Current Shift State</h3>
       </div>
@@ -78,7 +78,7 @@
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
       <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+          <span>{% hgi_stroke name="checkmark-circle-01" size="16" color="currentColor" stroke_width="2" %}</span>
         </div>
         <h3 class="text-base font-bold text-gray-900">Recent Closes</h3>
       </div>
@@ -95,7 +95,7 @@
                   <span class="font-mono {% if close.total_short_excess < 0 %}text-red-600{% elif close.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ close.total_short_excess }}</span>
                 </p>
               </div>
-              <svg class="w-5 h-5 text-gray-300 group-hover:text-orange-500 transition-colors group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              <span class="text-gray-300 group-hover:text-orange-500 transition-colors group-hover:translate-x-1">{% hgi_stroke name="arrow-right-01" size="20" color="currentColor" stroke_width="2" %}</span>
             </a>
           </li>
         {% empty %}

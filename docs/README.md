@@ -30,7 +30,7 @@ This directory is the living technical map of the current RestPOS source tree. I
 - [POS](workflows/pos.md): cashier-facing surface, shift gate, catalog, cart, tickets, payment, and history.
 - [Shifts](workflows/shifts.md): opening balances, active shift rules, closing reconciliation, and cancellation.
 - [Orders](workflows/orders.md): draft lifecycle, guest grouping, tickets, stage exits (delete/cancel/return), returns and refund submission, and audit events.
-- [Inventory](workflows/inventory.md): ledger, FIFO valuation, reservations, receipts, transfers, reconciliation, and every mutation path.
+- [Inventory](workflows/inventory.md): ledger, PWAC valuation, reservations, receipts, transfers, reconciliation, and every mutation path.
 - [Products and menu](workflows/products-and-menu.md): item flags, menus, prices, add-ons, variants, and POS catalog resolution.
 - [Payments](workflows/payments.md): payment master data, GL mappings, order payment rows, settlement validation, and cash change.
 - [Accounting scope recommendations](accounting-scope-recommendations.md): proposed accounting capabilities beyond the current Phase 8 scope, classified by implementation dependency and activation timing.
@@ -67,6 +67,10 @@ These pages answer: "When I perform this action, what happens next?" Each one na
 - [Troubleshooting](debugging/troubleshooting.md): symptom-to-code tracing guide.
 - [Risks and complexity](risks-and-complexity.md): coupling, incomplete flows, bypasses, orphaned code, and future refactoring targets.
 - [Glossary](glossary.md): project domain terms and their actual model meanings.
+
+## Reviews
+
+- [PWAC migration review](reviews/pwac-review.md): open findings from the FIFO→PWAC code review, with fix instructions and status tracking.
 
 ## Archive
 

@@ -79,6 +79,9 @@ class RestaurantForm(SettingsModelForm):
             # Payables (Phase 2 §4.1)
             "default_payable_account",
             "default_stock_in_hand_account",
+            # Inventory costing (PWAC D4/D5)
+            "stock_received_but_not_billed_account",
+            "inventory_price_variance_account",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -109,6 +112,8 @@ class RestaurantForm(SettingsModelForm):
             "cash_over_short_account",
             "default_payable_account",
             "default_stock_in_hand_account",
+            "stock_received_but_not_billed_account",
+            "inventory_price_variance_account",
         ):
             self.fields[field_name].queryset = active_choices(
                 LedgerAccount, getattr(self.instance, f"{field_name}_id"), disabled=False, is_group=False
@@ -135,6 +140,13 @@ class ProductionUnitForm(SettingsModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs["placeholder"] = "e.g. Main Kitchen"
+        self.fields["department"].choices = [
+            ("", "Select department..."),
+            *self.fields["department"].choices,
+        ]
+        self.fields["block_takeaway_kot"].help_text = "Prevent this station from receiving tickets marked for takeaway."
+        self.fields["printer_ip"].widget.attrs["placeholder"] = "e.g. 192.168.1.51"
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
         self.fields["warehouse"].help_text = "FOOD uses Kitchen; DRINKS uses the Bar / POS sales warehouse."
         self.fields["income_account"].queryset = active_choices(

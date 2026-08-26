@@ -317,6 +317,11 @@ class SupplierInvoiceItem(BaseModel):
             clash = type(self).objects.filter(source_receipt_line_id=line.pk).exclude(pk=self.pk).exists()
             if clash:
                 raise ValidationError({"source_receipt_line": "This receipt line is already on an invoice."})
+            # Rate and qty must match receipt line (backend enforces, no autofill)
+            if self.qty != line.received_qty:
+                raise ValidationError({"qty": "Quantity must match the receipt line quantity."})
+            if self.rate != line.rate:
+                raise ValidationError({"rate": "Rate must match the receipt line rate."})
 
     def save(self, *args, **kwargs):
         if self.invoice_id:
@@ -328,8 +333,6 @@ class SupplierInvoiceItem(BaseModel):
             self.item = line.item
             self.received_qty = line.received_qty
             self.amount_per_unit = line.rate
-            self.qty = line.received_qty
-            self.rate = line.rate
             self.description = self.description or line.item.item_name
         if self.rate is None:
             self.rate = Decimal("0")
@@ -376,6 +379,10 @@ class SupplierInvoiceItem(BaseModel):
             clash = type(self).objects.filter(source_receipt_line_id=line.pk).exclude(pk=self.pk).exists()
             if clash:
                 raise ValidationError({"source_receipt_line": "This receipt line is already on an invoice."})
+            if self.qty != line.received_qty:
+                raise ValidationError("Quantity must match the receipt line quantity.")
+            if self.rate != line.rate:
+                raise ValidationError("Rate must match the receipt line rate.")
 
 
 class SupplierPayment(BaseModel):

@@ -156,11 +156,10 @@ def _cogs_legs(order, rows, settings):
     from apps.inventory.models import StockLedgerEntry
 
     default_expense = settings.default_expense_account if settings else None
-    # Aggregate per item: quantity and FIFO outgoing value from the settle-time SLEs.
     sle_rows = StockLedgerEntry.objects.filter(
         voucher_type="POS Order",
         voucher_no=str(order.pk),
-        actual_qty__lt=0,
+        quantity__lt=0,
     ).select_related("item")
     per_account = {}
     for sle in sle_rows:
@@ -171,7 +170,7 @@ def _cogs_legs(order, rows, settings):
         if account is None:
             raise ValidationError("The default expense account is not configured.")
         account = _resolve_required_account(account, label="The default expense account")
-        value = (abs(sle.actual_qty) * sle.outgoing_rate).quantize(TWO_PLACES)
+        value = (abs(sle.quantity) * sle.unit_rate).quantize(TWO_PLACES)
         per_account[account.pk] = {
             "account": account,
             "debit": per_account.get(account.pk, {}).get("debit", Decimal("0")) + value,
@@ -301,7 +300,7 @@ def _is_drink_line(line):
 
 
 def _settle_time_rate(source_order, item):
-    """Outgoing FIFO rate from the source order's settle-time stock deductions."""
+    """WAC at the source order's settle-time stock deductions."""
     from apps.inventory.models import StockLedgerEntry
 
     sles = list(
@@ -309,16 +308,42 @@ def _settle_time_rate(source_order, item):
             voucher_type="POS Order",
             voucher_no=str(source_order.pk),
             item=item,
-            actual_qty__lt=0,
+            quantity__lt=0,
         )
     )
     if not sles:
         raise ValidationError(f"Settle-time valuation rate for {item.item_name} cannot be resolved.")
-    qty = sum((abs(sle.actual_qty) for sle in sles), Decimal("0"))
-    value = sum((abs(sle.actual_qty) * sle.outgoing_rate for sle in sles), Decimal("0"))
+    qty = sum((abs(sle.quantity) for sle in sles), Decimal("0"))
+    value = sum((abs(sle.quantity) * sle.unit_rate for sle in sles), Decimal("0"))
     if qty <= 0:
         raise ValidationError(f"Settle-time valuation rate for {item.item_name} cannot be resolved.")
     return value / qty
+
+
+def _current_wac_for_return(return_order, item):
+    """Current WAC at return time — from restore SLE or Bin."""
+    from apps.inventory.models import Bin, StockLedgerEntry
+
+    # Prefer the restore SLE created by _restore_stock (POS Return) — business date is posting_date.
+    restore = (
+        StockLedgerEntry.objects.filter(
+            voucher_type="POS Return",
+            voucher_no=str(return_order.pk),
+            item=item,
+            quantity__gt=0,
+        )
+        .order_by("-posting_date", "-posting_datetime", "-pk")
+        .first()
+    )
+    if restore is not None:
+        return restore.unit_rate
+    # Not restockable has no restore — use Bin's current WAC
+    if return_order.stock_warehouse_id:
+        bin_obj = Bin.objects.filter(item=item, warehouse=return_order.stock_warehouse).first()
+        if bin_obj and bin_obj.valuation_rate:
+            return bin_obj.valuation_rate
+    # Fallback to original sale rate
+    return _settle_time_rate(return_order.return_against, item)
 
 
 def _plug_round_off(rows, settings):
@@ -402,7 +427,7 @@ def post_refund_gl(return_order):
         )
 
     for line in drink_returns:
-        rate = _settle_time_rate(source, line.item)
+        rate = _current_wac_for_return(return_order, line.item)
         value = (abs(line.qty) * rate).quantize(TWO_PLACES)
         if not value:
             continue
@@ -567,7 +592,7 @@ def _reverse_gl(voucher_type, voucher_no, remarks="Reversal"):
 
 @transaction.atomic
 def post_supplier_invoice_gl(invoice):
-    """Post the supplier invoice: Dr stock-in-hand/expense, Cr payable. Idempotent."""
+    """Post the supplier invoice: Dr GRNI/expense, Cr payable. Idempotent."""
     if GLEntry.objects.filter(
         voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number, is_cancelled=False
     ).exists():
@@ -581,10 +606,18 @@ def post_supplier_invoice_gl(invoice):
     expense_total = Decimal("0")
     stock_rows = []
     expense_rows = []
-    for line in invoice.items.select_related("item__item_group", "expense_account").all():
+    for line in invoice.items.select_related("item__item_group", "expense_account", "source_receipt_line").all():
         if line.item_id:
-            account = settings.default_stock_in_hand_account if settings else None
-            account = _resolve_required_account(account, label="The default stock-in-hand account")
+            # Stock lines must link to a purchase receipt (GRNI clearing)
+            if not invoice.purchase_receipt_id:
+                raise ValidationError("Supplier invoices with stock lines must link to a purchase receipt.")
+            # Enforce rate/qty equality if linked to receipt line
+            if line.source_receipt_line_id and (
+                line.qty != line.source_receipt_line.received_qty or line.rate != line.source_receipt_line.rate
+            ):
+                raise ValidationError("Stock line rate/quantity must match the receipt line.")
+            account = settings.stock_received_but_not_billed_account if settings else None
+            account = _resolve_required_account(account, label="The stock received but not billed account")
             stock_total += line.amount
             stock_rows.append({"account": account, "debit": line.amount, "cost_center": cost_center})
         else:

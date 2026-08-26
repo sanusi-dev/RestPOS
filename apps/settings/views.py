@@ -226,15 +226,8 @@ def _build_staff_entry(user: CustomUser) -> dict[str, CustomUser | str]:
 
 @login_required
 def production_unit_list(request: HttpRequest) -> HttpResponse:
-    department = request.GET.get("department")
     production_units = ProductionUnit.objects.select_related("warehouse").all()
-    if department:
-        production_units = production_units.filter(department=department)
-    return render(
-        request,
-        "backoffice/settings/production_unit_list.html",
-        {"production_units": production_units, "selected_department": department},
-    )
+    return render(request, "backoffice/settings/production_unit_list.html", {"production_units": production_units})
 
 
 @login_required

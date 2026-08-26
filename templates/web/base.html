@@ -54,20 +54,20 @@
 {% block body_wrapper %}
 <nav class="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/60 shadow-[0_4px_30px_rgb(0,0,0,0.03)]"
      x-data="{ mobileMenuOpen: false }">
-  <div class="max-w-7xl mx-auto flex items-center justify-between h-20 px-4 sm:px-6 lg:px-8">
-    <div class="flex items-center gap-2">
+  <div class="max-w-screen-2xl mx-auto flex items-center justify-between h-20 px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center gap-4">
       <div class="lg:hidden">
         <button @click="mobileMenuOpen = true" class="inline-flex items-center p-2 rounded-xl text-gray-600 hover:bg-white hover:shadow-sm transition-all">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h8m-8 6h16" /></svg>
         </button>
       </div>
-    </div>
-    <div class="flex-1 flex items-center justify-start lg:justify-center">
       <a class="flex items-center gap-2 text-xl font-black text-gray-900 tracking-tight hover:opacity-80 transition-opacity" href="{% url 'web:home' %}">
         {{ project_meta.NAME }}
       </a>
     </div>
     <div class="flex items-center gap-4">
+      {% block navbar_actions %}
+      {% endblock %}
       {% if user.is_authenticated %}
       {% else %}
       <a href="{% url 'account_login' %}" class="hidden sm:inline-flex text-sm font-bold text-gray-700 bg-white/50 px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm hover:bg-white hover:text-gray-900 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">

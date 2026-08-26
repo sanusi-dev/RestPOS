@@ -114,6 +114,19 @@ def setup_chart_of_accounts(restaurant):
         report_type=LedgerAccount.BALANCE_SHEET,
         account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
     )
+    grni = LedgerAccount.objects.create(
+        name=f"Stock Received But Not Billed {restaurant.pk}",
+        parent=liabilities,
+        root_type=LedgerAccount.LIABILITY,
+        report_type=LedgerAccount.BALANCE_SHEET,
+    )
+    variance = LedgerAccount.objects.create(
+        name=f"Inventory Price Variance {restaurant.pk}",
+        parent=expenses,
+        root_type=LedgerAccount.EXPENSE,
+        report_type=LedgerAccount.PROFIT_AND_LOSS,
+        account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
+    )
     kitchen_cc = CostCenter.objects.create(name=f"Kitchen {restaurant.pk}")
     bar_cc = CostCenter.objects.create(name=f"Bar {restaurant.pk}")
 
@@ -135,6 +148,8 @@ def setup_chart_of_accounts(restaurant):
     restaurant.cost_center = kitchen_cc
     restaurant.default_payable_account = payable
     restaurant.default_stock_in_hand_account = stock_in_hand
+    restaurant.stock_received_but_not_billed_account = grni
+    restaurant.inventory_price_variance_account = variance
     restaurant.save()
 
     return {
@@ -150,6 +165,8 @@ def setup_chart_of_accounts(restaurant):
         "expenses": expenses,
         "cogs": cogs,
         "stock_in_hand": stock_in_hand,
+        "grni": grni,
+        "variance": variance,
         "round_off": round_off,
         "equity": equity,
         "owner_equity": owner_equity,

@@ -27,34 +27,35 @@ class TestDashboardRenders(DashboardContentTestBase):
         """Assert the 'Your Shortcuts' quick-action buttons are rendered."""
         response = self.client.get(reverse("web:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Your Shortcuts")
-        self.assertContains(response, "Open Shift")
-        self.assertContains(response, "Menu Items")
-        self.assertContains(response, "Items")
-        self.assertContains(response, "Stock Ledger")
+        self.assertContains(response, "Quick links")
+        self.assertContains(response, "Frequently used")
+        self.assertContains(response, "Open a shift")
+        self.assertContains(response, "Receive stock")
+        self.assertContains(response, "Prepare daily P&amp;L")
+        self.assertContains(response, "New journal entry")
 
     def test_dashboard_shows_masters_and_setup_cards(self):
         """Assert the 'Masters & Setup' grid of grouped link cards is rendered."""
         response = self.client.get(reverse("web:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Masters &amp; Setup")
+        self.assertContains(response, "Modules &amp; setup")
         # Each card heading
-        for card_heading in ("Menu", "POS", "Inventory", "Setup"):
+        for card_heading in ("Orders", "Inventory", "Menu", "Accounting", "Reports", "POS &amp; shifts", "Settings"):
             self.assertContains(response, f">{card_heading}<")
 
     def test_dashboard_pos_card_links_to_shifts(self):
         """Assert the POS card exposes shift workflow links."""
         response = self.client.get(reverse("web:dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Opening Entries")
-        self.assertContains(response, "Closing Entries")
-        self.assertContains(response, "Payment Modes")
+        self.assertContains(response, "Opening entries")
+        self.assertContains(response, "Closing entries")
+        self.assertContains(response, "Payment modes")
 
     def test_dashboard_no_live_panels(self):
         """Assert no live operational panels on the home dashboard."""
         response = self.client.get(reverse("web:dashboard"))
         self.assertEqual(response.status_code, 200)
-        # No 'Opened by' / 'Recent Closes' / 'Low Stock Alerts' headlines
+        # The home dashboard remains a navigator, not an operational status board.
         self.assertNotContains(response, "Opened by")
         self.assertNotContains(response, "Recent Closes")
         self.assertNotContains(response, "Low Stock Alerts")

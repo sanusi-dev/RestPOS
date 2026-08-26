@@ -79,13 +79,17 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
         self.assertEqual(computation.totals["cogs"], Decimal("0"))
 
     def test_drink_cogs_from_fifo(self):
+        # Reset WAC to known state — helper leaves 100 @ 0 which would dilute.
+        from apps.inventory.models import Bin
+
+        Bin.objects.filter(item=self.drink, warehouse=self.bar_wh).update(actual_qty=0, valuation_rate=0)
         StockLedgerEntry.create_entry(
             item=self.drink,
             warehouse=self.bar_wh,
-            actual_qty=Decimal("100"),
+            quantity=Decimal("100"),
             voucher_type="Purchase Receipt",
             voucher_no="PR-1",
-            rate=Decimal("300"),
+            unit_rate=Decimal("300"),
         )
         order = self._create_order()
         add_order_line(order, self.drink, qty=2, rate=Decimal("500"), menu_item=self.drink_mi)

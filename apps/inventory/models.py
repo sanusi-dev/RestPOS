@@ -1,4 +1,4 @@
-import json
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -6,6 +6,10 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from apps.utils.models import BaseModel
+
+
+class InsufficientStock(ValidationError):
+    """Raised when an outbound would drive Bin.actual_qty negative."""
 
 
 def _assert_document_is_draft(document, *, action="modify"):
@@ -194,13 +198,19 @@ class Bin(BaseModel):
     actual_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     reserved_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     valuation_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    stock_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
 
     class Meta:
         unique_together = [("item", "warehouse")]
 
     def __str__(self):
         return f"{self.item.item_code} @ {self.warehouse.name}: {self.actual_qty}"
+
+    @property
+    def stock_value(self):
+        """Derived stock value (qty × WAC) for template/admin compatibility."""
+        qty = self.actual_qty or Decimal("0")
+        wac = self.valuation_rate or Decimal("0")
+        return qty * wac
 
     @classmethod
     def get_or_create_bin(cls, item, warehouse):
@@ -214,30 +224,19 @@ class Bin(BaseModel):
         bin_obj, _created = cls.objects.get_or_create(item_id=item_id, warehouse_id=warehouse_id)
         return bin_obj
 
-    def current_stock_queue(self):
-        """Return the FIFO queue ([qty, rate] pairs) from the latest non-cancelled SLE."""
-        # Filter by ids so this is safe to call on a Bin whose FKs weren't loaded.
-        latest = (
-            StockLedgerEntry.objects.filter(item_id=self.item_id, warehouse_id=self.warehouse_id, is_cancelled=False)
-            .order_by("-posting_datetime", "-pk")
-            .first()
-        )
-        if latest and latest.stock_queue:
-            try:
-                raw = json.loads(latest.stock_queue)
-                return [[Decimal(str(q)), Decimal(str(r))] for q, r in raw]
-            except json.JSONDecodeError, TypeError:
-                return []
-        return []
-
 
 class StockLedgerEntry(BaseModel):
     """An immutable record of a single stock movement for one item in one warehouse.
 
     This is the core of the inventory ledger — every stock change creates one
     or more SLE rows. Submitted documents are never edited; cancellation
-    creates reversal entries.
+    creates reversal entries via reversal_of_sle.
     """
+
+    VARIANCE_CHOICES = [
+        ("CANCELLATION_WAC", "Cancellation WAC"),
+        ("SALE_RETURN", "Sale Return"),
+    ]
 
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="stock_ledger_entries")
     warehouse = models.ForeignKey(
@@ -245,57 +244,93 @@ class StockLedgerEntry(BaseModel):
         on_delete=models.PROTECT,
         related_name="stock_ledger_entries",
     )
+    # Business date — always pass the voucher's posting_date explicitly; default is fallback.
+    posting_date = models.DateField(default=timezone.localdate, editable=False)
     posting_datetime = models.DateTimeField(auto_now_add=True, editable=False)
     voucher_type = models.CharField(max_length=50)
     voucher_no = models.CharField(max_length=100)
     voucher_detail_no = models.CharField(max_length=100, blank=True)
-    actual_qty = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
-    qty_after_transaction = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
-    incoming_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"), editable=False)
-    outgoing_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"), editable=False)
-    valuation_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"), editable=False)
-    stock_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
-    stock_queue = models.TextField(blank=True, default="")
-    is_cancelled = models.BooleanField(default=False, editable=False)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+    unit_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"), editable=False)
+    stock_value_change = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
+    variance_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
+    variance_type = models.CharField(
+        max_length=20,
+        choices=VARIANCE_CHOICES,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    reversal_of_sle = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reversals",
+        editable=False,
+    )
 
     class Meta:
         ordering = ["-posting_datetime"]
         indexes = [models.Index(fields=["item", "warehouse", "-posting_datetime"])]
 
     def __str__(self):
-        sign = "+" if self.actual_qty >= 0 else ""
-        return f"{sign}{self.actual_qty} {self.item.item_code} @ {self.warehouse.name}"
+        sign = "+" if self.quantity >= 0 else ""
+        return f"{sign}{self.quantity} {self.item.item_code} @ {self.warehouse.name}"
 
     @classmethod
     def create_entry(
         cls,
         item,
         warehouse,
-        actual_qty,
-        voucher_type,
-        voucher_no,
-        rate=Decimal("0"),
+        quantity=None,
+        voucher_type="",
+        voucher_no="",
+        *,
+        unit_rate=None,
         voucher_detail_no="",
         prevent_negative=False,
+        posting_date=None,
+        variance_amount=Decimal("0"),
+        variance_type="",
+        reversal_of_sle_id=None,
+        # legacy aliases — mapped to new names for transition
+        actual_qty=None,
+        rate=None,
     ):
         """Create a ledger entry and update the corresponding Bin.
 
-        ``actual_qty`` is signed: positive for receipts, negative for issues.
-        ``rate`` is the incoming rate (ignored for outgoing moves where FIFO
-        or moving-average valuation supplies the outgoing rate).
+        ``quantity`` is signed: positive for receipts, negative for issues.
+        ``unit_rate`` is the inbound rate (ignored for outbound where WAC supplies it).
         """
+        # Map legacy kwargs (actual_qty/rate) to new names.
+        if quantity is None and actual_qty is not None:
+            quantity = actual_qty
+        if unit_rate is None and rate is not None:
+            unit_rate = rate
+        if quantity is None:
+            raise ValidationError("quantity is required")
+        quantity = Decimal(str(quantity))
+        if unit_rate is not None:
+            unit_rate = Decimal(str(unit_rate))
+        if variance_amount is not None:
+            variance_amount = Decimal(str(variance_amount))
         with transaction.atomic():
             bin_obj = Bin.get_or_create_bin(item, warehouse)
             bin_obj = Bin.objects.select_for_update().get(pk=bin_obj.pk)
             return cls._create_entry_locked(
                 item=item,
                 warehouse=warehouse,
-                actual_qty=actual_qty,
+                quantity=quantity,
                 voucher_type=voucher_type,
                 voucher_no=voucher_no,
-                rate=rate,
+                unit_rate=unit_rate,
                 voucher_detail_no=voucher_detail_no,
                 prevent_negative=prevent_negative,
+                posting_date=posting_date,
+                variance_amount=variance_amount,
+                variance_type=variance_type,
+                reversal_of_sle_id=reversal_of_sle_id,
                 bin_obj=bin_obj,
             )
 
@@ -305,100 +340,89 @@ class StockLedgerEntry(BaseModel):
         *,
         item,
         warehouse,
-        actual_qty,
+        quantity,
         voucher_type,
         voucher_no,
-        rate,
+        unit_rate,
         voucher_detail_no,
         prevent_negative,
         bin_obj,
+        posting_date=None,
+        variance_amount=Decimal("0"),
+        variance_type="",
+        reversal_of_sle_id=None,
+        # legacy
+        actual_qty=None,
+        rate=None,
     ):
+        # Map legacy for callers not yet migrated.
+        if quantity is None and actual_qty is not None:
+            quantity = actual_qty
+        if unit_rate is None and rate is not None:
+            unit_rate = rate
+        quantity = Decimal(str(quantity))
+        if unit_rate is not None:
+            unit_rate = Decimal(str(unit_rate))
+        variance_amount = Decimal("0") if variance_amount is None else Decimal(str(variance_amount))
+        variance_type = variance_type or ""
+
+        # Posting date is business/audit date — copy of voucher posting_date.
+        # Always blend at current WAC; posting_date never affects valuation.
+        if posting_date is None:
+            posting_date = timezone.localdate()
+        if isinstance(posting_date, str):
+            posting_date = date.fromisoformat(posting_date)
+        # Future-dated transactions are rejected.
+        if posting_date > timezone.localdate():
+            raise ValidationError("Posting date cannot be in the future.")
+
         current_qty = bin_obj.actual_qty or Decimal("0")
-        current_rate = bin_obj.valuation_rate or Decimal("0")
-        new_qty = current_qty + actual_qty
-        if prevent_negative and new_qty < 0:
-            raise ValidationError(f"Insufficient stock for {item.item_name} in {warehouse.name}.")
+        wac = bin_obj.valuation_rate or Decimal("0")
+        quantity = Decimal(quantity)
 
-        incoming_rate = Decimal("0")
-        outgoing_rate = Decimal("0")
-        valuation_rate = current_rate
+        # Enforce non-negative stock everywhere (perpetual WAC invariant).
+        new_qty = current_qty + quantity
+        if new_qty < 0:
+            raise InsufficientStock(f"Insufficient stock for {item.item_name} in {warehouse.name}.")
 
-        # Maintain a FIFO queue of [qty, rate] pairs, read from the latest SLE.
-        try:
-            latest = (
-                cls.objects.filter(item=item, warehouse=warehouse, is_cancelled=False)
-                .order_by("-posting_datetime", "-pk")
-                .first()
-            )
-            queue = (
-                [[Decimal(str(q)), Decimal(str(r))] for q, r in json.loads(latest.stock_queue)]
-                if latest and latest.stock_queue
-                else []
-            )
-        except json.JSONDecodeError, TypeError:
-            queue = []
+        stock_value_change = Decimal("0")
+        resolved_rate = Decimal("0")
 
-        if actual_qty > 0:
-            incoming_rate = rate
-            queue.append([actual_qty, rate])
-            valuation_rate = rate
-        elif actual_qty < 0:
-            # FIFO: consume the oldest [qty, rate] batches first. The consumed
-            # value sets the outgoing rate; what remains becomes the new queue
-            # and its weighted-average rate the new valuation rate.
-            remaining = abs(actual_qty)
-            consumed_value = Decimal("0")
-            while remaining > 0 and queue:
-                front_qty, front_rate = queue[0]
-                if front_qty <= remaining:
-                    consumed_value += front_qty * front_rate
-                    remaining -= front_qty
-                    queue.pop(0)
-                else:
-                    consumed_value += remaining * front_rate
-                    queue[0] = [front_qty - remaining, front_rate]
-                    remaining = Decimal("0")
-            outgoing_rate = consumed_value / abs(actual_qty) if actual_qty != 0 else Decimal("0")
-            if queue:
-                remaining_qty = sum(q for q, _ in queue)
-                remaining_value = sum(q * r for q, r in queue)
-                valuation_rate = remaining_value / remaining_qty if remaining_qty != 0 else Decimal("0")
-            else:
-                valuation_rate = Decimal("0")
+        if quantity > 0:
+            # Inbound: blend at resolved_rate. If caller didn't supply a rate
+            # (e.g. restores at current WAC), use current WAC — identity blend.
+            resolved_rate = wac if unit_rate is None else unit_rate
+            if resolved_rate < 0:
+                raise ValidationError("Unit rate cannot be negative.")
+            inbound_value = quantity * resolved_rate
+            new_wac = (current_qty * wac + inbound_value) / new_qty if new_qty != 0 else Decimal("0")
+            stock_value_change = inbound_value
+            bin_obj.valuation_rate = new_wac
+        elif quantity < 0:
+            # Outbound: always at current WAC; WAC unchanged.
+            resolved_rate = wac
+            stock_value_change = quantity * wac  # negative
         else:
-            # Zero-qty adjustment (e.g. rate-only reconciliation) — no queue change.
-            pass
-        stock_value = new_qty * valuation_rate
+            raise ValidationError("Quantity cannot be zero.")
 
         sle = cls.objects.create(
             item=item,
             warehouse=warehouse,
-            actual_qty=actual_qty,
-            qty_after_transaction=new_qty,
-            incoming_rate=incoming_rate,
-            outgoing_rate=outgoing_rate,
-            valuation_rate=valuation_rate,
-            stock_value=stock_value,
-            stock_queue=json.dumps([[str(q), str(r)] for q, r in queue]),
+            quantity=quantity,
+            unit_rate=resolved_rate,
+            stock_value_change=stock_value_change,
+            variance_amount=variance_amount,
+            variance_type=variance_type,
+            reversal_of_sle_id=reversal_of_sle_id,
             voucher_type=voucher_type,
             voucher_no=voucher_no,
             voucher_detail_no=voucher_detail_no,
+            posting_date=posting_date,
         )
 
-        # The Bin mirrors the ledger's tail state so reads don't need to
-        # replay the SLE history.
         bin_obj.actual_qty = new_qty
-        bin_obj.valuation_rate = valuation_rate
-        bin_obj.stock_value = stock_value
-        bin_obj.save(
-            update_fields=[
-                "actual_qty",
-                "reserved_qty",
-                "valuation_rate",
-                "stock_value",
-                "updated_at",
-            ]
-        )
+        # valuation_rate already updated for inbound; outbound keeps it.
+        bin_obj.save(update_fields=["actual_qty", "valuation_rate", "reserved_qty", "updated_at"])
 
         return sle
 

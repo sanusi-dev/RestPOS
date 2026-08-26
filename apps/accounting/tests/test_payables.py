@@ -24,13 +24,18 @@ from .helpers import setup_chart_of_accounts
 class PayablesTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.restaurant = Restaurant.objects.create(company="Test Co")
-        cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.uom = UOM.objects.create(name="Nos")
+        cls.store = Warehouse.objects.create(name="Store Payables")
+        cls.restaurant = Restaurant.objects.create(company="Test Co", store_warehouse=cls.store)
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
+        # Refresh store to get account wired by helper
+        cls.store.refresh_from_db()
+        if not cls.store.account_id:
+            cls.store.account = cls.accounts["stock_in_hand"]
+            cls.store.save(update_fields=["account", "updated_at"])
+            cls.store.refresh_from_db()
         cls.group = ItemGroup.objects.create(name=f"Supplies {cls.restaurant.pk}")
-        cls.store = Warehouse.objects.create(name=f"Store {cls.restaurant.pk}")
-        cls.restaurant.store_warehouse = cls.store
-        cls.restaurant.save()
+        # Ensure group name unique; helper already created fiscal year etc.
         cls.item = Item.objects.create(
             item_name="Rice",
             item_group=cls.group,
@@ -79,16 +84,47 @@ class SupplierModelTest(PayablesTestBase):
     def test_disabled_supplier_can_hold_history(self):
         self.supplier.disabled = True
         self.supplier.save()
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice)
+        # Stock invoice needs receipt link
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         invoice.submit()
         self.assertEqual(invoice.status, SupplierInvoice.SUBMITTED)
 
 
 class SupplierInvoiceSubmitTest(PayablesTestBase):
     def test_submit_posts_stock_and_payable_legs(self):
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice, qty=2, rate=100)
+        # Stock invoice must link to a purchase receipt — posts Dr GRNI / Cr Payable
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        # Stock line linked to receipt line must match qty/rate
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         invoice.submit()
         invoice.refresh_from_db()
 
@@ -97,7 +133,10 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(invoice.outstanding_amount, Decimal("200"))
         entries = GLEntry.objects.filter(voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number)
         self.assertEqual(entries.count(), 2)
-        stock = entries.get(account=self.accounts["stock_in_hand"])
+        from apps.settings.models import Restaurant
+
+        grni_acct = Restaurant.objects.get(pk=self.restaurant.pk).stock_received_but_not_billed_account
+        stock = entries.get(account=grni_acct)
         self.assertEqual(stock.debit, Decimal("200"))
         payable = entries.get(account=self.accounts["payable"])
         self.assertEqual(payable.credit, Decimal("200"))
@@ -121,8 +160,22 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
     def test_submit_fails_closed_without_payable_account(self):
         self.restaurant.default_payable_account = None
         self.restaurant.save()
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice)
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         with self.assertRaisesMessage(ValidationError, "default payable account"):
             invoice.submit()
         self.assertEqual(invoice.status, SupplierInvoice.DRAFT)
@@ -136,8 +189,22 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         )
         self.supplier.payable_account = override
         self.supplier.save()
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice)
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         invoice.submit()
         entries = GLEntry.objects.filter(voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number)
         self.assertTrue(entries.filter(account=override).exists())
@@ -154,15 +221,31 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         submit_purchase_receipt(receipt)
 
         invoice = self._make_invoice()
-        line = SupplierInvoiceItem.objects.create(invoice=invoice, source_receipt_line=receipt_line)
+        line = SupplierInvoiceItem.objects.create(
+            invoice=invoice, source_receipt_line=receipt_line, qty=Decimal("5"), rate=Decimal("80")
+        )
         line.refresh_from_db()
         self.assertEqual(line.qty, Decimal("5"))
         self.assertEqual(line.rate, Decimal("80"))
         self.assertEqual(line.amount, Decimal("400"))
 
     def test_cancel_reverses_gl_and_clears_outstanding(self):
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice, qty=2, rate=100)
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         invoice.submit()
         invoice.cancel()
         invoice.refresh_from_db()
@@ -176,13 +259,27 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
             voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number, is_cancelled=False, remarks="Reversal"
         )
         self.assertEqual(reversals.count(), 2)
-        # Reversal rows mirror the originals: stock now credited, payable debited.
-        self.assertEqual(reversals.get(account=self.accounts["stock_in_hand"]).credit, Decimal("200"))
+        # Reversal mirrors: GRNI credited, payable debited.
+        self.assertEqual(reversals.get(account=self.accounts["grni"]).credit, Decimal("200"))
         self.assertEqual(reversals.get(account=self.accounts["payable"]).debit, Decimal("200"))
 
     def test_cancel_twice_is_idempotent(self):
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice)
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
         invoice.submit()
         invoice.cancel()
         invoice.cancel()
@@ -191,9 +288,23 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
 
 class SupplierPaymentTest(PayablesTestBase):
     def _paid_invoice(self, amount=200):
-        # qty defaults to 2, so the invoice total is 2 × amount.
-        invoice = self._make_invoice()
-        self._add_stock_line(invoice, qty=2, rate=amount)
+        # qty 2 × rate amount — create receipt-linked stock invoice
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=amount
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=amount, source_receipt_line=receipt_line
+        )
         invoice.submit()
         return invoice
 

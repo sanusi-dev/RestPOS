@@ -24,6 +24,8 @@ from apps.users.models import CustomUser
 class InventoryViewTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        from apps.accounting.tests.helpers import setup_chart_of_accounts
+
         cls.user = CustomUser.objects.create_user(
             username="admin@test.com", password="testpass123", email="admin@test.com"
         )
@@ -32,7 +34,13 @@ class InventoryViewTestBase(TestCase):
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Main Store")
-        Restaurant.objects.create(company="Test Restaurant", store_warehouse=cls.warehouse)
+        cls.restaurant = Restaurant.objects.create(company="Test Restaurant", store_warehouse=cls.warehouse)
+        # Wire chart + warehouse account + fiscal year for GL postings
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
+        cls.warehouse.refresh_from_db()
+        if not cls.warehouse.account_id:
+            cls.warehouse.account = cls.accounts["stock_in_hand"]
+            cls.warehouse.save(update_fields=["account", "updated_at"])
         cls.item = Item.objects.create(
             item_name="Jollof Rice",
             item_group=cls.group,
