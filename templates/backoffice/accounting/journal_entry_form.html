@@ -48,7 +48,6 @@
           <thead class="bg-gray-50/50">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
-              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cost Center</th>
               <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
               <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Remarks</th>
@@ -62,10 +61,6 @@
                 <td class="px-6 py-3">
                   {{ row_form.account }}
                   {% if show_errors and row_form.account.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.account.errors|join:", " }}</p>{% endif %}
-                </td>
-                <td class="px-6 py-3">
-                  {{ row_form.cost_center }}
-                  {% if show_errors and row_form.cost_center.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.cost_center.errors|join:", " }}</p>{% endif %}
                 </td>
                 <td class="px-6 py-3">
                   {{ row_form.debit }}

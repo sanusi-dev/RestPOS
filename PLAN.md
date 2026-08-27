@@ -22,7 +22,7 @@ conventions are in `AGENTS.md`.
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
-| `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, cost centers, supplier payables | E #57–61 | built |
+| `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, supplier payables | E #57–61 | built |
 | `reports` | Daily P&L, sales reports, trial balance | E #62–63 | built (Daily P&L); sales reports planned |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
@@ -142,7 +142,6 @@ guard as `Order.stock_warehouse`).
 | `item` | FK Item, PROTECT, null=True | required for stock lines |
 | `source_receipt_line` | FK PurchaseReceiptItem, SET_NULL, null, blank | link to the receipt line when using the linked-receipt source |
 | `expense_account` | FK LedgerAccount, PROTECT, null=True | required for expense lines |
-| `cost_center` | FK CostCenter, SET_NULL, null, blank | |
 | `description` | CharField(200) blank | |
 | `qty` | Decimal(10,2), default 1 | positive |
 | `rate` | Decimal(10,2) | `>= 0` |
@@ -197,7 +196,7 @@ fails closed when the payable chain is missing), and both are idempotent — a s
 submit returns without re-posting.
 
 **Supplier invoice** — `voucher_type="Supplier Invoice"`, `voucher_no=invoice_number`,
-resolved fiscal year, Restaurant cost center when set:
+resolved fiscal year:
 
 | Leg | Dr | Cr | Amount | Account resolution |
 |---|---|---|---|---|
@@ -214,7 +213,7 @@ document. Cancelling a submitted invoice is refused while submitted payment
 allocations exist — cancel those payments first, then the invoice.
 
 **Supplier payment** — `voucher_type="Supplier Payment"`, `voucher_no=payment_number`,
-resolved fiscal year, Restaurant cost center when set:
+resolved fiscal year:
 
 | Leg | Dr | Cr | Amount | Account resolution |
 |---|---|---|---|---|
@@ -356,24 +355,12 @@ account FKs.
 Validation: end after start; enabled years cannot overlap. `get_for(date)` returns the enabled
 year covering a date or raises.
 
-**CostCenter**
-
-| Field | Type |
-|---|---|
-| `name` | CharField(100) unique |
-| `parent` | FK self, SET_NULL, null=True |
-| `is_group` | Boolean, default False |
-| `disabled` | Boolean, default False |
-
-Same tree rules as LedgerAccount.
-
 **GLEntry**
 
 | Field | Type | Notes |
 |---|---|---|
 | `posting_date` | DateField | |
 | `account` | FK LedgerAccount, PROTECT | leaf accounts only |
-| `cost_center` | FK CostCenter, SET_NULL, null=True | optional |
 | `debit` / `credit` | Decimal(14,2), default 0 | exactly one non-zero |
 | `against` | CharField(200) | comma-joined balancing account names |
 | `voucher_type` / `voucher_no` | CharField(50/100) | e.g. "Order" + invoice number |
@@ -402,7 +389,7 @@ resolved fiscal year.
 | `amended_from` | FK self, SET_NULL, null=True | amendment chain |
 
 Methods: `submit()` (atomic; rows may not mix debit and credit, no duplicate
-account+cost_center rows, difference 0, total > 0; posts one GLEntry per row; a
+account rows, difference 0, total > 0; posts one GLEntry per row; a
 `voucher_type=OPENING` entry sets `is_opening=True` automatically), `cancel()` (atomic;
 mirrored negated entries, originals marked `is_cancelled`), `amend()` (only from CANCELLED;
 copies into a new DRAFT linked via `amended_from`; rejected if an amendment already exists,
@@ -414,7 +401,6 @@ so a cancelled entry has at most one amendment).
 |---|---|
 | `journal_entry` | FK JournalEntry, CASCADE |
 | `account` | FK LedgerAccount, PROTECT |
-| `cost_center` | FK CostCenter, SET_NULL, null=True |
 | `debit` / `credit` | Decimal(14,2), default 0 |
 | `remarks` | CharField(200) blank |
 
@@ -425,10 +411,9 @@ so a cancelled entry has at most one amendment).
   creating a missing leaf account under Assets (Cash/Bank by mode type).
 - `settings.Restaurant` gains nullable FKs: `default_income_account`,
   `default_expense_account`, `round_off_account`, `account_for_change_amount`,
-  `write_off_account`, `write_off_cost_center`, `cost_center`, `wastage_account`
-  (consumed by §4.3), `cash_shortage_account`, `cash_over_short_account`,
-  `variance_approval_threshold` (Decimal, consumed by §4.5). Settlement enforces the
-  ones it needs; the settings form gains an Accounting section.
+  `write_off_account`, `wastage_account` (consumed by §4.3), `cash_shortage_account`,
+  `cash_over_short_account`, `variance_approval_threshold` (Decimal, consumed by §4.5).
+  Settlement enforces the ones it needs; the settings form gains an Accounting section.
 - `settings.ProductionUnit.income_account`: FK LedgerAccount, null — the departmental split
   hook (Kitchen = FOOD income, Bar = DRINKS income).
 - `inventory.ItemGroup` gains `income_account` / `expense_account` FKs.
@@ -441,8 +426,7 @@ so a cancelled entry has at most one amendment).
 
 `accounting.services.post_order_gl(order)` runs inside `settle_order`'s atomic block after the
 order flips SUBMITTED and the drink deductions are written. All entries carry
-`voucher_type="Order"`, `voucher_no=invoice_number`, `posting_date`, resolved fiscal year, and
-the Restaurant cost center when set.
+`voucher_type="Order"`, `voucher_no=invoice_number`, `posting_date`, and resolved fiscal year.
 
 | Leg | Dr | Cr | Amount | Account resolution |
 |---|---|---|---|---|
@@ -451,25 +435,24 @@ the Restaurant cost center when set.
 | Round-off | — | `Restaurant.round_off_account` | `rounding_adjustment` (may be negative) | required when non-zero |
 | COGS | expense account | `order.stock_warehouse.account` | FIFO outgoing value of the settle-time deductions, per account | `ItemGroup.expense_account` → `Restaurant.default_expense_account` (required when stock items exist) |
 
-`against` holds the balancing account names; entries sharing account/against/fiscal
-year/cost center merge. Order cancel posts mirrored negated entries, originals
-`is_cancelled=True`.
+`against` holds the balancing account names; entries sharing account/against merge.
+Order cancel posts mirrored negated entries, originals `is_cancelled=True`.
 
 ##### Frontend
 
 All pages extend the backoffice base; the nav gains an Accounting section (Chart of Accounts,
-Journal Entries, GL Entries, Fiscal Years, Cost Centers). Chart of accounts is a tree page with
+Journal Entries, GL Entries, Fiscal Years). Chart of accounts is a tree page with
 HTMX expand/collapse; journal entries use the existing formset add/remove row pattern with
-submit/cancel/amend POST buttons; GL entries are a read-only filtered table; fiscal years and
-cost centers are simple CRUD pages.
+submit/cancel/amend POST buttons; GL entries are a read-only filtered table; fiscal years
+are simple CRUD pages.
 
 ##### Seeds
 
 `seed_chart_of_accounts` (idempotent): Assets → Cash Account, Bank Accounts → Electronic
 Account; Inventory stock leaves per warehouse; Income → Food Sales + Drinks Sales; Expenses →
-Cost of Goods Sold + Round Off; Equity → Owner's Equity. Creates Kitchen/Bar cost centers, the
-current-year fiscal year, and fills production-unit income accounts, warehouse accounts,
-Restaurant defaults, and payment GL mappings only when those FKs are currently null.
+Cost of Goods Sold + Round Off; Equity → Owner's Equity. Creates the current-year fiscal year,
+and fills production-unit income accounts, warehouse accounts, Restaurant defaults, and
+payment GL mappings only when those FKs are currently null.
 
 ##### Activation and rollout
 
@@ -483,8 +466,7 @@ Restaurant defaults, and payment GL mappings only when those FKs are currently n
 
 ##### Tests
 
-- `test_models.py` — account tree rules, fiscal year rules + `get_for`, cost center tree, GL
-  immutability.
+- `test_models.py` — account tree rules, fiscal year rules + `get_for`, GL immutability.
 - `test_journal_entry.py` — balanced submit, unbalanced/mixed-row/duplicate rejections,
   frozen/disabled/group account rejections, cancel reversal, amend chain, write-off voucher.
 - `test_order_gl.py` — settle legs incl. departmental income split, change reduction,
@@ -613,7 +595,7 @@ or a per-day override. Electricity optional (blank = ₦0).
   time-wise.
 - Cancelled invoices, average bill value, POS register.
 - Read-only GL report, Trial Balance, and a simple Profit & Loss report over `GLEntry`,
-  grouped by account, fiscal year, posting date, and cost center, with drill-down to the
+  grouped by account, fiscal year, and posting date, with drill-down to the
   source voucher. Cancelled entries and their reversals are handled consistently.
 - No balance sheet and no formal statements.
 - Query-based; no persistent aggregates unless needed.

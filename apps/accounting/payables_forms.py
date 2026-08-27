@@ -6,7 +6,7 @@ from apps.inventory.models import Item, PurchaseReceipt, PurchaseReceiptItem
 from apps.payments.models import ModeOfPayment
 from apps.utils.forms import StyledModelForm, active_choices
 
-from .models import CostCenter, LedgerAccount
+from .models import LedgerAccount
 from .payables_models import (
     Supplier,
     SupplierInvoice,
@@ -72,7 +72,7 @@ class SupplierInvoiceForm(PayablesModelForm):
 class SupplierInvoiceItemForm(PayablesModelForm):
     class Meta:
         model = SupplierInvoiceItem
-        fields = ["item", "source_receipt_line", "expense_account", "cost_center", "description", "qty", "rate"]
+        fields = ["item", "source_receipt_line", "expense_account", "description", "qty", "rate"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,8 +90,7 @@ class SupplierInvoiceItemForm(PayablesModelForm):
         self.fields["expense_account"].queryset = active_choices(
             LedgerAccount, self.instance.expense_account_id, disabled=False, is_group=False
         )
-        self.fields["cost_center"].queryset = active_choices(CostCenter, self.instance.cost_center_id, disabled=False)
-        for field_name in ("item", "source_receipt_line", "expense_account", "cost_center", "description"):
+        for field_name in ("item", "source_receipt_line", "expense_account", "description"):
             self.fields[field_name].required = False
 
 

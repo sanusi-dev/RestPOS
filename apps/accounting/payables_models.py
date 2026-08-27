@@ -256,13 +256,6 @@ class SupplierInvoiceItem(BaseModel):
         blank=True,
         related_name="supplier_invoice_lines",
     )
-    cost_center = models.ForeignKey(
-        "accounting.CostCenter",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="supplier_invoice_lines",
-    )
     description = models.CharField(max_length=200, blank=True)
     qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1"))
     rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))

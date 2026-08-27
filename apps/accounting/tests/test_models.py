@@ -1,4 +1,4 @@
-"""Model tests — account tree rules, fiscal years, cost centers, GL immutability."""
+"""Model tests — account tree rules, fiscal years, GL immutability."""
 
 from datetime import date
 from decimal import Decimal
@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.accounting.models import CostCenter, FiscalYear, GLEntry, LedgerAccount
+from apps.accounting.models import FiscalYear, GLEntry, LedgerAccount
 
 
 class LedgerAccountTreeTest(TestCase):
@@ -94,20 +94,6 @@ class FiscalYearTest(TestCase):
     def test_get_for_missing_raises(self):
         with self.assertRaises(ValidationError):
             FiscalYear.get_for(date(2025, 6, 15))
-
-
-class CostCenterTreeTest(TestCase):
-    def test_parent_must_be_group(self):
-        group = CostCenter.objects.create(name="Ops", is_group=True)
-        leaf = CostCenter.objects.create(name="Kitchen", parent=group)
-        with self.assertRaises(ValidationError):
-            CostCenter.objects.create(name="Sub", parent=leaf)
-
-    def test_no_self_parent(self):
-        cc = CostCenter.objects.create(name="Kitchen")
-        cc.parent = cc
-        with self.assertRaises(ValidationError):
-            cc.full_clean()
 
 
 class GLEntryImmutabilityTest(TestCase):

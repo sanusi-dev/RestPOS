@@ -34,8 +34,8 @@ def _expense_account_for(item_group, default_expense):
     return default_expense
 
 
-def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks, cost_center=None):
-    """Merge rows per (account, cost_center) and post via GLEntry."""
+def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks):
+    """Merge rows per account and post via GLEntry."""
 
     from apps.accounting.models import GLEntry
 
@@ -43,7 +43,7 @@ def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks, cost_ce
         return []
     merged = {}
     for r in rows:
-        key = (r["account"].pk, r.get("cost_center"))
+        key = r["account"].pk
         if key in merged:
             merged[key]["debit"] = merged[key].get("debit", Decimal("0")) + r.get("debit", Decimal("0"))
             merged[key]["credit"] = merged[key].get("credit", Decimal("0")) + r.get("credit", Decimal("0"))
@@ -53,15 +53,12 @@ def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks, cost_ce
     against = ", ".join(r["account"].name for r in out if r.get("credit"))
     for r in out:
         r.setdefault("against", against)
-        if r.get("cost_center") is None and cost_center is not None:
-            r["cost_center"] = cost_center
     return GLEntry.post(
         posting_date=posting_date,
         rows=out,
         voucher_type=voucher_type,
         voucher_no=voucher_no,
         remarks=remarks,
-        cost_center=cost_center,
     )
 
 
@@ -216,14 +213,12 @@ def submit_stock_entry(entry):
     if updated_items:
         Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
     if gl_rows and locked.purpose == "MATERIAL_RECEIPT":
-        cost_center = restaurant.cost_center if restaurant and restaurant.cost_center_id else None
         _post_gl_rows(
             locked.posting_date,
             "Stock Entry",
             voucher_no,
             gl_rows,
             f"Stock Entry {voucher_no} MATERIAL_RECEIPT",
-            cost_center,
         )
     locked.status = "SUBMITTED"
     locked.save(update_fields=["status", "updated_at"])
@@ -379,7 +374,6 @@ def cancel_stock_entry(entry):
                 for gl in gl_originals:
                     gl.is_cancelled = True
                     gl.save(update_fields=["is_cancelled", "updated_at"])
-                cost_center = restaurant.cost_center if restaurant and restaurant.cost_center_id else None
                 # Determine if any drift exists to resolve variance account once (C3)
                 has_drift = False
                 for sle in sles:
@@ -406,18 +400,18 @@ def cancel_stock_entry(entry):
                     exp_acct = _resolve_account(exp_acct, "The default expense account")
                     orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
                     curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
-                    new_rows.append({"account": sih_acct, "credit": curr_amount, "cost_center": cost_center})
-                    new_rows.append({"account": exp_acct, "debit": orig_amount, "cost_center": cost_center})
+                    new_rows.append({"account": sih_acct, "credit": curr_amount})
+                    new_rows.append({"account": exp_acct, "debit": orig_amount})
                     diff = curr_amount - orig_amount
                     if diff != 0:
                         if variance_acct is None:
                             raise ValidationError("The inventory price variance account is not configured.")
                         if diff > 0:
-                            new_rows.append({"account": variance_acct, "debit": diff, "cost_center": cost_center})
+                            new_rows.append({"account": variance_acct, "debit": diff})
                         else:
-                            new_rows.append({"account": variance_acct, "credit": -diff, "cost_center": cost_center})
+                            new_rows.append({"account": variance_acct, "credit": -diff})
                 if new_rows:
-                    _post_gl_rows(locked.posting_date, "Stock Entry", voucher_no, new_rows, "Reversal", cost_center)
+                    _post_gl_rows(locked.posting_date, "Stock Entry", voucher_no, new_rows, "Reversal")
             # H4: revert last_purchase_rate for stock entry material receipt
             _revert_last_purchase_rates_for_stock_entry(locked, sles)
         # Also handle case where sles empty but still need to revert? No items.
@@ -532,14 +526,12 @@ def submit_stock_reconciliation(reconciliation):
                 gl_rows.append({"account": wastage_acct, "debit": amount})
                 gl_rows.append({"account": sih_acct, "credit": amount})
     if gl_rows:
-        cost_center = restaurant.cost_center if restaurant and restaurant.cost_center_id else None
         _post_gl_rows(
             locked.posting_date,
             "Stock Reconciliation",
             voucher_no,
             gl_rows,
             f"Stock Reconciliation {voucher_no} {locked.reason}",
-            cost_center,
         )
     locked.status = "SUBMITTED"
     locked.save(update_fields=["status", "updated_at"])
@@ -600,7 +592,6 @@ def cancel_stock_reconciliation(reconciliation):
                 rows=[
                     {
                         "account": gl.account,
-                        "cost_center": gl.cost_center,
                         "debit": gl.credit,
                         "credit": gl.debit,
                         "against": gl.against,
@@ -684,19 +675,17 @@ def submit_purchase_receipt(receipt):
         restaurant.stock_received_but_not_billed_account, "The stock received but not billed account"
     )
     sih_acct = _resolve_account(restaurant.store_warehouse.account, "The Store warehouse account")
-    cost_center = restaurant.cost_center if restaurant and restaurant.cost_center_id else None
     stock_total = sum((line.amount for line in lines), Decimal("0")).quantize(Decimal("0.01"))
     if stock_total:
         GLEntry.post(
             posting_date=locked.posting_date,
             rows=[
-                {"account": sih_acct, "debit": stock_total, "against": grni_acct.name, "cost_center": cost_center},
-                {"account": grni_acct, "credit": stock_total, "against": sih_acct.name, "cost_center": cost_center},
+                {"account": sih_acct, "debit": stock_total, "against": grni_acct.name},
+                {"account": grni_acct, "credit": stock_total, "against": sih_acct.name},
             ],
             voucher_type="Purchase Receipt",
             voucher_no=str(locked.pk),
             remarks=f"Purchase Receipt {locked.pk}",
-            cost_center=cost_center,
         )
     locked.warehouse = restaurant.store_warehouse
     locked.total = total
@@ -773,7 +762,6 @@ def cancel_purchase_receipt(receipt):
         for gl in gl_originals:
             gl.is_cancelled = True
             gl.save(update_fields=["is_cancelled", "updated_at"])
-        cost_center = restaurant.cost_center if restaurant and restaurant.cost_center_id else None
         grni_acct = _resolve_account(
             restaurant.stock_received_but_not_billed_account,
             "The stock received but not billed account",
@@ -798,18 +786,18 @@ def cancel_purchase_receipt(receipt):
             curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
             orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
             sih_acct = _resolve_account(sle.warehouse.account, "The warehouse account")
-            new_rows.append({"account": sih_acct, "credit": curr_amount, "cost_center": cost_center})
-            new_rows.append({"account": grni_acct, "debit": orig_amount, "cost_center": cost_center})
+            new_rows.append({"account": sih_acct, "credit": curr_amount})
+            new_rows.append({"account": grni_acct, "debit": orig_amount})
             diff = curr_amount - orig_amount
             if diff != 0:
                 if variance_acct is None:
                     raise ValidationError("The inventory price variance account is not configured.")
                 if diff > 0:
-                    new_rows.append({"account": variance_acct, "debit": diff, "cost_center": cost_center})
+                    new_rows.append({"account": variance_acct, "debit": diff})
                 else:
-                    new_rows.append({"account": variance_acct, "credit": -diff, "cost_center": cost_center})
+                    new_rows.append({"account": variance_acct, "credit": -diff})
         if new_rows:
-            _post_gl_rows(locked.posting_date, "Purchase Receipt", voucher_no, new_rows, "Reversal", cost_center)
+            _post_gl_rows(locked.posting_date, "Purchase Receipt", voucher_no, new_rows, "Reversal")
     _revert_last_purchase_rates(locked)
     locked.status = "CANCELLED"
     locked.save(update_fields=["status", "updated_at"])

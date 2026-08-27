@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.accounting.models import CostCenter, FiscalYear, JournalEntry, JournalEntryAccount, LedgerAccount
+from apps.accounting.models import FiscalYear, JournalEntry, JournalEntryAccount, LedgerAccount
 from apps.users.models import CustomUser
 
 
@@ -26,7 +26,6 @@ class AccountingViewTestBase(TestCase):
         cls.year = FiscalYear.objects.create(
             name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
         )
-        cls.cc = CostCenter.objects.create(name="Kitchen")
 
 
 class AccountingViewAccessTest(AccountingViewTestBase):
@@ -48,7 +47,6 @@ class AccountingViewAccessTest(AccountingViewTestBase):
             "accounting:journal_entry_list",
             "accounting:gl_entry_list",
             "accounting:fiscal_year_list",
-            "accounting:cost_center_list",
         ]:
             response = self.client.get(reverse(url))
             self.assertEqual(response.status_code, 200, url)

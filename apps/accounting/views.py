@@ -1,5 +1,5 @@
 """Accounting backoffice views — chart of accounts, journal entries, GL entries,
-fiscal years, cost centers. All behind the backoffice role gate."""
+fiscal years. All behind the backoffice role gate."""
 
 from decimal import Decimal
 
@@ -15,13 +15,12 @@ from apps.users.models import CustomUser
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .forms import (
-    CostCenterForm,
     FiscalYearForm,
     JournalEntryAccountFormSet,
     JournalEntryForm,
     LedgerAccountForm,
 )
-from .models import CostCenter, FiscalYear, GLEntry, JournalEntry, LedgerAccount
+from .models import FiscalYear, GLEntry, JournalEntry, LedgerAccount
 
 
 def _authenticated_user(request: HttpRequest) -> CustomUser:
@@ -56,7 +55,6 @@ def accounting_dashboard(request: HttpRequest) -> HttpResponse:
             "journal_count": JournalEntry.objects.count(),
             "gl_entry_count": GLEntry.objects.count(),
             "fiscal_year_count": FiscalYear.objects.count(),
-            "cost_center_count": CostCenter.objects.count(),
             "supplier_count": Supplier.objects.count(),
             "invoice_count": SupplierInvoice.objects.count(),
             "unpaid_invoice_count": SupplierInvoice.objects.filter(
@@ -198,7 +196,7 @@ def journal_entry_account_remove(request: HttpRequest, index: int) -> HttpRespon
 def journal_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     _require_manager(request)
     journal = get_object_or_404(JournalEntry.objects.select_related("amended_from"), pk=pk)
-    rows = journal.accounts.select_related("account", "cost_center").all()
+    rows = journal.accounts.select_related("account").all()
     return render(
         request,
         "backoffice/accounting/journal_entry_detail.html",
@@ -241,7 +239,7 @@ def journal_entry_review(request: HttpRequest, pk: int) -> HttpResponse:
     if journal.voucher_type != JournalEntry.OPENING or journal.status != JournalEntry.DRAFT:
         return redirect("accounting:journal_entry_detail", pk=journal.pk)
     journal._recompute_totals()
-    rows = journal.accounts.select_related("account", "cost_center").all()
+    rows = journal.accounts.select_related("account").all()
     return render(
         request,
         "backoffice/accounting/journal_entry_review.html",
@@ -301,7 +299,7 @@ def journal_entry_amend(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def gl_entry_list(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
-    qs = GLEntry.objects.select_related("account", "cost_center", "fiscal_year").order_by("-posting_date", "-pk")
+    qs = GLEntry.objects.select_related("account", "fiscal_year").order_by("-posting_date", "-pk")
     account_id = request.GET.get("account")
     voucher_type = request.GET.get("voucher_type")
     include_cancelled = request.GET.get("include_cancelled") == "1"
@@ -369,51 +367,4 @@ def fiscal_year_update(request: HttpRequest, pk: int) -> HttpResponse:
         request,
         "backoffice/accounting/fiscal_year_form.html",
         {"form": form, "is_create": False, "year": year},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Cost Centers
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def cost_center_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
-    centers = CostCenter.objects.all().order_by("name")
-    return render(request, "backoffice/accounting/cost_center_list.html", {"centers": centers})
-
-
-@login_required
-def cost_center_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
-    if request.method == "POST":
-        form = CostCenterForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("accounting:cost_center_list")
-    else:
-        form = CostCenterForm()
-    return render(
-        request,
-        "backoffice/accounting/cost_center_form.html",
-        {"form": form, "is_create": True},
-    )
-
-
-@login_required
-def cost_center_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
-    center = get_object_or_404(CostCenter, pk=pk)
-    if request.method == "POST":
-        form = CostCenterForm(request.POST, instance=center)
-        if form.is_valid():
-            form.save()
-            return redirect("accounting:cost_center_list")
-    else:
-        form = CostCenterForm(instance=center)
-    return render(
-        request,
-        "backoffice/accounting/cost_center_form.html",
-        {"form": form, "is_create": False, "center": center},
     )

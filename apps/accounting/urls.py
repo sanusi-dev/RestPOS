@@ -35,10 +35,6 @@ urlpatterns = [
     path("fiscal-years/", view=views.fiscal_year_list, name="fiscal_year_list"),
     path("fiscal-years/create/", view=views.fiscal_year_create, name="fiscal_year_create"),
     path("fiscal-years/<int:pk>/edit/", view=views.fiscal_year_update, name="fiscal_year_update"),
-    # Cost Centers
-    path("cost-centers/", view=views.cost_center_list, name="cost_center_list"),
-    path("cost-centers/create/", view=views.cost_center_create, name="cost_center_create"),
-    path("cost-centers/<int:pk>/edit/", view=views.cost_center_update, name="cost_center_update"),
     # Supplier Payables (Phase 2 §4.1)
     path("suppliers/", view=payables_views.supplier_list, name="supplier_list"),
     path("suppliers/create/", view=payables_views.supplier_create, name="supplier_create"),

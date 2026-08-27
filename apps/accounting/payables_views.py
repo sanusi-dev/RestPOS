@@ -178,7 +178,7 @@ def supplier_invoice_detail(request: HttpRequest, pk: int) -> HttpResponse:
         SupplierInvoice.objects.select_related("supplier", "purchase_receipt"),
         pk=pk,
     )
-    items = invoice.items.select_related("item", "source_receipt_line", "expense_account", "cost_center").all()
+    items = invoice.items.select_related("item", "source_receipt_line", "expense_account").all()
     gl_entries = GLEntry.objects.filter(
         voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number
     ).select_related("account", "fiscal_year")

@@ -124,8 +124,7 @@ No new Restaurant field is required. The two existing accounts fully cover the t
 ### 4.3 GL posting (new `post_stock_reconciliation_gl` in `apps/accounting/services.py`)
 
 Posted at submit time, atomically with the SLEs. Voucher type `"Stock Reconciliation"`,
-voucher_no `str(reconciliation.pk)`, posting_date = reconciliation posting date, cost center
-= `Restaurant.cost_center`.
+voucher_no `str(reconciliation.pk)`, posting_date = reconciliation posting date.
 
 Per line with a non-zero difference, at the SLE's FIFO `outgoing_rate` (shortage) or
 `incoming_rate` (surplus):

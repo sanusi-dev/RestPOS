@@ -89,23 +89,6 @@ class Restaurant(BaseModel):
         related_name="+",
         verbose_name="Write-off account",
     )
-    write_off_cost_center = models.ForeignKey(
-        "accounting.CostCenter",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name="Write-off cost center",
-    )
-    cost_center = models.ForeignKey(
-        "accounting.CostCenter",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name="Default cost center",
-        help_text="Cost center stamped on order GL postings.",
-    )
     wastage_account = models.ForeignKey(
         "accounting.LedgerAccount",
         on_delete=models.PROTECT,

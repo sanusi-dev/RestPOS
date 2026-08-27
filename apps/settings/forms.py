@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.accounting.models import CostCenter, LedgerAccount
+from apps.accounting.models import LedgerAccount
 from apps.inventory.models import Warehouse
 from apps.menu.models import Menu
 from apps.utils.forms import active_choices
@@ -73,8 +73,6 @@ class RestaurantForm(SettingsModelForm):
             "wastage_account",
             "cash_shortage_account",
             "cash_over_short_account",
-            "cost_center",
-            "write_off_cost_center",
             "variance_approval_threshold",
             # Payables (Phase 2 §4.1)
             "default_payable_account",
@@ -110,10 +108,6 @@ class RestaurantForm(SettingsModelForm):
         ):
             self.fields[field_name].queryset = active_choices(
                 LedgerAccount, getattr(self.instance, f"{field_name}_id"), disabled=False, is_group=False
-            )
-        for field_name in ("cost_center", "write_off_cost_center"):
-            self.fields[field_name].queryset = active_choices(
-                CostCenter, getattr(self.instance, f"{field_name}_id"), disabled=False
             )
 
 

@@ -74,7 +74,6 @@ def dashboard(request):
                         {"label": "Supplier invoices", "url": "accounting:supplier_invoice_list"},
                         {"label": "Supplier payments", "url": "accounting:supplier_payment_list"},
                         {"label": "GL entries", "url": "accounting:gl_entry_list"},
-                        {"label": "Cost centers", "url": "accounting:cost_center_list"},
                     ],
                 },
                 {

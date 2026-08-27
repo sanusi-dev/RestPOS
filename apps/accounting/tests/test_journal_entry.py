@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.accounting.models import CostCenter, FiscalYear, GLEntry, JournalEntry, JournalEntryAccount, LedgerAccount
+from apps.accounting.models import FiscalYear, GLEntry, JournalEntry, JournalEntryAccount, LedgerAccount
 
 
 class JournalEntryTestBase(TestCase):
@@ -24,7 +24,6 @@ class JournalEntryTestBase(TestCase):
             name="Expenses", is_group=True, root_type=LedgerAccount.EXPENSE, report_type=LedgerAccount.PROFIT_AND_LOSS
         )
         cls.cogs = LedgerAccount.objects.create(name="COGS", parent=cls.expenses)
-        cls.cc = CostCenter.objects.create(name="Kitchen")
         cls.year = FiscalYear.objects.create(
             name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
         )
@@ -34,11 +33,10 @@ class JournalEntryTestBase(TestCase):
         defaults.update(kwargs)
         return JournalEntry.objects.create(**defaults)
 
-    def _row(self, journal, account, debit=None, credit=None, cost_center=None, remarks=""):
+    def _row(self, journal, account, debit=None, credit=None, remarks=""):
         return JournalEntryAccount.objects.create(
             journal_entry=journal,
             account=account,
-            cost_center=cost_center,
             debit=debit or Decimal("0"),
             credit=credit or Decimal("0"),
             remarks=remarks,
@@ -74,12 +72,12 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
                 journal_entry=journal, account=self.cash, debit=Decimal("10"), credit=Decimal("10")
             )
 
-    def test_duplicate_account_cost_center_row_rejected(self):
+    def test_duplicate_account_row_rejected(self):
         journal = self._journal()
         self._row(journal, self.cash, debit=Decimal("50"))
         self._row(journal, self.cash, debit=Decimal("50"))
         self._row(journal, self.sales, credit=Decimal("100"))
-        with self.assertRaisesMessage(ValidationError, "Duplicate account"):
+        with self.assertRaisesMessage(ValidationError, "Duplicate account rows are not allowed."):
             journal.submit()
 
     def test_frozen_or_group_account_rejected(self):

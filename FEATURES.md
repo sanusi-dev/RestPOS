@@ -134,7 +134,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it will do |
 |---|---|---|
-| 57 | Accounting / GL | **Implemented (Phase 6).** Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), fiscal years, and cost centers. GL posts at order settlement (income, payment, rounding, COGS). |
+| 57 | Accounting / GL | **Implemented (Phase 6).** Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS). Food vs drinks separation uses department, production-unit income accounts, and Daily P&L — not cost centers. |
 | 58 | Refunds completion | **Implemented (Phase 6).** Refund GL reversal postings, wastage posting for non-restockable items, and partial returns. |
 | 59 | Opening balances | **Implemented (Phase 6).** A reviewed opening journal entry for go-live, with duplicate protection. |
 | 60 | Cash variance posting | **Implemented (Phase 6).** Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |

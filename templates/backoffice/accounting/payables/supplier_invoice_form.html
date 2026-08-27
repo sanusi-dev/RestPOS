@@ -56,7 +56,6 @@
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Source Receipt Line</th>
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Expense Account</th>
-              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cost Center</th>
               <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
               <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
               <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
@@ -78,10 +77,6 @@
                 <td class="px-6 py-3">
                   {{ row_form.expense_account }}
                   {% if show_errors and row_form.expense_account.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.expense_account.errors|join:", " }}</p>{% endif %}
-                </td>
-                <td class="px-6 py-3">
-                  {{ row_form.cost_center }}
-                  {% if show_errors and row_form.cost_center.errors %}<p class="text-xs text-red-500 mt-1">{{ row_form.cost_center.errors|join:", " }}</p>{% endif %}
                 </td>
                 <td class="px-6 py-3">
                   {{ row_form.description }}

@@ -1,7 +1,6 @@
 from django.contrib import admin
 
 from .models import (
-    CostCenter,
     FiscalYear,
     GLEntry,
     JournalEntry,
@@ -32,15 +31,6 @@ class FiscalYearAdmin(admin.ModelAdmin):
     ordering = ("-year_start_date",)
 
 
-@admin.register(CostCenter)
-class CostCenterAdmin(admin.ModelAdmin):
-    list_display = ("name", "parent", "is_group", "disabled")
-    list_filter = ("is_group", "disabled")
-    list_select_related = ("parent",)
-    search_fields = ("name",)
-    ordering = ("name",)
-
-
 @admin.register(GLEntry)
 class GLEntryAdmin(admin.ModelAdmin):
     list_display = (
@@ -55,7 +45,7 @@ class GLEntryAdmin(admin.ModelAdmin):
         "is_opening",
     )
     list_filter = ("voucher_type", "is_cancelled", "is_opening", "fiscal_year")
-    list_select_related = ("account", "fiscal_year", "cost_center")
+    list_select_related = ("account", "fiscal_year")
     search_fields = ("voucher_no", "account__name")
     date_hierarchy = "posting_date"
     ordering = ("-posting_date", "-pk")
@@ -114,8 +104,8 @@ class JournalEntryAdmin(admin.ModelAdmin):
 
 @admin.register(JournalEntryAccount)
 class JournalEntryAccountAdmin(admin.ModelAdmin):
-    list_display = ("journal_entry", "account", "debit", "credit", "cost_center")
-    list_select_related = ("journal_entry", "account", "cost_center")
+    list_display = ("journal_entry", "account", "debit", "credit")
+    list_select_related = ("journal_entry", "account")
     search_fields = ("account__name", "journal_entry__reference_no")
     ordering = ("-journal_entry__posting_date", "-pk")
 

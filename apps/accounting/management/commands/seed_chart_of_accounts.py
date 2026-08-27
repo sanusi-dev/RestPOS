@@ -1,8 +1,8 @@
 """Seed the chart of accounts for visual testing and go-live.
 
-Idempotent. Creates the account tree, cost centers, the current-year fiscal
-year, and wires the Restaurant accounting FKs, warehouse accounts,
-production-unit income accounts, and payment GL mappings.
+Idempotent. Creates the account tree, the current-year fiscal year, and wires
+the Restaurant accounting FKs, warehouse accounts, production-unit income
+accounts, and payment GL mappings.
 
 Usage:
     make manage ARGS='seed_chart_of_accounts'
@@ -15,11 +15,11 @@ from django.db import transaction
 
 
 class Command(BaseCommand):
-    help = "Seed the chart of accounts, cost centers, fiscal year, and GL wiring."
+    help = "Seed the chart of accounts, fiscal year, and GL wiring."
 
     @transaction.atomic
     def handle(self, *args, **options):
-        from apps.accounting.models import CostCenter, FiscalYear, LedgerAccount
+        from apps.accounting.models import FiscalYear, LedgerAccount
         from apps.inventory.models import Warehouse
         from apps.payments.models import ModeOfPayment, PaymentGLMapping
         from apps.settings.models import ProductionUnit, Restaurant
@@ -139,15 +139,6 @@ class Command(BaseCommand):
             },
         )
 
-        kitchen_cc = CostCenter.objects.get_or_create(
-            name="Kitchen",
-            defaults={"is_group": False},
-        )[0]
-        bar_cc = CostCenter.objects.get_or_create(
-            name="Bar",
-            defaults={"is_group": False},
-        )[0]
-
         today = date.today()
         fiscal_year = FiscalYear.objects.filter(disabled=False).first()
         if fiscal_year is None:
@@ -263,7 +254,6 @@ class Command(BaseCommand):
                 ("wastage_account", cogs),
                 ("cash_shortage_account", cogs),
                 ("cash_over_short_account", round_off),
-                ("cost_center", kitchen_cc),
                 ("default_payable_account", payable_account),
                 ("default_stock_in_hand_account", stock_in_hand),
                 ("stock_received_but_not_billed_account", grni_account),
@@ -291,6 +281,5 @@ class Command(BaseCommand):
         self.stdout.write(f"  Cash account: {cash_account.name}")
         self.stdout.write(f"  Electronic account: {electronic_account.name}")
         self.stdout.write(f"  Income: {food_sales.name} / {drinks_sales.name}")
-        self.stdout.write(f"  Cost centers: {kitchen_cc.name} / {bar_cc.name}")
         self.stdout.write(f"  GRNI: {grni_account.name}")
         self.stdout.write(f"  Variance: {variance_account.name}")

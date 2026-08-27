@@ -44,7 +44,6 @@
           <tr>
             <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Posting Date</th>
             <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cost Center</th>
             <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
             <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
             <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Against</th>
@@ -56,7 +55,6 @@
             <tr class="{% if entry.is_cancelled %}bg-red-50/30{% endif %}">
               <td class="px-6 py-4 text-sm text-gray-600">{{ entry.posting_date|date:"M j, Y" }}</td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ entry.account.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-600">{{ entry.cost_center.name|default:"—" }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ entry.debit }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ entry.credit }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ entry.against }}</td>
@@ -66,7 +64,7 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">No GL entries match the filter.</td></tr>
+            <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No GL entries match the filter.</td></tr>
           {% endfor %}
         </tbody>
       </table>

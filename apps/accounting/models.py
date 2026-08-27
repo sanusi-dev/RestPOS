@@ -167,41 +167,6 @@ class FiscalYear(BaseModel):
         return year
 
 
-class CostCenter(BaseModel):
-    """A profit/cost centre (e.g. Kitchen, Bar). Flat FK tree like LedgerAccount."""
-
-    name = models.CharField(max_length=100, unique=True)
-    parent = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="children",
-    )
-    is_group = models.BooleanField(default=False)
-    disabled = models.BooleanField(default=False)
-
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-    def clean(self):
-        super().clean()
-        self.name = self.name.strip()
-        if not self.name:
-            raise ValidationError({"name": "Cost center name is required."})
-        if self.pk and self.parent_id == self.pk:
-            raise ValidationError({"parent": "A cost center cannot be its own parent."})
-        if self.parent_id and not self.parent.is_group:
-            raise ValidationError({"parent": "The parent must be a group cost center."})
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-
 class GLEntry(BaseModel):
     """One side of a journalised posting — immutable once created.
 
@@ -211,13 +176,6 @@ class GLEntry(BaseModel):
 
     posting_date = models.DateField()
     account = models.ForeignKey(LedgerAccount, on_delete=models.PROTECT, related_name="gl_entries")
-    cost_center = models.ForeignKey(
-        CostCenter,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="gl_entries",
-    )
     debit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     credit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     against = models.CharField(max_length=200, blank=True)
@@ -284,7 +242,7 @@ class GLEntry(BaseModel):
         raise ValidationError("GL entries cannot be deleted.")
 
     @classmethod
-    def post(cls, *, posting_date, rows, voucher_type, voucher_no, remarks="", cost_center=None):
+    def post(cls, *, posting_date, rows, voucher_type, voucher_no, remarks=""):
         """Create a batch of GL entries atomically.
 
         ``rows`` is an iterable of dicts with account / debit / credit /
@@ -303,7 +261,6 @@ class GLEntry(BaseModel):
                 entry = cls.objects.create(
                     posting_date=posting_date,
                     account=row["account"],
-                    cost_center=row.get("cost_center", cost_center),
                     debit=row.get("debit", Decimal("0")),
                     credit=row.get("credit", Decimal("0")),
                     against=row.get("against", ""),
@@ -414,9 +371,9 @@ class JournalEntry(BaseModel):
                 raise ValidationError("Every account row must have a debit or a credit.")
         seen = set()
         for row in rows:
-            key = (row.account_id, row.cost_center_id)
+            key = row.account_id
             if key in seen:
-                raise ValidationError("Duplicate account + cost center rows are not allowed.")
+                raise ValidationError("Duplicate account rows are not allowed.")
             seen.add(key)
         locked._recompute_totals()
         if locked.total_debit != locked.total_credit:
@@ -458,7 +415,6 @@ class JournalEntry(BaseModel):
             rows=[
                 {
                     "account": row.account,
-                    "cost_center": row.cost_center,
                     "debit": row.debit,
                     "credit": row.credit,
                     "against": row.remarks or "",
@@ -491,7 +447,6 @@ class JournalEntry(BaseModel):
             rows=[
                 {
                     "account": row.account,
-                    "cost_center": row.cost_center,
                     "debit": row.credit,
                     "credit": row.debit,
                     "against": row.remarks or "",
@@ -528,7 +483,6 @@ class JournalEntry(BaseModel):
             JournalEntryAccount.objects.create(
                 journal_entry=copy,
                 account=row.account,
-                cost_center=row.cost_center,
                 debit=row.debit,
                 credit=row.credit,
                 remarks=row.remarks,
@@ -545,13 +499,6 @@ class JournalEntryAccount(BaseModel):
         related_name="accounts",
     )
     account = models.ForeignKey(LedgerAccount, on_delete=models.PROTECT, related_name="journal_rows")
-    cost_center = models.ForeignKey(
-        CostCenter,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="journal_rows",
-    )
     debit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     credit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     remarks = models.CharField(max_length=200, blank=True)

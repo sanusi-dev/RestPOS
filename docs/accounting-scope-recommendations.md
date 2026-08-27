@@ -295,7 +295,7 @@ trial balance, or balance sheet.
 ### Proposed implementation
 
 Build read-only reports from `GLEntry` grouped by account, fiscal year, posting
-date, and cost center.
+date.
 
 The Trial Balance should show opening debit or credit, period movement, and
 closing debit or credit. The Profit and Loss Statement should use income and

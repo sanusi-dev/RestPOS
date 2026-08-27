@@ -6,7 +6,7 @@ missing, so order/staff tests that settle or close need this baseline setup.
 
 from datetime import date
 
-from apps.accounting.models import CostCenter, FiscalYear, LedgerAccount
+from apps.accounting.models import FiscalYear, LedgerAccount
 from apps.payments.models import PaymentGLMapping
 
 
@@ -127,9 +127,6 @@ def setup_chart_of_accounts(restaurant):
         report_type=LedgerAccount.PROFIT_AND_LOSS,
         account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
     )
-    kitchen_cc = CostCenter.objects.create(name=f"Kitchen {restaurant.pk}")
-    bar_cc = CostCenter.objects.create(name=f"Bar {restaurant.pk}")
-
     today = date.today()
     fiscal_year = FiscalYear.objects.create(
         name=f"FY{today.year}-{restaurant.pk}",
@@ -145,7 +142,6 @@ def setup_chart_of_accounts(restaurant):
     restaurant.wastage_account = cogs
     restaurant.cash_shortage_account = cogs
     restaurant.cash_over_short_account = round_off
-    restaurant.cost_center = kitchen_cc
     restaurant.default_payable_account = payable
     restaurant.default_stock_in_hand_account = stock_in_hand
     restaurant.stock_received_but_not_billed_account = grni
@@ -170,8 +166,6 @@ def setup_chart_of_accounts(restaurant):
         "round_off": round_off,
         "equity": equity,
         "owner_equity": owner_equity,
-        "kitchen_cc": kitchen_cc,
-        "bar_cc": bar_cc,
         "fiscal_year": fiscal_year,
     }
 

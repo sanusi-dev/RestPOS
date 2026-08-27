@@ -188,10 +188,10 @@ def _cogs_legs(order, rows, settings):
 
 
 def _merge_rows(rows):
-    """Merge GL rows sharing account/against/fiscal-year/cost-center."""
+    """Merge GL rows sharing account/against."""
     merged = {}
     for row in rows:
-        key = (row.get("account").pk, row.get("against", ""), row.get("cost_center", None))
+        key = (row.get("account").pk, row.get("against", ""))
         if key in merged:
             merged[key]["debit"] = merged[key].get("debit", Decimal("0")) + row.get("debit", Decimal("0"))
             merged[key]["credit"] = merged[key].get("credit", Decimal("0")) + row.get("credit", Decimal("0"))
@@ -199,7 +199,6 @@ def _merge_rows(rows):
             merged[key] = {
                 "account": row.get("account"),
                 "against": row.get("against", ""),
-                "cost_center": row.get("cost_center"),
                 "debit": row.get("debit", Decimal("0")),
                 "credit": row.get("credit", Decimal("0")),
             }
@@ -230,7 +229,6 @@ def post_order_gl(order):
     settings = Restaurant.load()
     if settings is None:
         raise ValidationError("Restaurant settings are not configured.")
-    cost_center = settings.cost_center if settings.cost_center_id else None
     rows = _order_lines_with_accounts(order)
 
     legs = []
@@ -253,7 +251,6 @@ def post_order_gl(order):
         voucher_type="Order",
         voucher_no=order.invoice_number,
         remarks=f"Order {order.invoice_number}",
-        cost_center=cost_center,
     )
 
 
@@ -276,7 +273,6 @@ def reverse_order_gl(order, posting_date=None):
         rows=[
             {
                 "account": gl.account,
-                "cost_center": gl.cost_center,
                 "debit": gl.credit,
                 "credit": gl.debit,
                 "against": gl.against,
@@ -286,7 +282,6 @@ def reverse_order_gl(order, posting_date=None):
         voucher_type="Order",
         voucher_no=order.invoice_number,
         remarks="Reversal",
-        cost_center=None,
     )
 
 
@@ -388,7 +383,6 @@ def post_refund_gl(return_order):
     settings = Restaurant.load()
     if settings is None:
         raise ValidationError("Restaurant settings are not configured.")
-    cost_center = settings.cost_center if settings.cost_center_id else None
     lines = list(return_order.items.select_related("item__item_group", "item").all())
     if not lines:
         raise ValidationError("The return has no refundable value.")
@@ -398,7 +392,7 @@ def post_refund_gl(return_order):
     for row in income_rows:
         amount = abs(row.get("credit") or row.get("debit") or Decimal("0"))
         if amount:
-            rows.append({"account": row["account"], "debit": amount, "cost_center": cost_center})
+            rows.append({"account": row["account"], "debit": amount})
 
     for payment in return_order.payments.select_related("mode_of_payment").all():
         amount = abs(payment.amount)
@@ -407,7 +401,6 @@ def post_refund_gl(return_order):
                 {
                     "account": _resolve_payment_account(payment.mode_of_payment),
                     "credit": amount,
-                    "cost_center": cost_center,
                 }
             )
 
@@ -433,14 +426,13 @@ def post_refund_gl(return_order):
             continue
         expense = _expense_account_for(line.item.item_group) or default_expense
         expense = _resolve_required_account(expense, label="The default expense account")
-        rows.append({"account": expense, "credit": value, "cost_center": cost_center})
-        rows.append({"account": warehouse_account, "debit": value, "cost_center": cost_center})
+        rows.append({"account": expense, "credit": value})
+        rows.append({"account": warehouse_account, "debit": value})
         if line.not_restockable:
             rows.append(
                 {
                     "account": wastage_account,
                     "debit": value,
-                    "cost_center": cost_center,
                     "against": warehouse_account.name,
                 }
             )
@@ -448,7 +440,6 @@ def post_refund_gl(return_order):
                 {
                     "account": warehouse_account,
                     "credit": value,
-                    "cost_center": cost_center,
                     "against": wastage_account.name,
                 }
             )
@@ -465,7 +456,6 @@ def post_refund_gl(return_order):
         voucher_type="Order",
         voucher_no=return_order.invoice_number,
         remarks=f"Refund of {source.invoice_number}",
-        cost_center=cost_center,
     )
 
 
@@ -577,7 +567,6 @@ def _reverse_gl(voucher_type, voucher_no, remarks="Reversal"):
         rows=[
             {
                 "account": gl.account,
-                "cost_center": gl.cost_center,
                 "debit": gl.credit,
                 "credit": gl.debit,
                 "against": gl.against,
@@ -600,7 +589,6 @@ def post_supplier_invoice_gl(invoice):
     settings = Restaurant.load()
     if settings is None:
         raise ValidationError("Restaurant settings are not configured.")
-    cost_center = settings.cost_center if settings.cost_center_id else None
 
     stock_total = Decimal("0")
     expense_total = Decimal("0")
@@ -619,13 +607,12 @@ def post_supplier_invoice_gl(invoice):
             account = settings.stock_received_but_not_billed_account if settings else None
             account = _resolve_required_account(account, label="The stock received but not billed account")
             stock_total += line.amount
-            stock_rows.append({"account": account, "debit": line.amount, "cost_center": cost_center})
+            stock_rows.append({"account": account, "debit": line.amount})
         else:
             expense_rows.append(
                 {
                     "account": _resolve_required_account(line.expense_account, label="The line expense account"),
                     "debit": line.amount,
-                    "cost_center": cost_center,
                 }
             )
             expense_total += line.amount
@@ -645,7 +632,6 @@ def post_supplier_invoice_gl(invoice):
         voucher_type="Supplier Invoice",
         voucher_no=invoice.invoice_number,
         remarks=f"Supplier invoice {invoice.invoice_number}",
-        cost_center=cost_center,
     )
 
 
@@ -667,15 +653,13 @@ def post_supplier_payment_gl(payment):
         raise ValidationError("Restaurant settings are not configured.")
     payable = _payable_account_for(payment.supplier, settings)
     cash_account = _resolve_payment_account(payment.mode_of_payment)
-    cost_center = settings.cost_center if settings.cost_center_id else None
 
     rows = [
-        {"account": payable, "debit": payment.paid_amount, "against": cash_account.name, "cost_center": cost_center},
+        {"account": payable, "debit": payment.paid_amount, "against": cash_account.name},
         {
             "account": cash_account,
             "credit": payment.paid_amount,
             "against": payable.name,
-            "cost_center": cost_center,
         },
     ]
     GLEntry.post(
@@ -684,7 +668,6 @@ def post_supplier_payment_gl(payment):
         voucher_type="Supplier Payment",
         voucher_no=payment.payment_number,
         remarks=f"Payment to {payment.supplier.supplier_name}",
-        cost_center=cost_center,
     )
 
 

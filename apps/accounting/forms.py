@@ -1,4 +1,4 @@
-"""Accounting backoffice forms — chart, journal entries, fiscal years, cost centers."""
+"""Accounting backoffice forms — chart, journal entries, fiscal years."""
 
 from decimal import Decimal
 
@@ -6,7 +6,7 @@ from django import forms
 
 from apps.utils.forms import StyledModelForm, active_choices
 
-from .models import CostCenter, FiscalYear, JournalEntry, JournalEntryAccount, LedgerAccount
+from .models import FiscalYear, JournalEntry, JournalEntryAccount, LedgerAccount
 
 
 class AccountingModelForm(StyledModelForm):
@@ -35,17 +35,6 @@ class LedgerAccountForm(AccountingModelForm):
         self.fields["root_type"].required = False
         self.fields["report_type"].required = False
         self.fields["account_type"].required = False
-
-
-class CostCenterForm(AccountingModelForm):
-    class Meta:
-        model = CostCenter
-        fields = ["name", "parent", "is_group", "disabled"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["parent"].queryset = active_choices(CostCenter, self.instance.parent_id, is_group=True)
-        self.fields["parent"].label = "Parent group"
 
 
 class FiscalYearForm(AccountingModelForm):
@@ -78,15 +67,13 @@ class JournalEntryForm(AccountingModelForm):
 class JournalEntryAccountForm(AccountingModelForm):
     class Meta:
         model = JournalEntryAccount
-        fields = ["account", "cost_center", "debit", "credit", "remarks"]
+        fields = ["account", "debit", "credit", "remarks"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["account"].queryset = active_choices(
             LedgerAccount, self.instance.account_id, disabled=False, is_group=False
         )
-        self.fields["cost_center"].queryset = active_choices(CostCenter, self.instance.cost_center_id, disabled=False)
-        self.fields["cost_center"].required = False
         self.fields["debit"].required = False
         self.fields["credit"].required = False
         self.fields["remarks"].required = False
