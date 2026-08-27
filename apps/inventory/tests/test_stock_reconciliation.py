@@ -51,7 +51,7 @@ class StockReconciliationTest(TestCase):
     def test_submit_rereads_locked_current_qty(self):
         rec = self.make_reconciliation()
         line = StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
-        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
+        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", unit_rate=Decimal("100"))
         # The line snapshot is intentionally stale; submit() must lock and read
         # the current Bin rather than trusting current_qty from line creation.
         self.assertEqual(line.current_qty, Decimal("0"))
@@ -85,7 +85,7 @@ class StockReconciliationTest(TestCase):
             submit_stock_reconciliation(rec)
 
     def test_cancel_reverses_atomically_and_is_idempotent(self):
-        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", rate=Decimal("100"))
+        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", unit_rate=Decimal("100"))
         rec = self.make_reconciliation()
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
         submit_stock_reconciliation(rec)

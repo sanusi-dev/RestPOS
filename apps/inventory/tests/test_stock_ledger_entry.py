@@ -183,6 +183,7 @@ class WACInboundTest(StockLedgerEntryTestBase):
 
 
 class NegativeStockTest(StockLedgerEntryTestBase):
+    """Outbound that would drive the bin negative is rejected."""
     def test_outbound_beyond_available_raises(self):
         StockLedgerEntry.create_entry(
             item=self.item,
@@ -227,7 +228,7 @@ class NegativeStockTest(StockLedgerEntryTestBase):
             StockLedgerEntry.create_entry(
                 item=self.item,
                 warehouse=self.warehouse,
-                actual_qty=Decimal("-5"),
+                quantity=Decimal("-5"),
                 voucher_type="T",
                 voucher_no="2",
             )
@@ -320,14 +321,15 @@ class SLEFieldsNotEditable(StockLedgerEntryTestBase):
 
 
 class LegacyAliasTest(StockLedgerEntryTestBase):
-    def test_legacy_rate_alias(self):
-        sle = StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            actual_qty=Decimal("4"),
-            voucher_type="T",
-            voucher_no="1",
-            rate=Decimal("25"),
-        )
-        self.assertEqual(sle.quantity, Decimal("4"))
-        self.assertEqual(sle.unit_rate, Decimal("25"))
+    """The legacy actual_qty/rate kwargs were removed; the canonical names only."""
+
+    def test_legacy_aliases_rejected(self):
+        with self.assertRaises(TypeError):
+            StockLedgerEntry.create_entry(
+                item=self.item,
+                warehouse=self.warehouse,
+                actual_qty=Decimal("4"),
+                voucher_type="T",
+                voucher_no="1",
+                rate=Decimal("25"),
+            )

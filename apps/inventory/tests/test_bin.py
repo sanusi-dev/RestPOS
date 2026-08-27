@@ -66,10 +66,10 @@ class BinModelTest(TestCase):
         StockLedgerEntry.create_entry(
             item=self.item,
             warehouse=self.warehouse,
-            actual_qty=Decimal("10"),
+            quantity=Decimal("10"),
             voucher_type="Stock Entry",
             voucher_no="SE1",
-            rate=Decimal("100"),
+            unit_rate=Decimal("100"),
         )
         bin_obj.refresh_from_db()
         self.assertEqual(bin_obj.actual_qty, Decimal("10"))
@@ -77,7 +77,7 @@ class BinModelTest(TestCase):
         StockLedgerEntry.create_entry(
             item=self.item,
             warehouse=self.warehouse,
-            actual_qty=Decimal("-3"),
+            quantity=Decimal("-3"),
             voucher_type="Stock Entry",
             voucher_no="SE2",
         )

@@ -294,20 +294,12 @@ class StockLedgerEntry(BaseModel):
         variance_amount=Decimal("0"),
         variance_type="",
         reversal_of_sle_id=None,
-        # legacy aliases — mapped to new names for transition
-        actual_qty=None,
-        rate=None,
     ):
         """Create a ledger entry and update the corresponding Bin.
 
         ``quantity`` is signed: positive for receipts, negative for issues.
         ``unit_rate`` is the inbound rate (ignored for outbound where WAC supplies it).
         """
-        # Map legacy kwargs (actual_qty/rate) to new names.
-        if quantity is None and actual_qty is not None:
-            quantity = actual_qty
-        if unit_rate is None and rate is not None:
-            unit_rate = rate
         if quantity is None:
             raise ValidationError("quantity is required")
         quantity = Decimal(str(quantity))
@@ -351,15 +343,7 @@ class StockLedgerEntry(BaseModel):
         variance_amount=Decimal("0"),
         variance_type="",
         reversal_of_sle_id=None,
-        # legacy
-        actual_qty=None,
-        rate=None,
     ):
-        # Map legacy for callers not yet migrated.
-        if quantity is None and actual_qty is not None:
-            quantity = actual_qty
-        if unit_rate is None and rate is not None:
-            unit_rate = rate
         quantity = Decimal(str(quantity))
         if unit_rate is not None:
             unit_rate = Decimal(str(unit_rate))
