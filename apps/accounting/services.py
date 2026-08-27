@@ -554,8 +554,8 @@ def _payable_account_for(supplier, settings, label="The default payable account"
     return _resolve_required_account(account, label=label)
 
 
-def _reverse_gl(voucher_type, voucher_no, remarks="Reversal"):
-    """Mark a voucher's GL rows cancelled and post mirrored negated rows (today)."""
+def _reverse_gl(voucher_type, voucher_no, remarks="Reversal", posting_date=None):
+    """Mark a voucher's GL rows cancelled and post mirrored negated rows."""
     originals = list(GLEntry.objects.filter(voucher_type=voucher_type, voucher_no=voucher_no, is_cancelled=False))
     if not originals:
         return
@@ -563,7 +563,7 @@ def _reverse_gl(voucher_type, voucher_no, remarks="Reversal"):
         gl.is_cancelled = True
         gl.save(update_fields=["is_cancelled", "updated_at"])
     GLEntry.post(
-        posting_date=timezone.localdate(),
+        posting_date=posting_date or timezone.localdate(),
         rows=[
             {
                 "account": gl.account,
@@ -638,7 +638,7 @@ def post_supplier_invoice_gl(invoice):
 @transaction.atomic
 def cancel_supplier_invoice_gl(invoice):
     """Reverse the invoice's GL rows (mirrored negated rows, originals cancelled)."""
-    _reverse_gl("Supplier Invoice", invoice.invoice_number)
+    _reverse_gl("Supplier Invoice", invoice.invoice_number, posting_date=invoice.posting_date)
 
 
 @transaction.atomic
@@ -674,4 +674,4 @@ def post_supplier_payment_gl(payment):
 @transaction.atomic
 def cancel_supplier_payment_gl(payment):
     """Reverse the payment's GL rows (mirrored negated rows, originals cancelled)."""
-    _reverse_gl("Supplier Payment", payment.payment_number)
+    _reverse_gl("Supplier Payment", payment.payment_number, posting_date=payment.posting_date)

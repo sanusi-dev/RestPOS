@@ -327,6 +327,34 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         invoice.cancel()
         self.assertEqual(invoice.status, SupplierInvoice.CANCELLED)
 
+    def test_cancel_posts_reversal_on_invoice_posting_date(self):
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date(2026, 8, 1),
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt, posting_date=date(2026, 8, 1))
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice, item=self.item, qty=2, rate=100, source_receipt_line=receipt_line
+        )
+        invoice.submit()
+        invoice.cancel()
+        reversals = GLEntry.objects.filter(
+            voucher_type="Supplier Invoice",
+            voucher_no=invoice.invoice_number,
+            is_cancelled=False,
+            remarks="Reversal",
+        )
+        self.assertEqual(reversals.count(), 2)
+        self.assertTrue(all(gl.posting_date == date(2026, 8, 1) for gl in reversals))
+
 
 class SupplierPaymentTest(PayablesTestBase):
     def _paid_invoice(self, amount=200):
