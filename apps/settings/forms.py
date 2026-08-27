@@ -86,13 +86,6 @@ class RestaurantForm(SettingsModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["name"].widget.attrs["placeholder"] = "e.g. Main Kitchen"
-        self.fields["department"].choices = [
-            ("", "Select department..."),
-            *self.fields["department"].choices,
-        ]
-        self.fields["block_takeaway_kot"].help_text = "Prevent this station from receiving tickets marked for takeaway."
-        self.fields["printer_ip"].widget.attrs["placeholder"] = "e.g. 192.168.1.51"
         self.fields["max_open_drafts"].required = False
         self.fields["active_menu"].queryset = active_choices(Menu, self.instance.active_menu_id, enabled=True)
         self.fields["default_warehouse"].queryset = active_choices(
