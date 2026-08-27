@@ -229,6 +229,48 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(line.rate, Decimal("80"))
         self.assertEqual(line.amount, Decimal("400"))
 
+    def test_stock_line_on_receipt_invoice_requires_receipt_link(self):
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name="Mama Bisi Foods",
+            posting_date=date.today(),
+            warehouse=self.store,
+        )
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        # A stock line without the receipt link is rejected — it could not
+        # clear GRNI at the receipt rate.
+        with self.assertRaisesMessage(ValidationError, "must link to a receipt line"):
+            SupplierInvoiceItem.objects.create(invoice=invoice, item=self.item, qty=2, rate=100)
+        # The same guard blocks submit even if the line bypassed clean().
+        line = SupplierInvoiceItem(invoice=invoice, item=self.item, qty=2, rate=100)
+        with self.assertRaisesMessage(ValidationError, "must link to a receipt line"):
+            line.validate_for_submission()
+
+    def test_stock_line_autofills_qty_rate_from_receipt_line(self):
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name="Mama Bisi Foods",
+            posting_date=date.today(),
+            warehouse=self.store,
+        )
+        receipt_line = PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=5, rate=80
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        line = SupplierInvoiceItem.objects.create(invoice=invoice, source_receipt_line=receipt_line)
+        line.refresh_from_db()
+        self.assertEqual(line.item, self.item)
+        self.assertEqual(line.qty, Decimal("5"))
+        self.assertEqual(line.rate, Decimal("80"))
+        self.assertEqual(line.amount, Decimal("400"))
+
     def test_cancel_reverses_gl_and_clears_outstanding(self):
         receipt = PurchaseReceipt.objects.create(
             supplier=self.supplier,
