@@ -122,7 +122,7 @@ Example §4: 5 @ ₦100 (value implied) + 2 @ ₦150 → 7 qty, WAC ₦114.2857.
 - `Bin`: keep `actual_qty`, `valuation_rate (=wac)`, `reserved_qty`; **drop `stock_value`** (derived), drop `current_stock_queue()`. Compute `stock_value = actual_qty × valuation_rate` in code/views/reports when needed.
 - `StockLedgerEntry`: **drop** `stock_queue`, `incoming_rate`, `outgoing_rate`, `valuation_rate`, `stock_value`, `qty_after_transaction`, `is_cancelled`; **add** `quantity`, `unit_rate`, `stock_value_change`, `variance_amount`, `variance_type`, `reversal_of_sle_id`, `posting_date`. `valuation_rate` meaning not reinterpreted — removed. Hunt: `apps/inventory/views.py`, `apps/reports/sources.py`, `apps/accounting/services.py:154-188` (`_cogs_legs`), admin, templates.
 - `Restaurant`: add `stock_received_but_not_billed_account` (GRNI) + `inventory_price_variance_account` (cancellation drift). Seed defaults. Forms validate required when inventory active. Stock entry market purchase posts `Dr SIH / Cr Cash/Expense` — no GRNI.
-- GL: receipt `Dr SIH / Cr GRNI`; linked invoice `Dr GRNI / Cr Payable` (rate equality enforced; no `amount_difference` to variance); unlinked stock-invoice path removed. Expense lines on invoice (`gas` etc.) → `Dr Expense / Cr Payable` even when `purchase_receipt` linked — not a stock line, so not part of GRNI.
+- GL: receipt `Dr SIH / Cr GRNI`; linked invoice `Dr GRNI / Cr Payable` (rate equality enforced; no `amount_difference` to variance); unlinked stock-invoice path removed. Expense lines on invoice (`gas` etc.) → `Dr default-supplier-expense / Cr Payable` even when `purchase_receipt` linked — not a stock line, so not part of GRNI.
 
 ### 8.2 What stays
 Document models, status `DRAFT/SUBMITTED/CANCELLED`, `select_for_update` locking, `reserved_qty` flow, warehouse topology, `Item.last_purchase_rate`, admin guards (SLE append-only via `reversal_of_sle_id`).
@@ -178,7 +178,8 @@ Document models, status `DRAFT/SUBMITTED/CANCELLED`, `select_for_update` locking
 
 ### Phase 5 — Payables Posting
 **Goal:** Invoice clears GRNI at same rate.
-- **Files:** `apps/accounting/services.py:568-616` (`post_supplier_invoice_gl`): if `invoice.purchase_receipt_id` → stock lines `Dr GRNI / Cr Payable` @ invoice amount (validated `== receipt rate`; no variance branch). Expense lines → `Dr Expense / Cr Payable` even when receipt linked. `SupplierInvoiceForm` keeps `purchase_receipt` optional, but **stock lines with receipt link must have rate == receipt rate** (backend `clean()` enforces; no autofill). `cancel_supplier_invoice_gl` reverses via `_reverse_gl`.
+- **Files:** `apps/accounting/services.py:568-616` (`post_supplier_invoice_gl`): if `invoice.purchase_receipt_id` → stock lines `Dr GRNI / Cr Payable` @ invoice amount (validated `== receipt rate`; no variance branch). Expense lines → `Dr Expense / Cr Payable` even when receipt linked. `cancel_supplier_invoice_gl` reverses via `_reverse_gl`.
+- **Superseded by the receipt-first UX (see `docs/supplier-invoice-receipt-first-ux.md`):** stock lines are no longer user input — `build_supplier_invoice_stock_lines` creates `SupplierInvoiceItem` rows from the linked receipt's lines at submit (read-only thereafter); `SupplierInvoiceItemForm`/FormSet deleted; expenses are a dedicated `SupplierInvoiceExpense` (description + amount) posting `Dr Restaurant.default_supplier_expense_account / Cr Payable`, with a missing config a hard error at submit.
 - **Tests:** linked invoice clears GRNI, expense line with receipt still `Dr Expense`; cancel reverses.
 - **DoD:** Trial: receipt (SIH/GRNI) + linked invoice (GRNI/Payable) → SIH holds receipt value, GRNI 0.
 

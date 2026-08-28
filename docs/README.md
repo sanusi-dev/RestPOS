@@ -14,7 +14,7 @@ This directory is the living technical map of the current RestPOS source tree. I
 | Understand the cashier POS | [POS workflow](workflows/pos.md) |
 | Trace an action end to end | [Execution flows](#execution-flows) |
 | Debug an unexpected result | [Troubleshooting](debugging/troubleshooting.md) |
-| Plan future refactoring | [Risks and complexity](risks-and-complexity.md) |
+| Plan the receipt-first supplier invoice UX | [Supplier invoice receipt-first UX](supplier-invoice-receipt-first-ux.md) |
 
 ## Architecture
 
@@ -33,7 +33,6 @@ This directory is the living technical map of the current RestPOS source tree. I
 - [Inventory](workflows/inventory.md): ledger, PWAC valuation, reservations, receipts, transfers, reconciliation, and every mutation path.
 - [Products and menu](workflows/products-and-menu.md): item flags, menus, prices, add-ons, variants, and POS catalog resolution.
 - [Payments](workflows/payments.md): payment master data, GL mappings, order payment rows, settlement validation, and cash change.
-- [Accounting scope recommendations](accounting-scope-recommendations.md): proposed accounting capabilities beyond the current Phase 8 scope, classified by implementation dependency and activation timing.
 - [Backoffice](workflows/backoffice.md): manager/owner pages and their create, submit, cancel, and filtering workflows.
 - [Authentication and access](workflows/auth.md): allauth, roles, middleware gates, and view-level permission checks.
 - [Receipts and printing](workflows/receipts-and-printing.md): settlement receipt print, KOT/BOT dispatch, retry behavior, and the current printer stub.
@@ -65,12 +64,17 @@ These pages answer: "When I perform this action, what happens next?" Each one na
 ## Debugging and Vocabulary
 
 - [Troubleshooting](debugging/troubleshooting.md): symptom-to-code tracing guide.
-- [Risks and complexity](risks-and-complexity.md): coupling, incomplete flows, bypasses, orphaned code, and future refactoring targets.
 - [Glossary](glossary.md): project domain terms and their actual model meanings.
+
+## Plans
+
+- [PWAC plan](pwac-plan.md): FIFO→PWAC costing decisions.
+- [PWAC implementation plan](pwac-implementation-plan.md): build sequence for PWAC.
+- [Supplier invoice receipt-first UX](supplier-invoice-receipt-first-ux.md): agreed redesign — invoice generated from receipt; dedicated expense lines.
 
 ## Reviews
 
-- [PWAC migration review](reviews/pwac-review.md): open findings from the FIFO→PWAC code review, with fix instructions and status tracking.
+- [PWAC migration review](reviews/pwac-review.md): findings from the FIFO→PWAC code review, with fix instructions and status tracking.
 
 ## Archive
 
