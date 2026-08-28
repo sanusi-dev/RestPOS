@@ -2,7 +2,15 @@
 
 ## Access Model
 
-Requests under `/backoffice/` are redirected to the POS unless the user has `has_backoffice_access`, which is true for superusers, RestPOS Admin, or RestPOS Manager. Most backoffice views add only `@login_required`; the middleware supplies the route gate. Explicit manager checks exist for order cancellation/return and settings mutations. Superuser is required for staff role assignment/removal.
+Every backoffice view declares its own role requirement with a decorator from `apps/users/decorators.py`; `LoginRequiredMiddleware` enforces site-wide login. There is no middleware route gate.
+
+| Decorator | Who passes | Backoffice surfaces |
+|---|---|---|
+| `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register |
+| `@manager_required` | superuser, RestPOS Admin, or RestPOS Manager | Accounting, reports/Daily P&L, payments writes, order cancel/return/delete, restaurant settings, production unit writes |
+| `@admin_required` | superuser or RestPOS Admin | Staff role assignment/removal |
+
+Anonymous users redirect to login; authenticated users who fail the role test get `403`. See [Authentication and Authorization](auth.md) for the full table including POS surfaces.
 
 ## Main Surfaces
 
@@ -20,11 +28,13 @@ Requests under `/backoffice/` are redirected to the POS unless the user has `has
 
 ## Accounting Operations
 
-All accounting pages are manager/admin-only (the view gate raises 403 directly, in addition to the middleware route gate). The chart of accounts is a tree page with a create/edit form per account; the account form enforces group/leaf and root-type rules via `LedgerAccount.clean()`. Journal entries use a prefixed inline formset of account rows (HTMX row add/remove endpoints that rebuild the posted formset and re-render the accounts partial, per the inventory formset pattern); an empty formset is rejected. Drafts are edited and submitted from the detail page, where submit/cancel/amend are confirmation-aware POSTs. `JournalEntry.submit()` posts balanced rows to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft (one amendment per cancelled entry). GL entries are read-only with account/voucher-type/cancelled filters. Fiscal years are simple CRUD pages. All accounting models are registered in Django admin (`accounting/admin.py`); `GLEntry` and `JournalEntryAccount` are fully read-only there, and journal entries cannot be deleted from admin.
+All accounting pages are manager/admin-only (`@manager_required` raises 403 directly). The chart of accounts is a tree page with a create/edit form per account; the account form enforces group/leaf and root-type rules via `LedgerAccount.clean()`. Journal entries use a prefixed inline formset of account rows (HTMX row add/remove endpoints that rebuild the posted formset and re-render the accounts partial, per the inventory formset pattern); an empty formset is rejected. Drafts are edited and submitted from the detail page, where submit/cancel/amend are confirmation-aware POSTs. `JournalEntry.submit()` posts balanced rows to the GL; `cancel()` posts reversals; `amend()` copies a cancelled entry into a new draft (one amendment per cancelled entry). GL entries are read-only with account/voucher-type/cancelled filters. Fiscal years are simple CRUD pages. All accounting models are registered in Django admin (`accounting/admin.py`); `GLEntry` and `JournalEntryAccount` are fully read-only there, and journal entries cannot be deleted from admin.
 
 ## Daily P&L Operations
 
-All reports pages are manager/admin-only (view 403 plus the middleware route gate). P&L settings hold the business-day start hour, electricity rate, depreciation, cash-variance toggle, material catalog, and recurring expense templates. Creating a Daily P&L saves a draft for one business date (one draft / one submitted per date). The draft form accepts meter readings, material quantities, ad-hoc expenses, and an optional employee-cost override; HTMX "Refresh preview" saves the draft and returns the three-column statement partial. Submit freezes lines and totals inside one atomic block and does not post GL. Cancel leaves the snapshot on file; Amend copies inputs into a new draft that recomputes.
+All reports pages are manager/admin-only (`@manager_required`, view 403). P&L settings hold the business-day start hour, electricity rate, depreciation, cash-variance toggle, material catalog, and recurring expense templates. Creating a Daily P&L saves a draft for one business date (one draft / one submitted per date). The draft form accepts meter readings, material quantities, ad-hoc expenses, and an optional employee-cost override; HTMX "Refresh preview" saves the draft and returns the three-column statement partial. Submit freezes lines and totals inside one atomic block and does not post GL. Cancel leaves the snapshot on file; Amend copies inputs into a new draft that recomputes.
+
+The full idea-to-code explainer is [Daily P&L](daily-pnl.md).
 
 ## Inventory Operations
 

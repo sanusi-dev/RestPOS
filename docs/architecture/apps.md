@@ -123,7 +123,7 @@
 
 ## Users
 
-`apps/users/models.py:17-70` extends `AbstractUser` with avatar storage and cached role properties derived from Django groups. `UserConfig.ready()` seeds three role groups after migrations and imports `apps/users/signals.py`. Profile editing is in `apps/users/views.py`; allauth owns login, signup, and logout routes.
+`apps/users/models.py` extends `AbstractUser` with avatar storage and plain role properties derived from Django groups via `groups.filter(...).exists()`. `apps/users/decorators.py` turns them into `backoffice_required`, `manager_required`, `staff_required`, and `admin_required` view decorators. `UserConfig.ready()` seeds three role groups after migrations and imports `apps/users/signals.py`. Profile editing is in `apps/users/views.py`; allauth owns login, signup, and logout routes.
 
 ## Settings
 

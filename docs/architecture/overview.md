@@ -35,7 +35,7 @@ flowchart TD
 ## Runtime Request Lifecycle
 
 1. Django loads `restpos.settings`, including the custom user model and app URLs.
-2. `AuthenticationMiddleware` sets `request.user`; `BackofficeAccessMiddleware` gates `/backoffice/` and `/pos/` by role.
+2. `AuthenticationMiddleware` sets `request.user`; `LoginRequiredMiddleware` redirects anonymous requests to login unless the view is `@login_not_required`.
 3. `HtmxMiddleware` exposes `request.htmx` to views and templates.
 4. A route in `restpos/urls.py` selects a web, POS, or backoffice view.
 5. Views parse request data, resolve records, and delegate multi-record changes to `apps.orders.services`, `apps.inventory.services`, or `apps.staff.services`.

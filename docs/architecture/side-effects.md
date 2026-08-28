@@ -4,8 +4,8 @@
 
 | Trigger | Code | Effect |
 |---|---|---|
-| Authenticated request to `/backoffice/` or `/pos/` | `apps/web/middleware.py:8-24` | Prefetches groups and redirects users without the required role. |
-| HTMX response with Django messages | `apps/web/middleware.py:27-52` | Adds `showMessages` JSON to `HX-Trigger`. |
+| Any request without a session | `LoginRequiredMiddleware` | Redirects to `settings.LOGIN_URL?next=...` unless the view is `@login_not_required`. |
+| HTMX response with Django messages | `apps/web/middleware.py:15-31` | Adds `showMessages` JSON to `HX-Trigger`. |
 | Backoffice template context | `apps/web/context_processors.py:31-35` | Counts `ItemGroup` rows for navigation. |
 | Every template context | `apps/web/context_processors.py:10-28` | Adds metadata, page URLs, and CSRF cookie name. |
 
@@ -13,8 +13,7 @@
 
 - `apps/users/apps.py:9-22` registers a `post_migrate` callback that creates the three RestPOS groups and imports user signal receivers.
 - `apps/inventory/apps.py:9-62` registers a `post_migrate` callback that seeds standard UOMs and item groups.
-- `apps/users/signals.py:20-26` clears cached role properties after group membership changes.
-- `apps/users/signals.py:28-45` sends an admin email after allauth signup and promotes a confirmed email address to primary.
+- `apps/users/signals.py:26-45` sends an admin email after allauth signup and promotes a confirmed email address to primary.
 - `apps/users/signals.py:47-63` deletes old avatar files before user save and the current avatar after user deletion.
 
 ## Model Save/Delete Effects

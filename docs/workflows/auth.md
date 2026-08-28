@@ -4,6 +4,8 @@
 
 `AUTH_USER_MODEL` is `users.CustomUser`. django-allauth provides `/accounts/login/`, signup, logout, and related routes. `CustomLoginForm` and `CustomSignupForm` only adjust help text. Email verification defaults to `none`; if enabled, `email_confirmed` sets the confirmed address primary.
 
+`django.contrib.auth.middleware.LoginRequiredMiddleware` is installed, so every view requires login unless it opts out with `@login_not_required`. The only opt-out in project code is `web.views.home`; allauth's own login/signup views opt themselves out.
+
 ## Roles
 
 Roles are Django groups seeded after migrations:
@@ -12,26 +14,27 @@ Roles are Django groups seeded after migrations:
 - `RestPOS Manager`
 - `RestPOS Cashier`
 
-Cached properties in `CustomUser` derive `is_admin`, `is_manager`, `is_cashier`, `has_backoffice_access`, and `has_staff_role`. `users.signals.clear_role_caches_on_group_change()` invalidates these caches after group changes.
+Plain properties in `CustomUser` derive `is_admin`, `is_manager`, `is_cashier`, `has_backoffice_access`, and `has_staff_role` via `groups.filter(...).exists()` — no caching and no invalidation signal. Repeated access on the same user issues repeated indexed `exists()` queries (O(1) per access, not per row).
 
-## Route Gates
+## Per-View Decorators
 
-`BackofficeAccessMiddleware`:
+Every `/backoffice/*` and `/pos/*` view declares its role requirement through `apps/users/decorators.py`. No view relies on URL prefix for security.
 
-- prefetched groups on `/pos/` and `/backoffice/`;
-- redirected non-backoffice users from `/backoffice/` to `web:pos_index`;
-- redirected users without any staff role from `/pos/` to `web:pending_approval`.
+| Decorator | Test | Surface |
+|---|---|---|
+| `@backoffice_required` | `has_backoffice_access` (admin/manager/superuser) | Inventory, menu, payments reads, settings reads, orders backoffice, web dashboard |
+| `@manager_required` | superuser/admin/manager | Accounting, reports/Daily P&L, payments writes (modes, GL mappings), order cancel/return/delete, restaurant settings, production unit writes |
+| `@staff_required` | `has_staff_role` (any RestPOS role) | POS (`views_pos`), shifts/opening/closing entries, `web:pos_index` |
+| `@admin_required` | superuser/admin | Staff role assignment/removal only |
 
-The middleware does not gate `/admin/`, `/accounts/`, or `/users/`; those paths rely on their own Django/allauth/view checks.
+Each decorator wraps `login_required`: anonymous users redirect to `settings.LOGIN_URL?next=...`; authenticated users who fail the role test get `403 PermissionDenied`, not a redirect.
 
-## Explicit View Checks
+Remaining inline checks (kept deliberately, as row-level capability checks inside authorized views):
 
-- Manager/admin/superuser: backoffice order cancel and return; Restaurant and ProductionUnit mutations.
-- Superuser only: assigning/removing RestPOS staff roles.
-- Manager/admin/superuser: ticket reprint from POS.
-- Any authenticated staff-role user: normal POS use, including settlement and retry.
-
-Backoffice order list/detail/KOT views are login-protected but do not repeat `has_backoffice_access`; normally the middleware protects them, but direct invocation/testing should account for that boundary.
+- Ticket reprint from POS: manager check inside `pos_order_action`/history print.
+- Full order history on POS: manager check inside `pos_order_history`.
+- `web:pending_approval` stays `@login_required` — it serves logged-in users with no role.
+- `users.views.profile` and `upload_profile_image` stay `@login_required` — self-service.
 
 ## Profile Side Effects
 
@@ -39,4 +42,4 @@ Backoffice order list/detail/KOT views are login-protected but do not repeat `ha
 
 ## Access Debugging
 
-Start at `restpos/settings.py` middleware order, then `apps/web/middleware.py`, then cached role properties in `apps/users/models.py`. If a role appears stale after a group change, inspect the m2m signal and prefetched group cache. If a backoffice action is unexpectedly available, inspect whether it relies only on middleware or has an explicit view-level check.
+Start at the decorator on the specific view (`apps/users/decorators.py`), then the role properties in `apps/users/models.py`. A `403` means the view's decorator rejected the role; a `302` to login means the session is missing. There is no middleware gate and no role cache to go stale — group changes apply on the next request.

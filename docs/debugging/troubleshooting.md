@@ -19,7 +19,7 @@ Always distinguish database state from physical side effects. A receipt can be m
 
 | Symptom | Start here | Trace |
 |---|---|---|
-| POS shows no shift | `orders.views_pos.pos_home`, `staff.POSOpeningEntry` | Restaurant exists -> `status=SUBMITTED` -> `closing_entry IS NULL` -> role middleware |
+| POS shows no shift | `orders.views_pos.pos_home`, `staff.POSOpeningEntry` | Restaurant exists -> `status=SUBMITTED` -> `closing_entry IS NULL` -> `@staff_required` gate |
 | Shift will not open | `pos_open_shift`, `staff.services.open_shift` | enabled modes -> Restaurant lock -> existing open shift -> opening form decimals |
 | Shift will not close | `pos_close_shift`, `submit_closing_entry` | open draft count -> closing rows -> active opening -> expected amounts |
 | Item missing from catalog | `_build_order_context`, active Menu | Restaurant.active_menu -> menu enabled -> MenuItem disabled -> filters -> Item flags |
@@ -36,8 +36,8 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Cancellation did not restore stock | `cancel_sent_order`, `_restore_stock` | draft sent status -> `stock_warehouse` snapshot -> reservation release, cancellation KOTs |
 | Shift totals are wrong | `expected_closing_amounts`, `submit_closing_entry` | submitted period rows -> payment sums -> cash change subtraction -> refund subtraction -> closing rows |
 | Return cannot complete | `make_return`, `submit_return` | return submission revalidates lines, restores stock, writes proportional refund rows |
-| Backoffice route unexpectedly accessible | middleware and view | `/backoffice/` role gate -> view-level manager/superuser checks |
-| Role appears stale | `CustomUser` cached properties and `users.signals` | group m2m change -> cache invalidation -> prefetched groups |
+| Backoffice route unexpectedly accessible | view decorator | `apps/users/decorators.py` on the view -> role properties in `CustomUser` |
+| Role appears stale | `CustomUser` role properties | plain `@property` group checks — no cache; changes apply next request |
 | HTMX response does not update | template target and view fragment | `HX-Target` -> partial name -> swap mode -> target ID |
 | Toast missing | response `HX-Trigger` header | MessagesMiddleware -> JSON merge -> `toast.js` `showMessages` listener |
 

@@ -38,4 +38,4 @@ The resulting return is a draft; `settle_order()` rejects returns. Managers can 
 
 ## KOT Register
 
-`kot_list()` filters KOT type, ticket type, lifecycle status, print status, and order/KOT number. `kot_detail()` loads the source order, production unit, creator, and item snapshots. Neither view has an additional role check beyond the backoffice middleware.
+`kot_list()` filters KOT type, ticket type, lifecycle status, print status, and order/KOT number. `kot_detail()` loads the source order, production unit, creator, and item snapshots. Both views are gated by `@backoffice_required` in `apps/users/decorators.py`.
