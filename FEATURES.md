@@ -51,11 +51,11 @@ Implementation status lives in `PLAN.md`.
 | 11 | Item master | The product database. Each item records its name, group, unit, department (FOOD/DRINKS), image, and independent flags: sellable, stock-tracked, purchasable. Department or menu membership does not imply stock tracking or purchase eligibility. |
 | 12 | Item groups | Flat product categories used for POS filtering and report grouping. |
 | 13 | Warehouses | Flat physical locations: the central Store, the Bar (the POS deduction warehouse), and the Kitchen. Meaning comes from configuration, not a role field. |
-| 14 | Stock ledger entries | Immutable signed records of every stock movement under Perpetual Weighted-Average Cost (PWAC): quantity (signed), unit rate (current WAC), value change, and variance (cancellation WAC drift or sale-return). Bin holds the current WAC; ledger is append-only audit. Cancellation posts reversals via `reversal_of_sle`, never edits; posting date is informational, valuation always at current WAC. |
+| 14 | Stock ledger entries | Immutable signed records of every stock movement under Perpetual Weighted-Average Cost (PWAC): quantity (signed), unit rate (inbound: actual rate; outbound: current WAC), value change, and variance (cancellation WAC drift or sale-return). Bin holds the current WAC; ledger is append-only audit. Cancellation posts reversals via `reversal_of_sle`, never edits; posting date is informational, valuation always at current WAC. |
 | 15 | Stock entries | Manual movements: Material Receipt (into the Store, at actual rate — market purchase posts Dr SIH / Cr expense, no GRNI) and Material Transfer (Store → Kitchen or Bar) only. Transfers value at the source WAC and dest recalculates its WAC; cannot drive source stock negative. Cancellation reverses at dest current WAC, net zero. |
-| 16 | Stock reconciliation | The one-sided adjustment workflow for physical counts, kitchen consumption, waste/damage, and corrections. Every reconciliation requires a reason. Consumption adjustments are restricted to the Kitchen warehouse and FOOD items. |
+| 16 | Stock reconciliation | The one-sided adjustment workflow for physical counts, kitchen consumption, waste/damage, and corrections, valued at current WAC. Opening stock (or a first receipt into an empty bin) requires an entered rate to seed WAC. Every reconciliation requires a reason. Consumption adjustments are restricted to the Kitchen warehouse and FOOD items. Waste posts Dr wastage / Cr warehouse. |
 | 17 | Purchase receipts | Supplier goods received into the Store: posts Dr SIH (warehouse asset) / Cr GRNI at receipt rate, blending WAC. Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. Cancellation blocked if a submitted supplier invoice or allocated payment exists; allowed cancellation reverses at current WAC with drift to the inventory price variance account. |
-| 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation. Drives POS drink availability and reservations. |
+| 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation (current WAC). Drives POS drink availability and reservations. |
 | 19 | Stock reports | A stock ledger report (movement audit trail) and a stock balance report (opening/received/issued/closing) in the back office. |
 
 ### A4. Payment Modes
@@ -97,6 +97,27 @@ Implementation status lives in `PLAN.md`.
 | 37 | Submit/cancel immutability | Financial documents follow Draft → Submitted → Cancelled. Submitted records are never edited; corrections post reversal entries. |
 | 38 | Deletion protection | Financial records are never cascade-deleted. Orders, payments, and stock ledger entries survive changes to the records they reference. |
 
+### A8. Accounting
+
+| # | Feature | What it does |
+|---|---|---|
+| 57 | Accounting / GL | Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS at current WAC). Food vs drinks separation uses department, production-unit income accounts, and Daily P&L — not cost centers. |
+| 58 | Refunds completion | Refund GL on return submit, wastage posting for non-restockable items, and partial returns. Restockable drinks restore at current WAC; sale-return variance vs original COGS lands in COGS. |
+| 59 | Opening balances | A reviewed opening journal entry for go-live, with duplicate protection. |
+| 60 | Cash variance posting | Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
+
+### A9. Supplier Payables
+
+| # | Feature | What it does |
+|---|---|---|
+| 61 | Supplier payables | Supplier master, supplier invoices, supplier payments fully allocated to outstanding invoices, and accounts-payable balances per supplier. Invoice creation is receipt-first: the form takes header fields (supplier, dates, bill no., linked purchase receipt, remarks) plus optional expense lines (description + amount). Stock lines are not typed in — on submit they are generated from the linked receipt (qty/rate copied, read-only, rate-locked). Expense-only invoices need no receipt. Stock invoices post Dr GRNI / Cr payable at the receipt rate; expense lines post Dr `Restaurant.default_supplier_expense_account` / Cr payable (missing config is a hard error). Purchase receipts post Dr SIH / Cr GRNI; market purchases via Stock Entry post Dr SIH / Cr expense (no GRNI, no invoice). Payments post Dr payable / Cr cash-bank; cancellation reverses. Receipt cancel is blocked while a submitted invoice or allocated payment exists. |
+
+### A10. Daily P&L
+
+| # | Feature | What it does |
+|---|---|---|
+| 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (drinks at current WAC) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Kitchen consumption (reconciliation at current WAC) is shown beside FOOD sales as a memo, not in GP. Sale-return variance posts to COGS (current WAC vs original). Prime cost (drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
+
 ## B. POS Frontend
 
 | # | Feature | What it does |
@@ -117,7 +138,7 @@ Implementation status lives in `PLAN.md`.
 | # | Feature | What it does |
 |---|---|---|
 | 49 | Department classification | Every item must be FOOD or DRINKS. Department drives ticket routing, drink stock validation, and per-line revenue tracking. |
-| 50 | Revenue split | Each order line snapshots its department, so food and drinks revenue can be summed independently of the single paid total. Separate income accounts per department (item group → production unit → default) arrive with the accounting phase — implemented. |
+| 50 | Revenue split | Each order line snapshots its department, so food and drinks revenue can be summed independently of the single paid total. Separate income accounts per department resolve item group → production unit → restaurant default. |
 | 51 | Departmental reports | Food and drinks revenue reported separately, including the daily P&L split (FOOD / DRINKS / TOTAL columns). |
 
 ## D. Architecture Constraints
@@ -134,12 +155,6 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it will do |
 |---|---|---|
-| 57 | Accounting / GL | **Implemented (Phase 6).** Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS). Food vs drinks separation uses department, production-unit income accounts, and Daily P&L — not cost centers. |
-| 58 | Refunds completion | **Implemented (Phase 6).** Refund GL reversal postings, wastage posting for non-restockable items, and partial returns. |
-| 59 | Opening balances | **Implemented (Phase 6).** A reviewed opening journal entry for go-live, with duplicate protection. |
-| 60 | Cash variance posting | **Implemented (Phase 6).** Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
-| 61 | Supplier payables | **Implemented (Phase 2 / §4.1 + PWAC rework + receipt-first UX).** Supplier master, supplier invoices (stock lines generated from the linked purchase receipt, plus dedicated expense lines), supplier payments fully allocated to outstanding invoices, and accounts-payable balances per supplier. Invoice stock lines are read-only: on submit the service creates them from the receipt's lines (qty/rate copied, no manual entry). Expense lines are description + amount and post Dr `Restaurant.default_supplier_expense_account` / Cr payable (missing config is a hard error at submit). Stock invoices must link to a purchase receipt and post Dr GRNI / Cr payable at the same rate (rate equality enforced); purchase receipts post Dr SIH / Cr GRNI (accrual); market purchases via Stock Entry post Dr SIH / Cr expense directly (no GRNI). Payments post Dr payable / Cr cash-bank; cancellation reverses. |
-| 62 | Daily P&L | **Implemented (Phase 7).** A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (drinks WAC — perpetual weighted-average, current WAC at sale) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Kitchen consumption (reconciliation at current WAC) is shown beside FOOD sales as a memo, not in GP. Sale-return variance posts to COGS (current WAC vs original). Prime cost (drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
 | 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
 
