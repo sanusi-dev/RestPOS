@@ -133,6 +133,15 @@ class Restaurant(BaseModel):
         verbose_name="Default payable account",
         help_text="Accounts-payable account credited by supplier invoices and debited by supplier payments.",
     )
+    default_supplier_expense_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Default supplier expense account",
+        help_text="Expense account debited by supplier invoice expense lines.",
+    )
     default_stock_in_hand_account = models.ForeignKey(
         "accounting.LedgerAccount",
         on_delete=models.PROTECT,

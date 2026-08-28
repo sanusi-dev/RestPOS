@@ -18,8 +18,8 @@ from apps.utils.forms import add_formset_row, remove_formset_row
 from .models import GLEntry
 from .payables_forms import (
     SupplierForm,
+    SupplierInvoiceExpenseFormSet,
     SupplierInvoiceForm,
-    SupplierInvoiceItemFormSet,
     SupplierPaymentAllocationFormSet,
     SupplierPaymentForm,
 )
@@ -129,45 +129,45 @@ def supplier_invoice_create(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
     if request.method == "POST":
         form = SupplierInvoiceForm(request.POST)
-        item_fs = SupplierInvoiceItemFormSet(request.POST, instance=SupplierInvoice(), prefix="items")
-        if form.is_valid() and item_fs.is_valid():
+        expense_fs = SupplierInvoiceExpenseFormSet(request.POST, instance=SupplierInvoice(), prefix="expenses")
+        if form.is_valid() and expense_fs.is_valid():
             with transaction.atomic():
                 invoice = form.save()
-                item_fs.instance = invoice
-                item_fs.save()
+                expense_fs.instance = invoice
+                expense_fs.save()
             messages.success(request, "Supplier invoice draft created.")
             return redirect("accounting:supplier_invoice_detail", pk=invoice.pk)
     else:
         form = SupplierInvoiceForm()
-        item_fs = SupplierInvoiceItemFormSet(instance=SupplierInvoice(), prefix="items")
+        expense_fs = SupplierInvoiceExpenseFormSet(instance=SupplierInvoice(), prefix="expenses")
     return render(
         request,
         "backoffice/accounting/payables/supplier_invoice_form.html",
-        {"form": form, "is_create": True, "item_formset": item_fs, "show_errors": request.method == "POST"},
+        {"form": form, "is_create": True, "expense_formset": expense_fs, "show_errors": request.method == "POST"},
     )
 
 
 @login_required
 @require_POST
-def supplier_invoice_item_add(request: HttpRequest) -> HttpResponse:
+def supplier_invoice_expense_add(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
-    formset = add_formset_row(SupplierInvoiceItemFormSet, "items", request.POST)
+    formset = add_formset_row(SupplierInvoiceExpenseFormSet, "expenses", request.POST)
     return render(
         request,
-        "backoffice/accounting/payables/supplier_invoice_form.html#items_partial",
-        {"item_formset": formset},
+        "backoffice/accounting/payables/supplier_invoice_form.html#expenses_partial",
+        {"expense_formset": formset},
     )
 
 
 @login_required
 @require_POST
-def supplier_invoice_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+def supplier_invoice_expense_remove(request: HttpRequest, index: int) -> HttpResponse:
     _require_manager(request)
-    formset = remove_formset_row(SupplierInvoiceItemFormSet, "items", request.POST, index)
+    formset = remove_formset_row(SupplierInvoiceExpenseFormSet, "expenses", request.POST, index)
     return render(
         request,
-        "backoffice/accounting/payables/supplier_invoice_form.html#items_partial",
-        {"item_formset": formset},
+        "backoffice/accounting/payables/supplier_invoice_form.html#expenses_partial",
+        {"expense_formset": formset},
     )
 
 
@@ -178,14 +178,15 @@ def supplier_invoice_detail(request: HttpRequest, pk: int) -> HttpResponse:
         SupplierInvoice.objects.select_related("supplier", "purchase_receipt"),
         pk=pk,
     )
-    items = invoice.items.select_related("item", "source_receipt_line", "expense_account").all()
+    items = invoice.items.select_related("item", "source_receipt_line").all()
+    expenses = invoice.expenses.all()
     gl_entries = GLEntry.objects.filter(
         voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number
     ).select_related("account", "fiscal_year")
     return render(
         request,
         "backoffice/accounting/payables/supplier_invoice_detail.html",
-        {"invoice": invoice, "items": items, "gl_entries": gl_entries},
+        {"invoice": invoice, "items": items, "expenses": expenses, "gl_entries": gl_entries},
     )
 
 
@@ -198,20 +199,20 @@ def supplier_invoice_update(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("accounting:supplier_invoice_detail", pk=pk)
     if request.method == "POST":
         form = SupplierInvoiceForm(request.POST, instance=invoice)
-        item_fs = SupplierInvoiceItemFormSet(request.POST, instance=invoice, prefix="items")
-        if form.is_valid() and item_fs.is_valid():
+        expense_fs = SupplierInvoiceExpenseFormSet(request.POST, instance=invoice, prefix="expenses")
+        if form.is_valid() and expense_fs.is_valid():
             with transaction.atomic():
                 form.save()
-                item_fs.save()
+                expense_fs.save()
             messages.success(request, "Supplier invoice updated.")
             return redirect("accounting:supplier_invoice_detail", pk=invoice.pk)
     else:
         form = SupplierInvoiceForm(instance=invoice)
-        item_fs = SupplierInvoiceItemFormSet(instance=invoice, prefix="items")
+        expense_fs = SupplierInvoiceExpenseFormSet(instance=invoice, prefix="expenses")
     return render(
         request,
         "backoffice/accounting/payables/supplier_invoice_form.html",
-        {"form": form, "is_create": False, "item_formset": item_fs, "show_errors": request.method == "POST"},
+        {"form": form, "is_create": False, "expense_formset": expense_fs, "show_errors": request.method == "POST"},
     )
 
 

@@ -16,6 +16,7 @@ class RestaurantAdmin(admin.ModelAdmin):
         "default_warehouse",
         "stock_received_but_not_billed_account",
         "inventory_price_variance_account",
+        "default_supplier_expense_account",
     )
     list_select_related = ("active_menu", "store_warehouse", "default_warehouse")
     search_fields = ("company",)

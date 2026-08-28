@@ -241,6 +241,16 @@ class Command(BaseCommand):
                     "account_type": LedgerAccount.ACCOUNT_TYPE_STOCK,
                 },
             )[0]
+        supplier_expense_account = LedgerAccount.objects.get_or_create(
+            name="Supplier Expenses",
+            defaults={
+                "parent": expenses,
+                "is_group": False,
+                "root_type": LedgerAccount.EXPENSE,
+                "report_type": LedgerAccount.PROFIT_AND_LOSS,
+                "account_type": LedgerAccount.ACCOUNT_TYPE_EXPENSE,
+            },
+        )[0]
 
         restaurant = Restaurant.load()
         if restaurant is not None:
@@ -255,6 +265,7 @@ class Command(BaseCommand):
                 ("cash_shortage_account", cogs),
                 ("cash_over_short_account", round_off),
                 ("default_payable_account", payable_account),
+                ("default_supplier_expense_account", supplier_expense_account),
                 ("default_stock_in_hand_account", stock_in_hand),
                 ("stock_received_but_not_billed_account", grni_account),
                 ("inventory_price_variance_account", variance_account),
@@ -282,4 +293,5 @@ class Command(BaseCommand):
         self.stdout.write(f"  Electronic account: {electronic_account.name}")
         self.stdout.write(f"  Income: {food_sales.name} / {drinks_sales.name}")
         self.stdout.write(f"  GRNI: {grni_account.name}")
+        self.stdout.write(f"  Supplier expenses: {supplier_expense_account.name}")
         self.stdout.write(f"  Variance: {variance_account.name}")

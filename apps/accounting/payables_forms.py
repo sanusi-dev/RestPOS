@@ -1,8 +1,8 @@
-"""Supplier payables forms — supplier, invoice (with line formset), payment (with allocations)."""
+"""Supplier payables forms — supplier, invoice (with expense formset), payment (with allocations)."""
 
 from django import forms
 
-from apps.inventory.models import Item, PurchaseReceipt, PurchaseReceiptItem
+from apps.inventory.models import PurchaseReceipt
 from apps.payments.models import ModeOfPayment
 from apps.utils.forms import StyledModelForm, active_choices
 
@@ -10,7 +10,7 @@ from .models import LedgerAccount
 from .payables_models import (
     Supplier,
     SupplierInvoice,
-    SupplierInvoiceItem,
+    SupplierInvoiceExpense,
     SupplierPayment,
     SupplierPaymentAllocation,
 )
@@ -69,29 +69,10 @@ class SupplierInvoiceForm(PayablesModelForm):
         return cleaned
 
 
-class SupplierInvoiceItemForm(PayablesModelForm):
+class SupplierInvoiceExpenseForm(PayablesModelForm):
     class Meta:
-        model = SupplierInvoiceItem
-        fields = ["item", "source_receipt_line", "expense_account", "description", "qty", "rate"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["item"].queryset = active_choices(
-            Item,
-            self.instance.item_id,
-            disabled=False,
-            is_stock_item=True,
-            is_purchase_item=True,
-            has_variants=False,
-        )
-        self.fields["source_receipt_line"].queryset = active_choices(
-            PurchaseReceiptItem, self.instance.source_receipt_line_id
-        )
-        self.fields["expense_account"].queryset = active_choices(
-            LedgerAccount, self.instance.expense_account_id, disabled=False, is_group=False
-        )
-        for field_name in ("item", "source_receipt_line", "expense_account", "description"):
-            self.fields[field_name].required = False
+        model = SupplierInvoiceExpense
+        fields = ["description", "amount"]
 
 
 class SupplierPaymentForm(PayablesModelForm):
@@ -152,10 +133,10 @@ class SupplierPaymentAllocationForm(PayablesModelForm):
         return cleaned
 
 
-SupplierInvoiceItemFormSet = forms.inlineformset_factory(
+SupplierInvoiceExpenseFormSet = forms.inlineformset_factory(
     SupplierInvoice,
-    SupplierInvoiceItem,
-    form=SupplierInvoiceItemForm,
+    SupplierInvoiceExpense,
+    form=SupplierInvoiceExpenseForm,
     extra=1,
     can_delete=True,
 )

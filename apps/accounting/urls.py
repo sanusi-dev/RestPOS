@@ -43,14 +43,14 @@ urlpatterns = [
     path("supplier-invoices/", view=payables_views.supplier_invoice_list, name="supplier_invoice_list"),
     path("supplier-invoices/create/", view=payables_views.supplier_invoice_create, name="supplier_invoice_create"),
     path(
-        "supplier-invoices/items/add/",
-        view=payables_views.supplier_invoice_item_add,
-        name="supplier_invoice_item_add",
+        "supplier-invoices/expenses/add/",
+        view=payables_views.supplier_invoice_expense_add,
+        name="supplier_invoice_expense_add",
     ),
     path(
-        "supplier-invoices/items/remove/<int:index>/",
-        view=payables_views.supplier_invoice_item_remove,
-        name="supplier_invoice_item_remove",
+        "supplier-invoices/expenses/remove/<int:index>/",
+        view=payables_views.supplier_invoice_expense_remove,
+        name="supplier_invoice_expense_remove",
     ),
     path("supplier-invoices/<int:pk>/", view=payables_views.supplier_invoice_detail, name="supplier_invoice_detail"),
     path(

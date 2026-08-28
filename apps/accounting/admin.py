@@ -8,6 +8,7 @@ from .models import (
     LedgerAccount,
     Supplier,
     SupplierInvoice,
+    SupplierInvoiceExpense,
     SupplierInvoiceItem,
     SupplierPayment,
     SupplierPaymentAllocation,
@@ -125,6 +126,15 @@ class JournalEntryAccountAdmin(admin.ModelAdmin):
 class SupplierInvoiceItemInline(admin.TabularInline):
     model = SupplierInvoiceItem
     extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class SupplierInvoiceExpenseInline(admin.TabularInline):
+    model = SupplierInvoiceExpense
+    extra = 0
 
 
 @admin.register(Supplier)
@@ -161,7 +171,7 @@ class SupplierInvoiceAdmin(admin.ModelAdmin):
     search_fields = ("invoice_number", "supplier__supplier_name", "bill_no")
     date_hierarchy = "posting_date"
     ordering = ("-posting_date", "-pk")
-    inlines = (SupplierInvoiceItemInline,)
+    inlines = (SupplierInvoiceItemInline, SupplierInvoiceExpenseInline)
 
     def get_readonly_fields(self, request, obj=None):
         return ["invoice_number", "total", "outstanding_amount"]
@@ -198,3 +208,14 @@ class SupplierPaymentAllocationAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SupplierInvoiceExpense)
+class SupplierInvoiceExpenseAdmin(admin.ModelAdmin):
+    list_display = ("invoice", "description", "amount")
+    list_select_related = ("invoice",)
+    search_fields = ("invoice__invoice_number", "description")
+    ordering = ("-invoice__posting_date", "-pk")
+
+    def get_readonly_fields(self, request, obj=None):
+        return ["invoice"]

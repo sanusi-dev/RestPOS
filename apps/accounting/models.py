@@ -538,6 +538,7 @@ class JournalEntryAccount(BaseModel):
 from .payables_models import (  # noqa: E402,F401
     Supplier,
     SupplierInvoice,
+    SupplierInvoiceExpense,
     SupplierInvoiceItem,
     SupplierPayment,
     SupplierPaymentAllocation,

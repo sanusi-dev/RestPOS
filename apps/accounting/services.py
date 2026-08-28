@@ -16,6 +16,7 @@ from apps.payments.models import PaymentGLMapping
 from apps.settings.models import Restaurant
 
 from .models import GLEntry, JournalEntry, JournalEntryAccount
+from .payables_models import SupplierInvoiceItem
 
 TWO_PLACES = Decimal("0.01")
 
@@ -580,6 +581,30 @@ def _reverse_gl(voucher_type, voucher_no, remarks="Reversal", posting_date=None)
 
 
 @transaction.atomic
+def build_supplier_invoice_stock_lines(invoice):
+    """Create SupplierInvoiceItem rows from the linked receipt's lines.
+
+    Each receipt line not already linked to an item line on this invoice is
+    copied (qty/rate auto-fill from the receipt line in the model's save()).
+    """
+    if not invoice.purchase_receipt_id:
+        return
+    for receipt_line in invoice.purchase_receipt.items.all():
+        already_linked = SupplierInvoiceItem.objects.filter(
+            invoice=invoice, source_receipt_line_id=receipt_line.pk
+        ).exists()
+        if already_linked:
+            continue
+        SupplierInvoiceItem.objects.create(
+            invoice=invoice,
+            item=receipt_line.item,
+            source_receipt_line=receipt_line,
+            qty=receipt_line.received_qty,
+            rate=receipt_line.rate,
+        )
+
+
+@transaction.atomic
 def post_supplier_invoice_gl(invoice):
     """Post the supplier invoice: Dr GRNI/expense, Cr payable. Idempotent."""
     if GLEntry.objects.filter(
@@ -594,28 +619,26 @@ def post_supplier_invoice_gl(invoice):
     expense_total = Decimal("0")
     stock_rows = []
     expense_rows = []
-    for line in invoice.items.select_related("item__item_group", "expense_account", "source_receipt_line").all():
-        if line.item_id:
-            # Stock lines must link to a purchase receipt (GRNI clearing)
-            if not invoice.purchase_receipt_id:
-                raise ValidationError("Supplier invoices with stock lines must link to a purchase receipt.")
-            # Enforce rate/qty equality if linked to receipt line
-            if line.source_receipt_line_id and (
-                line.qty != line.source_receipt_line.received_qty or line.rate != line.source_receipt_line.rate
-            ):
-                raise ValidationError("Stock line rate/quantity must match the receipt line.")
-            account = settings.stock_received_but_not_billed_account if settings else None
-            account = _resolve_required_account(account, label="The stock received but not billed account")
-            stock_total += line.amount
-            stock_rows.append({"account": account, "debit": line.amount})
-        else:
-            expense_rows.append(
-                {
-                    "account": _resolve_required_account(line.expense_account, label="The line expense account"),
-                    "debit": line.amount,
-                }
-            )
-            expense_total += line.amount
+    for line in invoice.items.select_related("item", "source_receipt_line").all():
+        # Stock lines must link to a purchase receipt (GRNI clearing)
+        if not invoice.purchase_receipt_id:
+            raise ValidationError("Supplier invoices with stock lines must link to a purchase receipt.")
+        # Enforce rate/qty equality if linked to receipt line
+        if line.source_receipt_line_id and (
+            line.qty != line.source_receipt_line.received_qty or line.rate != line.source_receipt_line.rate
+        ):
+            raise ValidationError("Stock line rate/quantity must match the receipt line.")
+        account = settings.stock_received_but_not_billed_account if settings else None
+        account = _resolve_required_account(account, label="The stock received but not billed account")
+        stock_total += line.amount
+        stock_rows.append({"account": account, "debit": line.amount})
+    for expense in invoice.expenses.all():
+        account = _resolve_required_account(
+            settings.default_supplier_expense_account if settings else None,
+            label="The default supplier expense account",
+        )
+        expense_total += expense.amount
+        expense_rows.append({"account": account, "debit": expense.amount})
     if not stock_rows and not expense_rows:
         raise ValidationError("Add at least one line before submitting.")
 

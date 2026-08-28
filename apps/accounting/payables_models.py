@@ -167,20 +167,25 @@ class SupplierInvoice(BaseModel):
 
     @transaction.atomic
     def submit(self):
-        """Post GL (Dr stock/expense, Cr payable), set outstanding, and mark submitted."""
-        from .services import post_supplier_invoice_gl
+        """Build stock lines from the receipt, post GL, set outstanding, and mark submitted."""
+        from .services import build_supplier_invoice_stock_lines, post_supplier_invoice_gl
 
         locked = type(self).objects.select_for_update().get(pk=self.pk)
         if locked.status != self.DRAFT:
             self.status = locked.status
             return
-        lines = list(locked.items.select_related("item", "source_receipt_line", "expense_account"))
-        if not lines:
+        build_supplier_invoice_stock_lines(locked)
+        lines = list(locked.items.select_related("item", "source_receipt_line"))
+        expenses = list(locked.expenses.all())
+        if not lines and not expenses:
             raise ValidationError("Add at least one line before submitting.")
         total = Decimal("0")
         for line in lines:
             line.validate_for_submission()
             total += line.amount
+        for expense in expenses:
+            expense.full_clean()
+            total += expense.amount
         locked.total = total
         locked.outstanding_amount = total
         locked.save(update_fields=["total", "outstanding_amount", "updated_at"])
@@ -232,7 +237,7 @@ class SupplierInvoice(BaseModel):
 
 
 class SupplierInvoiceItem(BaseModel):
-    """A single line of a supplier invoice — a stock line or an expense line."""
+    """A stock line of a supplier invoice — created from the linked purchase receipt."""
 
     invoice = models.ForeignKey(SupplierInvoice, on_delete=models.CASCADE, related_name="items")
     item = models.ForeignKey(
@@ -245,13 +250,6 @@ class SupplierInvoiceItem(BaseModel):
     source_receipt_line = models.ForeignKey(
         "inventory.PurchaseReceiptItem",
         on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="supplier_invoice_lines",
-    )
-    expense_account = models.ForeignKey(
-        "accounting.LedgerAccount",
-        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="supplier_invoice_lines",
@@ -278,28 +276,16 @@ class SupplierInvoiceItem(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.item_id and self.expense_account_id:
-            raise ValidationError("A line cannot be both an item line and an expense line.")
-        if self.item_id:
-            item = self.item
-            if item.disabled or item.has_variants or not item.is_stock_item or not item.is_purchase_item:
-                raise ValidationError(f"{item.item_name} is not an enabled stock and purchase item.")
-            if self.qty <= 0:
-                raise ValidationError("Item quantity must be greater than zero.")
-            if self.rate < 0:
-                raise ValidationError("Item rate cannot be negative.")
-        elif self.expense_account_id:
-            if not self.expense_account.is_leaf:
-                raise ValidationError({"expense_account": "The expense account must be a leaf account."})
-            if self.expense_account.disabled:
-                raise ValidationError({"expense_account": "The expense account must be enabled."})
-            if self.qty <= 0:
-                raise ValidationError("Expense quantity must be greater than zero.")
-            if self.rate < 0:
-                raise ValidationError("Expense rate cannot be negative.")
-        else:
-            raise ValidationError("Choose an item or an expense account for the line.")
-        if self.item_id and not self.source_receipt_line_id and self.invoice_id and self.invoice.purchase_receipt_id:
+        if not self.item_id:
+            raise ValidationError("Choose an item for the line.")
+        item = self.item
+        if item.disabled or item.has_variants or not item.is_stock_item or not item.is_purchase_item:
+            raise ValidationError(f"{item.item_name} is not an enabled stock and purchase item.")
+        if self.qty <= 0:
+            raise ValidationError("Item quantity must be greater than zero.")
+        if self.rate < 0:
+            raise ValidationError("Item rate cannot be negative.")
+        if not self.source_receipt_line_id and self.invoice_id and self.invoice.purchase_receipt_id:
             # Stock lines on a receipt-linked invoice must trace to a receipt
             # line — qty/rate then come from the receipt and GRNI clears at
             # the exact credited rate (PWAC D4 rate lock).
@@ -346,30 +332,20 @@ class SupplierInvoiceItem(BaseModel):
         super().delete(*args, **kwargs)
 
     def validate_for_submission(self):
-        if self.item_id:
-            if (
-                self.item.disabled
-                or self.item.has_variants
-                or not self.item.is_stock_item
-                or not self.item.is_purchase_item
-            ):
-                raise ValidationError(f"{self.item.item_name} is not an enabled stock and purchase item.")
-            if self.qty <= 0:
-                raise ValidationError("Item quantity must be greater than zero.")
-            if self.rate < 0:
-                raise ValidationError("Item rate cannot be negative.")
-        elif self.expense_account_id:
-            if not self.expense_account.is_leaf:
-                raise ValidationError({"expense_account": "The expense account must be a leaf account."})
-            if self.expense_account.disabled:
-                raise ValidationError({"expense_account": "The expense account must be enabled."})
-            if self.qty <= 0:
-                raise ValidationError("Expense quantity must be greater than zero.")
-            if self.rate < 0:
-                raise ValidationError("Expense rate cannot be negative.")
-        else:
-            raise ValidationError("Choose an item or an expense account for the line.")
-        if self.item_id and not self.source_receipt_line_id and self.invoice_id and self.invoice.purchase_receipt_id:
+        if not self.item_id:
+            raise ValidationError("Choose an item for the line.")
+        if (
+            self.item.disabled
+            or self.item.has_variants
+            or not self.item.is_stock_item
+            or not self.item.is_purchase_item
+        ):
+            raise ValidationError(f"{self.item.item_name} is not an enabled stock and purchase item.")
+        if self.qty <= 0:
+            raise ValidationError("Item quantity must be greater than zero.")
+        if self.rate < 0:
+            raise ValidationError("Item rate cannot be negative.")
+        if not self.source_receipt_line_id and self.invoice_id and self.invoice.purchase_receipt_id:
             raise ValidationError(
                 {"source_receipt_line": "Stock lines on a receipt-linked invoice must link to a receipt line."}
             )
@@ -380,6 +356,43 @@ class SupplierInvoiceItem(BaseModel):
             clash = type(self).objects.filter(source_receipt_line_id=line.pk).exclude(pk=self.pk).exists()
             if clash:
                 raise ValidationError({"source_receipt_line": "This receipt line is already on an invoice."})
+
+
+class SupplierInvoiceExpense(BaseModel):
+    """A supplier invoice expense line — a non-stock cost with a description and amount."""
+
+    invoice = models.ForeignKey(SupplierInvoice, on_delete=models.CASCADE, related_name="expenses")
+    description = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        ordering = ["pk"]
+
+    def __str__(self):
+        return f"{self.description} {self.amount}"
+
+    def clean(self):
+        super().clean()
+        if not self.description.strip():
+            raise ValidationError({"description": "Description is required."})
+        if self.amount <= 0:
+            raise ValidationError({"amount": "Expense amount must be greater than zero."})
+
+    def save(self, *args, **kwargs):
+        if self.invoice_id:
+            invoice = self.invoice
+            if invoice.pk and invoice.status != SupplierInvoice.DRAFT:
+                raise ValidationError("Only draft supplier invoices can have expenses added or edited.")
+        self.amount = Decimal(self.amount).quantize(Decimal("0.01"))
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.invoice_id:
+            invoice = self.invoice
+            if invoice.pk and invoice.status != SupplierInvoice.DRAFT:
+                raise ValidationError("Only draft supplier invoices can have expenses removed.")
+        super().delete(*args, **kwargs)
 
 
 class SupplierPayment(BaseModel):
