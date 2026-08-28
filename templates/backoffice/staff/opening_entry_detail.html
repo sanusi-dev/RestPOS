@@ -98,7 +98,6 @@
     </div>
 
     {% if entry.status == "DRAFT" and form %}
-      {% comment %}Inline editable form for DRAFT entries — symmetric with closing_entry_detail.{% endcomment %}
       <form method="post" action="{% url 'staff:opening_entry_detail' entry.pk %}" id="opening-float-form" class="space-y-0">
         {% csrf_token %}
         <div class="overflow-x-auto">
@@ -127,7 +126,6 @@
         </div>
       </form>
     {% else %}
-      {% comment %}Read-only view for SUBMITTED / CANCELLED / Open entries.{% endcomment %}
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-100">
           <thead class="bg-gray-50/50">

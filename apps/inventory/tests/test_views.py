@@ -35,7 +35,6 @@ class InventoryViewTestBase(TestCase):
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Main Store")
         cls.restaurant = Restaurant.objects.create(company="Test Restaurant", store_warehouse=cls.warehouse)
-        # Wire chart + warehouse account + fiscal year for GL postings
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.warehouse.refresh_from_db()
         if not cls.warehouse.account_id:

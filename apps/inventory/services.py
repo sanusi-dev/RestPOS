@@ -62,11 +62,6 @@ def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks):
     )
 
 
-# ---------------------------------------------------------------------------
-# Stock Entry
-# ---------------------------------------------------------------------------
-
-
 @transaction.atomic
 def submit_stock_entry(entry):
     """Post the stock entry: create SLEs for every detail line and mark submitted."""
@@ -144,7 +139,6 @@ def submit_stock_entry(entry):
     updated_items = set()
     gl_rows = []
     default_expense = restaurant.default_expense_account if restaurant else None
-    # H3: bulk fetch ItemGroups for MATERIAL_RECEIPT
     groups = {}
     if locked.purpose == "MATERIAL_RECEIPT":
         group_ids = {d.item.item_group_id for d in details if getattr(d.item, "item_group_id", None)}
@@ -338,12 +332,10 @@ def cancel_stock_entry(entry):
                 )
                 .order_by("item_id", "warehouse_id")
             }
-            # H3: bulk fetch ItemGroups for expense lookup
             group_ids = {s.item.item_group_id for s in sles if getattr(s.item, "item_group_id", None)}
             groups = {}
             if group_ids:
                 groups = {g.pk: g for g in ItemGroup.objects.select_related("expense_account").filter(pk__in=group_ids)}
-            # C1: capture pre-reversal WAC before SLE reversal
             pre_wac_map = {}
             for sle in sles:
                 bin_obj = locked_bins[(sle.item_id, sle.warehouse_id)]
@@ -366,7 +358,6 @@ def cancel_stock_entry(entry):
                     reversal_of_sle_id=sle.pk,
                     bin_obj=bin_obj,
                 )
-            # C2/C3/C4/H6: build GL uniformly per SLE using pre-reversal WAC
             gl_originals = list(
                 GLEntry.objects.filter(voucher_type="Stock Entry", voucher_no=voucher_no, is_cancelled=False)
             )
@@ -374,7 +365,6 @@ def cancel_stock_entry(entry):
                 for gl in gl_originals:
                     gl.is_cancelled = True
                     gl.save(update_fields=["is_cancelled", "updated_at"])
-                # Determine if any drift exists to resolve variance account once (C3)
                 has_drift = False
                 for sle in sles:
                     pre_wac = pre_wac_map[sle.pk]
@@ -412,9 +402,7 @@ def cancel_stock_entry(entry):
                             new_rows.append({"account": variance_acct, "credit": -diff})
                 if new_rows:
                     _post_gl_rows(locked.posting_date, "Stock Entry", voucher_no, new_rows, "Reversal")
-            # H4: revert last_purchase_rate for stock entry material receipt
             _revert_last_purchase_rates_for_stock_entry(locked, sles)
-        # Also handle case where sles empty but still need to revert? No items.
         locked.status = "CANCELLED"
         locked.save(update_fields=["status", "updated_at"])
         entry.status = locked.status
@@ -422,11 +410,6 @@ def cancel_stock_entry(entry):
     locked.status = "CANCELLED"
     locked.save(update_fields=["status", "updated_at"])
     entry.status = locked.status
-
-
-# ---------------------------------------------------------------------------
-# Stock Reconciliation
-# ---------------------------------------------------------------------------
 
 
 @transaction.atomic
@@ -503,7 +486,6 @@ def submit_stock_reconciliation(reconciliation):
             else:
                 rate = None
 
-        # C5: capture WAC before SLE
         wac_before = bin_obj.valuation_rate or Decimal("0")
         StockLedgerEntry._create_entry_locked(
             item=line.item,
@@ -519,7 +501,6 @@ def submit_stock_reconciliation(reconciliation):
         )
         if locked.reason == "WASTE_DAMAGE" and difference < 0:
             amount = (abs(difference) * wac_before).quantize(Decimal("0.01"))
-            # H7: hoist restaurant guard before accessing wastage account
             if amount and restaurant is not None:
                 wastage_acct = _resolve_account(restaurant.wastage_account, "The wastage account")
                 sih_acct = _resolve_account(locked.warehouse.account, "The warehouse account")
@@ -579,7 +560,6 @@ def cancel_stock_reconciliation(reconciliation):
             )
         from apps.accounting.models import GLEntry
 
-        # C6: only post if originals existed (is_cancelled=False); guard idempotent
         gl_rows = list(
             GLEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=voucher_no, is_cancelled=False)
         )
@@ -605,11 +585,6 @@ def cancel_stock_reconciliation(reconciliation):
     locked.status = "CANCELLED"
     locked.save(update_fields=["status", "updated_at"])
     reconciliation.status = locked.status
-
-
-# ---------------------------------------------------------------------------
-# Purchase Receipt
-# ---------------------------------------------------------------------------
 
 
 def check_receipt_cancel_blocked(receipt):
@@ -731,7 +706,6 @@ def cancel_purchase_receipt(receipt):
         )
         .order_by("item_id", "warehouse_id")
     }
-    # C1: capture pre-reversal WAC before SLE reversal
     pre_wac_map = {}
     for sle in sles:
         bin_obj = locked_bins[(sle.item_id, sle.warehouse_id)]
@@ -754,7 +728,6 @@ def cancel_purchase_receipt(receipt):
             reversal_of_sle_id=sle.pk,
             bin_obj=bin_obj,
         )
-    # C2/C3/C4/H6: build GL uniformly using pre-reversal WAC
     gl_originals = list(
         GLEntry.objects.filter(voucher_type="Purchase Receipt", voucher_no=voucher_no, is_cancelled=False)
     )
@@ -802,11 +775,6 @@ def cancel_purchase_receipt(receipt):
     locked.status = "CANCELLED"
     locked.save(update_fields=["status", "updated_at"])
     receipt.status = locked.status
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 
 def _revert_last_purchase_rates(receipt):

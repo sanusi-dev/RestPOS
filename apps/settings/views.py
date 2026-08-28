@@ -62,11 +62,6 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/settings/dashboard.html", context)
 
 
-# ---------------------------------------------------------------------------
-# Restaurant settings (singleton)
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def restaurant_settings(request: HttpRequest) -> HttpResponse:
     user = _authenticated_user(request)
@@ -84,11 +79,6 @@ def restaurant_settings(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/settings/restaurant_settings.html", {"form": form, "restaurant": restaurant})
 
 
-# ---------------------------------------------------------------------------
-# Staff Management
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def staff_list(request: HttpRequest) -> HttpResponse:
     user = _authenticated_user(request)
@@ -96,8 +86,6 @@ def staff_list(request: HttpRequest) -> HttpResponse:
         return redirect("web:home")
 
     search = request.GET.get("search", "")
-    page = int(request.GET.get("page", 1))
-    per_page = 20
 
     users = CustomUser.objects.all().order_by("-date_joined")
     if search:
@@ -106,25 +94,18 @@ def staff_list(request: HttpRequest) -> HttpResponse:
             | models.Q(first_name__icontains=search)
             | models.Q(last_name__icontains=search)
         )
-    # Prefetch only RestPOS role groups so role derivation uses the prefetch cache
-    # (one group-membership query for the whole page rather than ~3 per user).
+    # Prefetch only RestPOS role groups so role derivation uses the prefetch cache instead of per-row queries.
     users = users.prefetch_related(
         models.Prefetch("groups", queryset=Group.objects.filter(name__in=RESTPOS_GROUP_NAMES))
     )
-
-    total = users.count()
-    users = users[(page - 1) * per_page : page * per_page]
-    total_pages = (total + per_page - 1) // per_page
 
     staff_data = [_build_staff_entry(user) for user in users]
 
     context = {
         "staff_data": staff_data,
-        "search": search,
-        "page": page,
-        "total_pages": total_pages,
-        "total": total,
+        "search": search
     }
+    
     if _is_htmx(request):
         return render(request, "backoffice/settings/staff_list.html#staff-rows", context)
     return render(request, "backoffice/settings/staff_list.html", context)
@@ -205,8 +186,7 @@ def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 def _build_staff_entry(user: CustomUser) -> dict[str, CustomUser | str]:
-    # Uses the user's prefetched groups (from staff_list) or cached role lookups;
-    # one query total per user rather than up to three per-row exists() checks.
+    # Reads the prefetched/cached group names — no per-row exists() queries.
     user_group_names = set(user._restpos_group_names)
     if user.is_superuser or "RestPOS Admin" in user_group_names:
         role = "admin"
@@ -217,11 +197,6 @@ def _build_staff_entry(user: CustomUser) -> dict[str, CustomUser | str]:
     else:
         role = ""
     return {"user": user, "role": role}
-
-
-# ---------------------------------------------------------------------------
-# Production Units
-# ---------------------------------------------------------------------------
 
 
 @login_required

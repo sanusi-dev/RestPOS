@@ -30,9 +30,7 @@ def _submitted_receipt(store, supplier, item, qty=2, rate=100, posting_date=None
         warehouse=store,
         posting_date=posting_date or date.today(),
     )
-    receipt_line = PurchaseReceiptItem.objects.create(
-        purchase_receipt=receipt, item=item, received_qty=qty, rate=rate
-    )
+    receipt_line = PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=item, received_qty=qty, rate=rate)
     from apps.inventory.services import submit_purchase_receipt
 
     submit_purchase_receipt(receipt)
@@ -46,14 +44,12 @@ class PayablesTestBase(TestCase):
         cls.store = Warehouse.objects.create(name="Store Payables")
         cls.restaurant = Restaurant.objects.create(company="Test Co", store_warehouse=cls.store)
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
-        # Refresh store to get account wired by helper
         cls.store.refresh_from_db()
         if not cls.store.account_id:
             cls.store.account = cls.accounts["stock_in_hand"]
             cls.store.save(update_fields=["account", "updated_at"])
             cls.store.refresh_from_db()
         cls.group = ItemGroup.objects.create(name=f"Supplies {cls.restaurant.pk}")
-        # Ensure group name unique; helper already created fiscal year etc.
         cls.item = Item.objects.create(
             item_name="Rice",
             item_group=cls.group,
@@ -95,16 +91,13 @@ class SupplierModelTest(PayablesTestBase):
     def test_disabled_supplier_can_hold_history(self):
         self.supplier.disabled = True
         self.supplier.save()
-        # Stock invoice needs receipt link
         receipt = PurchaseReceipt.objects.create(
             supplier=self.supplier,
             supplier_name=self.supplier.supplier_name,
             warehouse=self.store,
             posting_date=date.today(),
         )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
-        )
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
         from apps.inventory.services import submit_purchase_receipt
 
         submit_purchase_receipt(receipt)
@@ -121,12 +114,8 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
             warehouse=self.store,
             posting_date=date.today(),
         )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt, item=self.item, received_qty=2, rate=100
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt, item=self.item, received_qty=3, rate=50
-        )
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=3, rate=50)
         from apps.inventory.services import submit_purchase_receipt
 
         submit_purchase_receipt(receipt)
@@ -145,7 +134,6 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(entries.get(account=self.accounts["payable"]).credit, Decimal("350"))
 
     def test_submit_posts_stock_and_payable_legs(self):
-        # Stock invoice must link to a purchase receipt — posts Dr GRNI / Cr Payable
         invoice = self._make_receipt_invoice()
         invoice.submit()
         invoice.refresh_from_db()
@@ -230,11 +218,8 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
 
         submit_purchase_receipt(receipt)
         invoice = self._make_invoice(purchase_receipt=receipt)
-        # A stock line without the receipt link is rejected — it could not
-        # clear GRNI at the receipt rate.
         with self.assertRaisesMessage(ValidationError, "must link to a receipt line"):
             SupplierInvoiceItem.objects.create(invoice=invoice, item=self.item, qty=2, rate=100)
-        # The same guard blocks submit even if the line bypassed clean().
         line = SupplierInvoiceItem(invoice=invoice, item=self.item, qty=2, rate=100)
         with self.assertRaisesMessage(ValidationError, "must link to a receipt line"):
             line.validate_for_submission()
@@ -271,7 +256,6 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
             voucher_type="Supplier Invoice", voucher_no=invoice.invoice_number, is_cancelled=False, remarks="Reversal"
         )
         self.assertEqual(reversals.count(), 2)
-        # Reversal mirrors: GRNI credited, payable debited.
         self.assertEqual(reversals.get(account=self.accounts["grni"]).credit, Decimal("200"))
         self.assertEqual(reversals.get(account=self.accounts["payable"]).debit, Decimal("200"))
 
@@ -298,7 +282,6 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
 
 class SupplierPaymentTest(PayablesTestBase):
     def _paid_invoice(self, amount=200):
-        # qty 2 × rate amount — receipt-linked stock invoice, total 2 × amount
         invoice = self._make_receipt_invoice(rate=amount)
         invoice.submit()
         return invoice
@@ -309,7 +292,7 @@ class SupplierPaymentTest(PayablesTestBase):
         return payment
 
     def test_submit_posts_payable_and_cash_legs_and_reduces_outstanding(self):
-        invoice = self._paid_invoice(amount=100)  # total 200
+        invoice = self._paid_invoice(amount=100)
         payment = self._make_payment(invoice, Decimal("200"))
         payment.submit()
         payment.refresh_from_db()
@@ -324,7 +307,7 @@ class SupplierPaymentTest(PayablesTestBase):
         self.assertEqual(entries.get(account=self.accounts["cash"]).credit, Decimal("200"))
 
     def test_partial_payment_leaves_partly_paid(self):
-        invoice = self._paid_invoice(amount=200)  # total 400
+        invoice = self._paid_invoice(amount=200)
         payment = self._make_payment(invoice, Decimal("150"))
         payment.submit()
         invoice.refresh_from_db()
@@ -332,7 +315,7 @@ class SupplierPaymentTest(PayablesTestBase):
         self.assertEqual(invoice.payment_status, "Partly Paid")
 
     def test_payment_total_must_equal_allocations(self):
-        invoice = self._paid_invoice(amount=200)  # total 400
+        invoice = self._paid_invoice(amount=200)
         payment = SupplierPayment.objects.create(
             supplier=self.supplier, paid_amount=Decimal("500"), mode_of_payment=self.cash
         )
@@ -342,7 +325,7 @@ class SupplierPaymentTest(PayablesTestBase):
         self.assertEqual(payment.status, SupplierPayment.DRAFT)
 
     def test_allocation_cannot_exceed_outstanding(self):
-        invoice = self._paid_invoice(amount=200)  # qty 2 × rate 200 = 400 outstanding
+        invoice = self._paid_invoice(amount=200)
         payment = SupplierPayment.objects.create(
             supplier=self.supplier, paid_amount=Decimal("500"), mode_of_payment=self.cash
         )
@@ -350,7 +333,7 @@ class SupplierPaymentTest(PayablesTestBase):
             SupplierPaymentAllocation.objects.create(payment=payment, invoice=invoice, allocated_amount=Decimal("500"))
 
     def test_cancel_restores_outstanding_and_reverses_gl(self):
-        invoice = self._paid_invoice(amount=100)  # total 200
+        invoice = self._paid_invoice(amount=100)
         payment = self._make_payment(invoice, Decimal("200"))
         payment.submit()
         payment.cancel()
@@ -369,7 +352,6 @@ class SupplierPaymentTest(PayablesTestBase):
         self.assertEqual(reversals.get(account=self.accounts["cash"]).debit, Decimal("200"))
 
     def test_supplier_outstanding_balance_reflects_invoices_minus_payments(self):
-        # qty 2 × rate → invoice totals are 600 and 200.
         invoice1 = self._paid_invoice(amount=300)
         self._paid_invoice(amount=100)
         self.assertEqual(self.supplier.outstanding_balance, Decimal("800"))

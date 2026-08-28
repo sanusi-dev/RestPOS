@@ -99,7 +99,6 @@
     </div>
 
     {% if closing.status == "DRAFT" and form_data %}
-      {% comment %}Inline editable form for DRAFT entries.{% endcomment %}
       <form method="post" action="{% url 'staff:closing_entry_detail' closing.pk %}" id="reconciliation-form" class="space-y-0">
         {% csrf_token %}
         <div class="overflow-x-auto">
@@ -141,7 +140,6 @@
         </div>
       </form>
     {% else %}
-      {% comment %}Read-only view for SUBMITTED / CANCELLED entries.{% endcomment %}
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-100">
           <thead class="bg-gray-50/50">

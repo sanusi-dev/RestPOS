@@ -75,8 +75,7 @@ class ItemForm(InventoryModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filter dropdowns to active rows, keeping any currently-assigned (now disabled)
-        # row visible in the <select> when editing.
+        # Keep any currently-assigned (now disabled) row visible when editing.
         self.fields["variant_of"].queryset = active_choices(
             Item, self.instance.variant_of_id, disabled=False, has_variants=True
         )
@@ -157,8 +156,7 @@ class PurchaseReceiptForm(InventoryModelForm):
         restaurant = Restaurant.load()
         if not restaurant or not restaurant.store_warehouse_id or restaurant.store_warehouse.disabled:
             raise ValidationError("Configure an enabled central Store warehouse before creating a purchase receipt.")
-        # Selecting a Supplier master satisfies the required supplier_name:
-        # the receipt keeps the master's name so it stays readable on its own.
+        # Selecting a Supplier master fills supplier_name so the receipt stays readable on its own.
         if not cleaned_data.get("supplier_name") and cleaned_data.get("supplier"):
             cleaned_data["supplier_name"] = cleaned_data["supplier"].supplier_name
         elif not cleaned_data.get("supplier_name"):
@@ -183,8 +181,6 @@ class PurchaseReceiptItemForm(InventoryModelForm):
             has_variants=False,
         )
 
-
-# ---------------------------------------------------------------------------
 
 StockEntryDetailFormSet = inlineformset_factory(
     StockEntry, StockEntryDetail, form=StockEntryDetailForm, extra=1, can_delete=True

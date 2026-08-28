@@ -1,5 +1,4 @@
-"""Cash variance posting tests — shortage/excess legs, unconfigured skip, threshold gate,
-cancel reversal."""
+"""Cash variance posting tests — legs, unconfigured skip, threshold gate, cancel reversal."""
 
 from decimal import Decimal
 
@@ -23,9 +22,8 @@ class CashVarianceTestBase(TestCase):
         cls.manager = CustomUser.objects.create_user(username="manager", password="x", is_superuser=True)
         cls.restaurant = Restaurant.objects.create(company="Variance Co")
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
-        # The seed migration creates a "Cash" mode with no mapping; point every
-        # CASH-type mode at the cash ledger account so the variance posting
-        # resolves a valid cash account regardless of which mode it picks.
+        # Point every CASH-type mode at the cash account so variance posting
+        # resolves one regardless of which mode it picks.
         for mode in ModeOfPayment.objects.filter(type=ModeOfPayment.TYPE_CASH):
             PaymentGLMapping.objects.get_or_create(
                 mode_of_payment=mode, defaults={"default_account": cls.accounts["cash"]}

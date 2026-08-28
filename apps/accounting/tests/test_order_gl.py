@@ -130,7 +130,7 @@ class OrderSettleGLTest(OrderGLTestBase):
     def test_change_reduces_cash_leg(self):
         order = self._create_order()
         add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
-        self._settle(order, amount=Decimal("2000"))  # 500 change
+        self._settle(order, amount=Decimal("2000"))
         cash_entry = self._order_gl(order).get(account=self.accounts["cash"])
         self.assertEqual(cash_entry.debit, Decimal("1500"))
 
@@ -138,15 +138,13 @@ class OrderSettleGLTest(OrderGLTestBase):
         order = self._create_order()
         add_order_line(order, self.food, qty=1, rate=Decimal("1499.50"), menu_item=self.food_mi)
         order.recalculate_totals()
-        # rounding_adjustment = 0.50
         self._settle(order)
         entries = self._order_gl(order)
         round_entry = entries.get(account=self.accounts["round_off"])
         self.assertEqual(round_entry.credit, Decimal("0.50"))
 
     def test_cogs_posts_for_drink_order(self):
-        # Seed WAC so settle-time deduction has a real value.
-        # Bin starts with 100 @ 0 (from setUp), so adding 100 @ 300 blends to WAC 150.
+        # Bin starts with 100 @ 0 (from setUp); adding 100 @ 300 blends to WAC 150.
         StockLedgerEntry.create_entry(
             item=self.drink,
             warehouse=self.bar_wh,
@@ -160,14 +158,11 @@ class OrderSettleGLTest(OrderGLTestBase):
         self._settle(order)
         entries = self._order_gl(order)
         cogs_entry = entries.get(account=self.accounts["cogs"])
-        # WAC after seed: (100*0 + 100*300)/200 = 150, so 2 × 150 = 300
         self.assertEqual(cogs_entry.debit, Decimal("300"))
         stock_entry = entries.get(account=self.bar_wh.account)
         self.assertEqual(stock_entry.credit, Decimal("300"))
 
     def test_missing_income_account_raises(self):
-        # Clear both the item-group override and the Restaurant default so the
-        # chain resolution has nothing to fall back on.
         self.group_food.income_account = None
         self.group_food.save()
         self.restaurant.default_income_account = None
@@ -191,8 +186,7 @@ class OrderCancelGLTest(OrderGLTestBase):
         add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
         self._settle(order)
         # Paid orders cannot be cancelled via cancel_order; the reversal is
-        # invoked directly (as the refund flow does) and must mirror the
-        # settle legs.
+        # invoked directly (as the refund flow does).
         from apps.accounting.services import reverse_order_gl
 
         reverse_order_gl(order)
@@ -203,9 +197,6 @@ class OrderCancelGLTest(OrderGLTestBase):
         self.assertEqual(reversal.credit, Decimal("1500"))
 
     def test_reverse_order_gl_posts_on_today_not_sale_date(self):
-        # Corrections post on the day they occur; a stale sale date must not
-        # reach the GL (and would fail the fiscal-year guard if it did not
-        # fall inside an enabled year).
         order = self._create_order()
         add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
         self._settle(order)
@@ -255,20 +246,16 @@ class RefundGLTest(OrderGLTestBase):
         order = self._create_order()
         add_order_line(order, self.food, qty=4, rate=Decimal("1500"), menu_item=self.food_mi)
         self._settle(order)
-        # First return refunds half (qty -2 of -4).
         ret1 = make_return(order)
         line1 = ret1.items.first()
         line1.qty = Decimal("-2")
         line1.save()
         ret1.recalculate_totals()
         submit_return(ret1, actor=self.user)
-        # Second return mirrors only the remaining qty (-2), allowed once the
-        # first is SUBMITTED.
         ret2 = make_return(order)
         self.assertEqual(abs(ret2.items.first().qty), Decimal("2"))
         ret2.recalculate_totals()
         submit_return(ret2, actor=self.user)
-        # Both refunds posted
         self.assertEqual(GLEntry.objects.filter(voucher_no=ret2.invoice_number).count(), 2)
 
     def test_cumulative_qty_cap_enforced(self):
@@ -278,8 +265,6 @@ class RefundGLTest(OrderGLTestBase):
         ret1 = make_return(order)
         ret1.recalculate_totals()
         submit_return(ret1, actor=self.user)
-        # A full return leaves no remaining quantity; a second return draft
-        # has no lines and cannot be submitted.
         ret2 = make_return(order)
         self.assertEqual(ret2.items.count(), 0)
         with self.assertRaisesMessage(ValidationError, "no refundable value"):
@@ -296,7 +281,7 @@ class NotRestockableConstraintTest(OrderGLTestBase):
         line.not_restockable = True
         with self.assertRaises(ValidationError):
             line.full_clean()
-        # The DB constraint is the last line of defence (bypassing save()).
+        # The DB constraint is the last line of defence (bypasses save()).
         with self.assertRaises(IntegrityError), transaction.atomic():
             OrderItem.objects.filter(pk=line.pk).update(not_restockable=True)
 

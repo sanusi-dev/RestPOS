@@ -1,8 +1,4 @@
-"""Supplier payables views — suppliers, supplier invoices, and supplier payments.
-
-All behind the backoffice role gate (Manager/Admin), mirroring the accounting
-app's other registers.
-"""
+"""Supplier payables views — suppliers, invoices, and payments."""
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -37,11 +33,6 @@ def _require_manager(request: HttpRequest) -> CustomUser:
     if not (user.is_manager or user.is_admin or user.is_superuser):
         raise PermissionDenied
     return user
-
-
-# ---------------------------------------------------------------------------
-# Suppliers
-# ---------------------------------------------------------------------------
 
 
 @login_required
@@ -95,11 +86,6 @@ def supplier_update(request: HttpRequest, pk: int) -> HttpResponse:
         "backoffice/accounting/payables/supplier_form.html",
         {"form": form, "is_create": False, "supplier": supplier},
     )
-
-
-# ---------------------------------------------------------------------------
-# Supplier Invoices
-# ---------------------------------------------------------------------------
 
 
 @login_required
@@ -242,11 +228,6 @@ def supplier_invoice_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("accounting:supplier_invoice_detail", pk=pk)
     messages.success(request, f"Supplier invoice {invoice.invoice_number} cancelled.")
     return redirect("accounting:supplier_invoice_list")
-
-
-# ---------------------------------------------------------------------------
-# Supplier Payments
-# ---------------------------------------------------------------------------
 
 
 @login_required

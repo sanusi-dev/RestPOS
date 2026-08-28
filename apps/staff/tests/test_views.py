@@ -102,8 +102,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         )
         self.assertEqual(response.status_code, 302)
         entry = POSOpeningEntry.objects.exclude(pk=self.entry.pk).get()
-        # One opening row per active ModeOfPayment (mirrors ERPNext's
-        # pos_opening_entry.js secondary-payment pre-population).
         active_count = ModeOfPayment.objects.filter(enabled=True).count()
         self.assertEqual(entry.opening_payments.count(), active_count)
         self.assertEqual(
@@ -127,8 +125,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
             entry.opening_payments.get(mode_of_payment=self.cash_mode).opening_amount,
             Decimal("25000"),
         )
-        # Bank mode wasn't in the POST — it was rendered with initial=0 and
-        # the form coerced the blank to Decimal("0").
+        # Bank mode wasn't in the POST — rendered with initial=0 and coerced to Decimal("0").
         self.assertEqual(
             entry.opening_payments.get(mode_of_payment=self.bank_mode).opening_amount,
             Decimal("0"),
@@ -140,7 +137,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'name="mop_{self.cash_mode.pk}"')
         self.assertContains(response, f'name="mop_{self.bank_mode.pk}"')
-        # No inline formset management form (pre-change UI used one)
         self.assertNotContains(response, "opening_payments-TOTAL_FORMS")
         self.assertContains(response, "Opening Float")
 
@@ -163,8 +159,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertEqual(response.status_code, 404)
 
     def test_detail_get_renders_inline_form_for_draft(self):
-        """For a DRAFT opening, the detail page renders the float table as
-        an inline-editable form (POST back to the same detail URL)."""
+        """For a DRAFT opening, the float table renders as an inline-editable form."""
         response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(
@@ -174,8 +169,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertContains(response, "Submit & Open Shift")
 
     def test_detail_post_saves_amounts(self):
-        """POST to the detail URL re-uses the create form to save the edited
-        opening amounts (PRG)."""
+        """POST to the detail URL saves the edited opening amounts (PRG)."""
         response = self.client.post(
             reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}),
             data={
@@ -191,15 +185,13 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         )
 
     def test_detail_post_blocked_when_submitted(self):
-        """POST to a SUBMITTED opening's detail URL is rejected — the entry
-        is immutable once the shift is open (ERPNext submit/cancel pattern)."""
+        """POST to a SUBMITTED opening's detail URL is rejected — the entry is immutable once open."""
         self.entry.submit()
         response = self.client.post(
             reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}),
             data={f"mop_{self.cash_mode.pk}": "1"},
         )
         self.assertEqual(response.status_code, 302)
-        # Amount unchanged.
         self.entry.refresh_from_db()
         self.assertEqual(
             self.entry.opening_payments.get(mode_of_payment=self.cash_mode).opening_amount,
@@ -207,12 +199,10 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         )
 
     def test_detail_get_read_only_when_submitted(self):
-        """For an Open / Closed / Cancelled entry, the detail page renders
-        the float table read-only — no inline form, no Save button."""
+        """For an Open / Closed / Cancelled entry, the float table renders read-only."""
         self.entry.submit()
         response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}))
         self.assertEqual(response.status_code, 200)
-        # The inline form's POST action does NOT appear when read-only.
         self.assertNotContains(
             response,
             f'action="{reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk})}"',
@@ -250,14 +240,10 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         self.entry.submit()
 
     def _seed_closing_draft(self):
-        """Hit `closing_entry_create` (the real flow) to seed a DRAFT closing
-        entry with one `ClosingPayment` per `OpeningPayment` row. Returns the
-        new `POSClosingEntry` instance.
-        """
+        """Create a DRAFT closing via the real closing_entry_create flow; returns the new POSClosingEntry."""
         from apps.staff.models import POSClosingEntry
 
         response = self.client.post(reverse("staff:closing_entry_create"))
-        # GET and POST both work — the view is method-agnostic.
         self.assertEqual(response.status_code, 302)
         return POSClosingEntry.objects.get(opening_entry=self.entry)
 
@@ -267,9 +253,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         self.assertContains(response, "Closing Entries")
 
     def test_create_get_auto_creates_draft_and_seeds_rows(self):
-        """GET to `closing_entry_create` immediately creates a DRAFT closing
-        entry for the single open shift and seeds one ClosingPayment per
-        OpeningPayment — no manual shift-selection step."""
+        """GET to closing_entry_create starts a DRAFT close for the open shift and seeds ClosingPayment rows."""
         from apps.staff.models import POSClosingEntry
 
         response = self.client.get(reverse("staff:closing_entry_create"))
@@ -277,16 +261,13 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         closing = POSClosingEntry.objects.get(opening_entry=self.entry)
         self.assertEqual(closing.status, POSClosingEntry.DRAFT)
         self.assertEqual(closing.cashier, self.user)
-        # One closing row per opening row, all seeded with closing_amount=0.
         self.assertEqual(closing.closing_payments.count(), self.entry.opening_payments.count())
         for cp in closing.closing_payments.all():
             self.assertEqual(cp.closing_amount, Decimal("0"))
             self.assertEqual(cp.opening_amount, cp.expected_amount)
 
     def test_create_redirects_to_existing_draft(self):
-        """A second 'Close Shift' click must NOT create a duplicate draft —
-        it should redirect to the existing one (prevents double-click /
-        refresh from creating duplicate drafts)."""
+        """A second 'Close Shift' click redirects to the existing draft instead of creating a duplicate."""
         from apps.staff.models import POSClosingEntry
 
         first = self._seed_closing_draft()
@@ -295,29 +276,24 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
         self.assertEqual(POSClosingEntry.objects.filter(opening_entry=self.entry).count(), 1)
 
     def test_create_no_open_shift_redirects_to_dashboard(self):
-        """If no shift is open, the create endpoint refuses to start a close
-        and sends the user back to the dashboard with a warning."""
+        """With no open shift, the create endpoint redirects back to the dashboard with a warning."""
         from apps.staff.models import POSClosingEntry
 
-        # Cancel the open shift first.
         self.entry.cancel(by_user=self.user)
         response = self.client.get(reverse("staff:closing_entry_create"))
         self.assertRedirects(response, reverse("staff:dashboard"))
         self.assertEqual(POSClosingEntry.objects.count(), 0)
 
     def test_detail_get_renders_inline_form_for_draft(self):
-        """For a DRAFT closing, the detail page renders the reconciliation
-        table as an inline-editable form (POST back to the same URL)."""
+        """For a DRAFT closing, the reconciliation table renders as an inline-editable form."""
         closing = self._seed_closing_draft()
         response = self.client.get(reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Reconciliation")
-        # The form posts back to the same detail URL, not a separate edit URL.
         self.assertContains(
             response,
             f'action="{reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk})}"',
         )
-        # Submit button is wired to the SweetAlert-confirmed submit form.
         self.assertContains(response, "Submit & Close Shift")
 
     def test_detail_post_saves_amounts(self):
@@ -336,8 +312,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
             self.assertEqual(cp.closing_amount, Decimal("49500.00"))
 
     def test_detail_post_blocked_when_submitted(self):
-        """POST to a SUBMITTED closing's detail URL is rejected — the entry
-        is immutable once submitted (ERPNext submit/cancel pattern)."""
+        """POST to a SUBMITTED closing's detail URL is rejected — the entry is immutable once submitted."""
         closing = self._seed_closing_draft()
         for cp in closing.closing_payments.all():
             cp.closing_amount = cp.expected_amount
@@ -349,21 +324,18 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
             data=post_data,
         )
         self.assertEqual(response.status_code, 302)
-        # Amounts unchanged.
         for cp in closing.closing_payments.all():
             cp.refresh_from_db()
             self.assertEqual(cp.closing_amount, cp.expected_amount)
 
     def test_detail_get_read_only_when_submitted(self):
-        """For a SUBMITTED closing, the detail page renders the table
-        read-only — no inline form, no Save button."""
+        """For a SUBMITTED closing, the reconciliation table renders read-only."""
         closing = self._seed_closing_draft()
         submit_closing_entry(closing)
         response = self.client.get(reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk}))
         self.assertEqual(response.status_code, 200)
         # The 'Difference' column only appears in the read-only view.
         self.assertContains(response, "Difference")
-        # The inline form's POST action does NOT appear when read-only.
         self.assertNotContains(
             response,
             f'action="{reverse("staff:closing_entry_detail", kwargs={"pk": closing.pk})}"',
@@ -374,7 +346,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
 
         closing = self._seed_closing_draft()
         for cp in closing.closing_payments.all():
-            cp.closing_amount = cp.expected_amount  # exact match — no difference
+            cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
         response = self.client.post(reverse("staff:closing_entry_submit", kwargs={"pk": closing.pk}))
         self.assertRedirects(
@@ -412,8 +384,7 @@ class TestPOSClosingEntryViews(StaffViewTestBase):
             cp.closing_amount = cp.expected_amount
             cp.save(update_fields=["closing_amount"])
         submit_closing_entry(closing)
-        # Open a new shift — closing-cancellation must NOT reopen the older
-        # shift when a newer one is already live.
+        # Open a new shift — cancelling the older close must not reopen it while a newer shift is live.
         new_entry = POSOpeningEntry.objects.create(
             cashier=self.user,
             posting_date="2026-07-25",

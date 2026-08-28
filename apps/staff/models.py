@@ -56,11 +56,7 @@ class POSOpeningEntry(BaseModel):
 
     def clean(self):
         super().clean()
-        # Enforce "one Open shift". The check must fire whenever this entry is
-        # on the way to becoming Open — i.e. either it is already SUBMITTED
-        # (cleanup/edit), or it is DRAFT but about to be submitted (the view
-        # calls `full_clean()` before `submit()` flips the status, so guarding
-        # on `status == SUBMITTED` alone misses the submit path entirely).
+        # Must also fire on DRAFT: the view calls full_clean() before submit() flips the status.
         is_open_or_will_open = self.status == self.SUBMITTED and self.closing_entry_id is None
         is_being_submitted = self.status == self.DRAFT
         if is_open_or_will_open or is_being_submitted:
@@ -84,20 +80,13 @@ class POSOpeningEntry(BaseModel):
         return self.status == self.SUBMITTED and self.closing_entry_id is not None
 
     def submit(self):
-        """Transition from DRAFT to SUBMITTED. Idempotent.
-
-        Also re-runs the "one Open shift" check inside a `select_for_update`
-        transaction — closes the race between two concurrent POSTs that both
-        pass `full_clean()` before either flips to SUBMITTED. The view calls
-        `full_clean()` first; this is the last line of defense.
-        """
+        """Transition from DRAFT to SUBMITTED; re-checks "one Open shift" under row locks to close the submit race."""
         if self.status != self.DRAFT:
             return
         with transaction.atomic():
             from apps.settings.models import Restaurant
 
-            # Lock the Restaurant row as a single global mutex so two
-            # concurrent shift-open POSTs can't both pass the check below.
+            # Restaurant row lock is the global mutex: two concurrent opens can't both pass the check.
             Restaurant.objects.select_for_update().first()
             open_exists = (
                 POSOpeningEntry.objects.select_for_update()
@@ -219,8 +208,6 @@ class POSClosingEntry(BaseModel):
         return f"Closing #{self.pk} — {self.posting_date}"
 
     def save(self, *args, **kwargs):
-        # Auto-fill period_start / posting_date / cashier from the linked
-        # opening on the first save. Skipped if explicitly overridden.
         if self.opening_entry_id and self.period_start_date is None:
             self.period_start_date = self.opening_entry.period_start_date
         if self.opening_entry_id and not self.cashier_id:
@@ -242,9 +229,7 @@ class POSClosingEntry(BaseModel):
         """Cancel a closing entry. Blocked if a new Open shift exists."""
         if self.status == self.CANCELLED:
             return
-        # Re-opening a previous shift while a newer one is live would make
-        # two shifts claim the same period, so only the most recent close
-        # may be cancelled.
+        # Cancelling an older close would let two live shifts claim the same period.
         new_open_exists = (
             POSOpeningEntry.objects.filter(
                 status=self.SUBMITTED,
@@ -257,7 +242,6 @@ class POSClosingEntry(BaseModel):
             raise ValidationError(
                 "Cannot cancel this closing entry — a new shift is open. Close or cancel the new shift first."
             )
-        # Reverse the variance JournalEntry posted at close (Phase 6 §4.5).
         if self.variance_journal_entry_id:
             journal = self.variance_journal_entry
             if journal.status == journal.SUBMITTED:

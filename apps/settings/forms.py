@@ -64,7 +64,6 @@ class RestaurantForm(SettingsModelForm):
             "default_warehouse",
             "max_open_drafts",
             "pos_allow_full_history",
-            # Accounting (Phase 6)
             "default_income_account",
             "default_expense_account",
             "round_off_account",
@@ -74,11 +73,9 @@ class RestaurantForm(SettingsModelForm):
             "cash_shortage_account",
             "cash_over_short_account",
             "variance_approval_threshold",
-            # Payables (Phase 2 §4.1)
             "default_payable_account",
             "default_supplier_expense_account",
             "default_stock_in_hand_account",
-            # Inventory costing (PWAC D4/D5)
             "stock_received_but_not_billed_account",
             "inventory_price_variance_account",
         ]

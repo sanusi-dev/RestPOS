@@ -27,7 +27,6 @@ class PurchaseReceiptTest(TestCase):
         cls.store = Warehouse.objects.create(name="Store")
         cls.other = Warehouse.objects.create(name="Other")
         cls.restaurant = Restaurant.objects.create(company="Test", store_warehouse=cls.store)
-        # Chart + fiscal year + warehouse/GRNI wiring for GL postings
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.store.account = (
             cls.accounts["stock_in_hand"] if "stock_in_hand" in cls.accounts else cls.accounts.get("cogs")
@@ -98,8 +97,7 @@ class PurchaseReceiptTest(TestCase):
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
         PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=second_item, received_qty=2, rate=20)
         submit_purchase_receipt(receipt)
-        # Consuming only the second line makes cancellation fail after the
-        # first reversal would otherwise succeed; the whole cancellation must roll back.
+        # Consuming only the second line forces cancellation to fail mid-reversal; all reversals must roll back.
         StockLedgerEntry.create_entry(
             item=second_item, warehouse=self.store, quantity=Decimal("-2"), voucher_type="Consumption", voucher_no="1"
         )

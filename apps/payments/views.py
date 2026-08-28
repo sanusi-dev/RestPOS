@@ -23,11 +23,6 @@ def payments_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/payments/dashboard.html", context)
 
 
-# ---------------------------------------------------------------------------
-# ModeOfPayment
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def mode_list(request: HttpRequest) -> HttpResponse:
     modes = ModeOfPayment.objects.all()
@@ -78,11 +73,6 @@ def mode_update(request: HttpRequest, pk: int) -> HttpResponse:
         "backoffice/payments/mode_form.html",
         {"form": form, "is_create": False, "mode": mode},
     )
-
-
-# ---------------------------------------------------------------------------
-# PaymentGLMapping
-# ---------------------------------------------------------------------------
 
 
 @login_required

@@ -11,16 +11,13 @@ from .models import ClosingPayment
 
 
 class StaffModelForm(StyledModelForm):
-    """Base ModelForm for staff forms."""
+    pass
 
 
 class ClosingPaymentForm(StaffModelForm):
     class Meta:
         model = ClosingPayment
-        # mode_of_payment, opening_amount, expected_amount, and difference are
-        # all editable=False on the model; the first three are seeded by
-        # `closing_entry_create` and the fourth is computed on submit. Only
-        # closing_amount is user-editable.
+        # Other fields are editable=False: seeded at create, difference computed at submit.
         fields = ["closing_amount"]
         widgets = {
             "closing_amount": forms.NumberInput(
@@ -39,12 +36,9 @@ class OpeningFloatForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Snapshot the modes here so the view can re-read them from the form
-        # instance after binding (avoids a second DB round-trip and keeps
-        # the form's view of "active modes" stable across the request).
+        # Snapshot on the instance so the view re-reads modes without a second DB round-trip.
         all_modes = list(ModeOfPayment.objects.filter(enabled=True).order_by("name"))
-        # Sort CASH-type modes first — they are the primary float and should
-        # render at the top of the form.
+        # Cash modes first — the primary float renders at the top of the form.
         all_modes.sort(key=lambda m: (0 if m.type == ModeOfPayment.TYPE_CASH else 1, m.name))
         self.modes = all_modes
         for mode in self.modes:

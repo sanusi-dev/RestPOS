@@ -51,11 +51,7 @@ def collect_submitted_payment_totals(submitted_orders, payment_rows):
 
 
 def expected_closing_amounts(open_shift, period_start, period_end):
-    """Compute expected drawer amounts for each opening payment mode.
-
-    Expected = opening float + payments collected in the period (cash change
-    netted off), minus refunds of returns submitted in the period.
-    """
+    """Compute expected drawer amounts: opening float + collected payments (net of cash change) - refunds."""
     submitted_orders = Order.objects.submitted_in_shift(open_shift, period_start, period_end)
     opening_payments = list(open_shift.opening_payments.select_related("mode_of_payment").all())
     collected_by_mode = collect_submitted_payment_totals(submitted_orders, opening_payments)
@@ -139,12 +135,7 @@ def open_shift(cashier, opening_amounts, remarks=""):
 
 @transaction.atomic
 def submit_closing_entry(closing, actor=None):
-    """Compute expected amounts, validate, and close the opening entry.
-
-    When the reconciliation has a short/excess variance, a JournalEntry posts
-    atomically against the configured shortage/over-short account (Phase 6
-    §4.5). A variance beyond the approval threshold requires a manager note.
-    """
+    """Compute expected amounts, validate, and close the opening entry."""
     if closing.status != POSClosingEntry.DRAFT:
         return
     from apps.settings.models import Restaurant
@@ -169,8 +160,7 @@ def submit_closing_entry(closing, actor=None):
         )
 
     submitted_orders = Order.objects.submitted_in_shift(opening, locked.period_start_date, locked.period_end_date)
-    # Drafts block the close above; returns are excluded because they are
-    # handled by the deferred refund flow rather than drawer sales.
+    # Returns are excluded: their refunds flow through the deferred refund flow, not drawer sales.
     item_totals = (
         OrderItem.objects.filter(order_id=OuterRef("pk")).values("order_id").annotate(total=Sum("qty")).values("total")
     )
@@ -206,8 +196,6 @@ def submit_closing_entry(closing, actor=None):
         )
     locked.total_short_excess = sum((cp.difference for cp in closing_payments), Decimal("0"))
 
-    # Material variance approval gate (Phase 6 §4.5): an absolute variance
-    # beyond the configured threshold requires a manager note.
     threshold = settings.variance_approval_threshold
     if threshold is not None and abs(locked.total_short_excess) > threshold:
         is_manager_actor = actor is not None and (actor.is_manager or actor.is_admin or actor.is_superuser)
@@ -230,13 +218,10 @@ def submit_closing_entry(closing, actor=None):
             "updated_at",
         ]
     )
-    # Flip the opening entry to Closed
     opening.closing_entry = locked
     opening.period_end_date = locked.period_end_date
     opening.save(update_fields=["closing_entry", "period_end_date", "updated_at"])
 
-    # Variance GL posts atomically with the close (Phase 6 §4.5); the linked
-    # JournalEntry is immutable and reverses when the close is cancelled.
     if locked.total_short_excess:
         from apps.accounting.services import post_cash_variance_gl
 

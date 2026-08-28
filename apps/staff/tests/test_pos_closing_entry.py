@@ -44,7 +44,6 @@ class POSClosingEntryTestBase(TestCase):
             opening_entry=cls.opening,
             cashier=cls.user,
         )
-        # Seed one ClosingPayment per OpeningPayment
         for op in cls.opening.opening_payments.all():
             ClosingPayment.objects.create(
                 closing_entry=cls.closing,
@@ -61,7 +60,6 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertIn(f"Closing #{self.closing.pk}", str(self.closing))
 
     def test_save_auto_fills_from_opening(self):
-        """Auto-fill period_start and cashier from the linked opening."""
         # Close the first shift so the global one-open-shift rule allows a second opening.
         submit_closing_entry(self.closing)
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
@@ -78,7 +76,6 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertEqual(new_closing.period_start_date, new_opening.period_start_date)
 
     def test_clean_rejects_draft_opening(self):
-        """Reject if the linked opening is not open."""
         submit_closing_entry(self.closing)
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         new_closing = POSClosingEntry(opening_entry=new_opening)
@@ -134,12 +131,10 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.assertEqual(self.closing.status, prev_status)
 
     def test_cancel_blocks_if_new_open_shift(self):
-        """Block cancel if a new Open shift exists."""
         cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
         cash_closing.closing_amount = Decimal("50000")
         cash_closing.save()
         submit_closing_entry(self.closing)
-        # Now create a new shift and open it
         new_opening = POSOpeningEntry.objects.create(cashier=self.user, posting_date="2026-07-25")
         OpeningPayment.objects.create(
             opening_entry=new_opening,
@@ -161,7 +156,6 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         # The opening entry is NOT reopened
         self.opening.refresh_from_db()
         self.assertTrue(self.opening.is_closed)
-        # closing_entry still set
         self.assertEqual(self.opening.closing_entry, self.closing)
 
 
@@ -185,7 +179,6 @@ class ClosingPaymentModelTest(POSClosingEntryTestBase):
             self.cash_mode.delete()
 
     def test_clean_rejects_undeclared_mode(self):
-        """Reject payment mode not declared at shift-open."""
         other_mode = ModeOfPayment.objects.create(name="Stranger", type="GENERAL")
         cp = ClosingPayment(
             closing_entry=self.closing,

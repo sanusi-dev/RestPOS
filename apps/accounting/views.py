@@ -1,5 +1,4 @@
-"""Accounting backoffice views — chart of accounts, journal entries, GL entries,
-fiscal years. All behind the backoffice role gate."""
+"""Accounting backoffice views — chart of accounts, journals, GL, fiscal years, payables."""
 
 from decimal import Decimal
 
@@ -37,11 +36,6 @@ def _require_manager(request: HttpRequest) -> CustomUser:
     return user
 
 
-# ---------------------------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def accounting_dashboard(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
@@ -64,11 +58,6 @@ def accounting_dashboard(request: HttpRequest) -> HttpResponse:
             "outstanding_total": sum((s.outstanding_balance for s in Supplier.objects.all()), Decimal("0")),
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Chart of Accounts
-# ---------------------------------------------------------------------------
 
 
 @login_required
@@ -136,11 +125,6 @@ def account_update(request: HttpRequest, pk: int) -> HttpResponse:
         "backoffice/accounting/account_form.html",
         {"form": form, "is_create": False, "account": account},
     )
-
-
-# ---------------------------------------------------------------------------
-# Journal Entries
-# ---------------------------------------------------------------------------
 
 
 @login_required
@@ -291,11 +275,6 @@ def journal_entry_amend(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:journal_entry_update", pk=copy.pk)
 
 
-# ---------------------------------------------------------------------------
-# GL Entries (read-only)
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def gl_entry_list(request: HttpRequest) -> HttpResponse:
     _require_manager(request)
@@ -321,11 +300,6 @@ def gl_entry_list(request: HttpRequest) -> HttpResponse:
             "include_cancelled": include_cancelled,
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Fiscal Years
-# ---------------------------------------------------------------------------
 
 
 @login_required

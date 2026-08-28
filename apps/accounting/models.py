@@ -9,7 +9,6 @@ from apps.utils.models import BaseModel
 class LedgerAccount(BaseModel):
     """A chart-of-accounts node — a group (heading) or a leaf posting account."""
 
-    # Account root types (required on roots, inherited below)
     ASSET = "ASSET"
     LIABILITY = "LIABILITY"
     EQUITY = "EQUITY"
@@ -30,7 +29,6 @@ class LedgerAccount(BaseModel):
         (PROFIT_AND_LOSS, "Profit & Loss"),
     ]
 
-    # Restaurant-relevant subset of ERPNext account types.
     ACCOUNT_TYPE_CASH = "Cash"
     ACCOUNT_TYPE_BANK = "Bank"
     ACCOUNT_TYPE_STOCK = "Stock"
@@ -83,7 +81,7 @@ class LedgerAccount(BaseModel):
             raise ValidationError({"name": "Account name is required."})
         if self.pk and self.parent_id == self.pk:
             raise ValidationError({"parent": "An account cannot be its own parent."})
-        # Detect cycles by walking up the parent chain (flat FK tree).
+        # Detect cycles by walking up the parent chain.
         if self.parent_id:
             node = self.parent
             seen = {self.pk}
@@ -97,7 +95,6 @@ class LedgerAccount(BaseModel):
         if not self.parent_id and not self.root_type:
             raise ValidationError({"root_type": "Root accounts must declare a root type."})
         if self.parent_id:
-            # Children inherit their root type from the parent group.
             if not self.root_type:
                 self.root_type = self.parent.root_type
             if self.root_type != self.parent.root_type:
@@ -112,9 +109,6 @@ class LedgerAccount(BaseModel):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # PROTECT on FKs from GL/journal rows, payment mappings, and configured
-        # account FKs is enforced at the DB level; this model-level guard gives
-        # friendlier errors for the tree itself.
         if self.children.exists():
             raise ValidationError("Cannot delete an account that has children.")
         super().delete(*args, **kwargs)
@@ -170,8 +164,8 @@ class FiscalYear(BaseModel):
 class GLEntry(BaseModel):
     """One side of a journalised posting — immutable once created.
 
-    Exactly one of debit/credit is non-zero. Rows are never edited; reversal
-    postings mark the original row ``is_cancelled`` and write mirror rows.
+    Exactly one of debit/credit is non-zero; reversal postings mark the
+    original row ``is_cancelled`` and write mirror rows.
     """
 
     posting_date = models.DateField()
@@ -243,12 +237,7 @@ class GLEntry(BaseModel):
 
     @classmethod
     def post(cls, *, posting_date, rows, voucher_type, voucher_no, remarks=""):
-        """Create a batch of GL entries atomically.
-
-        ``rows`` is an iterable of dicts with account / debit / credit /
-        against. The fiscal year is resolved from the posting date and must
-        cover it. The batch must balance. Returns the created entries.
-        """
+        """Create a balanced batch of GL entries atomically, resolving the fiscal year from the posting date."""
         rows = list(rows)
         total_debit = sum((row.get("debit") or Decimal("0") for row in rows), Decimal("0"))
         total_credit = sum((row.get("credit") or Decimal("0") for row in rows), Decimal("0"))
@@ -426,7 +415,6 @@ class JournalEntry(BaseModel):
             remarks=locked.remark,
         )
         if locked.is_opening:
-            # Opening-typed vouchers post GL rows flagged as opening.
             GLEntry.objects.filter(voucher_type="Journal Entry", voucher_no=str(locked.pk)).update(is_opening=True)
 
     @transaction.atomic
@@ -532,9 +520,6 @@ class JournalEntryAccount(BaseModel):
         super().save(*args, **kwargs)
 
 
-# Supplier payables (Phase 2 §4.1) — imported here so the app exposes a single
-# model surface (``apps.accounting.models.Supplier`` etc.); the implementations
-# live in ``payables_models.py`` to keep this module within the file-size limit.
 from .payables_models import (  # noqa: E402,F401
     Supplier,
     SupplierInvoice,

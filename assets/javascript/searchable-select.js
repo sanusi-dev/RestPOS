@@ -1,9 +1,6 @@
 /**
- * Searchable select fields (Tom Select).
- *
- * Enhances every <select> with a type-to-search box so long option lists
- * (items and warehouses) are usable. Skips elements marked with
- * data-no-search. Re-runs after HTMX swaps so dynamic formset rows work.
+ * Searchable select fields (Tom Select). Re-runs after HTMX swaps so
+ * dynamic formset rows work.
  */
 import TomSelect from 'tom-select';
 import 'tom-select/dist/css/tom-select.css';
@@ -73,7 +70,6 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-// HTMX partials (formset add/remove rows, filters that swap content)
 document.body.addEventListener('htmx:afterSwap', (event) => {
   initSearchableSelects(event.detail?.target || document);
 });

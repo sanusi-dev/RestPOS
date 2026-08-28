@@ -186,9 +186,8 @@ class Command(BaseCommand):
                 warehouse.account = account
                 warehouse.save(update_fields=["account", "updated_at"])
 
-        # Supplier payables (Phase 2 §4.1): a dedicated payable leaf under
-        # Liabilities plus a stock-in-hand default under the Inventory Stock
-        # group, wired onto the Restaurant singleton.
+        # Supplier payables: a dedicated payable leaf under Liabilities plus a
+        # stock-in-hand default under the Inventory Stock group.
         liabilities = LedgerAccount.objects.get_or_create(
             name="Liabilities",
             defaults={

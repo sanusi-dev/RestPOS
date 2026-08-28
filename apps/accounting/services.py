@@ -1,9 +1,4 @@
-"""GL posting services — order settlement, cancellation, and refund postings.
-
-The Order is the accounting document: GL posts at order settle and reverses
-at order cancel/return. Manual journals and cash variance postings also flow
-through here.
-"""
+"""GL posting services — order settlement, cancellation, refund, variance, and payables postings."""
 
 from decimal import Decimal
 
@@ -19,11 +14,6 @@ from .models import GLEntry, JournalEntry, JournalEntryAccount
 from .payables_models import SupplierInvoiceItem
 
 TWO_PLACES = Decimal("0.01")
-
-
-# ---------------------------------------------------------------------------
-# Account chain resolution
-# ---------------------------------------------------------------------------
 
 
 def _income_account_for(item_group, department):
@@ -67,11 +57,6 @@ def _resolve_payment_account(mode):
     if not account.is_leaf:
         raise ValidationError(f"Payment mode {mode.name}'s GL account ({account.name}) must be a leaf account.")
     return account
-
-
-# ---------------------------------------------------------------------------
-# Order GL
-# ---------------------------------------------------------------------------
 
 
 def _order_lines_with_accounts(order):
@@ -215,15 +200,10 @@ def _merge_rows(rows):
 
 @transaction.atomic
 def post_order_gl(order):
-    """Post GL entries for a settled order. Runs inside settle_order's atomic block.
-
-    All entries carry voucher_type="Order", voucher_no=invoice_number.
-    Settlement fails closed when the required account chain is missing.
-    """
+    """Post GL entries for a settled order; fails closed when the account chain is unconfigured."""
     if order.status != SUBMITTED:
         raise ValidationError("Only submitted orders can be posted to the GL.")
     if order.is_return:
-        # Returns post via the refund flow, not here.
         return
     if GLEntry.objects.filter(voucher_type="Order", voucher_no=order.invoice_number, is_cancelled=False).exists():
         return  # already posted — idempotent
@@ -238,7 +218,6 @@ def post_order_gl(order):
     legs.extend(_rounding_leg(order, settings))
     legs.extend(_cogs_legs(order, rows, settings))
 
-    # Build `against` (balancing account names) and merge.
     against = ", ".join(row["account"].name for row in legs if row.get("credit"))
     for row in legs:
         row["against"] = against
@@ -259,9 +238,8 @@ def post_order_gl(order):
 def reverse_order_gl(order, posting_date=None):
     """Post mirror-negated GL entries for a cancelled order or a return.
 
-    Marks the original settle-time entries cancelled and writes negated rows.
-    Reversals post on the day they occur (default: today) — corrections never
-    retroactively alter the period of the original posting.
+    Reversals post on the day they occur — corrections never retroactively
+    alter the period of the original posting.
     """
     originals = GLEntry.objects.filter(voucher_type="Order", voucher_no=order.invoice_number, is_cancelled=False)
     if not originals.exists():
@@ -284,11 +262,6 @@ def reverse_order_gl(order, posting_date=None):
         voucher_no=order.invoice_number,
         remarks="Reversal",
     )
-
-
-# ---------------------------------------------------------------------------
-# Refund GL
-# ---------------------------------------------------------------------------
 
 
 def _is_drink_line(line):
@@ -320,7 +293,6 @@ def _current_wac_for_return(return_order, item):
     """Current WAC at return time — from restore SLE or Bin."""
     from apps.inventory.models import Bin, StockLedgerEntry
 
-    # Prefer the restore SLE created by _restore_stock (POS Return) — business date is posting_date.
     restore = (
         StockLedgerEntry.objects.filter(
             voucher_type="POS Return",
@@ -333,12 +305,10 @@ def _current_wac_for_return(return_order, item):
     )
     if restore is not None:
         return restore.unit_rate
-    # Not restockable has no restore — use Bin's current WAC
     if return_order.stock_warehouse_id:
         bin_obj = Bin.objects.filter(item=item, warehouse=return_order.stock_warehouse).first()
         if bin_obj and bin_obj.valuation_rate:
             return bin_obj.valuation_rate
-    # Fallback to original sale rate
     return _settle_time_rate(return_order.return_against, item)
 
 
@@ -362,12 +332,7 @@ def _plug_round_off(rows, settings):
 
 @transaction.atomic
 def post_refund_gl(return_order):
-    """Post refund GL rebuilt from the returned lines, payments, and wastage.
-
-    Income reverses per returned line. Payment credits follow the return's
-    OrderPayment rows. Drink lines reverse COGS at the settle-time outgoing
-    rate; not-restockable drink lines also post Dr wastage / Cr warehouse.
-    """
+    """Post refund GL rebuilt from the returned lines, payments, and wastage."""
     if return_order.status != SUBMITTED or not return_order.is_return:
         raise ValidationError("Only submitted return orders can be posted to the GL.")
     source = return_order.return_against
@@ -460,17 +425,10 @@ def post_refund_gl(return_order):
     )
 
 
-# ---------------------------------------------------------------------------
-# Cash variance posting (Phase 6 §4.5)
-# ---------------------------------------------------------------------------
-
-
 @transaction.atomic
 def post_cash_variance_gl(closing):
     """Post a JournalEntry for a closing entry's short/excess variance.
 
-    Shortage → Dr shortage account / Cr cash account.
-    Excess → Dr cash account / Cr over-short account.
     Only posts when the account matching the variance sign is configured;
     otherwise the variance stays visible on the close with no posting.
     """
@@ -542,11 +500,6 @@ def post_cash_variance_gl(closing):
     return journal
 
 
-# ---------------------------------------------------------------------------
-# Supplier payables GL (Phase 2 §4.1)
-# ---------------------------------------------------------------------------
-
-
 def _payable_account_for(supplier, settings, label="The default payable account"):
     """Resolve the payable account: per-supplier override → Restaurant default."""
     account = supplier.payable_account if supplier.payable_account_id else None
@@ -582,11 +535,7 @@ def _reverse_gl(voucher_type, voucher_no, remarks="Reversal", posting_date=None)
 
 @transaction.atomic
 def build_supplier_invoice_stock_lines(invoice):
-    """Create SupplierInvoiceItem rows from the linked receipt's lines.
-
-    Each receipt line not already linked to an item line on this invoice is
-    copied (qty/rate auto-fill from the receipt line in the model's save()).
-    """
+    """Create SupplierInvoiceItem rows from the linked receipt's unlinked lines."""
     if not invoice.purchase_receipt_id:
         return
     for receipt_line in invoice.purchase_receipt.items.all():
@@ -620,10 +569,8 @@ def post_supplier_invoice_gl(invoice):
     stock_rows = []
     expense_rows = []
     for line in invoice.items.select_related("item", "source_receipt_line").all():
-        # Stock lines must link to a purchase receipt (GRNI clearing)
         if not invoice.purchase_receipt_id:
             raise ValidationError("Supplier invoices with stock lines must link to a purchase receipt.")
-        # Enforce rate/qty equality if linked to receipt line
         if line.source_receipt_line_id and (
             line.qty != line.source_receipt_line.received_qty or line.rate != line.source_receipt_line.rate
         ):

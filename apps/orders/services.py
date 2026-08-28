@@ -39,10 +39,6 @@ from .models import (
     OrderPayment,
 )
 
-# ---------------------------------------------------------------------------
-# Order workflows
-# ---------------------------------------------------------------------------
-
 
 @transaction.atomic
 def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
@@ -154,9 +150,7 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     """Process a normal POS payment and submit the order atomically.
 
     Lines, stock, shift ownership, and payments are validated before the
-    order becomes immutable. Settlement doubles as the receipt event. GL
-    posts at settle (Phase 6) and fails closed when the account chain is
-    missing.
+    order becomes immutable. Fails closed when the account chain is missing.
     """
     locked = Order.objects.select_for_update().get(pk=order.pk)
     if locked.status != DRAFT:
@@ -233,8 +227,6 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
     with _transition(locked, flag="_allow_submit"):
         locked.save()
     _convert_drink_reservations(locked, reservations_initialized=reservations_initialized)
-    # GL posts inside the same atomic block, after the order flips SUBMITTED
-    # and the drink deductions are written (Phase 6 §4.2).
     from apps.accounting.services import post_order_gl
 
     post_order_gl(locked)
@@ -431,7 +423,7 @@ def make_return(order):
     if not source.is_paid:
         raise ValidationError("Only paid orders can be returned.")
     # One active return draft at a time; submitted returns are settled, so a
-    # new draft may be created for a further partial refund (Phase 6 §4.3).
+    # new draft may be created for a further partial refund.
     if source.return_orders.filter(status=DRAFT).exists():
         raise ValidationError("This order already has an active return.")
 
@@ -439,7 +431,7 @@ def make_return(order):
     # guest tag) so the return totals are exact negatives of the sale.
     # The mirrored qty is the *remaining returnable* amount — already
     # submitted returns reduce it, so a second return draft starts from the
-    # remainder (Phase 6 §4.3 partial returns).
+    # remainder.
     previously_returned = {}
     returned_rows = (
         OrderItem.objects.filter(
@@ -518,8 +510,8 @@ def submit_return(order, actor=None):
     locked.submitted_at = timezone.now()
     with _transition(locked, flag="_allow_submit"):
         locked.save()
-    # Refund GL mirrors the source settle legs for the refunded portion
-    # (Phase 6 §4.3), inside the same atomic block.
+    # Refund GL mirrors the source settle legs for the refunded portion,
+    # inside the same atomic block.
     from apps.accounting.services import post_refund_gl
 
     post_refund_gl(locked)
@@ -613,11 +605,6 @@ def _build_ticket_snapshots(locked, planned_tickets, *, created_by):
     return created
 
 
-# ---------------------------------------------------------------------------
-# Ticket dispatch
-# ---------------------------------------------------------------------------
-
-
 def dispatch_tickets(tickets):
     """Print each ticket, persist its print status, and return failed ticket types."""
     print_failures = []
@@ -634,11 +621,6 @@ def dispatch_tickets(tickets):
                 print_failures.append(result.ticket_type)
             ticket.save(update_fields=["print_status", "updated_at"])
     return print_failures
-
-
-# ---------------------------------------------------------------------------
-# Drink stock accounting
-# ---------------------------------------------------------------------------
 
 
 def drink_quantities(order):
@@ -739,11 +721,6 @@ def drink_stock_available(menu_items, settings):
         if available_qty <= 0:
             menu_item.stock_unavailable = True
             menu_item.stock_message = "Out of stock"
-
-
-# ---------------------------------------------------------------------------
-# POS read builders (query construction; views keep rendering/messages)
-# ---------------------------------------------------------------------------
 
 
 def order_history_rows(filters):
@@ -889,11 +866,6 @@ def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")
                 item_name=add_on_menu_items[add_on.add_on_item_id].item_name,
             )
         order.recalculate_totals()
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _validate_payment_data(order, payments_data, opening_entry):

@@ -28,14 +28,9 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/menu/dashboard.html", context)
 
 
-# ---------------------------------------------------------------------------
-# Menu
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def menu_list(request: HttpRequest) -> HttpResponse:
-    # annotate Avoids per-row COUNT query in template ({ menu.items.count }).
+    # Annotated count avoids a per-row COUNT in the template.
     menus = Menu.objects.annotate(item_count=Count("items"))
     return render(request, "backoffice/menu/menu_list.html", {"menus": menus})
 
@@ -55,7 +50,6 @@ def menu_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
     menu = get_object_or_404(Menu, pk=pk)
-    # Template reads denormalized mi.item_name only — no need to JOIN item.
     menu_items = menu.items.all()
     return render(
         request,
@@ -81,15 +75,9 @@ def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# MenuItem
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def menu_item_list(request: HttpRequest) -> HttpResponse:
     menu_id = request.GET.get("menu")
-    # Template reads mi.item_name (denormalized) + mi.menu.name — no need to JOIN item.
     menu_items = MenuItem.objects.select_related("menu").all()
     if menu_id:
         menu_items = menu_items.filter(menu_id=menu_id)
@@ -144,11 +132,6 @@ def menu_item_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("menu:menu_detail", pk=menu_id)
 
 
-# ---------------------------------------------------------------------------
-# ItemAddOn
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def add_on_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
@@ -198,11 +181,6 @@ def add_on_delete(request: HttpRequest, pk: int) -> HttpResponse:
     add_on = get_object_or_404(ItemAddOn, pk=pk)
     add_on.delete()
     return redirect("menu:add_on_list")
-
-
-# ---------------------------------------------------------------------------
-# ItemVariant
-# ---------------------------------------------------------------------------
 
 
 @login_required

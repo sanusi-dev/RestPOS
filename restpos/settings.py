@@ -8,27 +8,17 @@ from typing import Any
 import environ
 from django.utils.translation import gettext_lazy
 
-# Build paths inside the project like this: BASE_DIR / "subdir".
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
 env.read_env(os.path.join(BASE_DIR, ".env"))
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/stable/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-HjfWKVIxpdgt4NHh8q56GGVTdjDvKeYV32hlsbl1")
 
-# SECURITY WARNING: don"t run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=True)
 ENABLE_DEBUG_TOOLBAR = env.bool("ENABLE_DEBUG_TOOLBAR", default=False) and "test" not in sys.argv
 
-# Note: It is not recommended to set ALLOWED_HOSTS to "*" in production
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
-
-
-# Application definition
 
 DJANGO_APPS = [
     "django.contrib.admin",
@@ -43,7 +33,6 @@ DJANGO_APPS = [
     "django.forms",
 ]
 
-# Put your third-party apps here
 THIRD_PARTY_APPS = [
     "allauth",  # allauth account/registration management
     "allauth.account",
@@ -53,7 +42,6 @@ THIRD_PARTY_APPS = [
     "django_hugeicons_stroke",
 ]
 
-# Put your project-specific apps here
 PROJECT_APPS = [
     "apps.users.apps.UserConfig",
     "apps.settings.apps.SettingsConfig",
@@ -98,8 +86,7 @@ if DEBUG:
 
 ROOT_URLCONF = "restpos.urls"
 
-# used to disable the cache in dev, but turn it on in production.
-# more here: https://nickjanetakis.com/blog/django-4-1-html-templates-are-cached-by-default-with-debug-true
+# Cached template loaders are disabled under DEBUG so edits show without restart.
 _DEFAULT_LOADERS = [
     "django.template.loaders.filesystem.Loader",
     "django.template.loaders.app_directories.Loader",
@@ -136,7 +123,6 @@ WSGI_APPLICATION = "restpos.wsgi.application"
 FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
 
 # Database
-# https://docs.djangoproject.com/en/stable/ref/settings/#databases
 
 if "DATABASE_URL" in env:
     DATABASES = {"default": env.db()}
@@ -154,14 +140,9 @@ else:
 
 # Auth and Login
 
-# Django recommends overriding the user model even if you don"t think you need to because it makes
-# future changes much easier.
 AUTH_USER_MODEL = "users.CustomUser"
 LOGIN_URL = "account_login"
 LOGIN_REDIRECT_URL = "/"
-
-# Password validation
-# https://docs.djangoproject.com/en/stable/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -178,7 +159,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Allauth setup
+# Allauth
 
 ACCOUNT_ADAPTER = "apps.users.adapter.RestPOSAccountAdapter"
 ACCOUNT_LOGIN_METHODS = {"username"}
@@ -201,20 +182,14 @@ ACCOUNT_FORMS = {
     "signup": "apps.users.forms.CustomSignupForm",
 }
 
-# User signup configuration: change to "mandatory" to require users to confirm email before signing in.
-# or "optional" to send confirmation emails but not require them
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="none")
 
 AUTHENTICATION_BACKENDS = (
-    # Needed to login by username in Django admin, regardless of `allauth`
     "django.contrib.auth.backends.ModelBackend",
-    # `allauth` specific authentication methods, such as login by e-mail
     "allauth.account.auth_backends.AuthenticationBackend",
 )
 
-
 # Internationalization
-# https://docs.djangoproject.com/en/stable/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
 
@@ -223,10 +198,6 @@ TIME_ZONE = "UTC"
 USE_I18N = False
 
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/stable/howto/static-files/
 
 STATIC_ROOT = BASE_DIR / "static_root"
 STATIC_URL = "/static/"
@@ -240,9 +211,6 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        # swap these to use manifest storage to bust cache when files change
-        # note: this may break image references in sass/css files which is why it is not enabled by default
-        # "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
@@ -250,7 +218,6 @@ STORAGES = {
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
-# Vite Integration
 DJANGO_VITE = {
     "default": {
         "dev_mode": env.bool("DJANGO_VITE_DEV_MODE", default=DEBUG),
@@ -259,35 +226,20 @@ DJANGO_VITE = {
         "manifest_path": BASE_DIR / "static" / ".vite" / "manifest.json",
     }
 }
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/stable/ref/settings/#default-auto-field
-
-# future versions of Django will use BigAutoField as the default, but it can result in unwanted library
-# migration files being generated, so we stick with AutoField for now.
-# change this to BigAutoField if you"re sure you want to use it and aren"t worried about migrations.
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
-# Removes deprecation warning for future compatibility.
-# see https://adamj.eu/tech/2023/12/07/django-fix-urlfield-assume-scheme-warnings/ for details.
+# Silence UrlField assume_scheme deprecation warnings.
 FORMS_URLFIELD_ASSUME_HTTPS = True
-
-# Email setup
 
 SERVER_EMAIL = env("SERVER_EMAIL", default="noreply@localhost:8000")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="sanusio293@gmail.com")
 
-# The default value will print emails to the console, but you can change that here
-# and in your environment.
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 
 EMAIL_SUBJECT_PREFIX = "[RestPOS] "
 
-# Django sites
-
 SITE_ID = 1
 
-# Redis, cache, and/or Celery setup
 # `or` treats an empty REDIS_URL as unset so it falls back instead of yielding an empty URL
 REDIS_URL = env("REDIS_URL", default=None) or env("REDIS_TLS_URL", default=None)
 if not REDIS_URL:
@@ -310,19 +262,9 @@ CELERY_BROKER_URL = CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 # Add tasks to this dict and run `python manage.py bootstrap_celery_tasks` to create them
-SCHEDULED_TASKS: dict[str, Any] = {
-    # Example of a crontab schedule
-    # from celery import schedules
-    # "daily-4am-task": {
-    #     "task": "some.task.path",
-    #     "schedule": schedules.crontab(minute=0, hour=4),
-    # },
-}
+SCHEDULED_TASKS: dict[str, Any] = {}
 
 
-# Pegasus config
-
-# replace any values below with specifics for your project
 PROJECT_METADATA = {
     "NAME": gettext_lazy("RestPOS"),
     "URL": "http://localhost:8000",
@@ -336,7 +278,6 @@ PROJECT_METADATA = {
     "CONTACT_EMAIL": "sanusio293@gmail.com",
 }
 
-# set this to True in production to have URLs generated with https instead of http
 USE_HTTPS_IN_ABSOLUTE_URLS = env.bool("USE_HTTPS_IN_ABSOLUTE_URLS", default=False)
 
 ADMINS = ["sanusio293@gmail.com"]

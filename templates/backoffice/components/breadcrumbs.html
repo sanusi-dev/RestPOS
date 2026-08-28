@@ -1,12 +1,5 @@
 {% comment %}
-Shared backoffice breadcrumb navigation.
-
-Parameters:
-  root_label    (required) - label of the section root, e.g. "Inventory"
-  root_url      (required) - URL name of the section root, e.g. "inventory:dashboard"
-  section_label (optional) - middle crumb label, e.g. "Items"
-  section_url   (optional) - URL name for the middle crumb
-  current_label (required) - label of the current page (not a link)
+Params: root_label/root_url (required), section_label/section_url (optional), current_label (required).
 
 Usage:
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Items" section_url="inventory:item_list" current_label="New Item" %}

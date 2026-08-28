@@ -92,23 +92,14 @@ class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
                 expected_amount=op.opening_amount,
                 closing_amount=op.opening_amount,
             )
-        # Submitting the closing flips the opening to Closed.
         submit_closing_entry(closing)
         self.entry.refresh_from_db()
         self.assertTrue(self.entry.is_closed)
         self.assertIsNotNone(self.entry.closing_entry)
 
     def test_cannot_have_two_open_shifts(self):
-        """Reject a second open shift — one open shift exists at most.
-
-        Covers the historical regression: clean() used to gate on
-        `status == SUBMITTED`, but the view calls full_clean() *before*
-        submit() flips the status, so the check was skipped and two DRAFTs
-        could both pass validation then both submit. The fix makes clean()
-        fire when status is DRAFT (about to be submitted) too.
-        """
-        self.entry.submit()  # status=SUBMITTED, closing_entry=NULL → is_open=True
-        # New DRAFT entry — this is the state the view's full_clean() runs on.
+        """Regression: clean() must also fire on DRAFT — full_clean() runs before submit() flips the status."""
+        self.entry.submit()
         new_entry = POSOpeningEntry(
             cashier=self.user,
             posting_date="2026-07-24",
@@ -117,9 +108,7 @@ class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
             new_entry.full_clean()
 
     def test_submit_blocks_second_open_shift(self):
-        """Regression: submit() must re-check the unique-Open rule inside
-        a transaction, so a concurrent submit that bypassed full_clean()
-        (or a caller that forgets to call it) is still blocked."""
+        """Regression: submit() must re-check the unique-Open rule inside the transaction."""
         self.entry.submit()
         new_entry = POSOpeningEntry.objects.create(
             cashier=self.user,
@@ -127,10 +116,8 @@ class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
         )
         with self.assertRaises(ValidationError):
             new_entry.submit()
-        # The failed submit must NOT have flipped the status.
         new_entry.refresh_from_db()
         self.assertEqual(new_entry.status, POSOpeningEntry.DRAFT)
-        # Only one Open shift remains.
         self.assertEqual(
             POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True).count(),
             1,

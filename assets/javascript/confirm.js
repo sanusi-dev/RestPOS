@@ -24,8 +24,7 @@ function showConfirm(element) {
   });
 }
 
-// Handle custom data-confirm-* dialogs here; native hx-confirm values remain
-// handled by HTMX when no custom dialog metadata is present.
+// Custom data-confirm-* dialogs; native hx-confirm values remain handled by HTMX.
 document.addEventListener('htmx:confirm', function (e) {
   const message = confirmMessage(e.target);
   if (!message && !e.target.dataset.confirmTitle) {
@@ -41,9 +40,7 @@ document.addEventListener('htmx:confirm', function (e) {
   });
 });
 
-// Normal form submits and plain button/link clicks with confirmation
-// attributes. A one-shot data-confirm-accepted flag lets the re-submitted
-// event pass through without prompting twice.
+// A one-shot data-confirm-accepted flag lets the re-submitted event pass through without prompting twice.
 document.addEventListener(
   'submit',
   function (e) {
@@ -74,13 +71,11 @@ document.addEventListener(
   function (e) {
     const trigger = e.target.closest('[data-confirm-message], [data-confirm-body], [data-confirm-title]');
     if (!trigger || trigger.closest('form')) {
-      // Forms are handled by the submit listener.
       return;
     }
     if (!(trigger instanceof HTMLElement)) {
       return;
     }
-    // HTMX elements use htmx:confirm above.
     if (trigger.hasAttribute('hx-get') || trigger.hasAttribute('hx-post') || trigger.hasAttribute('hx-delete')) {
       return;
     }
@@ -97,8 +92,7 @@ document.addEventListener(
         return;
       }
       if (typeof trigger.click === 'function') {
-        // A one-shot flag so the synthetic click below (e.g. a checkbox or
-        // button with no HTMX attrs) doesn't re-trigger this handler.
+        // One-shot flag so the synthetic click below doesn't re-trigger this handler.
         trigger.dataset.confirmAccepted = 'true';
         trigger.click();
       }

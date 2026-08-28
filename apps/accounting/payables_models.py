@@ -1,10 +1,4 @@
-"""Supplier payables models — supplier master, invoices, payments, and allocations.
-
-These models are defined here (not in ``apps/accounting/models.py``) to keep
-that module under the project's file-size guideline; they are still part of the
-``accounting`` app and are imported into ``apps/accounting/models`` for a single
-model surface.
-"""
+"""Supplier payables models — supplier master, invoices, payments, and allocations."""
 
 from decimal import Decimal
 
@@ -66,7 +60,6 @@ class Supplier(BaseModel):
 
     def save(self, *args, **kwargs):
         if self.is_default:
-            # Sole default supplier used by quick entry; clears the flag on all others.
             Supplier.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
         self.full_clean()
         super().save(*args, **kwargs)
@@ -123,8 +116,6 @@ class SupplierInvoice(BaseModel):
                 allow_status = getattr(self, "_allow_status", False)
                 if not allow_status:
                     raise ValidationError(f"Cannot modify a {previous.status.lower()} supplier invoice.")
-                # Only the workflow-maintained fields may change on a
-                # submitted/cancelled invoice; user-editable fields stay locked.
                 editable = (
                     "supplier",
                     "posting_date",
@@ -286,9 +277,7 @@ class SupplierInvoiceItem(BaseModel):
         if self.rate < 0:
             raise ValidationError("Item rate cannot be negative.")
         if not self.source_receipt_line_id and self.invoice_id and self.invoice.purchase_receipt_id:
-            # Stock lines on a receipt-linked invoice must trace to a receipt
-            # line — qty/rate then come from the receipt and GRNI clears at
-            # the exact credited rate (PWAC D4 rate lock).
+            # Qty/rate come from the receipt so GRNI clears at the exact credited rate.
             raise ValidationError(
                 {"source_receipt_line": "Stock lines on a receipt-linked invoice must link to a receipt line."}
             )

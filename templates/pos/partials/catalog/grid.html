@@ -1,5 +1,4 @@
 {% load humanize %}
-{% comment %}Ordinary items post directly to the cart; items with add-ons first load the customization dialog.{% endcomment %}
 <div id="catalog-grid" {% if catalog_oob %}hx-swap-oob="outerHTML"{% endif %}
      class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
      >

@@ -48,7 +48,6 @@
 <!-- hx-headers covers HTMX requests; normal form posts still include csrf_token explicitly. -->
 <body class="{% block body_class %}bg-[#fafafa] text-gray-800 relative min-h-screen flex flex-col{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-boost="true">
 
-<!-- Subtle Global Background Decoration -->
 <div class="fixed inset-0 -z-10 pointer-events-none bg-[radial-gradient(600px_circle_at_95%_-5%,rgba(255,237,213,0.5),transparent_70%),radial-gradient(500px_circle_at_-5%_105%,rgba(254,242,242,0.6),transparent_70%)]"></div>
 
 {% block body_wrapper %}

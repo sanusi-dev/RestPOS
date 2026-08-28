@@ -1,8 +1,4 @@
-"""Shared test helpers — chart-of-accounts setup used across app test suites.
-
-Phase 6 settlement and shift close fail closed when the account chain is
-missing, so order/staff tests that settle or close need this baseline setup.
-"""
+"""Shared test helpers — chart-of-accounts setup used across app test suites."""
 
 from datetime import date
 

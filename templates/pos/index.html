@@ -21,20 +21,16 @@
       {% if catalog_specials %}<input type="hidden" name="specials" value="1" form="catalog-search-field">{% endif %}
     </div>
 
-    {% comment %}========== CATEGORY SIDEBAR (LEFT) =========={% endcomment %}
     {% include "pos/partials/catalog/sidebar.html" %}
 
-    {% comment %}========== CATALOG (CENTER) =========={% endcomment %}
     {% include "pos/partials/catalog/panel.html" %}
   </div>
   {% endpartialdef %}
 
-  {% comment %}========== CART PANEL (RIGHT) =========={% endcomment %}
   {% partialdef cart inline %}
   {% include "pos/partials/cart/panel.html" %}
   {% endpartialdef %}
 
-  {% comment %}========== PAYMENT DIALOG (HTMX-loaded) =========={% endcomment %}
   {% partialdef payment_dialog %}
   {% include "pos/partials/payment/dialog.html" %}
   {% endpartialdef %}

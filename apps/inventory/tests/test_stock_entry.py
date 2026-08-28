@@ -31,7 +31,6 @@ class StockEntryTest(TestCase):
             company="Test Restaurant", store_warehouse=cls.store, default_warehouse=cls.bar
         )
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
-        # Wire warehouse accounts for GL (material receipt posts SIH)
         for wh in [cls.store, cls.kitchen, cls.bar]:
             wh.account = cls.accounts["stock_in_hand"]
             wh.save(update_fields=["account", "updated_at"])
@@ -207,7 +206,6 @@ class StockEntryTest(TestCase):
         reversals = StockLedgerEntry.objects.filter(voucher_type="Stock Entry Cancellation", voucher_no=str(entry.pk))
         target_reversal = reversals.get(warehouse=self.kitchen)
         source_reversal = reversals.get(warehouse=self.store)
-        # Dest reversal outbound at dest current WAC 200
         self.assertEqual(target_reversal.unit_rate, Decimal("200"))
         self.assertEqual(target_reversal.quantity, Decimal("-1"))
         # Source reversal inbound at dest WAC 200

@@ -150,7 +150,7 @@ class Item(BaseModel):
 
     def save(self, *args, **kwargs):
         if self.has_variants:
-            # Templates are structure only — never stocked or sold as a line (ERPNext-aligned).
+            # Templates are structure only — never stocked or sold as a line.
             self.is_stock_item = False
             self.is_sales_item = False
             self.is_purchase_item = False
@@ -226,12 +226,7 @@ class Bin(BaseModel):
 
 
 class StockLedgerEntry(BaseModel):
-    """An immutable record of a single stock movement for one item in one warehouse.
-
-    This is the core of the inventory ledger — every stock change creates one
-    or more SLE rows. Submitted documents are never edited; cancellation
-    creates reversal entries via reversal_of_sle.
-    """
+    """An immutable record of a single stock movement for one item in one warehouse."""
 
     VARIANCE_CHOICES = [
         ("CANCELLATION_WAC", "Cancellation WAC"),
@@ -350,13 +345,11 @@ class StockLedgerEntry(BaseModel):
         variance_amount = Decimal("0") if variance_amount is None else Decimal(str(variance_amount))
         variance_type = variance_type or ""
 
-        # Posting date is business/audit date — copy of voucher posting_date.
-        # Always blend at current WAC; posting_date never affects valuation.
+        # Posting date is business/audit date only — valuation always blends at current WAC.
         if posting_date is None:
             posting_date = timezone.localdate()
         if isinstance(posting_date, str):
             posting_date = date.fromisoformat(posting_date)
-        # Future-dated transactions are rejected.
         if posting_date > timezone.localdate():
             raise ValidationError("Posting date cannot be in the future.")
 
@@ -373,8 +366,7 @@ class StockLedgerEntry(BaseModel):
         resolved_rate = Decimal("0")
 
         if quantity > 0:
-            # Inbound: blend at resolved_rate. If caller didn't supply a rate
-            # (e.g. restores at current WAC), use current WAC — identity blend.
+            # Inbound: blend at resolved_rate; missing rate falls back to current WAC (identity blend).
             resolved_rate = wac if unit_rate is None else unit_rate
             if resolved_rate < 0:
                 raise ValidationError("Unit rate cannot be negative.")
@@ -385,7 +377,7 @@ class StockLedgerEntry(BaseModel):
         elif quantity < 0:
             # Outbound: always at current WAC; WAC unchanged.
             resolved_rate = wac
-            stock_value_change = quantity * wac  # negative
+            stock_value_change = quantity * wac
         else:
             raise ValidationError("Quantity cannot be zero.")
 
@@ -405,7 +397,6 @@ class StockLedgerEntry(BaseModel):
         )
 
         bin_obj.actual_qty = new_qty
-        # valuation_rate already updated for inbound; outbound keeps it.
         bin_obj.save(update_fields=["actual_qty", "valuation_rate", "reserved_qty", "updated_at"])
 
         return sle
@@ -615,15 +606,7 @@ class StockReconciliationItem(BaseModel):
 
 
 class PurchaseReceipt(BaseModel):
-    """Records the receipt of goods from a supplier (FEATURES.md #123).
-
-    When a delivery arrives the storekeeper creates a purchase receipt listing
-    items, quantities and rates. On submit it increases stock in the receipt's
-    warehouse (via Stock Ledger Entries). The whole receipt goes to one store
-    room — further movement (e.g. store → kitchen) is done with Stock Entry.
-    Only quantities that enter stock are recorded; damaged/refused goods are
-    omitted (or written off later via Stock Reconciliation).
-    """
+    """Records the receipt of goods from a supplier."""
 
     supplier_name = models.CharField(max_length=200)
     supplier = models.ForeignKey(
@@ -689,10 +672,7 @@ class PurchaseReceipt(BaseModel):
 
 
 class PurchaseReceiptItem(BaseModel):
-    """A single line item of a purchase receipt.
-
-    Warehouse is on the parent PurchaseReceipt — every line posts to the same store.
-    """
+    """A single line item of a purchase receipt — warehouse is on the parent."""
 
     purchase_receipt = models.ForeignKey(
         PurchaseReceipt,

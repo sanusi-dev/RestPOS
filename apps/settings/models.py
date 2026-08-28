@@ -45,7 +45,6 @@ class Restaurant(BaseModel):
         help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
     )
 
-    # Accounting (Phase 6) — settlement enforces the accounts it needs.
     default_income_account = models.ForeignKey(
         "accounting.LedgerAccount",
         on_delete=models.PROTECT,
@@ -123,7 +122,6 @@ class Restaurant(BaseModel):
         help_text="Absolute cash variance that requires a manager note to close. Blank = no approval gate.",
     )
 
-    # Payables (Phase 2 §4.1) — supplier invoice/payment posting enforces these.
     default_payable_account = models.ForeignKey(
         "accounting.LedgerAccount",
         on_delete=models.PROTECT,
@@ -152,7 +150,6 @@ class Restaurant(BaseModel):
         help_text="Stock account debited by supplier invoice stock lines when the item group has no expense account.",
     )
 
-    # Inventory costing (PWAC D4/D5) — GRN accrual and cancellation drift.
     stock_received_but_not_billed_account = models.ForeignKey(
         "accounting.LedgerAccount",
         on_delete=models.PROTECT,
@@ -199,8 +196,7 @@ class Restaurant(BaseModel):
         if self.store_warehouse_id and self.store_warehouse_id == self.default_warehouse_id:
             raise ValidationError({"store_warehouse": "The central Store must differ from the Bar / POS warehouse."})
 
-        # Warehouse changes affect reservations and document posting; do not
-        # let existing drafts silently move to a different stock location.
+        # Drafts must not silently move to a different stock location when the warehouse changes.
         if self.pk:
             previous = Restaurant.objects.only("default_warehouse_id", "store_warehouse_id").get(pk=self.pk)
             if previous.default_warehouse_id != self.default_warehouse_id:
@@ -225,8 +221,7 @@ class Restaurant(BaseModel):
                         {"store_warehouse": "Submit or remove draft stock documents before changing the central Store."}
                     )
 
-        # Store receives stock, Kitchen consumes FOOD, and Bar/POS supplies
-        # DRINKS; these roles must continue pointing at compatible warehouses.
+        # Store receives stock, Kitchen consumes FOOD, Bar/POS supplies DRINKS — warehouses must stay compatible.
         units = ProductionUnit.objects.select_related("warehouse").all()
         drinks_unit = next((unit for unit in units if unit.department == ProductionUnit.DRINKS), None)
         food_unit = next((unit for unit in units if unit.department == ProductionUnit.FOOD), None)

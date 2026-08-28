@@ -28,11 +28,6 @@ def _authenticated_user(request: HttpRequest) -> CustomUser:
     return user
 
 
-# ---------------------------------------------------------------------------
-# Dashboard
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def staff_dashboard(request: HttpRequest) -> HttpResponse:
     """Current shift state and recent closes."""
@@ -53,11 +48,6 @@ def staff_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# POSOpeningEntry
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def opening_entry_list(request: HttpRequest) -> HttpResponse:
     entries = POSOpeningEntry.objects.select_related("cashier", "closing_entry").order_by("-period_start_date")
@@ -66,11 +56,7 @@ def opening_entry_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def opening_entry_create(request: HttpRequest) -> HttpResponse:
-    # NOTE: must use the explicit `if request.method == "POST"` test rather
-    # than `request.POST or None`, because an empty QueryDict is falsy — so a
-    # POST with no form fields (the no-modes edge case, or a client that
-    # omits all inputs) would be treated as a GET and `_save_opening_entry`
-    # would never run.
+    # Explicit request.method test: an empty QueryDict is falsy, so `request.POST or None` would miss a field-less POST.
     user = _authenticated_user(request)
     form = OpeningFloatForm(request.POST if request.method == "POST" else None)
     if request.method == "POST" and form.is_valid():
@@ -87,15 +73,7 @@ def opening_entry_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Opening-entry detail page — also handles inline save for DRAFT rows.
-
-    Symmetric with `closing_entry_detail`:
-    - GET: render the detail page. For DRAFT, the opening-float table is an
-      inline-editable form (one input per `OpeningPayment`, posting back
-      here). For SUBMITTED/CANCELLED, it's read-only.
-    - POST: re-use `_save_opening_entry` to persist the edited amounts for
-      DRAFT entries only, then redirect back here (PRG pattern).
-    """
+    """Opening-entry detail page; POST saves inline-edited draft amounts."""
     entry = get_object_or_404(
         POSOpeningEntry.objects.select_related("cashier", "closing_entry"),
         pk=pk,
@@ -119,7 +97,6 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             if updated is not None:
                 messages.success(request, f"Opening entry #{entry.pk} updated.")
                 return redirect("staff:opening_entry_detail", pk=entry.pk)
-        # Re-render with the bound form (errors surfaced on each field).
         return render(
             request,
             "backoffice/staff/opening_entry_detail.html",
@@ -131,8 +108,6 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             },
         )
 
-    # GET — build an unbound form pre-filled with existing draft amounts so
-    # the inline table renders the current values.
     if entry.status == POSOpeningEntry.DRAFT:
         initial = _entry_to_initial(opening_payments)
         form = OpeningFloatForm(initial=initial)
@@ -148,11 +123,6 @@ def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "form": form,
         },
     )
-
-
-# ---------------------------------------------------------------------------
-# Opening-entry helpers (all-methods form — see apps/staff/forms.py docstring)
-# ---------------------------------------------------------------------------
 
 
 def _entry_to_initial(opening_payments: list[OpeningPayment]) -> dict:
@@ -178,8 +148,7 @@ def _save_opening_entry(form: OpeningFloatForm, cashier, instance: POSOpeningEnt
         entry = instance or POSOpeningEntry(cashier=cashier)
         entry.cashier = cashier
         entry.save()
-        # Replace the existing child rows on edit; this also clears stale
-        # rows for modes that have since been disabled.
+        # Replacing child rows also clears stale rows for modes disabled since open.
         if instance is not None:
             entry.opening_payments.all().delete()
         rows = [
@@ -201,8 +170,7 @@ def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     if entry.status != POSOpeningEntry.DRAFT:
         messages.error(request, "This opening entry is no longer in draft.")
         return redirect("staff:opening_entry_detail", pk=entry.pk)
-    # Validation gives early feedback; submit() repeats the one-open-shift
-    # check while holding the row lock so concurrent submissions cannot race.
+    # Early feedback only; submit() repeats the one-open-shift check under row lock.
     try:
         entry.full_clean()
     except ValidationError as e:
@@ -240,11 +208,6 @@ def opening_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("staff:opening_entry_list")
 
 
-# ---------------------------------------------------------------------------
-# POSClosingEntry
-# ---------------------------------------------------------------------------
-
-
 @login_required
 def closing_entry_list(request: HttpRequest) -> HttpResponse:
     entries = POSClosingEntry.objects.select_related("cashier", "opening_entry").order_by("-period_end_date")
@@ -253,34 +216,8 @@ def closing_entry_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def closing_entry_create(request: HttpRequest) -> HttpResponse:
-    """Auto-create (or reuse) a DRAFT closing entry for the single Open shift.
-
-    RestPOS enforces a single Open shift (see `POSOpeningEntry.clean()`).
-    With that constraint, a dropdown of open shifts to close is pure
-    friction — there is at most one. This endpoint implements the
-    Lightspeed / Dynamics 365 / StoreHub pattern: clicking "Close Shift"
-    immediately starts the close flow against *the* Open shift, no
-    selection step.
-
-    Flow:
-    1. Find the single Open shift.
-    2. If none exists → message + redirect back to dashboard (the dashboard
-       "Close shift" button is hidden in this case, so this path is the
-       defensive fallback).
-    3. If a DRAFT `POSClosingEntry` already exists for that opening →
-       redirect to its detail page (prevents double-click / refresh from
-       creating duplicate drafts).
-    4. Otherwise, atomically create a new DRAFT closing entry + seed one
-       `ClosingPayment` row per `OpeningPayment` (mirrors ERPNext's
-       `pos_closing_entry.js` `set_opening_amounts` trigger), and redirect
-       to the detail page.
-
-    `select_for_update()` on the open shift serialises concurrent "Close
-    Shift" clicks so a double-click on the dashboard button cannot race
-    into two drafts.
-    """
+    """Auto-create (or reuse) the DRAFT closing entry for the single Open shift."""
     user = _authenticated_user(request)
-    # Find the single Open shift first (no transaction needed for a read).
     open_entry = (
         POSOpeningEntry.objects.filter(status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
         .select_related("cashier")
@@ -300,9 +237,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
         return redirect("pos:pos_home")
 
     with transaction.atomic():
-        # Lock the open shift row so two concurrent "Close Shift" clicks
-        # cannot both pass the duplicate-draft check below. PostgreSQL's
-        # `select_for_update` holds the lock until COMMIT.
+        # Lock the shift row so two concurrent "Close Shift" clicks can't both pass the duplicate-draft check.
         open_entry = POSOpeningEntry.objects.select_for_update().select_related("cashier").get(pk=open_entry.pk)
         draft_count = Order.objects.open_drafts(open_entry).count()
         if draft_count:
@@ -361,7 +296,6 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
                 closing.save(update_fields=["variance_note", "updated_at"])
             messages.success(request, f"Closing entry #{closing.pk} updated.")
             return redirect("staff:closing_entry_detail", pk=closing.pk)
-        # Re-render with errors using the bound form_data.
         return render(
             request,
             "backoffice/staff/closing_entry_detail.html",
@@ -373,7 +307,6 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
             },
         )
 
-    # GET
     if closing.status == POSClosingEntry.DRAFT:
         form_data = [(cp, ClosingPaymentForm(instance=cp, prefix=f"cp_{cp.pk}")) for cp in closing_payments]
     else:

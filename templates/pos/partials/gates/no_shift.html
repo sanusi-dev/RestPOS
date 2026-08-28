@@ -1,4 +1,3 @@
-{% comment %}========== NO-SHIFT GATE =========={% endcomment %}
 <div class="flex h-full items-center justify-center overflow-y-auto bg-slate-100 p-4 sm:p-6"
      x-data="{
        showForm: false,
@@ -10,7 +9,6 @@
      x-init="$nextTick(() => recalc())" @input="recalc()">
   <div class="w-full max-w-lg">
 
-    {% comment %}—— Empty gate ——{% endcomment %}
     <div x-show="!showForm" class="text-center">
       <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-white text-teal-700 shadow-sm ring-1 ring-slate-200/80">
         {% hgi_stroke name="time-04" size="28" color="currentColor" stroke_width="1.6" %}
@@ -27,7 +25,6 @@
       </button>
     </div>
 
-    {% comment %}—— Opening form ——{% endcomment %}
     <form method="post" action="{% url 'pos:pos_open_shift' %}"
           hx-post="{% url 'pos:pos_open_shift' %}" hx-target="#pos-main" hx-swap="innerHTML"
           x-show="showForm" x-cloak

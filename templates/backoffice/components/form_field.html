@@ -1,16 +1,5 @@
 {% comment %}
-Shared backoffice form field renderer.
-
-Renders one bound form field with label, errors and help text:
-- checkboxes render inline (box first, label after) so they stay aligned
-- all other widgets render with the label above the input
-- required fields get a red asterisk
-
-Parameters:
-  field (required) - a bound form field
-
-Usage:
-  {% include "backoffice/components/form_field.html" with field=field %}
+Params: field (required, bound form field); show_errors (optional, default False).
 {% endcomment %}
 {% if field.is_hidden %}
   {{ field }}

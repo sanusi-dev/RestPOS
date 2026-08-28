@@ -8,7 +8,6 @@ app_name = "staff"
 
 urlpatterns = [
     path("", view=views.staff_dashboard, name="dashboard"),
-    # POSOpeningEntry
     path("opening-entries/", view=views.opening_entry_list, name="opening_entry_list"),
     path(
         "opening-entries/create/",
@@ -30,7 +29,6 @@ urlpatterns = [
         view=views.opening_entry_cancel,
         name="opening_entry_cancel",
     ),
-    # POSClosingEntry
     path("closing-entries/", view=views.closing_entry_list, name="closing_entry_list"),
     path(
         "closing-entries/create/",

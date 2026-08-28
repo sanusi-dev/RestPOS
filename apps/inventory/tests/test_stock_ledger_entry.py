@@ -59,7 +59,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
         self.assertEqual(bin_obj.stock_value, Decimal("1000"))
 
     def test_inbound_blend(self):
-        # 5 @ 100 + 2 @ 150 => 7 qty, WAC 114.2857...
         StockLedgerEntry.create_entry(
             item=self.item,
             warehouse=self.warehouse,
@@ -79,7 +78,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
         bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
         self.assertEqual(bin_obj.actual_qty, Decimal("7"))
         expected_wac = (Decimal("5") * Decimal("100") + Decimal("2") * Decimal("150")) / Decimal("7")
-        # Quantize to 2dp as stored
         self.assertEqual(bin_obj.valuation_rate, expected_wac.quantize(Decimal("0.01")))
         self.assertEqual(bin_obj.stock_value, bin_obj.actual_qty * bin_obj.valuation_rate)
 
@@ -100,7 +98,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
             voucher_no="2",
             unit_rate=Decimal("200"),
         )
-        # WAC = (10*100+5*200)/15 = 133.33
         bin_before = Bin.objects.get(item=self.item, warehouse=self.warehouse)
         wac_before = bin_before.valuation_rate
         sle = StockLedgerEntry.create_entry(
@@ -114,7 +111,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
         self.assertEqual(sle.stock_value_change, Decimal("-4") * wac_before)
         bin_after = Bin.objects.get(item=self.item, warehouse=self.warehouse)
         self.assertEqual(bin_after.actual_qty, Decimal("11"))
-        # WAC unchanged on outbound
         self.assertEqual(bin_after.valuation_rate, wac_before)
 
     def test_wac_unchanged_on_outbound(self):
@@ -183,7 +179,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
 
 
 class NegativeStockTest(StockLedgerEntryTestBase):
-    """Outbound that would drive the bin negative is rejected."""
     def test_outbound_beyond_available_raises(self):
         StockLedgerEntry.create_entry(
             item=self.item,

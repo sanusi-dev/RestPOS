@@ -214,7 +214,6 @@ class GLEntryImmutabilityTest(TestCase):
         entry.save(update_fields=["is_cancelled", "updated_at"])
         entry.refresh_from_db()
         self.assertTrue(entry.is_cancelled)
-        # Cannot un-cancel
         entry.is_cancelled = False
         with self.assertRaises(ValidationError):
             entry.save()
