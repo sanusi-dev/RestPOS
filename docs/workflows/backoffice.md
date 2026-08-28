@@ -40,7 +40,7 @@ The order register filters by invoice/customer/order number, status, and order t
 
 ## Settings and Staff
 
-Restaurant and ProductionUnit changes are manager/admin-only at view level. Restaurant validation blocks unsafe warehouse changes when reserved orders or draft stock documents exist. Staff role buttons use HTMX row replacement, but the role value is not validated before removing existing role groups; an unknown role can strip roles. This is documented as a risk, not changed here.
+Restaurant and ProductionUnit changes are manager/admin-only at view level. Restaurant validation blocks unsafe warehouse changes when reserved orders or draft stock documents exist. Staff role buttons use target-specific HTMX row replacement: searches target `staff-table-body` and return the row collection, while role mutations target `staff-row-<pk>` and return one updated row. Boosted requests with another target continue through the full-page or redirect path so a row fragment never replaces the document body. The role value is not validated before removing existing role groups; an unknown role can strip roles. This is documented as a risk, not changed here.
 
 ## Reporting Surfaces
 
