@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.inventory.models import StockLedgerEntry, StockReconciliation
+from apps.inventory.models import Bin, StockLedgerEntry, StockReconciliation
 from apps.orders.models import SUBMITTED, Order, OrderItem
 from apps.staff.models import POSClosingEntry
 
@@ -55,17 +55,23 @@ def round_off(orders):
 
 
 def _wastage_rate(return_order, line):
+    """Current WAC at return time — mirrors accounting._current_wac_for_return."""
     sle = (
         StockLedgerEntry.objects.filter(
             voucher_type="POS Return",
             voucher_no=str(return_order.pk),
             item=line.item,
+            quantity__gt=0,
         )
         .order_by("-posting_date", "-posting_datetime", "-pk")
         .first()
     )
     if sle is not None:
         return sle.unit_rate
+    if return_order.stock_warehouse_id:
+        bin_obj = Bin.objects.filter(item=line.item, warehouse=return_order.stock_warehouse).first()
+        if bin_obj is not None and bin_obj.valuation_rate:
+            return bin_obj.valuation_rate
     source_sle = (
         StockLedgerEntry.objects.filter(
             voucher_type="POS Order",
@@ -78,56 +84,55 @@ def _wastage_rate(return_order, line):
     )
     if source_sle is not None:
         return source_sle.unit_rate
-    bin_obj = line.item.bins.filter(warehouse=return_order.stock_warehouse).first()
-    return bin_obj.valuation_rate if bin_obj else ZERO
+    return ZERO
 
 
 def drink_cogs(start, end, orders):
+    del start, end
     rows = []
     total = ZERO
-    # Business period is by posting_date (business date), not posting_datetime (audit).
-    start_date = start.date()
-    end_date = end.date()
-    sales = StockLedgerEntry.objects.filter(
-        posting_date__gte=start_date,
-        posting_date__lt=end_date,
-        voucher_type="POS Order",
-        quantity__lt=0,
-        item__department=DRINKS,
-    ).select_related("item")
-    for sle in sales:
-        qty = abs(sle.quantity)
-        amount = (qty * sle.unit_rate).quantize(TWO)
-        total += amount
-        rows.append(
-            {
-                "item_name": sle.item.item_name,
-                "qty": qty,
-                "rate": sle.unit_rate,
-                "amount": amount,
-                "kind": DailyPnLCogsRow.SALE,
-            }
-        )
-    returns = StockLedgerEntry.objects.filter(
-        posting_date__gte=start_date,
-        posting_date__lt=end_date,
-        voucher_type="POS Return",
-        quantity__gt=0,
-        item__department=DRINKS,
-    ).select_related("item")
-    for sle in returns:
-        qty = sle.quantity
-        amount = (qty * sle.unit_rate).quantize(TWO)
-        total -= amount
-        rows.append(
-            {
-                "item_name": sle.item.item_name,
-                "qty": qty,
-                "rate": sle.unit_rate,
-                "amount": -amount,
-                "kind": DailyPnLCogsRow.RETURN,
-            }
-        )
+    sale_orders = {str(o.pk) for o in orders if not o.is_return}
+    return_orders = {str(o.pk) for o in orders if o.is_return}
+    if sale_orders:
+        sales = StockLedgerEntry.objects.filter(
+            voucher_no__in=sale_orders,
+            voucher_type="POS Order",
+            quantity__lt=0,
+            item__department=DRINKS,
+        ).select_related("item")
+        for sle in sales:
+            qty = abs(sle.quantity)
+            amount = (qty * sle.unit_rate).quantize(TWO)
+            total += amount
+            rows.append(
+                {
+                    "item_name": sle.item.item_name,
+                    "qty": qty,
+                    "rate": sle.unit_rate,
+                    "amount": amount,
+                    "kind": DailyPnLCogsRow.SALE,
+                }
+            )
+    if return_orders:
+        returns = StockLedgerEntry.objects.filter(
+            voucher_no__in=return_orders,
+            voucher_type="POS Return",
+            quantity__gt=0,
+            item__department=DRINKS,
+        ).select_related("item")
+        for sle in returns:
+            qty = sle.quantity
+            amount = (qty * sle.unit_rate).quantize(TWO)
+            total -= amount
+            rows.append(
+                {
+                    "item_name": sle.item.item_name,
+                    "qty": qty,
+                    "rate": sle.unit_rate,
+                    "amount": -amount,
+                    "kind": DailyPnLCogsRow.RETURN,
+                }
+            )
     for order in orders:
         if not order.is_return:
             continue

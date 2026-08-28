@@ -78,7 +78,7 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
         computation = compute_daily_pnl(self._draft())
         self.assertEqual(computation.totals["cogs"], Decimal("0"))
 
-    def test_drink_cogs_from_fifo(self):
+    def test_drink_cogs_from_wac(self):
         # Reset WAC to known state — helper leaves 100 @ 0 which would dilute.
         from apps.inventory.models import Bin
 
@@ -113,10 +113,10 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
         StockLedgerEntry.create_entry(
             item=rice,
             warehouse=self.kitchen_wh,
-            actual_qty=Decimal("10"),
+            quantity=Decimal("10"),
             voucher_type="Purchase Receipt",
             voucher_no="PR-FOOD",
-            rate=Decimal("200"),
+            unit_rate=Decimal("200"),
         )
         rec = StockReconciliation.objects.create(
             reason="CONSUMPTION", warehouse=self.kitchen_wh, posting_date=date.today()
