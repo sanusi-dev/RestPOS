@@ -127,6 +127,13 @@ def setup_chart_of_accounts(restaurant):
         report_type=LedgerAccount.PROFIT_AND_LOSS,
         account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
     )
+    supplier_expense = LedgerAccount.objects.create(
+        name=f"Supplier Expenses {restaurant.pk}",
+        parent=expenses,
+        root_type=LedgerAccount.EXPENSE,
+        report_type=LedgerAccount.PROFIT_AND_LOSS,
+        account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
+    )
     today = date.today()
     fiscal_year = FiscalYear.objects.create(
         name=f"FY{today.year}-{restaurant.pk}",
@@ -143,6 +150,7 @@ def setup_chart_of_accounts(restaurant):
     restaurant.cash_shortage_account = cogs
     restaurant.cash_over_short_account = round_off
     restaurant.default_payable_account = payable
+    restaurant.default_supplier_expense_account = supplier_expense
     restaurant.default_stock_in_hand_account = stock_in_hand
     restaurant.stock_received_but_not_billed_account = grni
     restaurant.inventory_price_variance_account = variance
@@ -163,6 +171,7 @@ def setup_chart_of_accounts(restaurant):
         "stock_in_hand": stock_in_hand,
         "grni": grni,
         "variance": variance,
+        "supplier_expense": supplier_expense,
         "round_off": round_off,
         "equity": equity,
         "owner_equity": owner_equity,
