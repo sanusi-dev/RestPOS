@@ -1,27 +1,6 @@
 import json
 
 from django.contrib import messages as django_messages
-from django.db.models import prefetch_related_objects
-from django.shortcuts import redirect
-
-
-class BackofficeAccessMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        if request.user.is_authenticated:
-            path = request.path
-            # On cashier/backoffice paths we always check role membership, so prefetch
-            # the user's groups once and let cached_property role checks reuse them
-            # (one groups query per request instead of ~9 groups.exists() per page).
-            if path.startswith("/pos/") or path.startswith("/backoffice/"):
-                prefetch_related_objects([request.user], "groups")
-            if path.startswith("/backoffice/") and not request.user.has_backoffice_access:
-                return redirect("web:pos_index")
-            if path.startswith("/pos/") and not request.user.has_staff_role:
-                return redirect("web:pending_approval")
-        return self.get_response(request)
 
 
 class MessagesMiddleware:

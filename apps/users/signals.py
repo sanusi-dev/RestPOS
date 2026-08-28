@@ -2,27 +2,10 @@ from allauth.account.signals import email_confirmed, user_signed_up
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.mail import mail_admins
-from django.db.models.signals import m2m_changed, post_delete, pre_save
+from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 
 from apps.users.models import CustomUser
-
-_ROLE_CACHE_ATTRS = (
-    "_restpos_group_names",
-    "is_admin",
-    "is_manager",
-    "is_cashier",
-    "has_backoffice_access",
-    "has_staff_role",
-)
-
-
-@receiver(m2m_changed, sender=CustomUser.groups.through)
-def clear_role_caches_on_group_change(sender, instance, action, **kwargs):
-    """Invalidate cached role properties when a user's groups change."""
-    if action in ("post_add", "post_remove", "post_clear"):
-        for attr in _ROLE_CACHE_ATTRS:
-            instance.__dict__.pop(attr, None)
 
 
 @receiver(user_signed_up)

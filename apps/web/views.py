@@ -1,7 +1,10 @@
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_not_required, login_required
 from django.shortcuts import redirect, render
 
+from apps.users.decorators import backoffice_required, staff_required
 
+
+@login_not_required
 def home(request):
     if request.user.is_authenticated:
         if request.user.has_backoffice_access:
@@ -12,7 +15,7 @@ def home(request):
     return render(request, "web/landing.html")
 
 
-@login_required
+@backoffice_required
 def dashboard(request):
     """Render the backoffice navigation dashboard."""
     return render(
@@ -120,7 +123,7 @@ def dashboard(request):
     )
 
 
-@login_required
+@staff_required
 def pos_index(request):
     return render(request, "pos/index.html")
 

@@ -3,14 +3,13 @@
 from decimal import Decimal
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.users.models import CustomUser
+from apps.users.decorators import manager_required
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .forms import (
@@ -22,23 +21,8 @@ from .forms import (
 from .models import FiscalYear, GLEntry, JournalEntry, LedgerAccount
 
 
-def _authenticated_user(request: HttpRequest) -> CustomUser:
-    user = request.user
-    if not isinstance(user, CustomUser):
-        raise PermissionDenied
-    return user
-
-
-def _require_manager(request: HttpRequest) -> CustomUser:
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        raise PermissionDenied
-    return user
-
-
-@login_required
+@manager_required
 def accounting_dashboard(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     from .payables_models import Supplier, SupplierInvoice, SupplierPayment
 
     return render(
@@ -60,9 +44,8 @@ def accounting_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def chart_of_accounts(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     roots = (
         LedgerAccount.objects.filter(parent__isnull=True)
         .prefetch_related("children__children__children")
@@ -71,10 +54,9 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/accounting/chart_of_accounts.html", {"roots": roots})
 
 
-@login_required
+@manager_required
 def account_children(request: HttpRequest, pk: int) -> HttpResponse:
     """HTMX fragment of one account's children for expand/collapse."""
-    _require_manager(request)
     account = get_object_or_404(
         LedgerAccount.objects.prefetch_related("children__children"),
         pk=pk,
@@ -87,9 +69,8 @@ def account_children(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def account_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     if request.method == "POST":
         form = LedgerAccountForm(request.POST)
         if form.is_valid():
@@ -101,16 +82,14 @@ def account_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/accounting/account_form.html", {"form": form, "is_create": True})
 
 
-@login_required
+@manager_required
 def account_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     account = get_object_or_404(LedgerAccount.objects.select_related("parent"), pk=pk)
     return render(request, "backoffice/accounting/account_detail.html", {"account": account})
 
 
-@login_required
+@manager_required
 def account_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     account = get_object_or_404(LedgerAccount, pk=pk)
     if request.method == "POST":
         form = LedgerAccountForm(request.POST, instance=account)
@@ -127,16 +106,14 @@ def account_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def journal_entry_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     entries = JournalEntry.objects.select_related("amended_from").order_by("-posting_date", "-pk")
     return render(request, "backoffice/accounting/journal_entry_list.html", {"entries": entries})
 
 
-@login_required
+@manager_required
 def journal_entry_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     form = JournalEntryForm(request.POST or None)
     formset = JournalEntryAccountFormSet(request.POST or None, prefix="accounts")
     if request.method == "POST" and form.is_valid() and formset.is_valid():
@@ -152,10 +129,9 @@ def journal_entry_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def journal_entry_account_add(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     formset = add_formset_row(JournalEntryAccountFormSet, "accounts", request.POST)
     return render(
         request,
@@ -164,10 +140,9 @@ def journal_entry_account_add(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def journal_entry_account_remove(request: HttpRequest, index: int) -> HttpResponse:
-    _require_manager(request)
     formset = remove_formset_row(JournalEntryAccountFormSet, "accounts", request.POST, index)
     return render(
         request,
@@ -176,9 +151,8 @@ def journal_entry_account_remove(request: HttpRequest, index: int) -> HttpRespon
     )
 
 
-@login_required
+@manager_required
 def journal_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry.objects.select_related("amended_from"), pk=pk)
     rows = journal.accounts.select_related("account").all()
     return render(
@@ -188,9 +162,8 @@ def journal_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def journal_entry_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry, pk=pk)
     if journal.status != JournalEntry.DRAFT:
         messages.error(request, "Only draft journal entries can be edited.")
@@ -215,10 +188,9 @@ def journal_entry_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def journal_entry_review(request: HttpRequest, pk: int) -> HttpResponse:
     """Read-only review screen that must precede submitting an opening entry."""
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry.objects.select_related("amended_from"), pk=pk)
     if journal.voucher_type != JournalEntry.OPENING or journal.status != JournalEntry.DRAFT:
         return redirect("accounting:journal_entry_detail", pk=journal.pk)
@@ -231,10 +203,9 @@ def journal_entry_review(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def journal_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry, pk=pk)
     if journal.voucher_type == JournalEntry.OPENING and request.POST.get("confirmed") != "1":
         return redirect("accounting:journal_entry_review", pk=journal.pk)
@@ -247,10 +218,9 @@ def journal_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:journal_entry_detail", pk=journal.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def journal_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry, pk=pk)
     try:
         journal.cancel()
@@ -261,10 +231,9 @@ def journal_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:journal_entry_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def journal_entry_amend(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     journal = get_object_or_404(JournalEntry, pk=pk)
     try:
         copy = journal.amend()
@@ -275,9 +244,8 @@ def journal_entry_amend(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:journal_entry_update", pk=copy.pk)
 
 
-@login_required
+@manager_required
 def gl_entry_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     qs = GLEntry.objects.select_related("account", "fiscal_year").order_by("-posting_date", "-pk")
     account_id = request.GET.get("account")
     voucher_type = request.GET.get("voucher_type")
@@ -302,16 +270,14 @@ def gl_entry_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def fiscal_year_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     years = FiscalYear.objects.all().order_by("-year_start_date")
     return render(request, "backoffice/accounting/fiscal_year_list.html", {"years": years})
 
 
-@login_required
+@manager_required
 def fiscal_year_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     if request.method == "POST":
         form = FiscalYearForm(request.POST)
         if form.is_valid():
@@ -326,9 +292,8 @@ def fiscal_year_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def fiscal_year_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     year = get_object_or_404(FiscalYear, pk=pk)
     if request.method == "POST":
         form = FiscalYearForm(request.POST, instance=year)

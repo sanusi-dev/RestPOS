@@ -1,14 +1,15 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+from apps.users.decorators import backoffice_required, manager_required
 
 from .forms import ModeOfPaymentForm, PaymentGLMappingForm
 from .models import ModeOfPayment, PaymentGLMapping
 
 
-@login_required
+@backoffice_required
 def payments_dashboard(request: HttpRequest) -> HttpResponse:
     """Payments backoffice overview with mode and mapping counts."""
     modes = ModeOfPayment.objects.all()
@@ -23,13 +24,13 @@ def payments_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/payments/dashboard.html", context)
 
 
-@login_required
+@backoffice_required
 def mode_list(request: HttpRequest) -> HttpResponse:
     modes = ModeOfPayment.objects.all()
     return render(request, "backoffice/payments/mode_list.html", {"modes": modes})
 
 
-@login_required
+@manager_required
 def mode_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ModeOfPaymentForm(request.POST)
@@ -46,7 +47,7 @@ def mode_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def mode_detail(request: HttpRequest, pk: int) -> HttpResponse:
     mode = get_object_or_404(ModeOfPayment, pk=pk)
     mapping = getattr(mode, "gl_mapping", None)
@@ -57,7 +58,7 @@ def mode_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def mode_update(request: HttpRequest, pk: int) -> HttpResponse:
     mode = get_object_or_404(ModeOfPayment, pk=pk)
     if request.method == "POST":
@@ -75,13 +76,13 @@ def mode_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def gl_mapping_list(request: HttpRequest) -> HttpResponse:
     mappings = PaymentGLMapping.objects.select_related("mode_of_payment").all()
     return render(request, "backoffice/payments/gl_mapping_list.html", {"mappings": mappings})
 
 
-@login_required
+@manager_required
 def gl_mapping_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = PaymentGLMappingForm(request.POST)
@@ -98,7 +99,7 @@ def gl_mapping_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def gl_mapping_update(request: HttpRequest, pk: int) -> HttpResponse:
     mapping = get_object_or_404(PaymentGLMapping, pk=pk)
     if request.method == "POST":
@@ -116,7 +117,7 @@ def gl_mapping_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def gl_mapping_delete(request: HttpRequest, pk: int) -> HttpResponse:
     mapping = get_object_or_404(PaymentGLMapping, pk=pk)

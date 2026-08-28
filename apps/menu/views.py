@@ -1,12 +1,12 @@
 from typing import cast
 
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.inventory.models import Item
+from apps.users.decorators import backoffice_required
 
 from .forms import (
     ItemAddOnForm,
@@ -17,7 +17,7 @@ from .forms import (
 from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 
-@login_required
+@backoffice_required
 def menu_dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "menu_count": Menu.objects.count(),
@@ -28,14 +28,14 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/menu/dashboard.html", context)
 
 
-@login_required
+@backoffice_required
 def menu_list(request: HttpRequest) -> HttpResponse:
     # Annotated count avoids a per-row COUNT in the template.
     menus = Menu.objects.annotate(item_count=Count("items"))
     return render(request, "backoffice/menu/menu_list.html", {"menus": menus})
 
 
-@login_required
+@backoffice_required
 def menu_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = MenuForm(request.POST)
@@ -47,7 +47,7 @@ def menu_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/menu/menu_form.html", {"form": form, "is_create": True})
 
 
-@login_required
+@backoffice_required
 def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
     menu = get_object_or_404(Menu, pk=pk)
     menu_items = menu.items.all()
@@ -58,7 +58,7 @@ def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
     menu = get_object_or_404(Menu, pk=pk)
     if request.method == "POST":
@@ -75,7 +75,7 @@ def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def menu_item_list(request: HttpRequest) -> HttpResponse:
     menu_id = request.GET.get("menu")
     menu_items = MenuItem.objects.select_related("menu").all()
@@ -89,7 +89,7 @@ def menu_item_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def menu_item_create(request: HttpRequest) -> HttpResponse:
     menu_id = request.GET.get("menu")
     if request.method == "POST":
@@ -106,7 +106,7 @@ def menu_item_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def menu_item_update(request: HttpRequest, pk: int) -> HttpResponse:
     menu_item = get_object_or_404(MenuItem, pk=pk)
     if request.method == "POST":
@@ -123,7 +123,7 @@ def menu_item_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def menu_item_delete(request: HttpRequest, pk: int) -> HttpResponse:
     menu_item = get_object_or_404(MenuItem, pk=pk)
@@ -132,7 +132,7 @@ def menu_item_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("menu:menu_detail", pk=menu_id)
 
 
-@login_required
+@backoffice_required
 def add_on_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     add_ons = ItemAddOn.objects.select_related("parent_item", "add_on_item").all()
@@ -146,7 +146,7 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def add_on_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ItemAddOnForm(request.POST)
@@ -158,7 +158,7 @@ def add_on_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/menu/add_on_form.html", {"form": form, "is_create": True})
 
 
-@login_required
+@backoffice_required
 def add_on_update(request: HttpRequest, pk: int) -> HttpResponse:
     add_on = get_object_or_404(ItemAddOn, pk=pk)
     if request.method == "POST":
@@ -175,7 +175,7 @@ def add_on_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def add_on_delete(request: HttpRequest, pk: int) -> HttpResponse:
     add_on = get_object_or_404(ItemAddOn, pk=pk)
@@ -183,7 +183,7 @@ def add_on_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("menu:add_on_list")
 
 
-@login_required
+@backoffice_required
 def variant_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
     variants = ItemVariant.objects.select_related("parent_item", "variant_item").all()
@@ -197,7 +197,7 @@ def variant_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def variant_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ItemVariantForm(request.POST)
@@ -209,7 +209,7 @@ def variant_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/menu/variant_form.html", {"form": form, "is_create": True})
 
 
-@login_required
+@backoffice_required
 def variant_update(request: HttpRequest, pk: int) -> HttpResponse:
     variant = get_object_or_404(ItemVariant, pk=pk)
     if request.method == "POST":
@@ -226,7 +226,7 @@ def variant_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def variant_delete(request: HttpRequest, pk: int) -> HttpResponse:
     variant = get_object_or_404(ItemVariant, pk=pk)

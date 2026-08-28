@@ -3,8 +3,7 @@
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import models as django_models
 from django.db.models import Count, Prefetch, Q, Sum
@@ -13,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.users.models import CustomUser
+from apps.users.decorators import backoffice_required, manager_required
 
 from . import services
 from .forms import POSOrderCancelForm
@@ -31,14 +30,7 @@ from .models import (
 )
 
 
-def _authenticated_user(request: HttpRequest) -> CustomUser:
-    user = request.user
-    if not isinstance(user, CustomUser):
-        raise PermissionDenied
-    return user
-
-
-@login_required
+@backoffice_required
 def orders_dashboard(request: HttpRequest) -> HttpResponse:
     """Render the orders and kitchen/bar ticket backoffice overview."""
     today = timezone.localdate()
@@ -78,7 +70,7 @@ def orders_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/orders/dashboard.html", context)
 
 
-@login_required
+@backoffice_required
 def order_list(request: HttpRequest) -> HttpResponse:
     search = request.GET.get("search", "").strip()
     status_filter = request.GET.get("status", "").strip()
@@ -123,7 +115,7 @@ def order_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def order_detail(request: HttpRequest, pk: int) -> HttpResponse:
     ticket_queryset = KOT.objects.select_related("production_unit", "created_by").prefetch_related("items__item")
     order = get_object_or_404(
@@ -141,13 +133,9 @@ def order_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        messages.error(request, "Only managers can cancel orders.")
-        return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     form = POSOrderCancelForm(request.POST)
     if not form.is_valid():
@@ -157,7 +145,7 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
         cancellation_kots = services.cancel_sent_order(
             order,
             form.cleaned_data["cancel_reason"],
-            cancelled_by=user,
+            cancelled_by=request.user,
             reason_note=form.cleaned_data["cancel_reason_note"],
         )
     except ValidationError as e:
@@ -169,7 +157,7 @@ def order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("orders:order_detail", pk=order.pk)
 
 
-@login_required
+@backoffice_required
 def kot_list(request: HttpRequest) -> HttpResponse:
     type_filter = request.GET.get("type", "").strip()
     ticket_type_filter = request.GET.get("ticket_type", "").strip()
@@ -212,7 +200,7 @@ def kot_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def kot_detail(request: HttpRequest, pk: int) -> HttpResponse:
     kot = get_object_or_404(
         KOT.objects.select_related("order", "production_unit", "created_by").prefetch_related("items__item"),
@@ -221,14 +209,10 @@ def kot_detail(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "backoffice/orders/kot_detail.html", {"kot": kot})
 
 
-@login_required
+@manager_required
 @require_POST
 def order_return(request: HttpRequest, pk: int) -> HttpResponse:
     """Create a return draft from a submitted order. Manager only."""
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        messages.error(request, "Only managers can process returns.")
-        return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     try:
         return_order = services.make_return(order)
@@ -243,17 +227,13 @@ def order_return(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("orders:order_detail", pk=return_order.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def order_return_submit(request: HttpRequest, pk: int) -> HttpResponse:
     """Submit a return draft, restoring stock and mirroring refunds. Manager only."""
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        messages.error(request, "Only managers can submit returns.")
-        return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     try:
-        services.submit_return(order, actor=user)
+        services.submit_return(order, actor=request.user)
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Return submission failed.")
         return redirect("orders:order_detail", pk=order.pk)
@@ -264,14 +244,10 @@ def order_return_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("orders:order_detail", pk=order.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def order_return_line_update(request: HttpRequest, pk: int, line_pk: int) -> HttpResponse:
     """Reduce qty, drop a line, or mark wastage on a return draft. Manager only."""
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        messages.error(request, "Only managers can edit returns.")
-        return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     qty_raw = request.POST.get("qty")
     qty = None
@@ -296,14 +272,10 @@ def order_return_line_update(request: HttpRequest, pk: int, line_pk: int) -> Htt
     return redirect("orders:order_detail", pk=order.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def order_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a draft order that was never sent. Manager only."""
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        messages.error(request, "Only managers can delete orders.")
-        return redirect("orders:order_detail", pk=pk)
     order = get_object_or_404(Order, pk=pk)
     try:
         order.delete()

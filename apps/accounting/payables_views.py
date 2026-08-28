@@ -1,14 +1,13 @@
 """Supplier payables views — suppliers, invoices, and payments."""
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.users.models import CustomUser
+from apps.users.decorators import manager_required
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .models import GLEntry
@@ -26,25 +25,14 @@ from .payables_models import (
 )
 
 
-def _require_manager(request: HttpRequest) -> CustomUser:
-    user = request.user
-    if not isinstance(user, CustomUser):
-        raise PermissionDenied
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        raise PermissionDenied
-    return user
-
-
-@login_required
+@manager_required
 def supplier_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     suppliers = Supplier.objects.prefetch_related("invoices").order_by("supplier_name")
     return render(request, "backoffice/accounting/payables/supplier_list.html", {"suppliers": suppliers})
 
 
-@login_required
+@manager_required
 def supplier_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     if request.method == "POST":
         form = SupplierForm(request.POST)
         if form.is_valid():
@@ -56,9 +44,8 @@ def supplier_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/accounting/payables/supplier_form.html", {"form": form, "is_create": True})
 
 
-@login_required
+@manager_required
 def supplier_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     supplier = get_object_or_404(Supplier, pk=pk)
     invoices = supplier.invoices.all().order_by("-posting_date", "-pk")
     payments = supplier.payments.all().order_by("-posting_date", "-pk")
@@ -69,9 +56,8 @@ def supplier_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     supplier = get_object_or_404(Supplier, pk=pk)
     if request.method == "POST":
         form = SupplierForm(request.POST, instance=supplier)
@@ -88,9 +74,8 @@ def supplier_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_invoice_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     invoices = SupplierInvoice.objects.select_related("supplier").order_by("-posting_date", "-pk")
     status = request.GET.get("status")
     supplier_id = request.GET.get("supplier")
@@ -110,9 +95,8 @@ def supplier_invoice_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_invoice_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     if request.method == "POST":
         form = SupplierInvoiceForm(request.POST)
         expense_fs = SupplierInvoiceExpenseFormSet(request.POST, instance=SupplierInvoice(), prefix="expenses")
@@ -133,10 +117,9 @@ def supplier_invoice_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_invoice_expense_add(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     formset = add_formset_row(SupplierInvoiceExpenseFormSet, "expenses", request.POST)
     return render(
         request,
@@ -145,10 +128,9 @@ def supplier_invoice_expense_add(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_invoice_expense_remove(request: HttpRequest, index: int) -> HttpResponse:
-    _require_manager(request)
     formset = remove_formset_row(SupplierInvoiceExpenseFormSet, "expenses", request.POST, index)
     return render(
         request,
@@ -157,9 +139,8 @@ def supplier_invoice_expense_remove(request: HttpRequest, index: int) -> HttpRes
     )
 
 
-@login_required
+@manager_required
 def supplier_invoice_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     invoice = get_object_or_404(
         SupplierInvoice.objects.select_related("supplier", "purchase_receipt"),
         pk=pk,
@@ -176,9 +157,8 @@ def supplier_invoice_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_invoice_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     invoice = get_object_or_404(SupplierInvoice, pk=pk)
     if invoice.status != SupplierInvoice.DRAFT:
         messages.error(request, "Only draft supplier invoices can be edited.")
@@ -202,10 +182,9 @@ def supplier_invoice_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_invoice_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     invoice = get_object_or_404(SupplierInvoice, pk=pk)
     try:
         invoice.submit()
@@ -216,10 +195,9 @@ def supplier_invoice_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:supplier_invoice_detail", pk=pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_invoice_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     invoice = get_object_or_404(SupplierInvoice, pk=pk)
     try:
         invoice.cancel()
@@ -230,9 +208,8 @@ def supplier_invoice_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:supplier_invoice_list")
 
 
-@login_required
+@manager_required
 def supplier_payment_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     payments = SupplierPayment.objects.select_related("supplier", "mode_of_payment").order_by("-posting_date", "-pk")
     status = request.GET.get("status")
     supplier_id = request.GET.get("supplier")
@@ -252,9 +229,8 @@ def supplier_payment_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_payment_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     if request.method == "POST":
         form = SupplierPaymentForm(request.POST)
         alloc_fs = SupplierPaymentAllocationFormSet(request.POST, instance=SupplierPayment(), prefix="allocations")
@@ -275,10 +251,9 @@ def supplier_payment_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_payment_alloc_add(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     formset = add_formset_row(SupplierPaymentAllocationFormSet, "allocations", request.POST)
     return render(
         request,
@@ -287,10 +262,9 @@ def supplier_payment_alloc_add(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_payment_alloc_remove(request: HttpRequest, index: int) -> HttpResponse:
-    _require_manager(request)
     formset = remove_formset_row(SupplierPaymentAllocationFormSet, "allocations", request.POST, index)
     return render(
         request,
@@ -299,9 +273,8 @@ def supplier_payment_alloc_remove(request: HttpRequest, index: int) -> HttpRespo
     )
 
 
-@login_required
+@manager_required
 def supplier_payment_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     payment = get_object_or_404(
         SupplierPayment.objects.select_related("supplier", "mode_of_payment"),
         pk=pk,
@@ -317,9 +290,8 @@ def supplier_payment_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def supplier_payment_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     payment = get_object_or_404(SupplierPayment, pk=pk)
     if payment.status != SupplierPayment.DRAFT:
         messages.error(request, "Only draft supplier payments can be edited.")
@@ -343,10 +315,9 @@ def supplier_payment_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_payment_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     payment = get_object_or_404(SupplierPayment, pk=pk)
     try:
         payment.submit()
@@ -357,10 +328,9 @@ def supplier_payment_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("accounting:supplier_payment_detail", pk=pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def supplier_payment_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     payment = get_object_or_404(SupplierPayment, pk=pk)
     try:
         payment.cancel()

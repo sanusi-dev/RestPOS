@@ -1,13 +1,13 @@
 from typing import cast
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from apps.users.decorators import backoffice_required
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from . import services
@@ -36,7 +36,7 @@ from .models import (
 )
 
 
-@login_required
+@backoffice_required
 def inventory_dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "item_count": Item.objects.count(),
@@ -45,18 +45,13 @@ def inventory_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/inventory/dashboard.html", context)
 
 
-# ---------------------------------------------------------------------------
-# UOM
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def uom_list(request: HttpRequest) -> HttpResponse:
     uoms = UOM.objects.all().order_by("name")
     return render(request, "backoffice/inventory/uom_list.html", {"uoms": uoms})
 
 
-@login_required
+@backoffice_required
 def uom_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = UOMForm(request.POST)
@@ -72,7 +67,7 @@ def uom_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def uom_update(request: HttpRequest, pk: int) -> HttpResponse:
     uom = get_object_or_404(UOM, pk=pk)
     if request.method == "POST":
@@ -89,18 +84,13 @@ def uom_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# ItemGroup
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def item_group_list(request: HttpRequest) -> HttpResponse:
     groups = ItemGroup.objects.all().order_by("name")
     return render(request, "backoffice/inventory/item_group_list.html", {"groups": groups})
 
 
-@login_required
+@backoffice_required
 def item_group_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ItemGroupForm(request.POST)
@@ -116,7 +106,7 @@ def item_group_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def item_group_detail(request: HttpRequest, pk: int) -> HttpResponse:
     group = get_object_or_404(ItemGroup, pk=pk)
     items = group.items.all().order_by("item_name")
@@ -127,7 +117,7 @@ def item_group_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def item_group_update(request: HttpRequest, pk: int) -> HttpResponse:
     group = get_object_or_404(ItemGroup, pk=pk)
     if request.method == "POST":
@@ -144,18 +134,13 @@ def item_group_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# Warehouse
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def warehouse_list(request: HttpRequest) -> HttpResponse:
     warehouses = Warehouse.objects.all()
     return render(request, "backoffice/inventory/warehouse_list.html", {"warehouses": warehouses})
 
 
-@login_required
+@backoffice_required
 def warehouse_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = WarehouseForm(request.POST)
@@ -171,7 +156,7 @@ def warehouse_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def warehouse_detail(request: HttpRequest, pk: int) -> HttpResponse:
     warehouse = get_object_or_404(Warehouse, pk=pk)
     bins = warehouse.bins.select_related("item").order_by("item__item_name")
@@ -182,7 +167,7 @@ def warehouse_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
     warehouse = get_object_or_404(Warehouse, pk=pk)
     if request.method == "POST":
@@ -199,12 +184,7 @@ def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# Item
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def item_list(request: HttpRequest) -> HttpResponse:
     from django.db.models import Q
 
@@ -243,14 +223,10 @@ def item_list(request: HttpRequest) -> HttpResponse:
         items = items.filter(Q(item_name__icontains=q) | Q(item_code__icontains=q))
 
     item_groups = ItemGroup.objects.all().order_by("name")
-    template = (
-        "backoffice/inventory/item_list.html#items_table"
-        if request.headers.get("HX-Request")
-        else "backoffice/inventory/item_list.html"
-    )
+
     return render(
         request,
-        template,
+        "backoffice/inventory/item_list.html",
         {
             "items": items,
             "item_groups": item_groups,
@@ -265,7 +241,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def item_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES)
@@ -284,7 +260,7 @@ def item_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from django.db.models import Exists, OuterRef
 
@@ -314,9 +290,8 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def item_update(request: HttpRequest, pk: int) -> HttpResponse:
-    # select_related matches item_detail — template/form may access item_group/stock_uom FKs.
     item = get_object_or_404(
         Item.objects.select_related("item_group", "stock_uom", "default_warehouse", "variant_of"),
         pk=pk,
@@ -339,17 +314,7 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# StockEntry
-# ---------------------------------------------------------------------------
-
-# The item add/remove endpoints below rebuild a bound formset from POST data
-# instead of saving, so the partial re-render keeps the user's other rows
-# intact. The remove view renumbers the surviving rows (Django formset
-# management indices must stay contiguous).
-
-
-@login_required
+@backoffice_required
 def stock_entry_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
     purpose = request.GET.get("purpose")
@@ -369,7 +334,7 @@ def stock_entry_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def stock_entry_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StockEntryForm(request.POST)
@@ -392,7 +357,7 @@ def stock_entry_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
     formset = add_formset_row(StockEntryDetailFormSet, "items", request.POST)
@@ -401,7 +366,7 @@ def stock_entry_item_add(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
     formset = remove_formset_row(StockEntryDetailFormSet, "items", request.POST, index)
@@ -410,12 +375,11 @@ def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
     items = entry.items.select_related("item", "source_warehouse", "target_warehouse").all()
     voucher_no = str(entry.pk)
-    # stock_ledger_entries_for_voucher already adds select_related("item", "warehouse") centrally.
     ledger_entries = StockEntry.stock_ledger_entries_for_voucher(voucher_no)
     return render(
         request,
@@ -424,7 +388,7 @@ def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
@@ -436,7 +400,7 @@ def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
-@login_required
+@backoffice_required
 @require_POST
 def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry, pk=pk)
@@ -448,12 +412,7 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
-# ---------------------------------------------------------------------------
-# StockReconciliation
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def reconciliation_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
     reason = request.GET.get("reason")
@@ -487,7 +446,7 @@ def reconciliation_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def reconciliation_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = StockReconciliationForm(request.POST)
@@ -508,25 +467,21 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def reconciliation_item_add(request: HttpRequest) -> HttpResponse:
-    # Append one empty row to the posted formset data and re-render the
-    # partial (same pattern as stock_entry_item_add).
     formset = add_formset_row(StockReconciliationItemFormSet, "items", request.POST)
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
 
 
-@login_required
+@backoffice_required
 @require_POST
 def reconciliation_item_remove(request: HttpRequest, index: int) -> HttpResponse:
-    # Drop the indexed row and renumber the survivors (same pattern as
-    # stock_entry_item_remove).
     formset = remove_formset_row(StockReconciliationItemFormSet, "items", request.POST, index)
     return render(request, "backoffice/inventory/reconciliation_form.html#items_partial", {"item_formset": formset})
 
 
-@login_required
+@backoffice_required
 def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(
         StockReconciliation.objects.select_related("warehouse"),
@@ -548,7 +503,7 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
@@ -560,7 +515,7 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
-@login_required
+@backoffice_required
 @require_POST
 def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
@@ -572,12 +527,7 @@ def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
-# ---------------------------------------------------------------------------
-# PurchaseReceipt
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def purchase_receipt_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
     supplier = request.GET.get("supplier")
@@ -597,7 +547,7 @@ def purchase_receipt_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = PurchaseReceiptForm(request.POST)
@@ -618,25 +568,21 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def purchase_receipt_item_add(request: HttpRequest) -> HttpResponse:
-    # Append one empty row to the posted formset data and re-render the
-    # partial (same pattern as stock_entry_item_add).
     formset = add_formset_row(PurchaseReceiptItemFormSet, "items", request.POST)
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
 
 
-@login_required
+@backoffice_required
 @require_POST
 def purchase_receipt_item_remove(request: HttpRequest, index: int) -> HttpResponse:
-    # Drop the indexed row and renumber the survivors (same pattern as
-    # stock_entry_item_remove).
     formset = remove_formset_row(PurchaseReceiptItemFormSet, "items", request.POST, index)
     return render(request, "backoffice/inventory/purchase_receipt_form.html#items_partial", {"item_formset": formset})
 
 
-@login_required
+@backoffice_required
 def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(
         PurchaseReceipt.objects.select_related("warehouse"),
@@ -654,7 +600,7 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 @require_POST
 def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
@@ -666,7 +612,7 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 
-@login_required
+@backoffice_required
 @require_POST
 def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     receipt = get_object_or_404(PurchaseReceipt.objects.select_related("warehouse"), pk=pk)
@@ -678,12 +624,7 @@ def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 
-# ---------------------------------------------------------------------------
-# Reports
-# ---------------------------------------------------------------------------
-
-
-@login_required
+@backoffice_required
 def stock_ledger_list(request: HttpRequest) -> HttpResponse:
     item_id = request.GET.get("item")
     warehouse_id = request.GET.get("warehouse")
@@ -715,7 +656,7 @@ def stock_ledger_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@backoffice_required
 def stock_balance_list(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
     bins = Bin.objects.select_related("item", "warehouse").all()

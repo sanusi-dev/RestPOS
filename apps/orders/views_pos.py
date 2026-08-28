@@ -4,8 +4,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -35,7 +34,7 @@ from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
 from apps.staff.models import ClosingPayment, POSClosingEntry, POSOpeningEntry
 from apps.staff.services import ensure_closing_draft, expected_closing_amounts, open_shift, submit_closing_entry
-from apps.users.models import CustomUser
+from apps.users.decorators import staff_required
 
 from . import printing, services
 from .forms import POSOrderCancelForm
@@ -53,13 +52,6 @@ class _HtmxRequest(HttpRequest):
 class _AddOnWithMenuItem(Protocol):
     add_on_item: Item
     menu_item: MenuItem | None
-
-
-def _authenticated_user(request: HttpRequest) -> CustomUser:
-    user = request.user
-    if not isinstance(user, CustomUser):
-        raise PermissionDenied
-    return user
 
 
 def _is_htmx(request: HttpRequest) -> bool:
@@ -188,7 +180,7 @@ def _render_cart(request, order, **extra_context):
 
 def _build_order_context(request, order):
     """Build the context dict for the order screen."""
-    user = _authenticated_user(request)
+    user = request.user
     catalog_query, catalog_group, catalog_specials = _get_catalog_filters(request)
     settings = Restaurant.load()
     active_menu = (
@@ -264,7 +256,7 @@ def _build_order_context(request, order):
     }
 
 
-@login_required
+@staff_required
 def pos_home(request: HttpRequest) -> HttpResponse:
     """Main POS entry: shift gate or draft orders list."""
     settings = Restaurant.load()
@@ -308,11 +300,11 @@ def pos_home(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_new(request: HttpRequest) -> HttpResponse:
     """Create a new draft order and open the order screen."""
-    user = _authenticated_user(request)
+    user = request.user
     if Restaurant.load() is None:
         return _home_or_redirect(request)
     order_type = request.POST.get("order_type", DINE_IN)
@@ -347,11 +339,11 @@ def pos_order_new(request: HttpRequest) -> HttpResponse:
     return redirect("pos:pos_order_screen", pk=order.pk)
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_open_shift(request: HttpRequest) -> HttpResponse:
     """Create a POSOpeningEntry with opening payments from the POS screen."""
-    user = _authenticated_user(request)
+    user = request.user
     if Restaurant.load() is None:
         return _home_or_redirect(request)
     form = OpeningFloatForm(request.POST)
@@ -381,7 +373,7 @@ def _closing_form_prefix(mode_of_payment_id):
     return f"cp_mop_{mode_of_payment_id}"
 
 
-@login_required
+@staff_required
 @require_http_methods(["GET", "POST"])
 def pos_close_shift(request: HttpRequest) -> HttpResponse:
     """Show or submit the active shift's closing reconciliation from the POS.
@@ -389,7 +381,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     GET never creates database rows — it only renders expected amounts for counting.
     POST creates the draft closing entry (if needed) and submits the reconciliation.
     """
-    user = _authenticated_user(request)
+    user = request.user
     open_shift = _get_open_shift()
     if open_shift is None:
         messages.warning(request, "There is no open shift to close.")
@@ -534,7 +526,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@staff_required
 def pos_order_screen(request: HttpRequest, pk: int) -> HttpResponse:
     """Render the full POS order screen (menu grid + cart)."""
     shift = _get_open_shift()
@@ -554,7 +546,7 @@ def pos_order_screen(request: HttpRequest, pk: int) -> HttpResponse:
     return _render_pos_surface(request, "pos/index.html", context)
 
 
-@login_required
+@staff_required
 def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> HttpResponse:
     """Render the optional add-on dialog for a menu item."""
     shift = _get_open_shift()
@@ -593,7 +585,7 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
     )
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
     """Update order type or guest count on a draft order. Returns the cart partial.
@@ -631,7 +623,7 @@ def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
     return _render_cart(request, order)
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
     """Add an item to the active customer card. Returns the cart partial."""
@@ -695,7 +687,7 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
     return response
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpResponse:
     """Update item quantity or remove it. Returns the cart partial."""
@@ -722,7 +714,7 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
     return _render_cart(request, order, catalog_oob=True)
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpResponse:
     """Set the active customer card in session and return the cart."""
@@ -739,7 +731,7 @@ def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpR
     return _render_cart(request, order)
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
     """Create the initial kitchen and bar tickets, then print each independently."""
@@ -781,7 +773,7 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
     """Empty a draft order before any kitchen or bar ticket has been sent."""
@@ -807,7 +799,7 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
     return _render_cart(request, order, error=error, catalog_oob=not error)
 
 
-@login_required
+@staff_required
 @require_http_methods(["GET", "POST"])
 def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
     """GET: show payment dialog. POST: process payment and settle."""
@@ -860,7 +852,7 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     """Cancel a sent draft order with a structured reason."""
@@ -910,7 +902,7 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("pos:pos_home")
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete an unsent draft order entirely, purging items and audit events."""
@@ -939,11 +931,11 @@ def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("pos:pos_home")
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, action: str) -> HttpResponse:
     """Retry or reprint one kitchen/bar ticket, including cancellation tickets."""
-    user = _authenticated_user(request)
+    user = request.user
     if ticket_type not in {TICKET_KITCHEN, TICKET_BAR} or action not in {"retry", "reprint"}:
         return HttpResponse(status=404)
     if action == "reprint" and not (user.is_manager or user.is_admin or user.is_superuser):
@@ -988,7 +980,7 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
     return redirect("pos:pos_order_history_detail", pk=order.pk)
 
 
-@login_required
+@staff_required
 def pos_order_history(request: HttpRequest) -> HttpResponse:
     """Show cashier-safe historical orders for a selected date.
 
@@ -997,7 +989,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
     """
     from datetime import date as date_type
 
-    user = _authenticated_user(request)
+    user = request.user
     payment_filter = request.GET.get("payment", "").strip()
     status_filter = request.GET.get("status", "sales").strip()
     order_type_filter = request.GET.get("order_type", "").strip()
@@ -1057,7 +1049,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@staff_required
 def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Show a read-only cashier view of a historical order."""
     order = get_object_or_404(
@@ -1082,7 +1074,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     return _render_pos_surface(request, "pos/order_history_detail.html", context)
 
 
-@login_required
+@staff_required
 @require_POST
 def pos_order_history_print(request: HttpRequest, pk: int) -> HttpResponse:
     """Reprint a submitted historical receipt without editing it."""

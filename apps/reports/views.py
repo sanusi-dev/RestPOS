@@ -1,14 +1,13 @@
 """Daily P&L backoffice views. Manager/Admin only."""
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.users.models import CustomUser
+from apps.users.decorators import manager_required
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .forms import (
@@ -23,20 +22,6 @@ from .models import DailyPnL, PnLConfiguration, PnLMaterial, PnLRecurringExpense
 from .services import compute_daily_pnl
 
 
-def _authenticated_user(request: HttpRequest) -> CustomUser:
-    user = request.user
-    if not isinstance(user, CustomUser):
-        raise PermissionDenied
-    return user
-
-
-def _require_manager(request: HttpRequest) -> CustomUser:
-    user = _authenticated_user(request)
-    if not (user.is_manager or user.is_admin or user.is_superuser):
-        raise PermissionDenied
-    return user
-
-
 def _seed_material_rows(pnl):
     existing = set(pnl.material_qtys.values_list("material_id", flat=True))
     for material in PnLMaterial.objects.filter(disabled=False):
@@ -44,9 +29,8 @@ def _seed_material_rows(pnl):
             pnl.material_qtys.create(material=material, qty=0)
 
 
-@login_required
+@manager_required
 def pnl_settings(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     config = PnLConfiguration.load()
     form = PnLConfigurationForm(request.POST or None, instance=config)
     materials = PnLMaterialFormSet(request.POST or None, queryset=PnLMaterial.objects.all(), prefix="materials")
@@ -67,9 +51,8 @@ def pnl_settings(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def daily_pnl_list(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     qs = DailyPnL.objects.all()
     status = request.GET.get("status")
     if status:
@@ -87,9 +70,8 @@ def daily_pnl_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def daily_pnl_create(request: HttpRequest) -> HttpResponse:
-    _require_manager(request)
     form = DailyPnLForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         pnl = form.save()
@@ -111,9 +93,8 @@ def _form_context(pnl, form, materials, adhoc, *, show_errors, preview=None):
     }
 
 
-@login_required
+@manager_required
 def daily_pnl_update(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     if pnl.status != DailyPnL.DRAFT:
         messages.error(request, "Only draft Daily P&L documents can be edited.")
@@ -141,9 +122,8 @@ def daily_pnl_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 def daily_pnl_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL.objects.select_related("amended_from", "submitted_by"), pk=pk)
     return render(
         request,
@@ -157,10 +137,9 @@ def daily_pnl_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_preview(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     if pnl.status != DailyPnL.DRAFT:
         return HttpResponse("Only drafts can be previewed.", status=400)
@@ -189,13 +168,12 @@ def daily_pnl_preview(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_submit(request: HttpRequest, pk: int) -> HttpResponse:
-    user = _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     try:
-        pnl.submit(actor=user)
+        pnl.submit(actor=request.user)
     except ValidationError as e:
         messages.error(request, e.messages[0] if e.messages else str(e))
         return redirect(
@@ -205,10 +183,9 @@ def daily_pnl_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("reports:daily_pnl_detail", pk=pnl.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_cancel(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     try:
         pnl.cancel()
@@ -219,10 +196,9 @@ def daily_pnl_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("reports:daily_pnl_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_amend(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     try:
         copy = pnl.amend()
@@ -233,10 +209,9 @@ def daily_pnl_amend(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("reports:daily_pnl_update", pk=copy.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_material_add(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     formset = add_formset_row(DailyPnLMaterialQtyFormSet, "materials", request.POST)
     return render(
@@ -246,10 +221,9 @@ def daily_pnl_material_add(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_material_remove(request: HttpRequest, pk: int, index: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     formset = remove_formset_row(DailyPnLMaterialQtyFormSet, "materials", request.POST, index)
     return render(
@@ -259,10 +233,9 @@ def daily_pnl_material_remove(request: HttpRequest, pk: int, index: int) -> Http
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_adhoc_add(request: HttpRequest, pk: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     formset = add_formset_row(DailyPnLAdHocFormSet, "adhoc", request.POST)
     return render(
@@ -272,10 +245,9 @@ def daily_pnl_adhoc_add(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
-@login_required
+@manager_required
 @require_POST
 def daily_pnl_adhoc_remove(request: HttpRequest, pk: int, index: int) -> HttpResponse:
-    _require_manager(request)
     pnl = get_object_or_404(DailyPnL, pk=pk)
     formset = remove_formset_row(DailyPnLAdHocFormSet, "adhoc", request.POST, index)
     return render(
