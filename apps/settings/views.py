@@ -105,8 +105,7 @@ def staff_list(request: HttpRequest) -> HttpResponse:
         "staff_data": staff_data,
         "search": search
     }
-    
-    if _is_htmx(request):
+    if _is_htmx(request) and request.htmx.target == "staff-table-body":
         return render(request, "backoffice/settings/staff_list.html#staff-rows", context)
     return render(request, "backoffice/settings/staff_list.html", context)
 
@@ -150,9 +149,8 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
         user.groups.add(cashier_group)
         messages.success(request, f"{user.get_display_name()} is now a Cashier.")
 
-    if _is_htmx(request):
-        response = render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
-        return response
+    if _is_htmx(request) and request.htmx.target == f"staff-row-{pk}":
+        return render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
     return redirect("settings:staff_list")
 
 
@@ -179,9 +177,8 @@ def staff_remove_role(request: HttpRequest, pk: int) -> HttpResponse:
     user.groups.remove(admin_group, manager_group, cashier_group)
     messages.success(request, f"Role removed from {user.get_display_name()}.")
 
-    if _is_htmx(request):
-        response = render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
-        return response
+    if _is_htmx(request) and request.htmx.target == f"staff-row-{pk}":
+        return render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
     return redirect("settings:staff_list")
 
 

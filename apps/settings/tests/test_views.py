@@ -249,6 +249,52 @@ class TestStaffManagementViews(TestCase):
         self.assertRedirects(response, reverse("settings:staff_list"))
         self.assertFalse(self.cashier.groups.filter(name="RestPOS Cashier").exists())
 
+    def test_assign_role_htmx_returns_targeted_row(self):
+        target = f"staff-row-{self.newbie.pk}"
+        response = self.client.post(
+            reverse("settings:staff_assign_role", kwargs={"pk": self.newbie.pk, "role": "cashier"}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET=target,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<tr id="{target}"')
+        self.assertContains(response, "Cashier")
+        self.assertNotContains(response, "No users found")
+        self.assertNotContains(response, "User roles")
+
+    def test_remove_role_htmx_returns_targeted_row(self):
+        self.cashier.groups.add(self.cashier_group)
+        target = f"staff-row-{self.cashier.pk}"
+        response = self.client.post(
+            reverse("settings:staff_remove_role", kwargs={"pk": self.cashier.pk}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET=target,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<tr id="{target}"')
+        self.assertContains(response, "No role")
+        self.assertNotContains(response, "User roles")
+
+    def test_role_mutation_with_boosted_body_target_redirects(self):
+        response = self.client.post(
+            reverse("settings:staff_assign_role", kwargs={"pk": self.newbie.pk, "role": "cashier"}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="body",
+        )
+
+        self.assertRedirects(response, reverse("settings:staff_list"))
+
+        self.cashier.groups.add(self.cashier_group)
+        response = self.client.post(
+            reverse("settings:staff_remove_role", kwargs={"pk": self.cashier.pk}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="body",
+        )
+
+        self.assertRedirects(response, reverse("settings:staff_list"))
+
     def test_cannot_remove_admin(self):
         self.admin_user.groups.add(self.admin_group)
         response = self.client.post(reverse("settings:staff_remove_role", kwargs={"pk": self.admin_user.pk}))
@@ -277,11 +323,22 @@ class TestStaffManagementViews(TestCase):
         self.assertNotContains(response, "newbie@test.com")
 
     def test_staff_list_htmx_search_returns_rows_only(self):
-        response = self.client.get(reverse("settings:staff_list"), {"search": "cashier"}, HTTP_HX_REQUEST="true")
+        response = self.client.get(
+            reverse("settings:staff_list"),
+            {"search": "cashier"},
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="staff-table-body",
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "cashier@test.com")
         self.assertNotContains(response, "app-content")
         self.assertNotContains(response, "User roles")
+
+    def test_staff_list_boosted_navigation_returns_full_page(self):
+        response = self.client.get(reverse("settings:staff_list"), HTTP_HX_REQUEST="true", HTTP_HX_TARGET="body")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "User roles")
+        self.assertContains(response, "staff-table-body")
 
     def test_staff_list_pagination(self):
         for i in range(25):
