@@ -52,6 +52,23 @@ stateDiagram-v2
 - Opening submission is serialized by locking the `Restaurant` row and open shift rows.
 - Cancelling a closing entry does not reopen the opening entry.
 
+## Daily P&L
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: create
+    DRAFT --> DRAFT: edit inputs
+    DRAFT --> [*]: delete
+    DRAFT --> SUBMITTED: submit_daily_pnl
+    SUBMITTED --> CANCELLED: cancel
+    CANCELLED --> DRAFT: amend copies inputs into a new draft
+```
+
+- One DRAFT and one SUBMITTED document per `business_date`.
+- Submit freezes statement lines and totals; it does not post GL.
+- Cancel is status-only. The snapshot rows stay on file.
+- Amend is allowed only from CANCELLED and creates a new DRAFT linked via `amended_from`.
+
 ## Inventory Documents
 
 `StockEntry`, `StockReconciliation`, and `PurchaseReceipt` use `DRAFT -> SUBMITTED -> CANCELLED`. Submission creates SLE rows. Cancellation creates reverse SLE rows and marks source SLEs cancelled. A service call on a non-draft/non-submitted document is generally idempotent and returns the current status.

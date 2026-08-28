@@ -36,4 +36,9 @@
 | Discard | Retained `DISCARDED` state for an empty untouched draft; legacy seed data only. |
 | Audit Event | Append-only `OrderAuditEvent` describing an order mutation or lifecycle event. |
 | POS History | `services.order_history_rows()` query and its cashier-facing filtered display. |
+| Daily P&L | Submitted management snapshot for one business day (`reports.DailyPnL`). Not a GL report and not a GL posting. |
+| Business-day window | `[business_date + start_hour, next day + start_hour)` used to pick orders and shift closes for a Daily P&L. |
+| Kitchen consumption (P&L) | Memo line: submitted Kitchen `CONSUMPTION` reconciliations on that calendar date, valued at current WAC. Not subtracted from gross profit. |
+| Prime cost (P&L) | Memo line: drink COGS + employee costs. Not subtracted again at net profit. |
+| P&L material | Catalog consumable (`PnLMaterial`) typed as a quantity on the day's draft (e.g. cooking gas), not an inventory item. |
 | Full History | Restaurant-controlled access to returns, cancelled, discarded, and all status filters. |
