@@ -69,13 +69,16 @@
   </div>
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Lines</h3></div>
+    <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="receipt-dollar" size="16" color="currentColor" stroke_width="2" %}</span></div>
+      <h3 class="text-base font-bold text-gray-900">Item Lines</h3>
+      <span class="text-xs text-gray-400 ml-1">from the linked purchase receipt</span>
+    </div>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
         <thead class="bg-gray-50/50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
             <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
             <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
             <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
@@ -85,13 +88,39 @@
           {% for line in items %}
             <tr>
               <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ line.description|default:line.item.item_name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-600">{% if line.expense_account %}{{ line.expense_account.name }}{% else %}{{ line.item.item_group.name|default:"—" }}{% endif %}</td>
               <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.qty }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.rate }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ line.amount }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">No lines.</td></tr>
+            <tr><td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No item lines — link a purchase receipt or add expense lines.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+    <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="clipboard" size="16" color="currentColor" stroke_width="2" %}</span></div>
+      <h3 class="text-base font-bold text-gray-900">Expenses</h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for expense in expenses %}
+            <tr>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ expense.description }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ expense.amount }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No expense lines.</td></tr>
           {% endfor %}
         </tbody>
       </table>
