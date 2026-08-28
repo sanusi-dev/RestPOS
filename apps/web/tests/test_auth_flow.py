@@ -1,6 +1,8 @@
 from django.contrib.auth.models import Group
 from django.urls import reverse
 
+from apps.users.models import CustomUser
+
 from .base import TestLoginRequiredViewBase, TestViewBase
 
 
@@ -69,24 +71,27 @@ class TestRoleBasedRedirects(TestViewBase):
         self.assertRedirects(response, reverse("web:pending_approval"))
 
 
-class TestPendingApprovalView(TestLoginRequiredViewBase):
+class TestPendingApprovalView(TestViewBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user.groups.clear()
-        cls.authenticated_client.login(username="testing@example.com", password="12345")
+        cls.user = CustomUser.objects.create_user(username="pending@example.com", password="12345")
+
+    def setUp(self):
+        self.client.login(username="pending@example.com", password="12345")
 
     def test_pending_approval_view(self):
-        self._run_tests(reverse("web:pending_approval"))
+        response = self.client.get(reverse("web:pending_approval"))
+        self.assertEqual(response.status_code, 200)
 
     def test_pending_approval_contains_message(self):
-        response = self.authenticated_client.get(reverse("web:pending_approval"))
+        response = self.client.get(reverse("web:pending_approval"))
         self.assertContains(response, "Pending Approval")
 
     def test_staff_user_redirected_away_from_pending(self):
         manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
         self.user.groups.add(manager_group)
-        response = self.authenticated_client.get(reverse("web:pending_approval"))
+        response = self.client.get(reverse("web:pending_approval"))
         self.assertEqual(response.status_code, 302)
 
 
@@ -94,10 +99,25 @@ class TestDashboardView(TestLoginRequiredViewBase):
     def test_dashboard_view(self):
         self._run_tests(reverse("web:dashboard"))
 
+    def test_cashier_gets_403_on_dashboard(self):
+        cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+        from apps.users.models import CustomUser
+
+        CustomUser.objects.create_user(username="cash403@example.com", password="12345").groups.add(cashier_group)
+        self.client.login(username="cash403@example.com", password="12345")
+        response = self.client.get(reverse("web:dashboard"))
+        self.assertEqual(response.status_code, 403)
+
 
 class TestPOSView(TestLoginRequiredViewBase):
     def test_pos_view(self):
         self._run_tests(reverse("web:pos_index"))
+
+    def test_no_role_user_gets_403_on_pos(self):
+        CustomUser.objects.create_user(username="norole403@example.com", password="12345")
+        self.client.login(username="norole403@example.com", password="12345")
+        response = self.client.get(reverse("web:pos_index"))
+        self.assertEqual(response.status_code, 403)
 
     def test_pos_contains_backoffice_link(self):
         self.user.is_staff = True

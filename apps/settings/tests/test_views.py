@@ -108,7 +108,7 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
         cashier.groups.add(cashier_group)
         self.client.login(username="cashier@test.com", password="testpass123")
         response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
         self.assertFalse(Restaurant.objects.exists())
 
 
@@ -217,7 +217,7 @@ class TestStaffManagementViews(TestCase):
         self.client.logout()
         self.client.login(username="newbie@test.com", password="testpass123")
         response = self.client.get(reverse("settings:staff_list"))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
 
     def test_assign_cashier_role(self):
         response = self.client.post(
