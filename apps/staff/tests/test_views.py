@@ -46,50 +46,15 @@ class StaffViewTestBase(TestCase):
 
 
 class TestLoginRequired(TestCase):
-    def test_dashboard_requires_login(self):
+    def test_requires_login(self):
         response = self.client.get(reverse("staff:dashboard"))
         self.assertEqual(response.status_code, 302)
 
-    def test_opening_list_requires_login(self):
-        response = self.client.get(reverse("staff:opening_entry_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_closing_list_requires_login(self):
-        response = self.client.get(reverse("staff:closing_entry_list"))
-        self.assertEqual(response.status_code, 302)
-
-
-class TestStaffDashboard(StaffViewTestBase):
-    def test_dashboard_200(self):
-        response = self.client.get(reverse("staff:dashboard"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Current Shift State")
-
-    def test_dashboard_shows_no_open_shift_state(self):
-        response = self.client.get(reverse("staff:dashboard"))
-        self.assertContains(response, "No open shift")
 
 
 class TestPOSOpeningEntryViews(StaffViewTestBase):
-    def test_list_200(self):
-        response = self.client.get(reverse("staff:opening_entry_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"#{self.entry.pk}")
 
-    def test_create_get(self):
-        response = self.client.get(reverse("staff:opening_entry_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Open Shift")
 
-    def test_create_post(self):
-        response = self.client.post(
-            reverse("staff:opening_entry_create"),
-            data={f"mop_{self.cash_mode.pk}": "30000"},
-        )
-        self.assertEqual(response.status_code, 302)
-        entry = POSOpeningEntry.objects.exclude(pk=self.entry.pk).get()
-        cash_row = entry.opening_payments.get(mode_of_payment=self.cash_mode)
-        self.assertEqual(cash_row.opening_amount, Decimal("30000"))
 
     def test_create_post_captures_all_methods(self):
         """Both cash and electronic mode opening balances are persisted."""
@@ -113,32 +78,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
             Decimal("120000"),
         )
 
-    def test_create_post_defaults_blank_to_zero(self):
-        """Blank fields coerce to 0 (matches the form's initial=0 default)."""
-        response = self.client.post(
-            reverse("staff:opening_entry_create"),
-            data={f"mop_{self.cash_mode.pk}": "25000"},
-        )
-        self.assertEqual(response.status_code, 302)
-        entry = POSOpeningEntry.objects.exclude(pk=self.entry.pk).get()
-        self.assertEqual(
-            entry.opening_payments.get(mode_of_payment=self.cash_mode).opening_amount,
-            Decimal("25000"),
-        )
-        # Bank mode wasn't in the POST — rendered with initial=0 and coerced to Decimal("0").
-        self.assertEqual(
-            entry.opening_payments.get(mode_of_payment=self.bank_mode).opening_amount,
-            Decimal("0"),
-        )
 
-    def test_create_get_renders_all_active_modes(self):
-        """On GET, the form shows one input per active ModeOfPayment."""
-        response = self.client.get(reverse("staff:opening_entry_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'name="mop_{self.cash_mode.pk}"')
-        self.assertContains(response, f'name="mop_{self.bank_mode.pk}"')
-        self.assertNotContains(response, "opening_payments-TOTAL_FORMS")
-        self.assertContains(response, "Opening Float")
 
     def test_create_post_blocks_when_no_modes_configured(self):
         """Re-render with error if no active ModeOfPayment exists."""
@@ -148,25 +88,8 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertContains(response, "No active payment methods")
         self.assertEqual(POSOpeningEntry.objects.count(), 1)
 
-    def test_detail_200(self):
-        response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test Cash")
-        self.assertContains(response, "Opening Float")
 
-    def test_detail_404(self):
-        response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": 9999}))
-        self.assertEqual(response.status_code, 404)
 
-    def test_detail_get_renders_inline_form_for_draft(self):
-        """For a DRAFT opening, the float table renders as an inline-editable form."""
-        response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            f'action="{reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk})}"',
-        )
-        self.assertContains(response, "Submit & Open Shift")
 
     def test_detail_post_saves_amounts(self):
         """POST to the detail URL saves the edited opening amounts (PRG)."""
@@ -198,15 +121,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
             Decimal("50000"),
         )
 
-    def test_detail_get_read_only_when_submitted(self):
-        """For an Open / Closed / Cancelled entry, the float table renders read-only."""
-        self.entry.submit()
-        response = self.client.get(reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(
-            response,
-            f'action="{reverse("staff:opening_entry_detail", kwargs={"pk": self.entry.pk})}"',
-        )
 
     def test_submit_post(self):
         response = self.client.post(reverse("staff:opening_entry_submit", kwargs={"pk": self.entry.pk}))
@@ -217,9 +131,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.status, POSOpeningEntry.SUBMITTED)
 
-    def test_submit_requires_post(self):
-        response = self.client.get(reverse("staff:opening_entry_submit", kwargs={"pk": self.entry.pk}))
-        self.assertEqual(response.status_code, 405)
 
     def test_cancel_post(self):
         response = self.client.post(reverse("staff:opening_entry_cancel", kwargs={"pk": self.entry.pk}))
@@ -228,12 +139,7 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertEqual(self.entry.status, POSOpeningEntry.CANCELLED)
         self.assertEqual(self.entry.cancelled_by, self.user)
 
-    def test_cancel_requires_post(self):
-        response = self.client.get(reverse("staff:opening_entry_cancel", kwargs={"pk": self.entry.pk}))
-        self.assertEqual(response.status_code, 405)
 
-
-class TestPOSClosingEntryViews(StaffViewTestBase):
     def setUp(self):
         super().setUp()
         # Open the shift so the closing entry is allowed

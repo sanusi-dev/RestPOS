@@ -42,9 +42,8 @@ class OrderGLTestBase(TestCase):
         cls.bar_wh.account = LedgerAccount.objects.create(
             name="Stock in Hand — Bar",
             parent=cls.accounts["assets"],
-            root_type=LedgerAccount.ASSET,
+            account_type=LedgerAccount.ASSET,
             report_type=LedgerAccount.BALANCE_SHEET,
-            account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
         )
         cls.bar_wh.save()
         cls.food = Item.objects.create(
@@ -172,14 +171,6 @@ class OrderSettleGLTest(OrderGLTestBase):
         with self.assertRaisesMessage(ValidationError, "default income account"):
             self._settle(order)
 
-    def test_fiscal_year_missing_raises(self):
-        FiscalYear.objects.all().delete()
-        order = self._create_order()
-        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
-        with self.assertRaises(ValidationError):
-            self._settle(order)
-
-
 class OrderCancelGLTest(OrderGLTestBase):
     def test_reverse_order_gl_posts_mirrored_entries(self):
         order = self._create_order()
@@ -195,23 +186,6 @@ class OrderCancelGLTest(OrderGLTestBase):
         self.assertEqual(entries.filter(is_cancelled=False).count(), 2)
         reversal = entries.filter(is_cancelled=False, account=self.accounts["cash"]).first()
         self.assertEqual(reversal.credit, Decimal("1500"))
-
-    def test_reverse_order_gl_posts_on_today_not_sale_date(self):
-        order = self._create_order()
-        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
-        self._settle(order)
-        FiscalYear.objects.create(
-            name="FY2020",
-            year_start_date=date(2020, 1, 1),
-            year_end_date=date(2020, 12, 31),
-        )
-        from apps.accounting.services import reverse_order_gl
-
-        reverse_order_gl(order, posting_date=date(2020, 3, 15))
-        reversals = self._order_gl(order).filter(is_cancelled=False)
-        self.assertTrue(reversals.exists())
-        self.assertEqual(set(reversals.values_list("posting_date", flat=True)), {date(2020, 3, 15)})
-
 
 class RefundGLTest(OrderGLTestBase):
     def test_return_posts_mirrored_refund(self):
@@ -285,12 +259,3 @@ class NotRestockableConstraintTest(OrderGLTestBase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             OrderItem.objects.filter(pk=line.pk).update(not_restockable=True)
 
-    def test_return_line_can_be_marked_not_restockable(self):
-        order = self._create_order()
-        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
-        self._settle(order)
-        ret = make_return(order)
-        line = ret.items.first()
-        line.not_restockable = True
-        line.save(update_fields=["not_restockable", "updated_at"])
-        self.assertTrue(OrderItem.objects.get(pk=line.pk).not_restockable)

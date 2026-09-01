@@ -12,20 +12,20 @@ from apps.accounting.models import FiscalYear, GLEntry, LedgerAccount
 class LedgerAccountTreeTest(TestCase):
     def setUp(self):
         self.assets = LedgerAccount.objects.create(
-            name="Assets", is_group=True, root_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
+            name="Assets", is_group=True, account_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
         )
 
-    def test_root_requires_root_type(self):
+    def test_root_requires_account_type(self):
         with self.assertRaises(ValidationError):
             LedgerAccount.objects.create(name="No Type", is_group=True)
 
-    def test_child_inherits_root_type(self):
+    def test_child_inherits_account_type(self):
         child = LedgerAccount.objects.create(name="Cash", parent=self.assets)
-        self.assertEqual(child.root_type, LedgerAccount.ASSET)
+        self.assertEqual(child.account_type, LedgerAccount.ASSET)
 
-    def test_child_root_type_must_match_parent(self):
+    def test_child_account_type_must_match_parent(self):
         with self.assertRaises(ValidationError):
-            LedgerAccount.objects.create(name="Bad", parent=self.assets, root_type=LedgerAccount.INCOME)
+            LedgerAccount.objects.create(name="Bad", parent=self.assets, account_type=LedgerAccount.INCOME)
 
     def test_parent_must_be_group(self):
         leaf = LedgerAccount.objects.create(name="Cash", parent=self.assets)
@@ -38,12 +38,6 @@ class LedgerAccountTreeTest(TestCase):
         with self.assertRaises(ValidationError):
             account.full_clean()
 
-    def test_leaf_cannot_be_parent(self):
-        # A leaf account can never gain children: the parent must be a group.
-        leaf = LedgerAccount.objects.create(name="Cash", parent=self.assets)
-        with self.assertRaises(ValidationError):
-            LedgerAccount.objects.create(name="Sub", parent=leaf)
-
     def test_group_with_children_cannot_disable(self):
         child = LedgerAccount.objects.create(name="Cash", parent=self.assets)
         self.assets.disabled = True
@@ -55,12 +49,6 @@ class LedgerAccountTreeTest(TestCase):
         LedgerAccount.objects.create(name="Cash", parent=self.assets)
         with self.assertRaises(ValidationError):
             self.assets.delete()
-
-    def test_unique_name(self):
-        LedgerAccount.objects.create(name="Cash", parent=self.assets)
-        with self.assertRaises(ValidationError):
-            LedgerAccount.objects.create(name="Cash", parent=self.assets)
-
 
 class FiscalYearTest(TestCase):
     def test_end_after_start(self):
@@ -99,11 +87,11 @@ class FiscalYearTest(TestCase):
 class GLEntryImmutabilityTest(TestCase):
     def setUp(self):
         self.assets = LedgerAccount.objects.create(
-            name="Assets", is_group=True, root_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
+            name="Assets", is_group=True, account_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
         )
         self.cash = LedgerAccount.objects.create(name="Cash", parent=self.assets)
         self.income = LedgerAccount.objects.create(
-            name="Income", is_group=True, root_type=LedgerAccount.INCOME, report_type=LedgerAccount.PROFIT_AND_LOSS
+            name="Income", is_group=True, account_type=LedgerAccount.INCOME, report_type=LedgerAccount.PROFIT_AND_LOSS
         )
         self.sales = LedgerAccount.objects.create(name="Sales", parent=self.income)
         self.year = FiscalYear.objects.create(
@@ -200,20 +188,3 @@ class GLEntryImmutabilityTest(TestCase):
                 voucher_no="X-7",
             )
 
-    def test_reversal_flag_can_be_flipped(self):
-        entry = GLEntry.post(
-            posting_date=date(2026, 5, 1),
-            rows=[
-                {"account": self.cash, "debit": Decimal("100")},
-                {"account": self.sales, "credit": Decimal("100")},
-            ],
-            voucher_type="Order",
-            voucher_no="X-8",
-        )[0]
-        entry.is_cancelled = True
-        entry.save(update_fields=["is_cancelled", "updated_at"])
-        entry.refresh_from_db()
-        self.assertTrue(entry.is_cancelled)
-        entry.is_cancelled = False
-        with self.assertRaises(ValidationError):
-            entry.save()

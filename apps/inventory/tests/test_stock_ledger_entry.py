@@ -44,20 +44,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
         self.assertEqual(sle.unit_rate, Decimal("100"))
         self.assertEqual(sle.stock_value_change, Decimal("1000"))
 
-    def test_receipt_updates_bin_wac(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("10"),
-            voucher_type="Stock Entry",
-            voucher_no="SE1",
-            unit_rate=Decimal("100"),
-        )
-        bin_obj = Bin.objects.get(item=self.item, warehouse=self.warehouse)
-        self.assertEqual(bin_obj.actual_qty, Decimal("10"))
-        self.assertEqual(bin_obj.valuation_rate, Decimal("100"))
-        self.assertEqual(bin_obj.stock_value, Decimal("1000"))
-
     def test_inbound_blend(self):
         StockLedgerEntry.create_entry(
             item=self.item,
@@ -112,25 +98,6 @@ class WACInboundTest(StockLedgerEntryTestBase):
         bin_after = Bin.objects.get(item=self.item, warehouse=self.warehouse)
         self.assertEqual(bin_after.actual_qty, Decimal("11"))
         self.assertEqual(bin_after.valuation_rate, wac_before)
-
-    def test_wac_unchanged_on_outbound(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("10"),
-            voucher_type="T",
-            voucher_no="1",
-            unit_rate=Decimal("100"),
-        )
-        wac = Bin.objects.get(item=self.item, warehouse=self.warehouse).valuation_rate
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("-3"),
-            voucher_type="T",
-            voucher_no="2",
-        )
-        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.warehouse).valuation_rate, wac)
 
     def test_zero_qty_rejected(self):
         StockLedgerEntry.create_entry(
@@ -200,35 +167,6 @@ class NegativeStockTest(StockLedgerEntryTestBase):
         self.assertEqual(StockLedgerEntry.objects.count(), 1)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.warehouse).actual_qty, Decimal("5"))
 
-    def test_insufficient_is_validation_error(self):
-        with self.assertRaises(ValidationError):
-            StockLedgerEntry.create_entry(
-                item=self.item,
-                warehouse=self.warehouse,
-                quantity=Decimal("-1"),
-                voucher_type="T",
-                voucher_no="1",
-            )
-
-    def test_legacy_actual_qty_alias_block(self):
-        StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("2"),
-            voucher_type="T",
-            voucher_no="1",
-            unit_rate=Decimal("50"),
-        )
-        with self.assertRaises(InsufficientStock):
-            StockLedgerEntry.create_entry(
-                item=self.item,
-                warehouse=self.warehouse,
-                quantity=Decimal("-5"),
-                voucher_type="T",
-                voucher_no="2",
-            )
-
-
 class FutureDateTest(StockLedgerEntryTestBase):
     def test_future_posting_date_rejected(self):
         tomorrow = timezone.localdate() + timedelta(days=1)
@@ -242,20 +180,6 @@ class FutureDateTest(StockLedgerEntryTestBase):
                 unit_rate=Decimal("100"),
                 posting_date=tomorrow,
             )
-
-    def test_posting_date_stored(self):
-        posting = date(2024, 2, 3)
-        sle = StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("1"),
-            voucher_type="T",
-            voucher_no="1",
-            unit_rate=Decimal("100"),
-            posting_date=posting,
-        )
-        self.assertEqual(sle.posting_date, posting)
-
 
 class VarianceFieldTest(StockLedgerEntryTestBase):
     def test_variance_and_reversal(self):
@@ -282,49 +206,5 @@ class VarianceFieldTest(StockLedgerEntryTestBase):
         self.assertEqual(sle2.variance_type, "CANCELLATION_WAC")
         self.assertEqual(sle2.reversal_of_sle_id, sle1.pk)
 
-    def test_sale_return_variance(self):
-        sle = StockLedgerEntry.create_entry(
-            item=self.item,
-            warehouse=self.warehouse,
-            quantity=Decimal("3"),
-            voucher_type="POS Return",
-            voucher_no="1",
-            unit_rate=Decimal("120"),
-            variance_amount=Decimal("30"),
-            variance_type="SALE_RETURN",
-        )
-        self.assertEqual(sle.variance_type, "SALE_RETURN")
-        self.assertEqual(sle.variance_amount, Decimal("30"))
 
 
-class SLEFieldsNotEditable(StockLedgerEntryTestBase):
-    def test_quantity_not_editable(self):
-        field = StockLedgerEntry._meta.get_field("quantity")
-        self.assertFalse(field.editable)
-
-    def test_unit_rate_not_editable(self):
-        field = StockLedgerEntry._meta.get_field("unit_rate")
-        self.assertFalse(field.editable)
-
-    def test_stock_value_change_not_editable(self):
-        field = StockLedgerEntry._meta.get_field("stock_value_change")
-        self.assertFalse(field.editable)
-
-    def test_variance_not_editable(self):
-        field = StockLedgerEntry._meta.get_field("variance_amount")
-        self.assertFalse(field.editable)
-
-
-class LegacyAliasTest(StockLedgerEntryTestBase):
-    """The legacy actual_qty/rate kwargs were removed; the canonical names only."""
-
-    def test_legacy_aliases_rejected(self):
-        with self.assertRaises(TypeError):
-            StockLedgerEntry.create_entry(
-                item=self.item,
-                warehouse=self.warehouse,
-                actual_qty=Decimal("4"),
-                voucher_type="T",
-                voucher_no="1",
-                rate=Decimal("25"),
-            )

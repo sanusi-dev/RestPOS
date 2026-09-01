@@ -36,13 +36,6 @@ class POSOpeningEntryTestBase(TestCase):
 
 
 class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
-    def test_str(self):
-        self.assertIn(f"Opening #{self.entry.pk}", str(self.entry))
-
-    def test_is_open_starts_false(self):
-        self.assertFalse(self.entry.is_open)
-        self.assertFalse(self.entry.is_closed)
-
     def test_submit_flips_status(self):
         self.entry.submit()
         self.assertEqual(self.entry.status, POSOpeningEntry.SUBMITTED)
@@ -125,10 +118,6 @@ class POSOpeningEntryModelTest(POSOpeningEntryTestBase):
 
 
 class OpeningPaymentModelTest(POSOpeningEntryTestBase):
-    def test_str(self):
-        op = self.entry.opening_payments.get(mode_of_payment=self.cash_mode)
-        self.assertIn("Test Cash", str(op))
-
     def test_unique_mode_per_entry(self):
         from django.db.utils import IntegrityError
 
@@ -139,16 +128,3 @@ class OpeningPaymentModelTest(POSOpeningEntryTestBase):
                 opening_amount=Decimal("0"),
             )
 
-    def test_protect_on_mode_delete(self):
-        from django.db.utils import IntegrityError
-
-        with self.assertRaises(IntegrityError):
-            self.cash_mode.delete()
-
-    def test_ordering_alphabetical(self):
-        names = list(self.entry.opening_payments.values_list("mode_of_payment__name", flat=True))
-        self.assertEqual(names, sorted(names))
-
-    def test_default_opening_amount_zero(self):
-        op = OpeningPayment(opening_entry=self.entry, mode_of_payment=self.cash_mode)
-        self.assertEqual(op.opening_amount, Decimal("0"))

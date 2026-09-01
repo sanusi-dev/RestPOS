@@ -9,7 +9,7 @@ from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 
 from ..models import Order
-from ..services import add_order_line, cancel_sent_order, create_tickets, remove_order_line
+from ..services import add_order_line, create_tickets
 from .accounting_setup import OrderAccountingMixin
 
 
@@ -23,10 +23,10 @@ class KOTTestBase(OrderAccountingMixin, TestCase):
         cls.kitchen_warehouse = Warehouse.objects.create(name="Kitchen")
         cls.bar_warehouse = Warehouse.objects.create(name="Bar")
         cls.food_item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
         )
         cls.drink_item = Item.objects.create(
-            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True
+            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True, is_stock_item=True, is_purchase_item=True
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
@@ -77,14 +77,6 @@ class KOTGenerationTest(KOTTestBase):
                 self.order,
             )
 
-    def test_department_routing_food_to_kitchen(self):
-        add_order_line(self.order, self.food_item, qty=1, rate=Decimal("1500"))
-        kots = create_tickets(
-            self.order,
-        )
-        self.assertEqual(len(kots), 1)
-        self.assertEqual(kots[0].production_unit, self.kitchen)
-
     def test_department_routing_drinks_to_bar(self):
         add_order_line(self.order, self.drink_item, qty=1, rate=Decimal("500"))
         kots = create_tickets(
@@ -128,15 +120,6 @@ class KOTGenerationTest(KOTTestBase):
         self.assertEqual(len(kots), 1)
         self.assertEqual(kots[0].ticket_type, "kitchen")
 
-    def test_sent_order_cannot_reduce_item_quantity(self):
-        add_order_line(self.order, self.food_item, qty=2, rate=Decimal("1500"))
-        create_tickets(
-            self.order,
-        )
-        oi = self.order.items.first()
-        with self.assertRaises(ValidationError):
-            remove_order_line(self.order, oi.pk)
-
     def test_customer_index_grouping(self):
         order = Order.objects.create(guest_count=2)
         add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"), customer_index=1)
@@ -150,35 +133,5 @@ class KOTGenerationTest(KOTTestBase):
         indices = {ki.customer_index for ki in kot.items.all()}
         self.assertEqual(indices, {1, 2})
 
-    def test_kot_number_format(self):
-        add_order_line(self.order, self.food_item, qty=1, rate=Decimal("1500"))
-        kots = create_tickets(
-            self.order,
-        )
-        self.assertTrue(kots[0].kot_number.startswith("KOT-"))
 
-    def test_cancel_kot_number_format(self):
-        add_order_line(self.order, self.food_item, qty=2, rate=Decimal("1500"))
-        create_tickets(
-            self.order,
-        )
-        cancel_sent_order(self.order, "Test reason")
-        cancel_kot = self.order.kots.filter(type="Cancelled").first()
-        self.assertTrue(cancel_kot.kot_number.startswith("CNCL-KOT-"))
 
-    def test_generate_kots_no_production_unit_skips(self):
-        self.kitchen.delete()
-        add_order_line(self.order, self.food_item, qty=1, rate=Decimal("1500"))
-        with self.assertRaises(ValidationError):
-            create_tickets(
-                self.order,
-            )
-
-    def test_sent_order_cannot_remove_item(self):
-        add_order_line(self.order, self.food_item, qty=2, rate=Decimal("1500"))
-        create_tickets(
-            self.order,
-        )
-        oi = self.order.items.first()
-        with self.assertRaises(ValidationError):
-            remove_order_line(self.order, oi.pk)

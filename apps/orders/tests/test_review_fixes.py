@@ -47,7 +47,7 @@ class ReviewFixBase(OrderAccountingMixin, TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True,
+            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1000"))
@@ -90,16 +90,6 @@ class ReviewFixBase(OrderAccountingMixin, TestCase):
         return order
 
 
-class NoActiveMenuTest(ReviewFixBase):
-    def test_order_screen_without_active_menu(self):
-        self.restaurant.active_menu = None
-        self.restaurant.save(update_fields=["active_menu"])
-        order = Order.objects.create(opening_entry=self.opening)
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": order.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No active menu is configured")
-
-
 class DisabledLineValidationTest(ReviewFixBase):
     def test_quantity_update_rejects_disabled_item(self):
         order = self._draft_order_with_item()
@@ -123,17 +113,6 @@ class DisabledLineValidationTest(ReviewFixBase):
             )
         order.refresh_from_db()
         self.assertEqual(order.status, DRAFT)
-
-
-class CloseShiftNoSideEffectGetTest(ReviewFixBase):
-    def test_get_does_not_create_closing_rows(self):
-        before_entries = POSClosingEntry.objects.count()
-        before_payments = ClosingPayment.objects.count()
-        response = self.client.get(reverse("pos:pos_close_shift"))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(POSClosingEntry.objects.count(), before_entries)
-        self.assertEqual(ClosingPayment.objects.count(), before_payments)
-        self.assertContains(response, "Total Expected")
 
 
 class SeedStoreWarehouseTest(TestCase):

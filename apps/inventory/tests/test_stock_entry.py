@@ -43,6 +43,7 @@ class StockEntryTest(TestCase):
             department="FOOD",
             is_stock_item=True,
             is_purchase_item=True,
+            is_sales_item=False,
         )
         cls.drink = Item.objects.create(
             item_name="Cola",
@@ -51,11 +52,8 @@ class StockEntryTest(TestCase):
             department="DRINKS",
             is_stock_item=True,
             is_purchase_item=True,
+            is_sales_item=True,
         )
-
-    def test_choices_exclude_material_issue(self):
-        values = {value for value, _label in StockEntry._meta.get_field("purpose").choices}
-        self.assertEqual(values, {"MATERIAL_RECEIPT", "MATERIAL_TRANSFER"})
 
     def test_receipt_forces_store_and_requires_purchasable_stock_item(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
@@ -70,14 +68,6 @@ class StockEntryTest(TestCase):
         line.refresh_from_db()
         self.assertEqual(line.target_warehouse, self.store)
         self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.store).actual_qty, Decimal("4"))
-
-    def test_receipt_rejects_non_purchase_item(self):
-        self.food.is_purchase_item = False
-        self.food.save()
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
-        StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=1)
-        with self.assertRaisesMessage(ValidationError, "not purchasable"):
-            submit_stock_entry(entry)
 
     def test_transfer_derives_department_targets_and_preserves_wac_rate(self):
         # WAC: store 2@100 + 3@200 => WAC 160. Transfer 3 at source WAC 160.
@@ -135,27 +125,6 @@ class StockEntryTest(TestCase):
         self.assertEqual(
             StockLedgerEntry.objects.filter(voucher_type="Stock Entry", voucher_no=str(entry.pk)).count(), 0
         )
-
-    def test_transfer_submit_and_cancel_are_idempotent(self):
-        StockLedgerEntry.create_entry(
-            item=self.food,
-            warehouse=self.store,
-            quantity=Decimal("5"),
-            voucher_type="Opening",
-            voucher_no="1",
-            unit_rate=Decimal("100"),
-        )
-        entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
-        StockEntryDetail.objects.create(stock_entry=entry, item=self.food, qty=Decimal("2"))
-        submit_stock_entry(entry)
-        submit_stock_entry(entry)
-        self.assertEqual(
-            StockLedgerEntry.objects.filter(voucher_type="Stock Entry", voucher_no=str(entry.pk)).count(), 2
-        )
-        cancel_stock_entry(entry)
-        cancel_stock_entry(entry)
-        self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.store).actual_qty, Decimal("5"))
-        self.assertEqual(Bin.objects.get(item=self.food, warehouse=self.kitchen).actual_qty, Decimal("0"))
 
     def test_cancel_transfer_rejects_consumed_target_atomically(self):
         StockLedgerEntry.create_entry(

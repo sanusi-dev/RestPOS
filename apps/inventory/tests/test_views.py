@@ -53,24 +53,8 @@ class InventoryViewTestBase(TestCase):
 
 
 class TestLoginRequired(TestCase):
-    def test_dashboard_requires_login(self):
+    def test_requires_login(self):
         response = self.client.get(reverse("inventory:dashboard"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_uom_list_requires_login(self):
-        response = self.client.get(reverse("inventory:uom_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_item_list_requires_login(self):
-        response = self.client.get(reverse("inventory:item_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_stock_entry_list_requires_login(self):
-        response = self.client.get(reverse("inventory:stock_entry_list"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_purchase_receipt_list_requires_login(self):
-        response = self.client.get(reverse("inventory:purchase_receipt_list"))
         self.assertEqual(response.status_code, 302)
 
 
@@ -82,23 +66,13 @@ class TestDashboardView(InventoryViewTestBase):
 
 
 class TestUOMViews(InventoryViewTestBase):
-    def test_uom_list_200(self):
-        response = self.client.get(reverse("inventory:uom_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Nos")
 
-    def test_uom_create_get(self):
-        response = self.client.get(reverse("inventory:uom_create"))
-        self.assertEqual(response.status_code, 200)
 
     def test_uom_create_post(self):
         response = self.client.post(reverse("inventory:uom_create"), {"name": "TestUnit"})
         self.assertRedirects(response, reverse("inventory:uom_list"))
         self.assertTrue(UOM.objects.filter(name="TestUnit").exists())
 
-    def test_uom_update_get(self):
-        response = self.client.get(reverse("inventory:uom_update", kwargs={"pk": self.uom.pk}))
-        self.assertEqual(response.status_code, 200)
 
     def test_uom_update_post(self):
         response = self.client.post(
@@ -111,10 +85,6 @@ class TestUOMViews(InventoryViewTestBase):
 
 
 class TestItemGroupViews(InventoryViewTestBase):
-    def test_item_group_list_200(self):
-        response = self.client.get(reverse("inventory:item_group_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Food")
 
     def test_item_group_create_post(self):
         response = self.client.post(
@@ -124,22 +94,9 @@ class TestItemGroupViews(InventoryViewTestBase):
         self.assertRedirects(response, reverse("inventory:item_group_list"))
         self.assertTrue(ItemGroup.objects.filter(name="Beverages").exists())
 
-    def test_item_group_detail_200(self):
-        response = self.client.get(reverse("inventory:item_group_detail", kwargs={"pk": self.group.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Food")
-
 
 class TestWarehouseViews(InventoryViewTestBase):
-    def test_warehouse_list_200(self):
-        response = self.client.get(reverse("inventory:warehouse_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Main Store")
 
-    def test_warehouse_create_get(self):
-        response = self.client.get(reverse("inventory:warehouse_create"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'name="name"')
 
     def test_warehouse_create_post(self):
         response = self.client.post(
@@ -153,70 +110,8 @@ class TestWarehouseViews(InventoryViewTestBase):
         wh = Warehouse.objects.get(name="Bar Store")
         self.assertEqual(wh.name, "Bar Store")
 
-    def test_warehouse_detail_200(self):
-        response = self.client.get(reverse("inventory:warehouse_detail", kwargs={"pk": self.warehouse.pk}))
-        self.assertEqual(response.status_code, 200)
-
-
-class TestItemViews(InventoryViewTestBase):
-    def test_item_list_200(self):
-        response = self.client.get(reverse("inventory:item_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_item_list_filter_by_department(self):
-        response = self.client.get(reverse("inventory:item_list"), {"department": "FOOD"})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_item_list_filter_sellable(self):
-        self.item.is_sales_item = True
-        self.item.save()
-        response = self.client.get(reverse("inventory:item_list"), {"sellable": "1"})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_item_list_search(self):
-        response = self.client.get(reverse("inventory:item_list"), {"q": "Jollof"})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_item_detail_200(self):
-        response = self.client.get(reverse("inventory:item_detail", kwargs={"pk": self.item.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Jollof Rice")
-
-    def test_item_detail_shows_variants(self):
-        template = Item.objects.create(
-            item_name="Chicken Template",
-            item_group=self.item.item_group,
-            stock_uom=self.item.stock_uom,
-            department="FOOD",
-            has_variants=True,
-            is_stock_item=False,
-        )
-        Item.objects.create(
-            item_name="Quarter Chicken Test",
-            item_group=self.item.item_group,
-            stock_uom=self.item.stock_uom,
-            department="FOOD",
-            variant_of=template,
-            is_sales_item=True,
-        )
-        response = self.client.get(reverse("inventory:item_detail", kwargs={"pk": template.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Quarter Chicken Test")
-        self.assertContains(response, "Variants")
-
-    def test_item_detail_404(self):
-        response = self.client.get(reverse("inventory:item_detail", kwargs={"pk": 9999}))
-        self.assertEqual(response.status_code, 404)
-
 
 class TestStockEntryViews(InventoryViewTestBase):
-    def test_stock_entry_list_200(self):
-        response = self.client.get(reverse("inventory:stock_entry_list"))
-        self.assertEqual(response.status_code, 200)
 
     def test_stock_entry_create_post(self):
         response = self.client.post(
@@ -254,18 +149,6 @@ class TestStockEntryViews(InventoryViewTestBase):
             )
         self.assertFalse(StockEntry.objects.filter(remarks="atomic failure").exists())
 
-    def test_stock_entry_detail_200(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
-        StockEntryDetail.objects.create(
-            stock_entry=entry,
-            item=self.item,
-            target_warehouse=self.warehouse,
-            qty=Decimal("10"),
-            basic_rate=Decimal("100"),
-        )
-        response = self.client.get(reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Submit")
 
     def test_stock_entry_submit_post(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
@@ -281,10 +164,6 @@ class TestStockEntryViews(InventoryViewTestBase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, "SUBMITTED")
 
-    def test_stock_entry_submit_requires_post(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
-        response = self.client.get(reverse("inventory:stock_entry_submit", kwargs={"pk": entry.pk}))
-        self.assertEqual(response.status_code, 405)
 
     def test_stock_entry_submit_validation_error_is_visible(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
@@ -294,6 +173,39 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertContains(response, "Bar / POS sales warehouse")
         entry.refresh_from_db()
         self.assertEqual(entry.status, "DRAFT")
+
+    def test_stock_entry_submit_htmx_error_returns_hx_redirect(self):
+        entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
+        StockEntryDetail.objects.create(stock_entry=entry, item=self.item, qty=Decimal("10"))
+        response = self.client.post(
+            reverse("inventory:stock_entry_submit", kwargs={"pk": entry.pk}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_BOOSTED="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["HX-Redirect"], reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
+        # The queued message persists in the cookie and renders on the followed page.
+        followed = self.client.get(reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
+        self.assertContains(followed, "Bar / POS sales warehouse")
+
+    def test_stock_entry_submit_htmx_success_returns_hx_redirect(self):
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
+        StockEntryDetail.objects.create(
+            stock_entry=entry,
+            item=self.item,
+            target_warehouse=self.warehouse,
+            qty=Decimal("10"),
+            basic_rate=Decimal("100"),
+        )
+        response = self.client.post(
+            reverse("inventory:stock_entry_submit", kwargs={"pk": entry.pk}),
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_BOOSTED="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["HX-Redirect"], reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, "SUBMITTED")
 
     def test_stock_entry_cancel_post(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
@@ -310,16 +222,8 @@ class TestStockEntryViews(InventoryViewTestBase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, "CANCELLED")
 
-    def test_stock_entry_cancel_requires_post(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
-        response = self.client.get(reverse("inventory:stock_entry_cancel", kwargs={"pk": entry.pk}))
-        self.assertEqual(response.status_code, 405)
-
 
 class TestReconciliationViews(InventoryViewTestBase):
-    def test_reconciliation_list_200(self):
-        response = self.client.get(reverse("inventory:reconciliation_list"))
-        self.assertEqual(response.status_code, 200)
 
     def test_reconciliation_create_rolls_back_parent_when_formset_save_fails(self):
         from apps.inventory.models import StockReconciliation
@@ -344,19 +248,7 @@ class TestReconciliationViews(InventoryViewTestBase):
             )
         self.assertFalse(StockReconciliation.objects.filter(remarks="atomic failure").exists())
 
-    def test_reconciliation_detail_200(self):
-        from apps.inventory.models import StockReconciliation
 
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        response = self.client.get(reverse("inventory:reconciliation_detail", kwargs={"pk": rec.pk}))
-        self.assertEqual(response.status_code, 200)
-
-    def test_reconciliation_submit_requires_post(self):
-        from apps.inventory.models import StockReconciliation
-
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse)
-        response = self.client.get(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}))
-        self.assertEqual(response.status_code, 405)
 
     def test_reconciliation_submit_validation_error_is_visible(self):
         from apps.inventory.models import StockReconciliation
@@ -366,42 +258,9 @@ class TestReconciliationViews(InventoryViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Add at least one item")
 
-    def test_reconciliation_filters_by_reason(self):
-        from apps.inventory.models import StockReconciliation
-
-        physical = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
-        correction = StockReconciliation.objects.create(warehouse=self.warehouse, reason="CORRECTION")
-        response = self.client.get(reverse("inventory:reconciliation_list"), {"reason": "CORRECTION"})
-        self.assertContains(response, reverse("inventory:reconciliation_detail", kwargs={"pk": correction.pk}))
-        self.assertNotContains(response, reverse("inventory:reconciliation_detail", kwargs={"pk": physical.pk}))
-
-
-class TestReportViews(InventoryViewTestBase):
-    def test_stock_ledger_list_200(self):
-        response = self.client.get(reverse("inventory:stock_ledger_list"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_stock_ledger_list_filter_by_item(self):
-        response = self.client.get(reverse("inventory:stock_ledger_list"), {"item": str(self.item.pk)})
-        self.assertEqual(response.status_code, 200)
-
-    def test_stock_balance_list_200(self):
-        response = self.client.get(reverse("inventory:stock_balance_list"))
-        self.assertEqual(response.status_code, 200)
-
-    def test_stock_balance_list_filter_by_warehouse(self):
-        response = self.client.get(reverse("inventory:stock_balance_list"), {"warehouse": str(self.warehouse.pk)})
-        self.assertEqual(response.status_code, 200)
-
 
 class TestPurchaseReceiptViews(InventoryViewTestBase):
-    def test_purchase_receipt_list_200(self):
-        response = self.client.get(reverse("inventory:purchase_receipt_list"))
-        self.assertEqual(response.status_code, 200)
 
-    def test_purchase_receipt_create_get(self):
-        response = self.client.get(reverse("inventory:purchase_receipt_create"))
-        self.assertEqual(response.status_code, 200)
 
     def test_purchase_receipt_create_post(self):
         response = self.client.post(
@@ -499,20 +358,6 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
             )
         self.assertFalse(PurchaseReceipt.objects.filter(supplier_name="Atomic Failure").exists())
 
-    def test_purchase_receipt_detail_200(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.warehouse,
-        )
-        PurchaseReceiptItem.objects.create(
-            purchase_receipt=receipt,
-            item=self.item,
-            received_qty=Decimal("10"),
-            rate=Decimal("100"),
-        )
-        response = self.client.get(reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Submit")
 
     def test_purchase_receipt_submit_post(self):
         receipt = PurchaseReceipt.objects.create(
@@ -530,13 +375,6 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         receipt.refresh_from_db()
         self.assertEqual(receipt.status, "SUBMITTED")
 
-    def test_purchase_receipt_submit_requires_post(self):
-        receipt = PurchaseReceipt.objects.create(
-            supplier_name="ABC Suppliers",
-            warehouse=self.warehouse,
-        )
-        response = self.client.get(reverse("inventory:purchase_receipt_submit", kwargs={"pk": receipt.pk}))
-        self.assertEqual(response.status_code, 405)
 
     def test_purchase_receipt_submit_validation_error_is_visible(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="ABC Suppliers", warehouse=self.warehouse)

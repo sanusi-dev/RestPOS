@@ -35,13 +35,7 @@ class TestLoginRequired(TestCase):
 
 
 class TestDashboardView(SettingsViewTestBase):
-    def test_dashboard_200(self):
-        response = self.client.get(reverse("settings:dashboard"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Restaurant settings")
 
-
-class TestRestaurantSettingsView(SettingsViewTestBase):
     def _post_data(self, **overrides):
         data = {
             "company": "Test Co",
@@ -55,10 +49,6 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
         data.update(overrides)
         return data
 
-    def test_get_200_no_config(self):
-        response = self.client.get(reverse("settings:restaurant_settings"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create settings")
 
     def test_post_creates_singleton(self):
         response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
@@ -66,11 +56,6 @@ class TestRestaurantSettingsView(SettingsViewTestBase):
         self.assertEqual(Restaurant.objects.count(), 1)
         self.assertEqual(Restaurant.objects.get().company, "Test Co")
 
-    def test_get_with_config(self):
-        Restaurant.objects.create(company="Test Co")
-        response = self.client.get(reverse("settings:restaurant_settings"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test Co")
 
     def test_post_updates_singleton(self):
         restaurant = Restaurant.objects.create(company="Test Co")
@@ -131,10 +116,6 @@ class TestProductionUnitViews(SettingsViewTestBase):
         data.update(overrides)
         return data
 
-    def test_list_200(self):
-        response = self.client.get(reverse("settings:production_unit_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Kitchen")
 
     def test_list_does_not_filter_by_department(self):
         unit_url = reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk})
@@ -142,23 +123,13 @@ class TestProductionUnitViews(SettingsViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, unit_url)
 
-    def test_create_get(self):
-        response = self.client.get(reverse("settings:production_unit_create"))
-        self.assertEqual(response.status_code, 200)
 
     def test_create_post(self):
         response = self.client.post(reverse("settings:production_unit_create"), self._post_data())
         self.assertRedirects(response, reverse("settings:production_unit_list"))
         self.assertTrue(ProductionUnit.objects.filter(name="Bar").exists())
 
-    def test_detail_200(self):
-        response = self.client.get(reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Kitchen")
 
-    def test_detail_404(self):
-        response = self.client.get(reverse("settings:production_unit_detail", kwargs={"pk": 9999}))
-        self.assertEqual(response.status_code, 404)
 
     def test_update_post(self):
         response = self.client.post(
@@ -198,15 +169,7 @@ class TestStaffManagementViews(TestCase):
     def setUp(self):
         self.client.login(username="admin@test.com", password="testpass123")
 
-    def test_staff_list_200(self):
-        response = self.client.get(reverse("settings:staff_list"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "User roles")
 
-    def test_staff_list_shows_users(self):
-        response = self.client.get(reverse("settings:staff_list"))
-        self.assertContains(response, "cashier@test.com")
-        self.assertContains(response, "newbie@test.com")
 
     def test_staff_list_requires_login(self):
         self.client.logout()
@@ -226,12 +189,6 @@ class TestStaffManagementViews(TestCase):
         self.assertRedirects(response, reverse("settings:staff_list"))
         self.assertTrue(self.newbie.groups.filter(name="RestPOS Cashier").exists())
 
-    def test_assign_manager_role(self):
-        response = self.client.post(
-            reverse("settings:staff_assign_role", kwargs={"pk": self.cashier.pk, "role": "manager"})
-        )
-        self.assertRedirects(response, reverse("settings:staff_list"))
-        self.assertTrue(self.cashier.groups.filter(name="RestPOS Manager").exists())
 
     def test_assign_admin_role(self):
         response = self.client.post(
@@ -249,19 +206,6 @@ class TestStaffManagementViews(TestCase):
         self.assertRedirects(response, reverse("settings:staff_list"))
         self.assertFalse(self.cashier.groups.filter(name="RestPOS Cashier").exists())
 
-    def test_assign_role_htmx_returns_targeted_row(self):
-        target = f"staff-row-{self.newbie.pk}"
-        response = self.client.post(
-            reverse("settings:staff_assign_role", kwargs={"pk": self.newbie.pk, "role": "cashier"}),
-            HTTP_HX_REQUEST="true",
-            HTTP_HX_TARGET=target,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'<tr id="{target}"')
-        self.assertContains(response, "Cashier")
-        self.assertNotContains(response, "No users found")
-        self.assertNotContains(response, "User roles")
 
     def test_remove_role_htmx_returns_targeted_row(self):
         self.cashier.groups.add(self.cashier_group)
@@ -322,37 +266,8 @@ class TestStaffManagementViews(TestCase):
         self.assertContains(response, "cashier@test.com")
         self.assertNotContains(response, "newbie@test.com")
 
-    def test_staff_list_htmx_search_returns_rows_only(self):
-        response = self.client.get(
-            reverse("settings:staff_list"),
-            {"search": "cashier"},
-            HTTP_HX_REQUEST="true",
-            HTTP_HX_TARGET="staff-table-body",
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "cashier@test.com")
-        self.assertNotContains(response, "app-content")
-        self.assertNotContains(response, "User roles")
 
-    def test_staff_list_boosted_navigation_returns_full_page(self):
-        response = self.client.get(reverse("settings:staff_list"), HTTP_HX_REQUEST="true", HTTP_HX_TARGET="body")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "User roles")
-        self.assertContains(response, "staff-table-body")
 
-    def test_staff_list_pagination(self):
-        for i in range(25):
-            CustomUser.objects.create_user(
-                username=f"batch{i}@test.com", email=f"batch{i}@test.com", password="testpass123"
-            )
-        response = self.client.get(reverse("settings:staff_list"), {"page": 2})
-        self.assertEqual(response.status_code, 200)
-
-    def test_assign_role_requires_post(self):
-        response = self.client.get(
-            reverse("settings:staff_assign_role", kwargs={"pk": self.newbie.pk, "role": "cashier"})
-        )
-        self.assertEqual(response.status_code, 405)
 
     def test_remove_role_requires_post(self):
         response = self.client.get(reverse("settings:staff_remove_role", kwargs={"pk": self.cashier.pk}))

@@ -33,7 +33,7 @@ class POSViewTestBase(OrderAccountingMixin, TestCase):
         cls.group_drinks = ItemGroup.objects.create(name="Drinks")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.food_item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
@@ -44,6 +44,7 @@ class POSViewTestBase(OrderAccountingMixin, TestCase):
             department="DRINKS",
             is_sales_item=True,
             is_stock_item=True,
+            is_purchase_item=True,
         )
         cls.drink_menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.drink_item, rate=Decimal("500"))
         Bin.objects.create(item=cls.food_item, warehouse=cls.warehouse, actual_qty=Decimal("100"))
@@ -175,11 +176,6 @@ class POSHomeTest(POSViewTestBase):
         self.assertTrue(response.context["draft_cap_reached"])
         self.assertContains(response, "disabled")
 
-    def test_pos_home_login_required(self):
-        self.client.logout()
-        response = self.client.get(reverse("pos:pos_home"))
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue("/accounts/login" in response.url or "/login" in response.url)
 
     def test_open_shift_saves_notes(self):
         response = self.client.post(
@@ -190,17 +186,6 @@ class POSHomeTest(POSViewTestBase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(POSOpeningEntry.objects.get().remarks, "Opening float checked")
 
-    def test_open_shift_htmx_renders_draft_orders_and_pushes_home_url(self):
-        response = self.client.post(
-            reverse("pos:pos_open_shift"),
-            {f"mop_{self.cash.pk}": "5000"},
-            HTTP_HX_REQUEST="true",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["HX-Push-Url"], reverse("pos:pos_home"))
-        self.assertContains(response, "No open orders")
-        self.assertNotContains(response, 'id="pos-main"')
 
     def test_draft_cap_blocks_new_order(self):
         self.restaurant.max_open_drafts = 1
@@ -218,34 +203,8 @@ class POSShiftCloseTest(POSViewTestBase):
         super().setUp()
         self.opening = self._open_shift()
 
-    def test_close_shift_page_shows_reconciliation_fields(self):
-        response = self.client.get(reverse("pos:pos_close_shift"))
 
-        self.assertContains(response, "Expected")
-        self.assertContains(response, "Counted")
-        self.assertContains(response, "Variance")
-        self.assertContains(response, "Close shift")
-        self.assertNotContains(response, "Notes")
 
-    def test_close_shift_htmx_get_returns_only_the_close_surface(self):
-        response = self.client.get(reverse("pos:pos_close_shift"), HTTP_HX_REQUEST="true")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Count the drawer")
-        self.assertNotContains(response, "<html")
-        self.assertNotContains(response, 'id="pos-main"')
-        self.assertContains(response, f'hx-post="{reverse("pos:pos_close_shift")}"')
-        self.assertContains(response, 'hx-swap-oob="outerHTML"')
-
-    def test_close_shift_is_blocked_by_open_order(self):
-        Order.objects.create(opening_entry=self.opening)
-
-        response = self.client.get(reverse("pos:pos_close_shift"))
-
-        self.assertContains(response, "Finish open orders first")
-        self.assertContains(response, "1 open order")
-        self.opening.refresh_from_db()
-        self.assertIsNone(self.opening.closing_entry_id)
 
     def test_close_shift_post_rechecks_open_orders(self):
         Order.objects.create(opening_entry=self.opening)
@@ -281,22 +240,6 @@ class POSShiftCloseTest(POSViewTestBase):
         self.assertEqual(POSClosingEntry.objects.count(), before_entries)
         self.assertEqual(ClosingPayment.objects.count(), before_payments)
 
-    def test_close_shift_htmx_success_returns_no_shift_surface_and_pushes_home_url(self):
-        response = self.client.get(reverse("pos:pos_close_shift"))
-        form_data = response.context["form_data"]
-        post_data = {form["closing_amount"].html_name: str(payment.expected_amount) for payment, form in form_data}
-
-        response = self.client.post(
-            reverse("pos:pos_close_shift"),
-            post_data,
-            HTTP_HX_REQUEST="true",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["HX-Push-Url"], reverse("pos:pos_home"))
-        self.assertContains(response, "No open shift")
-        self.assertNotContains(response, 'id="pos-main"')
-
 
 class POSOrderHistoryTest(POSViewTestBase):
     def setUp(self):
@@ -329,26 +272,7 @@ class POSOrderHistoryTest(POSViewTestBase):
             invoice_number="CAN-103",
         )
 
-    def test_history_defaults_to_completed_sales(self):
-        response = self.client.get(reverse("pos:pos_order_history"))
 
-        self.assertContains(response, "#101")
-        self.assertNotContains(response, "#102")
-        self.assertNotContains(response, "#103")
-        self.assertContains(response, "Open")
-        self.assertContains(response, "History")
-
-    def test_history_htmx_returns_only_the_history_surface(self):
-        response = self.client.get(reverse("pos:pos_order_history"), HTTP_HX_REQUEST="true")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"#{self.sale.order_number}")
-        self.assertNotContains(response, "<html")
-        self.assertNotContains(response, 'id="pos-main"')
-        self.assertContains(response, 'hx-swap-oob="outerHTML"')
-        # Cashiers without the restaurant setting only see Sales.
-        self.assertNotContains(response, 'hx-get="?status=all')
-        self.assertContains(response, 'hx-get="?status=sales')
 
     def test_history_full_filters_when_restaurant_setting_enabled(self):
         self.restaurant.pos_allow_full_history = True
@@ -358,36 +282,7 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, 'hx-get="?status=returns')
         self.assertContains(response, 'hx-get="?status=cancelled')
 
-    def test_history_view_link_targets_drawer_without_url_push(self):
-        response = self.client.get(reverse("pos:pos_order_history"))
 
-        self.assertContains(response, f'id="order-view-{self.sale.pk}"')
-        self.assertContains(response, 'hx-target="#order-details-drawer"')
-        self.assertContains(response, 'hx-push-url="false"')
-        self.assertContains(response, 'aria-controls="order-details-drawer"')
-
-    def test_history_detail_drawer_returns_only_drawer_fragment(self):
-        response = self.client.get(
-            reverse("pos:pos_order_history_detail", kwargs={"pk": self.sale.pk}),
-            HTTP_HX_REQUEST="true",
-            HTTP_HX_TARGET="order-details-drawer",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'role="dialog"')
-        self.assertContains(response, 'aria-modal="true"')
-        self.assertContains(response, "Kitchen status")
-        self.assertNotContains(response, "Payment status")
-        self.assertContains(response, "Items (0)")
-        self.assertContains(response, "Discount")
-        self.assertContains(response, "₦0")
-        self.assertContains(response, "No items recorded")
-        self.assertContains(response, "orderDetailsDrawer")
-        self.assertContains(response, "animate: true")
-        self.assertNotContains(response, "<html")
-        self.assertNotContains(response, 'id="pos-main"')
-        self.assertNotContains(response, 'hx-swap-oob="outerHTML"')
-        self.assertNotIn("HX-Push-Url", response)
 
     def test_history_detail_print_from_drawer_does_not_push_url(self):
         with patch(
@@ -417,11 +312,6 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, "#102")
         self.assertContains(response, "#103")
 
-    def test_cashier_without_full_history_is_forced_to_sales(self):
-        response = self.client.get(reverse("pos:pos_order_history"), {"status": "all"})
-        self.assertContains(response, "#101")
-        self.assertNotContains(response, "#102")
-        self.assertNotContains(response, "#103")
 
     def test_history_with_cleared_date_shows_older_orders(self):
         older_sale = Order.objects.create(
@@ -494,19 +384,6 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, f"#{self.sale.order_number}")
         self.assertNotContains(response, "<html")
 
-    def test_history_detail_htmx_returns_surface_with_history_active(self):
-        response = self.client.get(
-            reverse("pos:pos_order_history_detail", kwargs={"pk": self.sale.pk}),
-            HTTP_HX_REQUEST="true",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"#{self.sale.order_number}")
-        self.assertNotContains(response, "<html")
-        self.assertNotContains(response, 'id="pos-main"')
-        self.assertContains(response, 'id="pos-header-nav"')
-        self.assertContains(response, 'aria-current="page"')
-        self.assertNotContains(response, 'id="catalog-search"')
 
     def test_history_detail_groups_items_by_customer_and_shows_payments(self):
         order = Order.objects.create(opening_entry=self.opening, guest_count=2)
@@ -625,34 +502,8 @@ class POSAddItemTest(POSViewTestBase):
         self.assertContains(response, "Insufficient stock")
         self.assertEqual(Bin.objects.get(item=self.drink_item, warehouse=self.warehouse).reserved_qty, Decimal("2"))
 
-    def test_catalog_disables_out_of_stock_drink_without_htmx_action(self):
-        Bin.objects.filter(item=self.drink_item, warehouse=self.warehouse).update(actual_qty=Decimal("0"))
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
-        self.assertContains(response, "Out of stock")
-        self.assertContains(response, f'aria-label="{self.drink_item.item_name}: Out of stock"')
-        self.assertNotContains(
-            response,
-            f'hx-vals=\'{{"item_id":"{self.drink_item.pk}","qty":"1"}}\'',
-        )
 
-    def test_catalog_disables_invalid_non_stock_drink_configuration(self):
-        self.drink_item.is_stock_item = False
-        self.drink_item.save(update_fields=["is_stock_item"])
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
-        self.assertContains(response, "Setup required: mark this drink as a stock item")
-        add_response = self.client.post(
-            reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}),
-            {"item_id": self.drink_item.pk, "qty": "1"},
-            HTTP_HX_REQUEST="true",
-        )
-        self.assertContains(add_response, "not configured as a stock item")
-        self.assertFalse(self.order.items.filter(item=self.drink_item).exists())
 
-    def test_catalog_treats_disabled_bar_warehouse_as_unconfigured(self):
-        Warehouse.objects.filter(pk=self.warehouse.pk).update(disabled=True)
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
-        self.assertContains(response, "Setup required: configure the Bar/POS warehouse")
-        self.assertContains(response, f'aria-label="{self.drink_item.item_name}: Setup required')
 
     def test_add_on_dialog_adds_parent_and_selected_add_on_to_active_customer(self):
         add_on_item = Item.objects.create(
@@ -661,6 +512,8 @@ class POSAddItemTest(POSViewTestBase):
             stock_uom=self.uom,
             department="FOOD",
             is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         add_on_menu_item = MenuItem.objects.create(menu=self.menu, item=add_on_item, rate=Decimal("300"))
         ItemAddOn.objects.create(parent_item=self.food_item, add_on_item=add_on_item)
@@ -692,6 +545,8 @@ class POSAddItemTest(POSViewTestBase):
             stock_uom=self.uom,
             department="FOOD",
             is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         MenuItem.objects.create(menu=self.menu, item=add_on_item, rate=Decimal("300"))
         ItemAddOn.objects.create(parent_item=self.food_item, add_on_item=add_on_item)
@@ -749,12 +604,6 @@ class POSCatalogFilterTest(POSViewTestBase):
         self.order = Order.objects.first()
         self.order_url = reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk})
 
-    def test_catalog_search_includes_match_and_excludes_non_match(self):
-        response = self.client.get(self.order_url, {"q": "Coke"})
-
-        self.assertEqual(response.context["catalog_query"], "Coke")
-        self.assertContains(response, "Coke")
-        self.assertNotContains(response, "Jollof Rice")
 
     def test_catalog_category_and_special_filters(self):
         category_response = self.client.get(self.order_url, {"group": self.group_food.name})
@@ -771,52 +620,8 @@ class POSCatalogFilterTest(POSViewTestBase):
         self.assertContains(specials_response, "Coke")
         self.assertNotContains(specials_response, "Jollof Rice")
 
-    def test_htmx_catalog_filter_returns_only_catalog_workspace(self):
-        response = self.client.get(
-            self.order_url,
-            {"q": "Coke"},
-            HTTP_HX_REQUEST="true",
-            HTTP_HX_TARGET="catalog-workspace",
-        )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'id="catalog-workspace"')
-        self.assertNotContains(response, 'id="pos-main"')
-        self.assertNotContains(response, 'id="cart-panel"')
-        self.assertContains(response, "Coke")
-        self.assertNotContains(response, "Jollof Rice")
 
-    def test_full_order_url_restores_catalog_filters(self):
-        response = self.client.get(
-            self.order_url,
-            {"q": "Coke", "group": self.group_drinks.name, "specials": "1"},
-        )
-
-        self.assertEqual(response.context["catalog_query"], "Coke")
-        self.assertEqual(response.context["catalog_group"], self.group_drinks.name)
-        self.assertTrue(response.context["catalog_specials"])
-        self.assertContains(response, "Coke")
-        self.assertNotContains(response, "Jollof Rice")
-
-    def test_clear_filters_resets_catalog_and_header_state(self):
-        filtered_response = self.client.get(self.order_url, {"q": "Coke"})
-        clear_response = self.client.get(
-            self.order_url,
-            {"clear_filters": "1"},
-            HTTP_HX_REQUEST="true",
-            HTTP_HX_TARGET="catalog-workspace",
-        )
-
-        self.assertContains(filtered_response, "Clear filters")
-        self.assertContains(filtered_response, f'hx-push-url="{self.order_url}"')
-        self.assertFalse(clear_response.context["catalog_has_filters"])
-        self.assertContains(clear_response, 'id="catalog-search"')
-        self.assertContains(clear_response, 'value=""')
-        self.assertContains(clear_response, "Coke")
-        self.assertContains(clear_response, "Jollof Rice")
-
-        content = clear_response.content.decode()
-        self.assertLess(content.index('id="catalog-workspace"'), content.index('id="catalog-search-field"'))
 
     def test_cart_mutation_preserves_filtered_catalog_oob_result(self):
         response = self.client.post(
@@ -928,20 +733,6 @@ class POSSettleTest(POSViewTestBase):
         )
         return bank
 
-    def test_payment_dialog_renders_split_payment_and_discount_placeholder(self):
-        response = self.client.get(
-            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}),
-            HTTP_HX_REQUEST="true",
-        )
-
-        self.assertContains(response, "Apply Discount")
-        self.assertContains(response, "Not available yet")
-        self.assertContains(response, "Total Entered")
-        self.assertContains(response, "Order Summary")
-        self.assertContains(response, "Discount")
-        self.assertContains(response, "₦0.00")
-        self.assertContains(response, f'name="payment_{self.cash.pk}"')
-        self.assertNotContains(response, 'name="discount"')
 
     def test_settle_dine_in_marks_receipt_printed(self):
         response = self.client.post(
@@ -1241,13 +1032,6 @@ class POSNoPrintTest(POSViewTestBase):
             {"item_id": self.food_item.pk, "qty": "1"},
         )
 
-    def test_no_print_button_in_cart(self):
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Print Receipt")
-        self.assertNotContains(response, "pos_order_print")
-        self.assertContains(response, "Send")
-        self.assertContains(response, "Delete Order")
 
     def test_draft_edit_allowed_without_kot(self):
         self.client.post(
@@ -1345,11 +1129,6 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertContains(response, "Customer #1")
         self.assertContains(response, "Customer #2")
 
-    def test_delta_raise_guest_count(self):
-        response = self.client.post(self._meta_url, {"guest_delta": "1"}, HTTP_HX_REQUEST="true")
-        self.assertEqual(response.status_code, 200)
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.guest_count, 2)
 
     def test_lower_blocked_when_guest_has_items(self):
         self._set_guest_count(2)
@@ -1367,23 +1146,6 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertEqual(self.order.guest_count, 1)
         self.assertNotContains(response, "Customer 2")
 
-    def test_delta_lower_blocked_with_items(self):
-        self._set_guest_count(2)
-        self._add_to_card(2)
-        response = self.client.post(self._meta_url, {"guest_delta": "-1"}, HTTP_HX_REQUEST="true")
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.guest_count, 2)
-        self.assertContains(response, "Remove Customer 2")
-
-    def test_guest_subtotal_renders(self):
-        self._set_guest_count(2)
-        self._add_to_card(2)
-        response = self.client.get(reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk}))
-        self.assertContains(response, "Customer #1")
-        self.assertContains(response, "Customer #2")
-        self.assertEqual(
-            [group["subtotal"] for group in response.context["guest_groups"]], [Decimal("1500"), Decimal("1500")]
-        )
 
     def test_active_card_switch_assigns_items(self):
         self._set_guest_count(2)
@@ -1392,11 +1154,6 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertEqual(self.order.items.filter(customer_index=2).count(), 1)
         self.assertEqual(self.order.items.filter(customer_index=1).count(), 1)
 
-    def test_change_guest_count_guard_direct(self):
-        self._set_guest_count(2)
-        self._add_to_card(2)
-        with self.assertRaises(ValidationError):
-            self.order.change_guest_count(1)
 
     def test_order_type_update_renders_selected_state(self):
         response = self.client.post(

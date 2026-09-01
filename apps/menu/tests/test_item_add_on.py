@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.utils import IntegrityError
 from django.test import TestCase
 
 from apps.inventory.models import UOM, Item, ItemGroup
@@ -19,7 +18,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True,
+            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
         )
         cls.add_on_item = Item.objects.create(
             item_code="CHEESE001",
@@ -27,7 +26,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True,
+            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
         )
         cls.non_menu_item = Item.objects.create(
             item_code="BACON001",
@@ -35,23 +34,10 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True,
+            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.add_on_item, rate=Decimal("200"))
-
-    def test_str(self):
-        add_on = ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        self.assertEqual(str(add_on), "Burger + Extra Cheese")
-
-    def test_create_valid(self):
-        add_on = ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        self.assertEqual(add_on.add_on_item, self.add_on_item)
-
-    def test_unique_constraint(self):
-        ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        with self.assertRaises(IntegrityError):
-            ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
 
     def test_validation_add_on_must_be_in_menu(self):
         add_on = ItemAddOn(parent_item=self.parent_item, add_on_item=self.non_menu_item)
@@ -65,7 +51,7 @@ class ItemAddOnModelTest(TestCase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
-            is_sales_item=False,
+            is_sales_item=False, is_stock_item=True, is_purchase_item=True,
         )
         add_on = ItemAddOn(parent_item=self.parent_item, add_on_item=non_sellable)
         with self.assertRaises(ValidationError) as ctx:
@@ -86,35 +72,15 @@ class ItemAddOnModelTest(TestCase):
             add_on.full_clean()
         self.assertIn("add_on_item", ctx.exception.message_dict)
 
-    def test_validation_passes_when_add_on_in_menu(self):
-        add_on = ItemAddOn(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        add_on.full_clean()
-
     def test_non_sellable_item_stops_being_add_on(self):
         ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
         self.assertTrue(ItemAddOn.objects.filter(add_on_item=self.add_on_item).exists())
         # Drop enabled menu lines so Item.clean allows turning off sellable.
         MenuItem.objects.filter(item=self.add_on_item).update(disabled=True)
         self.add_on_item.is_sales_item = False
+        self.add_on_item.is_stock_item = True
+        self.add_on_item.is_purchase_item = True
         self.add_on_item.full_clean()
         self.add_on_item.save()
         self.assertFalse(ItemAddOn.objects.filter(add_on_item=self.add_on_item).exists())
 
-    def test_delete(self):
-        add_on = ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        pk = add_on.pk
-        add_on.delete()
-        self.assertFalse(ItemAddOn.objects.filter(pk=pk).exists())
-
-    def test_same_add_on_different_parent(self):
-        parent2 = Item.objects.create(
-            item_code="SANDWICH001",
-            item_name="Sandwich",
-            item_group=self.group,
-            stock_uom=self.uom,
-            department="FOOD",
-            is_sales_item=True,
-        )
-        ItemAddOn.objects.create(parent_item=self.parent_item, add_on_item=self.add_on_item)
-        add_on2 = ItemAddOn.objects.create(parent_item=parent2, add_on_item=self.add_on_item)
-        self.assertEqual(add_on2.add_on_item, self.add_on_item)

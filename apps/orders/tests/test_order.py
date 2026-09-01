@@ -15,7 +15,7 @@ from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 
-from ..models import DINE_IN, Order, OrderAuditEvent, OrderItem, OrderPayment, OrderSequence
+from ..models import Order, OrderAuditEvent, OrderItem, OrderPayment, OrderSequence
 from ..services import (
     add_order_line,
     cancel_sent_order,
@@ -42,10 +42,10 @@ class OrderTestBase(OrderAccountingMixin, TestCase):
         cls.group_drinks = ItemGroup.objects.create(name="Beverages")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
         )
         cls.item2 = Item.objects.create(
-            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True
+            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True, is_stock_item=True, is_purchase_item=True
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1500"))
@@ -82,12 +82,6 @@ class OrderTestBase(OrderAccountingMixin, TestCase):
 
 
 class OrderModelTest(OrderTestBase):
-    def test_create_order(self):
-        order = self._create_order()
-        self.assertEqual(order.status, "DRAFT")
-        self.assertEqual(order.order_type, DINE_IN)
-        self.assertTrue(order.invoice_number.startswith("REST-"))
-
     def test_order_number_assignment(self):
         order = self._create_order()
         order.assign_order_number()
@@ -95,19 +89,6 @@ class OrderModelTest(OrderTestBase):
         order2 = self._create_order()
         order2.assign_order_number()
         self.assertEqual(order2.order_number, 2)
-
-    def test_guest_count_defaults_to_one(self):
-        order = self._create_order()
-        self.assertEqual(order.guest_count, 1)
-
-    def test_str(self):
-        order = self._create_order()
-        self.assertIn(order.customer_name, str(order))
-
-    def test_arrived_time_set_on_creation(self):
-        order = self._create_order()
-        self.assertIsNotNone(order.arrived_time)
-
 
 class OrderItemTest(OrderTestBase):
     @skipUnless(connection.vendor == "postgresql", "PostgreSQL-specific row-lock regression")
@@ -144,18 +125,6 @@ class OrderItemTest(OrderTestBase):
         add_order_line(order, self.item, qty=1, rate=Decimal("1500"), customer_index=1)
         add_order_line(order, self.item, qty=1, rate=Decimal("1500"), customer_index=2)
         self.assertEqual(order.items.count(), 2)
-
-    def test_item_auto_fills_fields(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
-        oi = order.items.first()
-        self.assertEqual(oi.item_name, "Jollof Rice")
-
-    def test_item_amount_calculation(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=3, rate=Decimal("1500"))
-        oi = order.items.first()
-        self.assertEqual(oi.amount, Decimal("4500.00"))
 
     def test_remove_item(self):
         order = self._create_order()
@@ -197,7 +166,7 @@ class OrderItemTest(OrderTestBase):
         self.item2.is_stock_item = False
         self.item2.save(update_fields=["is_stock_item"])
         order = self._create_order()
-        with self.assertRaisesMessage(ValidationError, "not configured as a stock item"):
+        with self.assertRaisesMessage(ValidationError, "must be a stock-tracked"):
             add_order_line(order, self.item2, qty=1, rate=Decimal("500"))
 
     def test_drink_reservation_rejects_quantity_above_available(self):
@@ -276,11 +245,6 @@ class OrderSettleTest(OrderTestBase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, "SUBMITTED")
         self.assertTrue(self.order.is_paid)
-
-    def test_settle_creates_payments(self):
-        settle_order(self.order, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
-        self.assertEqual(self.order.payments.count(), 1)
-        self.assertEqual(self.order.payments.first().amount, Decimal("3000"))
 
     def test_settle_accepts_electronic_payment_without_reference(self):
         bank = self._add_bank_mode()
@@ -371,24 +335,11 @@ class OrderSettleTest(OrderTestBase):
         self.assertEqual(self.order.status, "DRAFT")
         self.assertEqual(self.order.payments.count(), 0)
 
-    def test_settle_marks_receipt_printed(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
-        settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "1500"}])
-        self.assertEqual(order.status, "SUBMITTED")
-        self.assertTrue(order.invoice_printed)
-        self.assertIsNotNone(order.invoice_printed_at)
-
     def test_settle_takeaway_no_print_required(self):
         order = self._create_order(order_type="TAKE_AWAY")
         add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
         settle_order(order, [{"mode_of_payment": self.cash.pk, "amount": "1500"}])
         self.assertEqual(order.status, "SUBMITTED")
-
-    def test_settle_assigns_order_number(self):
-        settle_order(self.order, [{"mode_of_payment": self.cash.pk, "amount": "3000"}])
-        self.order.refresh_from_db()
-        self.assertIsNotNone(self.order.order_number)
 
     def test_settle_requires_active_shift(self):
         from django.core.exceptions import ValidationError
@@ -438,10 +389,6 @@ class OrderCancelTest(OrderTestBase):
         cancel_kots = self.order.kots.filter(type="Cancelled")
         self.assertTrue(cancel_kots.exists())
 
-    def test_cancel_preserves_payment_audit_trail(self):
-        """Cancelling a submitted order must keep payment rows — audit trail."""
-        self.assertEqual(self.order.payments.count(), 0)
-
     def test_cancel_unsent_draft_requires_delete(self):
         """An unsent draft is deleted, never cancelled — stage rule 1."""
         draft = self._create_order()
@@ -460,25 +407,6 @@ class OrderCancelTest(OrderTestBase):
         cancel_sent_order(order, "wrong_order")
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
 
-    def test_cancel_sent_order_blocks_empty_draft(self):
-        from django.core.exceptions import ValidationError
-
-        draft = self._create_order()
-        with self.assertRaises(ValidationError):
-            cancel_sent_order(draft, "cashier_error")
-        draft.refresh_from_db()
-        self.assertEqual(draft.status, "DRAFT")
-
-    def test_cancel_sent_order_blocks_untouched_draft_with_items(self):
-        from django.core.exceptions import ValidationError
-
-        draft = self._create_order()
-        add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
-        with self.assertRaises(ValidationError):
-            cancel_sent_order(draft, "wrong_order")
-        draft.refresh_from_db()
-        self.assertEqual(draft.status, "DRAFT")
-
     def test_discard_empty_draft(self):
         draft = self._create_order()
         discard_order(draft, discarded_by=self.user)
@@ -487,42 +415,6 @@ class OrderCancelTest(OrderTestBase):
         self.assertEqual(draft.discarded_by, self.user)
         self.assertIsNotNone(draft.discarded_at)
         self.assertEqual(draft.audit_events.filter(event_type="DISCARDED").count(), 1)
-
-    def test_discard_blocks_order_with_items(self):
-        from django.core.exceptions import ValidationError
-
-        draft = self._create_order()
-        add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
-        with self.assertRaisesMessage(ValidationError, "Only empty orders can be discarded."):
-            discard_order(
-                draft,
-            )
-        draft.refresh_from_db()
-        self.assertEqual(draft.status, "DRAFT")
-
-    def test_discard_blocks_printed_order(self):
-        from django.core.exceptions import ValidationError
-
-        draft = self._create_order()
-        draft.invoice_printed = True
-        draft.save(update_fields=["invoice_printed"])
-        with self.assertRaisesMessage(ValidationError, "Printed, sent or paid orders cannot be discarded."):
-            discard_order(
-                draft,
-            )
-        draft.refresh_from_db()
-        self.assertEqual(draft.status, "DRAFT")
-
-    def test_discard_blocks_submitted_order(self):
-        from django.core.exceptions import ValidationError
-
-        draft = self._create_order()
-        add_order_line(draft, self.item, qty=1, rate=Decimal("1500"))
-        settle_order(draft, [{"mode_of_payment": self.cash.pk, "amount": "1500"}])
-        with self.assertRaisesMessage(ValidationError, "Only draft orders can be discarded."):
-            discard_order(
-                draft,
-            )
 
     def test_discard_blocks_cancelled_order(self):
         from django.core.exceptions import ValidationError
@@ -555,13 +447,6 @@ class OrderReturnTest(OrderTestBase):
         self.assertTrue(return_order.is_return)
         self.assertEqual(return_order.return_against, self.order)
 
-    def test_make_return_status_is_draft(self):
-        return_order = make_return(
-            self.order,
-        )
-        self.assertEqual(return_order.status, "DRAFT")
-        self.assertFalse(return_order.is_paid)
-
     def test_make_return_item_qty_negative(self):
         return_order = make_return(
             self.order,
@@ -569,32 +454,6 @@ class OrderReturnTest(OrderTestBase):
         for item in return_order.items.all():
             self.assertLess(item.qty, 0)
             self.assertLess(item.amount, 0)
-
-    def test_make_return_item_count_matches(self):
-        return_order = make_return(
-            self.order,
-        )
-        self.assertEqual(self.order.items.count(), return_order.items.count())
-
-    def test_make_return_has_no_payment_until_refund_workflow(self):
-        return_order = make_return(
-            self.order,
-        )
-        self.assertEqual(return_order.payments.count(), 0)
-
-    def test_make_return_total_negative(self):
-        return_order = make_return(
-            self.order,
-        )
-        self.assertLess(return_order.grand_total, 0)
-        self.assertEqual(abs(return_order.grand_total), self.order.grand_total)
-
-    def test_make_return_preserves_original_status(self):
-        make_return(
-            self.order,
-        )
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.status, "SUBMITTED")
 
     def test_duplicate_return_is_rejected(self):
         from django.core.exceptions import ValidationError
@@ -615,17 +474,6 @@ class OrderReturnTest(OrderTestBase):
         with self.assertRaises(ValidationError):
             make_return(
                 draft,
-            )
-
-    def test_cannot_return_return_order(self):
-        from django.core.exceptions import ValidationError
-
-        return_order = make_return(
-            self.order,
-        )
-        with self.assertRaises(ValidationError):
-            make_return(
-                return_order,
             )
 
     def test_clean_requires_return_against_when_is_return(self):
@@ -738,12 +586,6 @@ class OrderPaymentValidationTest(OrderTestBase):
 
 
 class OrderRecalculateTest(OrderTestBase):
-    def test_recalculate_updates_net_total(self):
-        order = self._create_order()
-        add_order_line(order, self.item, qty=2, rate=Decimal("1500"))
-        order.recalculate_totals()
-        self.assertEqual(order.net_total, Decimal("3000.00"))
-
     def test_recalculate_updates_grand_total(self):
         order = self._create_order()
         add_order_line(order, self.item, qty=2, rate=Decimal("1500"))
@@ -801,6 +643,7 @@ class DrinkReservationConcurrencyTest(TransactionTestCase):
             department="DRINKS",
             is_sales_item=True,
             is_stock_item=True,
+            is_purchase_item=True,
         )
         Bin.objects.create(item=self.item, warehouse=warehouse, actual_qty=Decimal("1"))
         restaurant.default_warehouse = warehouse

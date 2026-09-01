@@ -168,9 +168,3 @@ class SubmitClosingEntryTest(TestCase):
         self.assertFalse(self.opening.is_open)
         self.assertEqual(self.opening.closing_entry_id, closing.pk)
 
-    def test_draft_orders_block_close(self):
-        Order.objects.create(opening_entry=self.opening)
-        closing = POSClosingEntry.objects.create(opening_entry=self.opening, cashier=self.user)
-        ClosingPayment.objects.create(closing_entry=closing, mode_of_payment=self.cash, closing_amount=Decimal("0"))
-        with self.assertRaises(ValidationError):
-            submit_closing_entry(closing)

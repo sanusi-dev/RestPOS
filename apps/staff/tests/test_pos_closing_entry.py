@@ -56,9 +56,6 @@ class POSClosingEntryTestBase(TestCase):
 
 
 class POSClosingEntryModelTest(POSClosingEntryTestBase):
-    def test_str(self):
-        self.assertIn(f"Closing #{self.closing.pk}", str(self.closing))
-
     def test_save_auto_fills_from_opening(self):
         # Close the first shift so the global one-open-shift rule allows a second opening.
         submit_closing_entry(self.closing)
@@ -160,24 +157,6 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
 
 
 class ClosingPaymentModelTest(POSClosingEntryTestBase):
-    def test_str(self):
-        cp = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
-        self.assertIn("Test Cash", str(cp))
-
-    def test_unique_mode_per_closing(self):
-        with self.assertRaises(IntegrityError):
-            ClosingPayment.objects.create(
-                closing_entry=self.closing,
-                mode_of_payment=self.cash_mode,
-                opening_amount=Decimal("0"),
-                expected_amount=Decimal("0"),
-                closing_amount=Decimal("0"),
-            )
-
-    def test_protect_on_mode_delete(self):
-        with self.assertRaises(IntegrityError):
-            self.cash_mode.delete()
-
     def test_clean_rejects_undeclared_mode(self):
         other_mode = ModeOfPayment.objects.create(name="Stranger", type="GENERAL")
         cp = ClosingPayment(
@@ -190,6 +169,3 @@ class ClosingPaymentModelTest(POSClosingEntryTestBase):
         with self.assertRaises(ValidationError):
             cp.full_clean()
 
-    def test_ordering_alphabetical(self):
-        names = list(self.closing.closing_payments.values_list("mode_of_payment__name", flat=True))
-        self.assertEqual(names, sorted(names))

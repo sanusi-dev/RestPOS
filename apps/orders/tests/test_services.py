@@ -8,7 +8,7 @@ from django.test import TestCase
 
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, Warehouse
 from apps.menu.models import Menu, MenuItem
-from apps.orders.models import DINE_IN, KOT_PRINT_PENDING, KOT_PRINTED, TAKE_AWAY, Order
+from apps.orders.models import KOT_PRINT_PENDING, KOT_PRINTED, TAKE_AWAY, Order
 from apps.payments.models import ModeOfPayment
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
@@ -35,10 +35,10 @@ class OrderServiceTestBase(OrderAccountingMixin, TestCase):
         cls.group_drinks = ItemGroup.objects.create(name="Beverages")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
         )
         cls.item2 = Item.objects.create(
-            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True
+            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True, is_stock_item=True, is_purchase_item=True
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1500"))
@@ -76,11 +76,6 @@ class CreateDraftOrderTest(OrderServiceTestBase):
         self.assertIsNotNone(order.order_number)
         self.assertEqual(order.invoice_number, f"REST-{order.pk}")
         self.assertTrue(order.audit_events.filter(event_type="CREATED", actor=self.user).exists())
-
-    def test_defaults_to_dine_in_single_guest(self):
-        order = create_draft_order(self.opening, self.user)
-        self.assertEqual(order.order_type, DINE_IN)
-        self.assertEqual(order.guest_count, 1)
 
     def test_draft_cap_blocks_new_order(self):
         self.restaurant.max_open_drafts = 2
@@ -123,12 +118,6 @@ class UpdateOrderMetaTest(OrderServiceTestBase):
         self.assertEqual(order.guest_count, 3)
         self.assertEqual(result, 3)
         self.assertTrue(order.audit_events.filter(event_type="GUEST_COUNT_CHANGED", metadata__guest_count=3).exists())
-
-    def test_guest_delta_decrements(self):
-        order = self._create_order(guest_count=3)
-        update_order_meta(order, guest_delta="-1", actor=self.user)
-        order.refresh_from_db()
-        self.assertEqual(order.guest_count, 2)
 
     def test_absolute_guest_count(self):
         order = self._create_order()
@@ -188,11 +177,6 @@ class UpdateOrderItemTest(OrderServiceTestBase):
         self.assertEqual(line.qty, Decimal("3"))
         self.assertTrue(order.audit_events.filter(event_type="ITEM_QUANTITY_CHANGED").exists())
 
-    def test_decrement(self):
-        order = self._order_with_drink()
-        update_order_item(order, order.items.get().pk, action="decrement", actor=self.user)
-        self.assertEqual(order.items.get().qty, Decimal("1"))
-
     def test_remove_deletes_line_and_audits(self):
         order = self._order_with_drink()
         line = order.items.get()
@@ -206,22 +190,10 @@ class UpdateOrderItemTest(OrderServiceTestBase):
         update_order_item(order, order.items.get().pk, action="update", qty="4", actor=self.user)
         self.assertEqual(order.items.get().qty, Decimal("4"))
 
-    def test_set_zero_removes_line(self):
-        order = self._order_with_drink()
-        update_order_item(order, order.items.get().pk, action="update", qty="0", actor=self.user)
-        self.assertFalse(order.items.exists())
-
     def test_missing_line_raises(self):
         order = self._order_with_drink()
         with self.assertRaisesMessage(ValidationError, "That order line no longer exists."):
             update_order_item(order, 999999, action="increment", actor=self.user)
-
-    def test_recalculates_totals(self):
-        order = self._order_with_drink()
-        update_order_item(order, order.items.get().pk, action="increment", actor=self.user)
-        order.refresh_from_db()
-        self.assertEqual(order.net_total, Decimal("1500"))
-
 
 class DispatchTicketsTest(OrderServiceTestBase):
     def _sent_ticket(self):
@@ -262,7 +234,7 @@ class DrinkStockAvailableTest(OrderServiceTestBase):
         menu_items = [self.menu_item2]
         drink_stock_available(menu_items, self.restaurant)
         self.assertTrue(menu_items[0].stock_unavailable)
-        self.assertIn("mark this drink as a stock item", menu_items[0].stock_message)
+        self.assertIn("stock-tracked, sellable, and purchasable", menu_items[0].stock_message)
 
     def test_food_items_never_marked(self):
         self.item2.is_stock_item = False

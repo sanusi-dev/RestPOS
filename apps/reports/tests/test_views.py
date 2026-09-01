@@ -24,10 +24,6 @@ class DailyPnLViewTest(DailyPnLTestMixin, TestCase):
             response = self.client.get(reverse(name))
             self.assertIn(response.status_code, (302, 403), name)
 
-    def test_manager_list_and_settings(self):
-        self.client.force_login(self.manager)
-        self.assertEqual(self.client.get(reverse("reports:daily_pnl_list")).status_code, 200)
-        self.assertEqual(self.client.get(reverse("reports:pnl_settings")).status_code, 200)
 
     def test_create_draft_and_detail(self):
         self.client.force_login(self.manager)

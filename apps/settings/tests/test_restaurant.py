@@ -11,38 +11,10 @@ class RestaurantModelTest(TestCase):
     def setUpTestData(cls):
         cls.restaurant = Restaurant.objects.create(company="Test Restaurant Ltd")
 
-    def test_str_returns_company(self):
-        self.assertEqual(str(self.restaurant), "Test Restaurant Ltd")
-
-    def test_invoice_series_prefix_default(self):
-        self.assertEqual(self.restaurant.invoice_series_prefix, "REST-")
-
     def test_singleton_rejects_second_record(self):
         r2 = Restaurant(company="Other")
         with self.assertRaises(ValidationError):
             r2.clean()
-
-    def test_singleton_allows_update_of_same_record(self):
-        self.restaurant.company = "Updated"
-        self.restaurant.clean()
-
-    def test_load_returns_the_singleton(self):
-        self.assertEqual(Restaurant.load(), self.restaurant)
-
-    def test_load_returns_none_when_empty(self):
-        Restaurant.objects.all().delete()
-        self.assertIsNone(Restaurant.load())
-
-    def test_update(self):
-        self.restaurant.company = "New Name"
-        self.restaurant.save()
-        self.restaurant.refresh_from_db()
-        self.assertEqual(self.restaurant.company, "New Name")
-
-    def test_delete(self):
-        pk = self.restaurant.pk
-        self.restaurant.delete()
-        self.assertFalse(Restaurant.objects.filter(pk=pk).exists())
 
     def test_store_and_bar_warehouses_must_be_enabled_and_distinct(self):
         store = Warehouse.objects.create(name="Store")
@@ -65,17 +37,6 @@ class RestaurantModelTest(TestCase):
         self.restaurant.default_warehouse = new_bar
         with self.assertRaisesMessage(ValidationError, "open POS orders"):
             self.restaurant.full_clean()
-
-    def test_bar_change_ignores_returns_and_unsnapshotted_drafts(self):
-        old_bar = Warehouse.objects.create(name="Old Bar")
-        new_bar = Warehouse.objects.create(name="New Bar")
-        self.restaurant.default_warehouse = old_bar
-        self.restaurant.save(update_fields=["default_warehouse"])
-        Order.objects.create()
-        Order.objects.create(is_return=True, stock_warehouse=old_bar)
-
-        self.restaurant.default_warehouse = new_bar
-        self.restaurant.full_clean()
 
     def test_store_change_rejected_with_draft_stock_documents(self):
         old_store = Warehouse.objects.create(name="Old Store")

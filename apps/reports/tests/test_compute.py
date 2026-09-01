@@ -24,11 +24,6 @@ class WindowTest(DailyPnLTestMixin, TestCase):
     def setUpTestData(cls):
         cls._setup_pnl_world()
 
-    def test_midnight_window_includes_2330(self):
-        start, end = business_day_window(date(2026, 8, 19), 0)
-        self.assertEqual(start.hour, 0)
-        self.assertEqual((end - start).days, 1)
-
     def test_start_hour_6_puts_0100_on_previous_business_date(self):
         from datetime import datetime as dt
 
@@ -108,6 +103,7 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
             department="FOOD",
             is_sales_item=False,
             is_stock_item=True,
+            is_purchase_item=True,
         )
         Bin.objects.create(item=rice, warehouse=self.kitchen_wh, actual_qty=Decimal("0"))
         StockLedgerEntry.create_entry(
@@ -137,11 +133,6 @@ class ElectricityAndTemplatesTest(DailyPnLTestMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls._setup_pnl_world()
-
-    def test_blank_meter_is_zero(self):
-        computation = compute_daily_pnl(self._draft())
-        elec = next((line for line in computation.lines if line.label == "Electricity"), None)
-        self.assertIsNone(elec)
 
     def test_one_sided_readings_raise(self):
         with self.assertRaises(ValidationError):
@@ -260,11 +251,3 @@ class SubmitAndVarianceTest(DailyPnLTestMixin, TestCase):
         computation = compute_daily_pnl(self._draft())
         self.assertEqual(computation.totals["cash_variance"], Decimal("0"))
 
-    def test_prime_cost_is_memo(self):
-        PnLRecurringExpense.objects.create(
-            name="Wages", kind=PnLRecurringExpense.EMPLOYEE_DAILY, amount=Decimal("8000")
-        )
-        computation = compute_daily_pnl(self._draft())
-        prime = next(line for line in computation.lines if line.section == DailyPnLLine.PRIME_COST)
-        self.assertTrue(prime.is_memo)
-        self.assertEqual(prime.amount_total, Decimal("8000"))

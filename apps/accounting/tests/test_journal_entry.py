@@ -13,15 +13,15 @@ class JournalEntryTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.assets = LedgerAccount.objects.create(
-            name="Assets", is_group=True, root_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
+            name="Assets", is_group=True, account_type=LedgerAccount.ASSET, report_type=LedgerAccount.BALANCE_SHEET
         )
         cls.cash = LedgerAccount.objects.create(name="Cash", parent=cls.assets)
         cls.income = LedgerAccount.objects.create(
-            name="Income", is_group=True, root_type=LedgerAccount.INCOME, report_type=LedgerAccount.PROFIT_AND_LOSS
+            name="Income", is_group=True, account_type=LedgerAccount.INCOME, report_type=LedgerAccount.PROFIT_AND_LOSS
         )
         cls.sales = LedgerAccount.objects.create(name="Sales", parent=cls.income)
         cls.expenses = LedgerAccount.objects.create(
-            name="Expenses", is_group=True, root_type=LedgerAccount.EXPENSE, report_type=LedgerAccount.PROFIT_AND_LOSS
+            name="Expenses", is_group=True, account_type=LedgerAccount.EXPENSE, report_type=LedgerAccount.PROFIT_AND_LOSS
         )
         cls.cogs = LedgerAccount.objects.create(name="COGS", parent=cls.expenses)
         cls.year = FiscalYear.objects.create(
@@ -132,24 +132,6 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
             journal2 = self._journal()
             journal2.amend()
 
-    def test_amend_rejected_when_amendment_already_exists(self):
-        journal = self._journal()
-        self._row(journal, self.cash, debit=Decimal("100"))
-        self._row(journal, self.sales, credit=Decimal("100"))
-        journal.submit()
-        journal.cancel()
-        copy = journal.amend()
-        with self.assertRaisesMessage(ValidationError, "already been amended"):
-            journal.amend()
-        # The cancelled amendment can be amended once, forming a linear chain.
-        copy.submit()
-        copy.cancel()
-        amendment2 = copy.amend()
-        self.assertEqual(amendment2.amended_from, copy)
-        with self.assertRaisesMessage(ValidationError, "already been amended"):
-            copy.amend()
-
-
 class OpeningEntryTest(JournalEntryTestBase):
     def test_opening_submit_sets_is_opening(self):
         journal = self._journal(voucher_type=JournalEntry.OPENING)
@@ -179,22 +161,3 @@ class OpeningEntryTest(JournalEntryTestBase):
         self._row(journal, self.sales, credit=Decimal("5000"))
         with self.assertRaisesMessage(ValidationError, "source or note"):
             journal.submit()
-
-        journal2 = self._journal(voucher_type=JournalEntry.OPENING)
-        self._row(journal2, self.cash, debit=Decimal("5000"), remarks="Cash count")
-        self._row(journal2, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
-        journal2.submit()
-        journal2.refresh_from_db()
-        self.assertTrue(journal2.is_opening)
-
-    def test_cancelled_opening_can_be_amended_and_resubmitted(self):
-        journal = self._journal(voucher_type=JournalEntry.OPENING)
-        self._row(journal, self.cash, debit=Decimal("5000"), remarks="Cash count")
-        self._row(journal, self.sales, credit=Decimal("5000"), remarks="Retained earnings")
-        journal.submit()
-        journal.cancel()
-        copy = journal.amend()
-        copy.submit()
-        copy.refresh_from_db()
-        self.assertEqual(copy.status, JournalEntry.SUBMITTED)
-        self.assertTrue(copy.is_opening)

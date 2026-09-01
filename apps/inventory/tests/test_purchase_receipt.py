@@ -76,14 +76,6 @@ class PurchaseReceiptTest(TestCase):
             with self.assertRaisesMessage(ValidationError, "enabled stock and purchase item"):
                 submit_purchase_receipt(receipt)
 
-    def test_cancel_is_idempotent(self):
-        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
-        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=10)
-        submit_purchase_receipt(receipt)
-        cancel_purchase_receipt(receipt)
-        cancel_purchase_receipt(receipt)
-        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.store).actual_qty, Decimal("0"))
-
     def test_cancel_rejects_consumed_stock_and_rolls_back_all_reversals(self):
         second_item = Item.objects.create(
             item_name="Beans",

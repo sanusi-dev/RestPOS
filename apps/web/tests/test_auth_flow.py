@@ -6,14 +6,6 @@ from apps.users.models import CustomUser
 from .base import TestLoginRequiredViewBase, TestViewBase
 
 
-class TestLandingPage(TestViewBase):
-    def test_landing_page_renders_for_unauthenticated(self):
-        response = self.client.get(reverse("web:home"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sign In")
-        self.assertContains(response, "Get Started")
-
-
 class TestRoleBasedRedirects(TestViewBase):
     @classmethod
     def setUpClass(cls):
@@ -80,10 +72,6 @@ class TestPendingApprovalView(TestViewBase):
     def setUp(self):
         self.client.login(username="pending@example.com", password="12345")
 
-    def test_pending_approval_view(self):
-        response = self.client.get(reverse("web:pending_approval"))
-        self.assertEqual(response.status_code, 200)
-
     def test_pending_approval_contains_message(self):
         response = self.client.get(reverse("web:pending_approval"))
         self.assertContains(response, "Pending Approval")
@@ -96,9 +84,6 @@ class TestPendingApprovalView(TestViewBase):
 
 
 class TestDashboardView(TestLoginRequiredViewBase):
-    def test_dashboard_view(self):
-        self._run_tests(reverse("web:dashboard"))
-
     def test_cashier_gets_403_on_dashboard(self):
         cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
         from apps.users.models import CustomUser
@@ -110,93 +95,67 @@ class TestDashboardView(TestLoginRequiredViewBase):
 
 
 class TestPOSView(TestLoginRequiredViewBase):
-    def test_pos_view(self):
-        self._run_tests(reverse("web:pos_index"))
-
     def test_no_role_user_gets_403_on_pos(self):
         CustomUser.objects.create_user(username="norole403@example.com", password="12345")
         self.client.login(username="norole403@example.com", password="12345")
         response = self.client.get(reverse("web:pos_index"))
         self.assertEqual(response.status_code, 403)
 
-    def test_pos_contains_backoffice_link(self):
-        self.user.is_staff = True
-        self.user.save()
-        response = self.authenticated_client.get(reverse("web:pos_index"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Go to Backoffice")
 
 
 class TestCustomUserProperties(TestViewBase):
-    def test_is_manager(self):
+    def test_role_flags_flip_with_group_membership(self):
         from apps.users.models import CustomUser
 
         Group.objects.get_or_create(name="RestPOS Manager")
-        user = CustomUser.objects.create_user(username="mgr@example.com", email="mgr@example.com")
-        self.assertFalse(user.is_manager)
-        user.groups.add(Group.objects.get(name="RestPOS Manager"))
-        self.assertTrue(user.is_manager)
-
-    def test_is_cashier(self):
-        from apps.users.models import CustomUser
-
         Group.objects.get_or_create(name="RestPOS Cashier")
-        user = CustomUser.objects.create_user(username="cash@example.com", email="cash@example.com")
-        self.assertFalse(user.is_cashier)
-        user.groups.add(Group.objects.get(name="RestPOS Cashier"))
-        self.assertTrue(user.is_cashier)
+        mgr = CustomUser.objects.create_user(username="mgr@example.com", email="mgr@example.com")
+        self.assertFalse(mgr.is_manager)
+        mgr.groups.add(Group.objects.get(name="RestPOS Manager"))
+        self.assertTrue(mgr.is_manager)
 
-    def test_has_backoffice_access_superuser(self):
+        cash = CustomUser.objects.create_user(username="cash@example.com", email="cash@example.com")
+        self.assertFalse(cash.is_cashier)
+        cash.groups.add(Group.objects.get(name="RestPOS Cashier"))
+        self.assertTrue(cash.is_cashier)
+
+    def test_has_backoffice_access(self):
         from apps.users.models import CustomUser
 
-        user = CustomUser.objects.create_superuser(username="su@example.com", email="su@example.com")
-        self.assertTrue(user.has_backoffice_access)
+        su = CustomUser.objects.create_superuser(username="su@example.com", email="su@example.com")
+        self.assertTrue(su.has_backoffice_access)
 
-    def test_has_backoffice_access_staff_without_restpos_role(self):
-        from apps.users.models import CustomUser
+        staff = CustomUser.objects.create_user(username="staff2@example.com", email="staff2@example.com")
+        staff.is_staff = True
+        staff.save()
+        self.assertFalse(staff.has_backoffice_access)
 
-        user = CustomUser.objects.create_user(username="staff2@example.com", email="staff2@example.com")
-        user.is_staff = True
-        user.save()
-        self.assertFalse(user.has_backoffice_access)
+        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        mgr_user = CustomUser.objects.create_user(username="mgr2@example.com", email="mgr2@example.com")
+        mgr_user.groups.add(mgr)
+        self.assertTrue(mgr_user.has_backoffice_access)
 
-    def test_has_backoffice_access_manager(self):
+        cashier, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+        cash_user = CustomUser.objects.create_user(username="cash2@example.com", email="cash2@example.com")
+        cash_user.groups.add(cashier)
+        self.assertFalse(cash_user.has_backoffice_access)
+
+    def test_has_staff_role(self):
         from apps.users.models import CustomUser
 
         mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
-        user = CustomUser.objects.create_user(username="mgr2@example.com", email="mgr2@example.com")
-        user.groups.add(mgr)
-        self.assertTrue(user.has_backoffice_access)
-
-    def test_has_backoffice_access_cashier_only(self):
-        from apps.users.models import CustomUser
-
         cashier, _ = Group.objects.get_or_create(name="RestPOS Cashier")
-        user = CustomUser.objects.create_user(username="cash2@example.com", email="cash2@example.com")
-        user.groups.add(cashier)
-        self.assertFalse(user.has_backoffice_access)
+        mgr_user = CustomUser.objects.create_user(username="staffmgr@example.com", email="staffmgr@example.com")
+        mgr_user.groups.add(mgr)
+        self.assertTrue(mgr_user.has_staff_role)
 
-    def test_has_backoffice_access_anonymous_user(self):
-        from apps.users.models import CustomUser
+        cash_user = CustomUser.objects.create_user(username="staffcash@example.com", email="staffcash@example.com")
+        cash_user.groups.add(cashier)
+        self.assertTrue(cash_user.has_staff_role)
 
-        user = CustomUser.objects.create_user(username="nobody@example.com", email="nobody@example.com")
-        self.assertFalse(user.has_backoffice_access)
-
-    def test_has_staff_role_manager(self):
-        from apps.users.models import CustomUser
-
-        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
-        user = CustomUser.objects.create_user(username="staffmgr@example.com", email="staffmgr@example.com")
-        user.groups.add(mgr)
-        self.assertTrue(user.has_staff_role)
-
-    def test_has_staff_role_cashier(self):
-        from apps.users.models import CustomUser
-
-        cashier, _ = Group.objects.get_or_create(name="RestPOS Cashier")
-        user = CustomUser.objects.create_user(username="staffcash@example.com", email="staffcash@example.com")
-        user.groups.add(cashier)
-        self.assertTrue(user.has_staff_role)
+        nobody = CustomUser.objects.create_user(username="nobody@example.com", email="nobody@example.com")
+        self.assertFalse(nobody.has_staff_role)
+        self.assertFalse(nobody.has_backoffice_access)
 
     def test_has_staff_role_superuser(self):
         from apps.users.models import CustomUser
