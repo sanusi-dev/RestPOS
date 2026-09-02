@@ -45,8 +45,8 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 ## Settings and Routing
 
 - `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them).
-- `ProductionUnit`: one row per department via a unique constraint. Stores station warehouse, takeaway-ticket suppression, printer metadata, and `income_account` (the departmental income hook).
-- `ItemGroup`: flat category; since Phase 6 it carries optional `income_account`/`expense_account` FKs used in GL account resolution.
+- `ProductionUnit`: one row per department via a unique constraint. Stores station warehouse, takeaway-ticket suppression, printer metadata, and `income_account` (the departmental income hook — first stop in income account resolution before the Restaurant default).
+- `ItemGroup`: flat category.
 - `Warehouse`: flat stock location; since Phase 6 it carries an optional `account` FK credited with the stock value of settle-time drink deductions.
 - Warehouse role is inferred from references, not a warehouse type field.
 

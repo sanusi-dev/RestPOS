@@ -302,6 +302,11 @@ All pages extend the backoffice base; Manager/Admin only (same gate as accountin
 ### 4.2 Accounting / GL (Phase 6)
 
 **Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
+Post-build change: the `ItemGroup.income_account` / `expense_account` FKs ported from
+ERPNext's item-group override pattern were removed (inventory migration 0033) — item groups
+are pure menu categories here. Income resolves `ProductionUnit.income_account` (by line
+department) → `Restaurant.default_income_account`; expense/COGS always uses
+`Restaurant.default_expense_account`.
 
 **Scope decisions (locked):**
 
@@ -416,7 +421,6 @@ so a cancelled entry has at most one amendment).
   Settlement enforces the ones it needs; the settings form gains an Accounting section.
 - `settings.ProductionUnit.income_account`: FK LedgerAccount, null — the departmental split
   hook (Kitchen = FOOD income, Bar = DRINKS income).
-- `inventory.ItemGroup` gains `income_account` / `expense_account` FKs.
 - `inventory.Warehouse.account`: FK LedgerAccount, null — credited with the stock value of
   settle-time drink deductions.
 - `apps/orders/management/commands/seed_pos_setup.py` seeds accounts before creating
@@ -430,10 +434,10 @@ order flips SUBMITTED and the drink deductions are written. All entries carry
 
 | Leg | Dr | Cr | Amount | Account resolution |
 |---|---|---|---|---|
-| Income | — | income account | Σ item amounts per account | `ItemGroup.income_account` → `ProductionUnit.income_account` (by line department) → `Restaurant.default_income_account` (required — settle raises if empty) |
+| Income | — | income account | Σ item amounts per account | `ProductionUnit.income_account` (by line department) → `Restaurant.default_income_account` (required — settle raises if empty) |
 | Payment | payment account | — | per OrderPayment `amount`, reduced by change on the row whose account equals `Restaurant.account_for_change_amount` | `ModeOfPayment` GL mapping (required) |
 | Round-off | — | `Restaurant.round_off_account` | `rounding_adjustment` (may be negative) | required when non-zero |
-| COGS | expense account | `order.stock_warehouse.account` | current WAC (`unit_rate`) of the settle-time drink deductions, per account | `ItemGroup.expense_account` → `Restaurant.default_expense_account` (required when stock items exist) |
+| COGS | expense account | `order.stock_warehouse.account` | current WAC (`unit_rate`) of the settle-time drink deductions, per account | `Restaurant.default_expense_account` (required when stock items exist) |
 
 `against` holds the balancing account names; entries sharing account/against merge.
 Order cancel posts mirrored negated entries, originals `is_cancelled=True`.
