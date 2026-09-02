@@ -630,7 +630,7 @@ class PurchaseReceipt(BaseModel):
         blank=True,
         related_name="purchase_receipts",
         verbose_name="Supplier",
-        help_text="Optional link to the Supplier master; the receipt keeps its free-text name for quick entry.",
+        help_text="Link this receipt to a supplier record, if you keep one. The supplier name is still saved either way.",
     )
     supplier_delivery_note = models.CharField(max_length=100, blank=True)
     posting_date = models.DateField(default=timezone.now)
