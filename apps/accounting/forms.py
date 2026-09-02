@@ -50,12 +50,10 @@ class JournalEntryForm(AccountingModelForm):
             "reference_no",
             "reference_date",
             "remark",
-            "write_off_amount",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["write_off_amount"].required = False
         self.fields["reference_no"].required = False
         self.fields["reference_date"].required = False
         if self.instance.pk and self.instance.voucher_type == JournalEntry.OPENING:

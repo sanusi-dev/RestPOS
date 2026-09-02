@@ -1,4 +1,4 @@
-"""Journal entry tests — balanced submit, rejections, cancel reversal, amend, write-off."""
+"""Journal entry tests — balanced submit, rejections, cancel reversal, amend."""
 
 from datetime import date
 from decimal import Decimal
@@ -89,21 +89,6 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
         with self.assertRaises(ValidationError):
             self._row(journal2, frozen, debit=Decimal("100"))
 
-    def test_write_off_requires_amount(self):
-        journal = self._journal(voucher_type=JournalEntry.WRITE_OFF)
-        self._row(journal, self.cogs, debit=Decimal("50"))
-        self._row(journal, self.cash, credit=Decimal("50"))
-        with self.assertRaises(ValidationError):
-            journal.submit()
-
-    def test_write_off_submits_with_amount(self):
-        journal = self._journal(voucher_type=JournalEntry.WRITE_OFF, write_off_amount=Decimal("50"))
-        self._row(journal, self.cogs, debit=Decimal("50"))
-        self._row(journal, self.cash, credit=Decimal("50"))
-        journal.submit()
-        journal.refresh_from_db()
-        self.assertEqual(journal.status, JournalEntry.SUBMITTED)
-
     def test_cancel_posts_reversal_and_marks_originals(self):
         journal = self._journal()
         self._row(journal, self.cash, debit=Decimal("100"))
@@ -131,6 +116,7 @@ class JournalEntrySubmitTest(JournalEntryTestBase):
         with self.assertRaisesMessage(ValidationError, "Only cancelled"):
             journal2 = self._journal()
             journal2.amend()
+
 
 class OpeningEntryTest(JournalEntryTestBase):
     def test_opening_submit_sets_is_opening(self):

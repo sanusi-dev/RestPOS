@@ -101,7 +101,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 57 | Accounting / GL | Chart of accounts, GL entries, journal entries (incl. write-off and opening voucher types), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS at current WAC). Food vs drinks separation uses department, production-unit income accounts, and Daily P&L — not cost centers. |
+| 57 | Accounting / GL | Chart of accounts, GL entries, journal entries (incl. opening voucher type), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS at current WAC). Food vs drinks separation uses department, production-unit income accounts, and Daily P&L — not cost centers. |
 | 58 | Refunds completion | Refund GL on return submit, wastage posting for non-restockable items, and partial returns. Restockable drinks restore at current WAC; sale-return variance vs original COGS lands in COGS. |
 | 59 | Opening balances | A reviewed opening journal entry for go-live, with duplicate protection. |
 | 60 | Cash variance posting | Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |

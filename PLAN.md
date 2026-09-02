@@ -316,8 +316,9 @@ All pages extend the backoffice base; Manager/Admin only (same gate as accountin
    reconciliations Dr wastage / Cr warehouse.
 6. Return orders post no GL in the GL core; refund GL posts in refunds completion (§4.3),
    within the same phase.
-7. Write-off is a manual journal-entry voucher type (`WRITE_OFF` + `write_off_amount`).
-8. Amendment chain (`amended_from`) applies to JournalEntry only.
+7. Amendment chain (`amended_from`) applies to JournalEntry only. Write-off vouchers are
+   not used — wastage (returns marked not-restockable, WASTE_DAMAGE reconciliations) and
+   cash variance cover the restaurant's loss cases.
 
 **New app:** `apps/accounting`, URL namespace `accounting` under `backoffice/accounting/`,
 behind the backoffice role gate.
@@ -377,14 +378,13 @@ resolved fiscal year.
 
 | Field | Type | Notes |
 |---|---|---|
-| `voucher_type` | choices JOURNAL/CASH/BANK/WRITE_OFF/OPENING, default JOURNAL | |
+| `voucher_type` | choices JOURNAL/CASH/BANK/OPENING, default JOURNAL | |
 | `posting_date` | DateField | |
 | `reference_no` / `reference_date` | CharField(50) / DateField null | |
 | `remark` | TextField blank | |
 | `status` | DRAFT/SUBMITTED/CANCELLED | |
 | `total_debit` / `total_credit` | Decimal(14,2), editable=False | recomputed on save |
 | `difference` | Decimal(14,2), editable=False | must be 0 to submit |
-| `write_off_amount` | Decimal(12,2), default 0 | required non-zero when voucher_type=WRITE_OFF |
 | `is_opening` | Boolean, default False | |
 | `amended_from` | FK self, SET_NULL, null=True | amendment chain |
 
@@ -411,7 +411,7 @@ so a cancelled entry has at most one amendment).
   creating a missing leaf account under Assets (Cash/Bank by mode type).
 - `settings.Restaurant` gains nullable FKs: `default_income_account`,
   `default_expense_account`, `round_off_account`, `account_for_change_amount`,
-  `write_off_account`, `wastage_account` (consumed by §4.3), `cash_shortage_account`,
+  `wastage_account` (consumed by §4.3), `cash_shortage_account`,
   `cash_over_short_account`, `variance_approval_threshold` (Decimal, consumed by §4.5).
   Settlement enforces the ones it needs; the settings form gains an Accounting section.
 - `settings.ProductionUnit.income_account`: FK LedgerAccount, null — the departmental split
@@ -468,7 +468,7 @@ payment GL mappings only when those FKs are currently null.
 
 - `test_models.py` — account tree rules, fiscal year rules + `get_for`, GL immutability.
 - `test_journal_entry.py` — balanced submit, unbalanced/mixed-row/duplicate rejections,
-  frozen/disabled/group account rejections, cancel reversal, amend chain, write-off voucher.
+  frozen/disabled/group account rejections, cancel reversal, amend chain.
 - `test_order_gl.py` — settle legs incl. departmental income split, change reduction,
   rounding, COGS; cancel reversal; missing account config raises; fiscal year guard raises.
   (Return-order GL is covered by §4.3 tests.)

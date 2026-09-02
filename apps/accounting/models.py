@@ -257,13 +257,11 @@ class JournalEntry(BaseModel):
     JOURNAL = "JOURNAL"
     CASH = "CASH"
     BANK = "BANK"
-    WRITE_OFF = "WRITE_OFF"
     OPENING = "OPENING"
     VOUCHER_TYPE_CHOICES = [
         (JOURNAL, "Journal Entry"),
         (CASH, "Cash Entry"),
         (BANK, "Bank Entry"),
-        (WRITE_OFF, "Write Off"),
         (OPENING, "Opening Entry"),
     ]
 
@@ -276,7 +274,6 @@ class JournalEntry(BaseModel):
     total_debit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     total_credit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     difference = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
-    write_off_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     is_opening = models.BooleanField(default=False, editable=False)
     amended_from = models.ForeignKey(
         "self",
@@ -311,10 +308,8 @@ class JournalEntry(BaseModel):
                 raise ValidationError("Only draft journal entries can be edited.")
             if previous.voucher_type == self.OPENING and self.voucher_type != self.OPENING:
                 raise ValidationError("An opening entry's voucher type cannot change.")
-            if self.status != self.DRAFT and not (allow_submit or allow_cancel):
-                raise ValidationError("Use submit() to submit a journal entry.")
-        if self.write_off_amount and self.write_off_amount <= 0:
-            raise ValidationError({"write_off_amount": "Write-off amount must be positive."})
+        if self.status != self.DRAFT and not (allow_submit or allow_cancel):
+            raise ValidationError("Use submit() to submit a journal entry.")
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -349,8 +344,6 @@ class JournalEntry(BaseModel):
             raise ValidationError("The journal entry must balance (total debit = total credit).")
         if locked.total_debit <= 0:
             raise ValidationError("The journal entry total must be greater than zero.")
-        if locked.voucher_type == self.WRITE_OFF and not locked.write_off_amount:
-            raise ValidationError({"write_off_amount": "Write-off entries require a write-off amount."})
         if locked.voucher_type == self.OPENING:
             for row in rows:
                 if not (row.remarks or "").strip():
