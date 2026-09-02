@@ -131,7 +131,6 @@ def setup_chart_of_accounts(restaurant):
     restaurant.default_expense_account = cogs
     restaurant.round_off_account = round_off
     restaurant.account_for_change_amount = cash
-    restaurant.write_off_account = round_off
     restaurant.wastage_account = cogs
     restaurant.cash_shortage_account = cogs
     restaurant.cash_over_short_account = round_off

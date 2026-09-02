@@ -22,12 +22,8 @@ class DailyPnLTestMixin:
         cls.restaurant = Restaurant.objects.create(company="PnL Co")
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.uom = UOM.objects.create(name="Nos")
-        cls.group_food = ItemGroup.objects.create(
-            name="Food", income_account=cls.accounts["food_sales"], expense_account=cls.accounts["cogs"]
-        )
-        cls.group_drinks = ItemGroup.objects.create(
-            name="Beverages", income_account=cls.accounts["drinks_sales"], expense_account=cls.accounts["cogs"]
-        )
+        cls.group_food = ItemGroup.objects.create(name="Food")
+        cls.group_drinks = ItemGroup.objects.create(name="Beverages")
         cls.kitchen_wh = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         from apps.accounting.models import LedgerAccount
 
@@ -77,8 +73,12 @@ class DailyPnLTestMixin:
             opening_entry=cls.opening, mode_of_payment=cls.cash, opening_amount=Decimal("50000")
         )
         cls.opening.submit()
-        ProductionUnit.objects.create(name="Kitchen", warehouse=cls.kitchen_wh, department="FOOD")
-        ProductionUnit.objects.create(name="Bar", warehouse=cls.bar_wh, department="DRINKS")
+        ProductionUnit.objects.create(
+            name="Kitchen", warehouse=cls.kitchen_wh, department="FOOD", income_account=cls.accounts["food_sales"]
+        )
+        ProductionUnit.objects.create(
+            name="Bar", warehouse=cls.bar_wh, department="DRINKS", income_account=cls.accounts["drinks_sales"]
+        )
         cls.config = PnLConfiguration.load()
 
     def _create_order(self, **kwargs):

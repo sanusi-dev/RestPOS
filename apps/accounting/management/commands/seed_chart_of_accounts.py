@@ -28,7 +28,7 @@ class Command(BaseCommand):
             name="Assets",
             defaults={
                 "is_group": True,
-                "root_type": LedgerAccount.ASSET,
+                "account_type": LedgerAccount.ASSET,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -37,7 +37,7 @@ class Command(BaseCommand):
             defaults={
                 "parent": assets,
                 "is_group": True,
-                "root_type": LedgerAccount.ASSET,
+                "account_type": LedgerAccount.ASSET,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -46,9 +46,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": assets,
                 "is_group": False,
-                "root_type": LedgerAccount.ASSET,
+                "account_type": LedgerAccount.ASSET,
                 "report_type": LedgerAccount.BALANCE_SHEET,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_CASH,
             },
         )[0]
         electronic_account = LedgerAccount.objects.get_or_create(
@@ -56,9 +55,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": bank_group,
                 "is_group": False,
-                "root_type": LedgerAccount.ASSET,
+                "account_type": LedgerAccount.ASSET,
                 "report_type": LedgerAccount.BALANCE_SHEET,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_BANK,
             },
         )[0]
 
@@ -66,7 +64,7 @@ class Command(BaseCommand):
             name="Income",
             defaults={
                 "is_group": True,
-                "root_type": LedgerAccount.INCOME,
+                "account_type": LedgerAccount.INCOME,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
             },
         )[0]
@@ -75,9 +73,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": income,
                 "is_group": False,
-                "root_type": LedgerAccount.INCOME,
+                "account_type": LedgerAccount.INCOME,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_INCOME,
             },
         )[0]
         drinks_sales = LedgerAccount.objects.get_or_create(
@@ -85,9 +82,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": income,
                 "is_group": False,
-                "root_type": LedgerAccount.INCOME,
+                "account_type": LedgerAccount.INCOME,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_INCOME,
             },
         )[0]
 
@@ -95,7 +91,7 @@ class Command(BaseCommand):
             name="Expenses",
             defaults={
                 "is_group": True,
-                "root_type": LedgerAccount.EXPENSE,
+                "account_type": LedgerAccount.EXPENSE,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
             },
         )[0]
@@ -104,9 +100,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": expenses,
                 "is_group": False,
-                "root_type": LedgerAccount.EXPENSE,
+                "account_type": LedgerAccount.EXPENSE,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_COGS,
             },
         )[0]
         round_off = LedgerAccount.objects.get_or_create(
@@ -114,9 +109,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": expenses,
                 "is_group": False,
-                "root_type": LedgerAccount.EXPENSE,
+                "account_type": LedgerAccount.EXPENSE,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_ROUND_OFF,
             },
         )[0]
 
@@ -124,7 +118,7 @@ class Command(BaseCommand):
             name="Equity",
             defaults={
                 "is_group": True,
-                "root_type": LedgerAccount.EQUITY,
+                "account_type": LedgerAccount.EQUITY,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -133,9 +127,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": equity,
                 "is_group": False,
-                "root_type": LedgerAccount.EQUITY,
+                "account_type": LedgerAccount.EQUITY,
                 "report_type": LedgerAccount.BALANCE_SHEET,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_EQUITY,
             },
         )
 
@@ -166,25 +159,24 @@ class Command(BaseCommand):
             defaults={
                 "parent": assets,
                 "is_group": True,
-                "root_type": LedgerAccount.ASSET,
+                "account_type": LedgerAccount.ASSET,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
         for warehouse in Warehouse.objects.all():
-            account = warehouse.account
-            if account is None or account.account_type != LedgerAccount.ACCOUNT_TYPE_STOCK:
-                account, _ = LedgerAccount.objects.get_or_create(
-                    name=f"Stock in Hand — {warehouse.name}",
-                    defaults={
-                        "parent": stock_group,
-                        "is_group": False,
-                        "root_type": LedgerAccount.ASSET,
-                        "report_type": LedgerAccount.BALANCE_SHEET,
-                        "account_type": LedgerAccount.ACCOUNT_TYPE_STOCK,
-                    },
-                )
-                warehouse.account = account
-                warehouse.save(update_fields=["account", "updated_at"])
+            if warehouse.account_id:
+                continue
+            account, _ = LedgerAccount.objects.get_or_create(
+                name=f"Stock in Hand — {warehouse.name}",
+                defaults={
+                    "parent": stock_group,
+                    "is_group": False,
+                    "account_type": LedgerAccount.ASSET,
+                    "report_type": LedgerAccount.BALANCE_SHEET,
+                },
+            )
+            warehouse.account = account
+            warehouse.save(update_fields=["account", "updated_at"])
 
         # Supplier payables: a dedicated payable leaf under Liabilities plus a
         # stock-in-hand default under the Inventory Stock group.
@@ -192,7 +184,7 @@ class Command(BaseCommand):
             name="Liabilities",
             defaults={
                 "is_group": True,
-                "root_type": LedgerAccount.LIABILITY,
+                "account_type": LedgerAccount.LIABILITY,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -201,7 +193,7 @@ class Command(BaseCommand):
             defaults={
                 "parent": liabilities,
                 "is_group": False,
-                "root_type": LedgerAccount.LIABILITY,
+                "account_type": LedgerAccount.LIABILITY,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -210,7 +202,7 @@ class Command(BaseCommand):
             defaults={
                 "parent": liabilities,
                 "is_group": False,
-                "root_type": LedgerAccount.LIABILITY,
+                "account_type": LedgerAccount.LIABILITY,
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
@@ -219,15 +211,14 @@ class Command(BaseCommand):
             defaults={
                 "parent": expenses,
                 "is_group": False,
-                "root_type": LedgerAccount.EXPENSE,
+                "account_type": LedgerAccount.EXPENSE,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_EXPENSE,
             },
         )[0]
         stock_in_hand = LedgerAccount.objects.filter(
             parent=stock_group,
             is_group=False,
-            account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
+            account_type=LedgerAccount.ASSET,
         ).first()
         if stock_in_hand is None:
             stock_in_hand = LedgerAccount.objects.get_or_create(
@@ -235,9 +226,8 @@ class Command(BaseCommand):
                 defaults={
                     "parent": stock_group,
                     "is_group": False,
-                    "root_type": LedgerAccount.ASSET,
+                    "account_type": LedgerAccount.ASSET,
                     "report_type": LedgerAccount.BALANCE_SHEET,
-                    "account_type": LedgerAccount.ACCOUNT_TYPE_STOCK,
                 },
             )[0]
         supplier_expense_account = LedgerAccount.objects.get_or_create(
@@ -245,9 +235,8 @@ class Command(BaseCommand):
             defaults={
                 "parent": expenses,
                 "is_group": False,
-                "root_type": LedgerAccount.EXPENSE,
+                "account_type": LedgerAccount.EXPENSE,
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
-                "account_type": LedgerAccount.ACCOUNT_TYPE_EXPENSE,
             },
         )[0]
 
@@ -259,7 +248,6 @@ class Command(BaseCommand):
                 ("default_expense_account", cogs),
                 ("round_off_account", round_off),
                 ("account_for_change_amount", cash_account),
-                ("write_off_account", round_off),
                 ("wastage_account", cogs),
                 ("cash_shortage_account", cogs),
                 ("cash_over_short_account", round_off),
