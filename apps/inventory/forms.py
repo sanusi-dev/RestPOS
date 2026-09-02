@@ -67,21 +67,69 @@ class ItemForm(InventoryModelForm):
             "is_stock_item",
             "is_sales_item",
             "is_purchase_item",
-            "default_warehouse",
             "has_variants",
             "variant_of",
-            "safety_stock",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["item_name"].widget.attrs["placeholder"] = "e.g. Jollof Rice"
+        self.fields["description"].widget.attrs["placeholder"] = "e.g. Long-grain rice served with tomato stew and grilled chicken."
+        department_choices = list(self.fields["department"].choices)
+        department_choices[0] = ("", "Select a department...")
+        self.fields["department"].choices = department_choices
+
+        checkbox_copy = {
+            "is_stock_item": (
+                "Track stock levels",
+                "When enabled, this item’s stock quantity and inventory movements will be tracked automatically.",
+            ),
+            "is_sales_item": (
+                "Sell this item",
+                "When enabled, this item can be added to menus and sold through the POS.",
+            ),
+            "is_purchase_item": (
+                "Buy this item",
+                "When enabled, this item can be included on purchase receipts.",
+            ),
+            "disabled": (
+                "Pause this item",
+                "When enabled, this item will be hidden from new orders and purchases.",
+            ),
+            "has_variants": (
+                "Use variants",
+                "When enabled, this item becomes a template for variants and cannot be stocked, sold, or purchased directly.",
+            ),
+        }
+        for field_name, (label, help_text) in checkbox_copy.items():
+            self.fields[field_name].label = label
+            self.fields[field_name].help_text = help_text
+
         # Keep any currently-assigned (now disabled) row visible when editing.
         self.fields["variant_of"].queryset = active_choices(
             Item, self.instance.variant_of_id, disabled=False, has_variants=True
         )
-        self.fields["default_warehouse"].queryset = active_choices(
-            Warehouse, self.instance.default_warehouse_id, disabled=False
-        )
+
+    def clean(self):
+        cleaned = super().clean()
+        dept = cleaned.get("department") or getattr(self.instance, "department", None)
+        is_stock = cleaned.get("is_stock_item")
+        is_sales = cleaned.get("is_sales_item")
+        is_purch = cleaned.get("is_purchase_item")
+        has_variants = cleaned.get("has_variants")
+        if has_variants:
+            return cleaned
+        if dept == "DRINKS" and is_stock is not None and is_sales is not None and is_purch is not None:
+            if not (is_stock and is_sales and is_purch):
+                raise ValidationError("Drinks items must be stock-tracked, sellable, and purchasable.")
+        elif dept == "FOOD" and is_stock is not None and is_sales is not None and is_purch is not None:
+            if is_sales:
+                if is_stock or is_purch:
+                    raise ValidationError("Sellable food items are virtual — they must not be stock-tracked or purchasable.")
+            else:
+                if not (is_stock and is_purch):
+                    raise ValidationError("Non-sellable food items must be stock-tracked and purchasable.")
+        return cleaned
 
 
 class StockEntryForm(InventoryModelForm):

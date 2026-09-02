@@ -657,9 +657,11 @@ def reserve_drink_stock(order, target_quantities):
     items = {item.pk: item for item in Item.objects.filter(pk__in=item_ids).order_by("pk")}
     for item_id in target_quantities:
         item = items.get(item_id)
-        if item is None or item.department != "DRINKS" or not item.is_stock_item:
+        if item is None or item.department != "DRINKS" or not (
+            item.is_stock_item and item.is_sales_item and item.is_purchase_item
+        ):
             name = item.item_name if item else "This drink"
-            raise ValidationError(f"{name} is not configured as a stock-tracked drink.")
+            raise ValidationError(f"{name} is not configured as a stock-tracked, sellable, purchasable drink.")
     if warehouse is None:
         return
     bins = _locked_drink_bins(item_ids, warehouse)
@@ -707,13 +709,13 @@ def drink_stock_available(menu_items, settings):
         menu_item.stock_message = ""
         if menu_item.item.department != "DRINKS":
             continue
-        if not menu_item.item.is_stock_item:
-            menu_item.stock_unavailable = True
-            menu_item.stock_message = "Setup required: mark this drink as a stock item"
-            continue
         if not settings or not settings.default_warehouse_id or settings.default_warehouse.disabled:
             menu_item.stock_unavailable = True
             menu_item.stock_message = "Setup required: configure the Bar/POS warehouse"
+            continue
+        if not (menu_item.item.is_stock_item and menu_item.item.is_sales_item and menu_item.item.is_purchase_item):
+            menu_item.stock_unavailable = True
+            menu_item.stock_message = "Setup required: configure this drink as stock-tracked, sellable, and purchasable"
             continue
         drink_bin = drink_bins.get(menu_item.item_id)
         available_qty = drink_bin.actual_qty - drink_bin.reserved_qty if drink_bin is not None else Decimal("0")
@@ -976,8 +978,10 @@ def _locked_drink_stock(order, *, reservations_initialized):
     warehouse = order.stock_warehouse
     quantities = {}
     for order_item in drink_items:
-        if not order_item.item.is_stock_item:
-            raise ValidationError(f"{order_item.item_name} is a drink but is not configured as a stock item.")
+        if not (order_item.item.is_stock_item and order_item.item.is_sales_item and order_item.item.is_purchase_item):
+            raise ValidationError(
+                f"{order_item.item_name} must be a stock-tracked, sellable, purchasable drink."
+            )
         quantities[order_item.item_id] = quantities.get(order_item.item_id, Decimal("0")) + order_item.qty
     owned_quantities = quantities if reservations_initialized else {}
     bins = _locked_drink_bins(quantities, warehouse)

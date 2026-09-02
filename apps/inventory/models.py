@@ -74,7 +74,7 @@ class Warehouse(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Account",
-        help_text="Credited with the stock value of settle-time drink deductions.",
+        help_text="The account that holds the value of stock in this warehouse.",
     )
 
     class Meta:
@@ -118,18 +118,11 @@ class Item(BaseModel):
     is_stock_item = models.BooleanField(default=True)
     is_sales_item = models.BooleanField(
         default=False,
-        help_text="If true, this item may be added to a menu and sold on the POS.",
+        help_text="Allow this item to be added to menus and sold at the POS.",
     )
     is_purchase_item = models.BooleanField(
         default=False,
-        help_text="If true, this item may appear on purchase receipts.",
-    )
-    default_warehouse = models.ForeignKey(
-        Warehouse,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="default_items",
+        help_text="Allow this item to be added to purchase receipts.",
     )
     has_variants = models.BooleanField(default=False)
     variant_of = models.ForeignKey(
@@ -139,7 +132,6 @@ class Item(BaseModel):
         on_delete=models.PROTECT,
         related_name="variants",
     )
-    safety_stock = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     last_purchase_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:

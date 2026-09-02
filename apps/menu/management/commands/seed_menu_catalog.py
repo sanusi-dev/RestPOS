@@ -289,11 +289,15 @@ class Command(BaseCommand):
         result = []
         for name, group, uom, dept, rate, special in SIMPLE_MENU_ITEMS:
             is_bought_in = group in drink_groups
+            is_stock = is_bought_in
+            if dept == "FOOD":
+                # Food dishes are virtual (made in Kitchen, no stock ledger).
+                is_stock = False
             defaults = {
                 "item_group": self._get_group(group),
                 "stock_uom": self._get_uom(uom),
                 "department": dept,
-                "is_stock_item": True,
+                "is_stock_item": is_stock,
                 "is_sales_item": True,
                 "is_purchase_item": is_bought_in,
                 "description": "Finished dish / drink sold on POS.",
@@ -301,7 +305,7 @@ class Command(BaseCommand):
             item, _ = Item.objects.get_or_create(item_name=name, defaults=defaults)
             item.is_sales_item = True
             item.is_purchase_item = is_bought_in
-            item.is_stock_item = True
+            item.is_stock_item = is_stock
             item.save()
             result.append((item, Decimal(rate), special))
         return result
@@ -333,13 +337,14 @@ class Command(BaseCommand):
 
             variants = []
             for vname, rate in fam["variants"]:
+                is_stock_variant = fam["department"] != "FOOD"
                 vitem, _ = Item.objects.get_or_create(
                     item_name=vname,
                     defaults={
                         "item_group": group,
                         "stock_uom": uom,
                         "department": fam["department"],
-                        "is_stock_item": True,
+                        "is_stock_item": is_stock_variant,
                         "is_sales_item": True,
                         "is_purchase_item": False,
                         "has_variants": False,
@@ -350,7 +355,7 @@ class Command(BaseCommand):
                 vitem.variant_of = parent
                 vitem.is_sales_item = True
                 vitem.is_purchase_item = False
-                vitem.is_stock_item = True
+                vitem.is_stock_item = is_stock_variant
                 vitem.has_variants = False
                 vitem.save()
                 variants.append((vitem, Decimal(rate)))

@@ -44,6 +44,8 @@ class DailyPnLTestMixin:
             stock_uom=cls.uom,
             department="FOOD",
             is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.drink = Item.objects.create(
             item_name="Coke",
@@ -52,6 +54,7 @@ class DailyPnLTestMixin:
             department="DRINKS",
             is_sales_item=True,
             is_stock_item=True,
+            is_purchase_item=True,
         )
         cls.menu = Menu.objects.create(name="Main")
         cls.food_mi = MenuItem.objects.create(menu=cls.menu, item=cls.food, rate=Decimal("1500"))

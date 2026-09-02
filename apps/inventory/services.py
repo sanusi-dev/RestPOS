@@ -441,6 +441,11 @@ def submit_stock_reconciliation(reconciliation):
             raise ValidationError("Consumption reconciliation is only allowed for the configured Kitchen warehouse.")
         if any(line.item.department != "FOOD" for line in lines):
             raise ValidationError("Consumption reconciliation accepts FOOD stock items only.")
+        for line in lines:
+            if line.item.is_sales_item or not line.item.is_stock_item or not line.item.is_purchase_item:
+                raise ValidationError(
+                    f"{line.item.item_name} must be a stock-tracked, purchasable food ingredient for consumption."
+                )
 
     for line in lines:
         Bin.get_or_create_bin_id(line.item_id, locked.warehouse_id)

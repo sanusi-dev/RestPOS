@@ -78,15 +78,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Account for change amount",
-        help_text="The cash account whose settle-time payment rows are reduced by the change given.",
-    )
-    write_off_account = models.ForeignKey(
-        "accounting.LedgerAccount",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name="Write-off account",
+        help_text="The cash account used to record change given back to customers.",
     )
     wastage_account = models.ForeignKey(
         "accounting.LedgerAccount",

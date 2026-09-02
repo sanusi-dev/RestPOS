@@ -55,6 +55,16 @@ class MenuItem(BaseModel):
                 raise ValidationError({"item": "Only sellable items can be added to a menu."})
             if self.item.disabled:
                 raise ValidationError({"item": "Disabled items cannot be added to a menu."})
+            if self.item.department == "DRINKS":
+                if not (self.item.is_stock_item and self.item.is_sales_item and self.item.is_purchase_item):
+                    raise ValidationError(
+                        {"item": "Drinks items must be stock-tracked, sellable, and purchasable to be on a menu."}
+                    )
+            elif self.item.department == "FOOD" and self.item.is_sales_item:
+                if self.item.is_stock_item or self.item.is_purchase_item:
+                    raise ValidationError(
+                        {"item": "Sellable food items are virtual — they must not be stock-tracked or purchasable."}
+                    )
         if not self.rate and self.item and self.item.last_purchase_rate:
             self.rate = self.item.last_purchase_rate
 
@@ -84,6 +94,16 @@ class ItemAddOn(BaseModel):
             raise ValidationError({"add_on_item": "Only sellable items can be used as add-ons."})
         if add_on.disabled:
             raise ValidationError({"add_on_item": "Disabled items cannot be used as add-ons."})
+        if add_on.department == "DRINKS":
+            if not (add_on.is_stock_item and add_on.is_sales_item and add_on.is_purchase_item):
+                raise ValidationError(
+                    {"add_on_item": "Drinks add-ons must be stock-tracked, sellable, and purchasable."}
+                )
+        elif add_on.department == "FOOD" and add_on.is_sales_item:
+            if add_on.is_stock_item or add_on.is_purchase_item:
+                raise ValidationError(
+                    {"add_on_item": "Sellable food add-ons are virtual — they must not be stock-tracked or purchasable."}
+                )
         if not MenuItem.objects.filter(item=add_on, disabled=False).exists():
             raise ValidationError(
                 {"add_on_item": "Add-on item must be on an enabled menu line to have a resolvable POS price."}
