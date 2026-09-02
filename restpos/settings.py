@@ -141,6 +141,8 @@ else:
 # Auth and Login
 
 AUTH_USER_MODEL = "users.CustomUser"
+SESSION_COOKIE_NAME = "restpos_sessionid"
+CSRF_COOKIE_NAME = "restpos_csrftoken"
 LOGIN_URL = "account_login"
 LOGIN_REDIRECT_URL = "/"
 
