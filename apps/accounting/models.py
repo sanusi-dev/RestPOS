@@ -14,7 +14,7 @@ class LedgerAccount(BaseModel):
     EQUITY = "EQUITY"
     INCOME = "INCOME"
     EXPENSE = "EXPENSE"
-    ROOT_TYPE_CHOICES = [
+    ACCOUNT_TYPE_CHOICES = [
         (ASSET, "Asset"),
         (LIABILITY, "Liability"),
         (EQUITY, "Equity"),
@@ -29,25 +29,6 @@ class LedgerAccount(BaseModel):
         (PROFIT_AND_LOSS, "Profit & Loss"),
     ]
 
-    ACCOUNT_TYPE_CASH = "Cash"
-    ACCOUNT_TYPE_BANK = "Bank"
-    ACCOUNT_TYPE_STOCK = "Stock"
-    ACCOUNT_TYPE_INCOME = "Income Account"
-    ACCOUNT_TYPE_EXPENSE = "Expense Account"
-    ACCOUNT_TYPE_COGS = "Cost of Goods Sold"
-    ACCOUNT_TYPE_ROUND_OFF = "Round Off"
-    ACCOUNT_TYPE_EQUITY = "Equity"
-    ACCOUNT_TYPE_CHOICES = [
-        (ACCOUNT_TYPE_CASH, "Cash"),
-        (ACCOUNT_TYPE_BANK, "Bank"),
-        (ACCOUNT_TYPE_STOCK, "Stock"),
-        (ACCOUNT_TYPE_INCOME, "Income Account"),
-        (ACCOUNT_TYPE_EXPENSE, "Expense Account"),
-        (ACCOUNT_TYPE_COGS, "Cost of Goods Sold"),
-        (ACCOUNT_TYPE_ROUND_OFF, "Round Off"),
-        (ACCOUNT_TYPE_EQUITY, "Equity"),
-    ]
-
     name = models.CharField(max_length=200, unique=True)
     parent = models.ForeignKey(
         "self",
@@ -57,9 +38,8 @@ class LedgerAccount(BaseModel):
         related_name="children",
     )
     is_group = models.BooleanField(default=False)
-    root_type = models.CharField(max_length=10, choices=ROOT_TYPE_CHOICES, blank=True)
+    account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES, blank=True)
     report_type = models.CharField(max_length=15, choices=REPORT_TYPE_CHOICES, blank=True)
-    account_type = models.CharField(max_length=30, choices=ACCOUNT_TYPE_CHOICES, blank=True)
     account_number = models.CharField(max_length=50, blank=True)
     freeze_account = models.BooleanField(default=False)
     disabled = models.BooleanField(default=False)
@@ -92,15 +72,15 @@ class LedgerAccount(BaseModel):
                 node = node.parent
         if self.parent_id and not self.parent.is_group:
             raise ValidationError({"parent": "The parent must be a group account."})
-        if not self.parent_id and not self.root_type:
-            raise ValidationError({"root_type": "Root accounts must declare a root type."})
+        if not self.parent_id and not self.account_type:
+            raise ValidationError({"account_type": "Root accounts must declare an account type."})
         if self.parent_id:
-            if not self.root_type:
-                self.root_type = self.parent.root_type
-            if self.root_type != self.parent.root_type:
-                raise ValidationError({"root_type": "Root type must match the parent group."})
-        if self.report_type and not self.root_type:
-            raise ValidationError({"report_type": "A report type requires a root type."})
+            if not self.account_type:
+                self.account_type = self.parent.account_type
+            if self.account_type != self.parent.account_type:
+                raise ValidationError({"account_type": "Account type must match the parent group."})
+        if self.report_type and not self.account_type:
+            raise ValidationError({"report_type": "A report type requires an account type."})
         if self.is_group and self.disabled and self.pk and self.children.exists():
             raise ValidationError({"disabled": "A group with children cannot be disabled."})
 

@@ -14,121 +14,111 @@ def setup_chart_of_accounts(restaurant):
     assets = LedgerAccount.objects.create(
         name=f"Assets {restaurant.pk}",
         is_group=True,
-        root_type=LedgerAccount.ASSET,
+        account_type=LedgerAccount.ASSET,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     liabilities = LedgerAccount.objects.create(
         name=f"Liabilities {restaurant.pk}",
         is_group=True,
-        root_type=LedgerAccount.LIABILITY,
+        account_type=LedgerAccount.LIABILITY,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     payable = LedgerAccount.objects.create(
         name=f"Accounts Payable {restaurant.pk}",
         parent=liabilities,
-        root_type=LedgerAccount.LIABILITY,
+        account_type=LedgerAccount.LIABILITY,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     bank_group = LedgerAccount.objects.create(
         name=f"Bank Accounts {restaurant.pk}",
         parent=assets,
         is_group=True,
-        root_type=LedgerAccount.ASSET,
+        account_type=LedgerAccount.ASSET,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     cash = LedgerAccount.objects.create(
         name=f"Cash Account {restaurant.pk}",
         parent=assets,
-        root_type=LedgerAccount.ASSET,
+        account_type=LedgerAccount.ASSET,
         report_type=LedgerAccount.BALANCE_SHEET,
-        account_type=LedgerAccount.ACCOUNT_TYPE_CASH,
     )
     bank = LedgerAccount.objects.create(
         name=f"Electronic Account {restaurant.pk}",
         parent=bank_group,
-        root_type=LedgerAccount.ASSET,
+        account_type=LedgerAccount.ASSET,
         report_type=LedgerAccount.BALANCE_SHEET,
-        account_type=LedgerAccount.ACCOUNT_TYPE_BANK,
     )
     income = LedgerAccount.objects.create(
         name=f"Income {restaurant.pk}",
         is_group=True,
-        root_type=LedgerAccount.INCOME,
+        account_type=LedgerAccount.INCOME,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
     )
     food_sales = LedgerAccount.objects.create(
         name=f"Food Sales {restaurant.pk}",
         parent=income,
-        root_type=LedgerAccount.INCOME,
+        account_type=LedgerAccount.INCOME,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_INCOME,
     )
     drinks_sales = LedgerAccount.objects.create(
         name=f"Drinks Sales {restaurant.pk}",
         parent=income,
-        root_type=LedgerAccount.INCOME,
+        account_type=LedgerAccount.INCOME,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_INCOME,
     )
     expenses = LedgerAccount.objects.create(
         name=f"Expenses {restaurant.pk}",
         is_group=True,
-        root_type=LedgerAccount.EXPENSE,
+        account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
     )
     cogs = LedgerAccount.objects.create(
         name=f"Cost of Goods Sold {restaurant.pk}",
         parent=expenses,
-        root_type=LedgerAccount.EXPENSE,
+        account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_COGS,
     )
     round_off = LedgerAccount.objects.create(
         name=f"Round Off {restaurant.pk}",
         parent=expenses,
-        root_type=LedgerAccount.EXPENSE,
+        account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_ROUND_OFF,
     )
     equity = LedgerAccount.objects.create(
         name=f"Equity {restaurant.pk}",
         is_group=True,
-        root_type=LedgerAccount.EQUITY,
+        account_type=LedgerAccount.EQUITY,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     owner_equity = LedgerAccount.objects.create(
         name=f"Owner's Equity {restaurant.pk}",
         parent=equity,
-        root_type=LedgerAccount.EQUITY,
+        account_type=LedgerAccount.EQUITY,
         report_type=LedgerAccount.BALANCE_SHEET,
-        account_type=LedgerAccount.ACCOUNT_TYPE_EQUITY,
     )
     stock_in_hand = LedgerAccount.objects.create(
         name=f"Stock in Hand {restaurant.pk}",
         parent=assets,
-        root_type=LedgerAccount.ASSET,
+        account_type=LedgerAccount.ASSET,
         report_type=LedgerAccount.BALANCE_SHEET,
-        account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
     )
     grni = LedgerAccount.objects.create(
         name=f"Stock Received But Not Billed {restaurant.pk}",
         parent=liabilities,
-        root_type=LedgerAccount.LIABILITY,
+        account_type=LedgerAccount.LIABILITY,
         report_type=LedgerAccount.BALANCE_SHEET,
     )
     variance = LedgerAccount.objects.create(
         name=f"Inventory Price Variance {restaurant.pk}",
         parent=expenses,
-        root_type=LedgerAccount.EXPENSE,
+        account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
     )
     supplier_expense = LedgerAccount.objects.create(
         name=f"Supplier Expenses {restaurant.pk}",
         parent=expenses,
-        root_type=LedgerAccount.EXPENSE,
+        account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
-        account_type=LedgerAccount.ACCOUNT_TYPE_EXPENSE,
     )
     today = date.today()
     fiscal_year = FiscalYear.objects.create(

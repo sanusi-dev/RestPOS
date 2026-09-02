@@ -17,8 +17,8 @@ from .models import (
 
 @admin.register(LedgerAccount)
 class LedgerAccountAdmin(admin.ModelAdmin):
-    list_display = ("name", "parent", "is_group", "root_type", "account_type", "disabled", "freeze_account")
-    list_filter = ("root_type", "is_group", "account_type", "disabled", "freeze_account")
+    list_display = ("name", "parent", "is_group", "account_type", "disabled", "freeze_account")
+    list_filter = ("account_type", "is_group", "disabled", "freeze_account")
     list_select_related = ("parent",)
     search_fields = ("name", "account_number")
     ordering = ("name",)

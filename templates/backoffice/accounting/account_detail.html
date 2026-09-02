@@ -9,7 +9,7 @@
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ account.name }}</h1>
       <p class="text-sm text-gray-500">
         {% if account.is_group %}Group account{% else %}Leaf posting account{% endif %}
-        {% if account.root_type %} · {{ account.get_root_type_display }}{% endif %}
+        {% if account.account_type %} · {{ account.get_account_type_display }}{% endif %}
       </p>
     </div>
     <a href="{% url 'accounting:account_update' account.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Edit</a>
@@ -22,8 +22,8 @@
         <dd class="text-base font-bold text-gray-900">{% if account.parent %}<a href="{% url 'accounting:account_detail' account.parent_id %}" class="text-orange-500 hover:text-orange-600">{{ account.parent.name }}</a>{% else %}Root{% endif %}</dd>
       </div>
       <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Type</dt>
-        <dd class="text-base font-bold text-gray-900">{{ account.is_group|yesno:"Group,Leaf" }}{% if account.account_type %} · {{ account.get_account_type_display }}{% endif %}</dd>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Account Type</dt>
+        <dd class="text-base font-bold text-gray-900">{{ account.get_account_type_display|default:"—" }}</dd>
       </div>
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Report Type</dt>

@@ -20,9 +20,8 @@ class LedgerAccountForm(AccountingModelForm):
             "name",
             "parent",
             "is_group",
-            "root_type",
-            "report_type",
             "account_type",
+            "report_type",
             "account_number",
             "freeze_account",
             "disabled",
@@ -32,9 +31,8 @@ class LedgerAccountForm(AccountingModelForm):
         super().__init__(*args, **kwargs)
         self.fields["parent"].queryset = active_choices(LedgerAccount, self.instance.parent_id, is_group=True)
         self.fields["parent"].label = "Parent group"
-        self.fields["root_type"].required = False
-        self.fields["report_type"].required = False
         self.fields["account_type"].required = False
+        self.fields["report_type"].required = False
 
 
 class FiscalYearForm(AccountingModelForm):
