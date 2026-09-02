@@ -6,6 +6,9 @@ from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django_htmx.middleware import HtmxDetails
+from django.db.models import Q
+
 
 from apps.users.decorators import backoffice_required
 from apps.utils.forms import add_formset_row, remove_formset_row
@@ -353,7 +356,7 @@ def stock_entry_create(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "backoffice/inventory/stock_entry_form.html",
-        {"form": form, "is_create": True, "detail_formset": detail_fs, "show_errors": True},
+        {"form": form, "is_create": True, "detail_formset": detail_fs},
     )
 
 
@@ -397,6 +400,8 @@ def stock_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
             services.submit_stock_entry(entry)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Stock entry #{entry.pk} submitted.")
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -409,6 +414,8 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
             services.cancel_stock_entry(entry)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Stock entry #{entry.pk} cancelled.")
     return redirect("inventory:stock_entry_detail", pk=pk)
 
 
@@ -463,7 +470,7 @@ def reconciliation_create(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "backoffice/inventory/reconciliation_form.html",
-        {"form": form, "is_create": True, "item_formset": item_fs, "show_errors": True},
+        {"form": form, "is_create": True, "item_formset": item_fs},
     )
 
 
@@ -512,6 +519,8 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
             services.submit_stock_reconciliation(reconciliation)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Reconciliation #{reconciliation.pk} submitted.")
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -524,6 +533,8 @@ def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
             services.cancel_stock_reconciliation(reconciliation)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Reconciliation #{reconciliation.pk} cancelled.")
     return redirect("inventory:reconciliation_detail", pk=pk)
 
 
@@ -564,7 +575,7 @@ def purchase_receipt_create(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "backoffice/inventory/purchase_receipt_form.html",
-        {"form": form, "is_create": True, "item_formset": item_fs, "show_errors": True},
+        {"form": form, "is_create": True, "item_formset": item_fs},
     )
 
 
@@ -609,6 +620,8 @@ def purchase_receipt_submit(request: HttpRequest, pk: int) -> HttpResponse:
             services.submit_purchase_receipt(receipt)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Purchase receipt #{receipt.pk} submitted.")
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 
@@ -621,6 +634,8 @@ def purchase_receipt_cancel(request: HttpRequest, pk: int) -> HttpResponse:
             services.cancel_purchase_receipt(receipt)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"Purchase receipt #{receipt.pk} cancelled.")
     return redirect("inventory:purchase_receipt_detail", pk=pk)
 
 

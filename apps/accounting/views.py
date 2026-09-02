@@ -125,7 +125,7 @@ def journal_entry_create(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "backoffice/accounting/journal_entry_form.html",
-        {"form": form, "formset": formset, "is_create": True, "show_errors": request.method == "POST"},
+        {"form": form, "formset": formset, "is_create": True},
     )
 
 
@@ -183,7 +183,6 @@ def journal_entry_update(request: HttpRequest, pk: int) -> HttpResponse:
             "formset": formset,
             "is_create": False,
             "journal": journal,
-            "show_errors": request.method == "POST",
         },
     )
 

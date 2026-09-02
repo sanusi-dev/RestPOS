@@ -19,16 +19,16 @@
         <button onclick="Swal.fire({title:'Process Return?',text:'This creates a return draft with negative items and payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Create Return Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-amber-200 text-amber-600 text-sm font-semibold hover:bg-amber-50 transition-all">
           Create return
         </button>
-        <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden">{% csrf_token %}</form>
+        <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
         {% elif order.status == "DRAFT" and order.is_return %}
         <button onclick="Swal.fire({title:'Submit Return?',text:'This restores drink stock and records the refunds against the source payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Submit Return'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-submit-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-all">
           Submit return
         </button>
-        <form id="return-submit-form" method="post" action="{% url 'orders:order_return_submit' order.pk %}" class="hidden">{% csrf_token %}</form>
+        <form id="return-submit-form" method="post" action="{% url 'orders:order_return_submit' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
         <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
           Delete draft
         </button>
-        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden">{% csrf_token %}</form>
+        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
         {% elif order.status == "DRAFT" and order.kots.exists and not order.is_return %}
         <button onclick="document.getElementById('cancel-dialog').classList.toggle('hidden')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
           Cancel order
@@ -37,7 +37,7 @@
         <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
           Delete draft
         </button>
-        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden">{% csrf_token %}</form>
+        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
         {% endif %}
       {% endif %}
     </div>
@@ -52,7 +52,7 @@
       </div>
       <button type="button" onclick="document.getElementById('cancel-dialog').classList.add('hidden')" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">×</button>
     </div>
-    <form method="post" action="{% url 'orders:order_cancel' order.pk %}" class="grid grid-cols-1 md:grid-cols-[minmax(14rem,0.8fr)_minmax(18rem,1.2fr)_auto] items-end gap-4">
+    <form method="post" action="{% url 'orders:order_cancel' order.pk %}" class="grid grid-cols-1 md:grid-cols-[minmax(14rem,0.8fr)_minmax(18rem,1.2fr)_auto] items-end gap-4" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       {% csrf_token %}
       <div>
         <label for="{{ cancel_form.cancel_reason.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
@@ -62,7 +62,7 @@
         <label for="{{ cancel_form.cancel_reason_note.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
         {{ cancel_form.cancel_reason_note }}
       </div>
-      <button type="submit" class="h-[2.75rem] px-5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition-all">Confirm cancellation</button>
+      <button type="submit" class="backend-submit h-[2.75rem] px-5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition-all">Confirm cancellation</button>
     </form>
   </div>
 {% endif %}
@@ -128,12 +128,12 @@
             <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ item.amount|intcomma }}</td>
             {% if order.status == "DRAFT" and order.is_return %}
             <td class="px-6 py-4 text-right">
-              <form method="post" action="{% url 'orders:order_return_line_update' order.pk item.pk %}" class="flex flex-col items-end gap-2">
+              <form method="post" action="{% url 'orders:order_return_line_update' order.pk item.pk %}" class="flex flex-col items-end gap-2" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
                 {% csrf_token %}
                 <div class="flex items-center gap-2">
                   <label class="sr-only" for="return-qty-{{ item.pk }}">Return qty</label>
                   <input id="return-qty-{{ item.pk }}" type="number" name="qty" min="0" step="0.01" value="{{ item.qty|stringformat:'f'|cut:'-' }}" class="w-20 h-9 rounded-lg border border-gray-200 px-2 text-right text-sm font-semibold text-gray-900">
-                  <button type="submit" class="h-9 px-3 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-orange-500 transition-colors">Update</button>
+                  <button type="submit" class="backend-submit h-9 px-3 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-orange-500 transition-colors">Update</button>
                 </div>
                 {% if item.department == "DRINKS" or item.item.department == "DRINKS" %}
                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">

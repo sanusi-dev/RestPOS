@@ -9,7 +9,7 @@
     <p class="text-sm text-gray-500">Remembered rates and templates. Changing them does not rewrite submitted Daily P&amp;L documents.</p>
   </div>
 
-  <form method="post" class="space-y-6">
+  <form method="post" class="space-y-6" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">{{ form.non_field_errors }}</div>
@@ -19,7 +19,7 @@
       <h3 class="text-base font-bold text-gray-900 mb-4">Day and rates</h3>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {% for field in form %}
-          {% include "backoffice/components/form_field.html" with field=field show_errors=show_errors %}
+          {% include "backoffice/components/form_field.html" with field=field %}
         {% endfor %}
       </div>
     </div>
@@ -31,11 +31,11 @@
         {% for row_form in materials %}
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
             {% for hidden in row_form.hidden_fields %}{{ hidden }}{% endfor %}
-            {% include "backoffice/components/form_field.html" with field=row_form.name show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.unit show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.rate show_errors=show_errors %}
+            {% include "backoffice/components/form_field.html" with field=row_form.name %}
+            {% include "backoffice/components/form_field.html" with field=row_form.unit %}
+            {% include "backoffice/components/form_field.html" with field=row_form.rate %}
             <div class="flex items-center gap-3 pb-1">
-              {% include "backoffice/components/form_field.html" with field=row_form.disabled show_errors=show_errors %}
+              {% include "backoffice/components/form_field.html" with field=row_form.disabled %}
               {% if row_form.DELETE %}<label class="text-xs text-red-500">{{ row_form.DELETE }} Delete</label>{% endif %}
             </div>
           </div>
@@ -50,13 +50,13 @@
         {% for row_form in expenses %}
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end border-b border-gray-50 pb-4">
             {% for hidden in row_form.hidden_fields %}{{ hidden }}{% endfor %}
-            {% include "backoffice/components/form_field.html" with field=row_form.name show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.kind show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.amount show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.percent show_errors=show_errors %}
-            {% include "backoffice/components/form_field.html" with field=row_form.department show_errors=show_errors %}
+            {% include "backoffice/components/form_field.html" with field=row_form.name %}
+            {% include "backoffice/components/form_field.html" with field=row_form.kind %}
+            {% include "backoffice/components/form_field.html" with field=row_form.amount %}
+            {% include "backoffice/components/form_field.html" with field=row_form.percent %}
+            {% include "backoffice/components/form_field.html" with field=row_form.department %}
             <div class="flex items-center gap-3 pb-1">
-              {% include "backoffice/components/form_field.html" with field=row_form.disabled show_errors=show_errors %}
+              {% include "backoffice/components/form_field.html" with field=row_form.disabled %}
               {% if row_form.DELETE %}<label class="text-xs text-red-500">{{ row_form.DELETE }} Delete</label>{% endif %}
             </div>
           </div>
@@ -65,7 +65,7 @@
     </div>
 
     <div class="flex justify-end">
-      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">Save settings</button>
+      <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">Save settings</button>
     </div>
   </form>
 </div>

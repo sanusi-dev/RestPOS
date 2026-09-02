@@ -13,28 +13,28 @@
     </div>
     <div class="flex items-center gap-2">
       {% if closing.status == "DRAFT" %}
-        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing draft?" data-confirm-body="This will discard the closing entry. The shift will remain open." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing draft?" data-confirm-body="This will discard the closing entry. The shift will remain open." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
             Cancel
           </button>
         </form>
-        <button type="submit" form="reconciliation-form" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+        <button type="submit" form="reconciliation-form" hx-indicator="this" hx-disabled-elt="this" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
           Save Counted Amounts
         </button>
         <form method="post" action="{% url 'staff:closing_entry_submit' closing.pk %}" id="submit-close-form" class="inline"
               data-confirm-title="Submit closing entry and close the shift?"
               data-confirm-body="This finalises the reconciliation. The shift will be marked Closed and cannot be reopened (only cancelled)."
-              data-confirm-button="Submit & Close Shift">
+              data-confirm-button="Submit & Close Shift" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
             Submit &amp; Close Shift
           </button>
         </form>
       {% elif closing.status == "SUBMITTED" %}
-        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing entry?" data-confirm-body="This will cancel the submitted closing entry. The opening entry will NOT be reopened." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'staff:closing_entry_cancel' closing.pk %}" class="inline" data-confirm-title="Cancel this closing entry?" data-confirm-body="This will cancel the submitted closing entry. The opening entry will NOT be reopened." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
             Cancel Closing Entry
           </button>
         </form>
@@ -99,7 +99,7 @@
     </div>
 
     {% if closing.status == "DRAFT" and form_data %}
-      <form method="post" action="{% url 'staff:closing_entry_detail' closing.pk %}" id="reconciliation-form" class="space-y-0">
+      <form method="post" action="{% url 'staff:closing_entry_detail' closing.pk %}" id="reconciliation-form" class="space-y-0" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
         {% csrf_token %}
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-100">

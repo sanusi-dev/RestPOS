@@ -11,15 +11,15 @@
     </div>
     {% if not is_create %}
       <div class="flex items-center gap-2">
-        <form method="post" action="{% url 'reports:daily_pnl_submit' pnl.pk %}" data-confirm-title="Submit this Daily P&L?" data-confirm-body="Totals freeze. Nothing posts to the general ledger." data-confirm-button="Submit">
+        <form method="post" action="{% url 'reports:daily_pnl_submit' pnl.pk %}" data-confirm-title="Submit this Daily P&L?" data-confirm-body="Totals freeze. Nothing posts to the general ledger." data-confirm-button="Submit" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700">Submit</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700">Submit</button>
         </form>
       </div>
     {% endif %}
   </div>
 
-  <form method="post" id="pnl-draft-form" class="space-y-6">
+  <form method="post" id="pnl-draft-form" class="space-y-6" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ form.non_field_errors }}</div>
@@ -28,7 +28,7 @@
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {% for field in form %}
-          {% include "backoffice/components/form_field.html" with field=field show_errors=show_errors %}
+          {% include "backoffice/components/form_field.html" with field=field %}
         {% endfor %}
       </div>
     </div>
@@ -51,11 +51,11 @@
       <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-base font-bold text-gray-900">Preview</h3>
-          <button type="button" class="px-4 py-2 rounded-xl text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100"
+          <button type="button" class="backend-submit px-4 py-2 rounded-xl text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100"
             hx-post="{% url 'reports:daily_pnl_preview' pnl.pk %}"
             hx-include="closest form"
             hx-target="#pnl-preview"
-            hx-swap="innerHTML">Refresh preview</button>
+            hx-swap="innerHTML" hx-indicator="this" hx-disabled-elt="this">Refresh preview</button>
         </div>
         <div id="pnl-preview">
           {% if preview %}
@@ -69,7 +69,7 @@
 
     <div class="flex items-center justify-end gap-3 pt-2">
       <a href="{% url 'reports:daily_pnl_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100">Cancel</a>
-      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">
+      <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">
         {% if is_create %}Create draft{% else %}Save draft{% endif %}
       </button>
     </div>

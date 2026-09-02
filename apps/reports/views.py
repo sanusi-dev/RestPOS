@@ -47,7 +47,7 @@ def pnl_settings(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "backoffice/reports/pnl_settings.html",
-        {"form": form, "materials": materials, "expenses": expenses, "show_errors": request.method == "POST"},
+        {"form": form, "materials": materials, "expenses": expenses},
     )
 
 
@@ -81,14 +81,13 @@ def daily_pnl_create(request: HttpRequest) -> HttpResponse:
     return render(request, "backoffice/reports/daily_pnl_form.html", {"form": form, "is_create": True})
 
 
-def _form_context(pnl, form, materials, adhoc, *, show_errors, preview=None):
+def _form_context(pnl, form, materials, adhoc, *, preview=None):
     return {
         "form": form,
         "materials": materials,
         "adhoc": adhoc,
         "pnl": pnl,
         "is_create": False,
-        "show_errors": show_errors,
         "preview": preview,
     }
 
@@ -118,7 +117,7 @@ def daily_pnl_update(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "backoffice/reports/daily_pnl_form.html",
-        _form_context(pnl, form, materials, adhoc, show_errors=request.method == "POST", preview=preview),
+        _form_context(pnl, form, materials, adhoc, preview=preview),
     )
 
 
@@ -164,7 +163,7 @@ def daily_pnl_preview(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "backoffice/reports/daily_pnl_form.html",
-        _form_context(pnl, form, materials, adhoc, show_errors=True),
+        _form_context(pnl, form, materials, adhoc),
     )
 
 
@@ -217,7 +216,7 @@ def daily_pnl_material_add(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "backoffice/reports/_material_formset.html",
-        {"materials": formset, "pnl": pnl, "show_errors": False},
+        {"materials": formset, "pnl": pnl},
     )
 
 
@@ -229,7 +228,7 @@ def daily_pnl_material_remove(request: HttpRequest, pk: int, index: int) -> Http
     return render(
         request,
         "backoffice/reports/_material_formset.html",
-        {"materials": formset, "pnl": pnl, "show_errors": False},
+        {"materials": formset, "pnl": pnl},
     )
 
 
@@ -241,7 +240,7 @@ def daily_pnl_adhoc_add(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "backoffice/reports/_adhoc_formset.html",
-        {"adhoc": formset, "pnl": pnl, "show_errors": False},
+        {"adhoc": formset, "pnl": pnl},
     )
 
 
@@ -253,5 +252,5 @@ def daily_pnl_adhoc_remove(request: HttpRequest, pk: int, index: int) -> HttpRes
     return render(
         request,
         "backoffice/reports/_adhoc_formset.html",
-        {"adhoc": formset, "pnl": pnl, "show_errors": False},
+        {"adhoc": formset, "pnl": pnl},
     )

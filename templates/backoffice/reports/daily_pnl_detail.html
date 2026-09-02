@@ -12,19 +12,19 @@
     <div class="flex items-center gap-2">
       {% if pnl.status == "DRAFT" %}
         <a href="{% url 'reports:daily_pnl_update' pnl.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold">Edit</a>
-        <form method="post" action="{% url 'reports:daily_pnl_submit' pnl.pk %}" data-confirm-title="Submit this Daily P&L?" data-confirm-body="Totals freeze. Nothing posts to the general ledger." data-confirm-button="Submit">
+        <form method="post" action="{% url 'reports:daily_pnl_submit' pnl.pk %}" data-confirm-title="Submit this Daily P&L?" data-confirm-body="Totals freeze. Nothing posts to the general ledger." data-confirm-button="Submit" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold">Submit</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold">Submit</button>
         </form>
       {% elif pnl.status == "SUBMITTED" %}
-        <form method="post" action="{% url 'reports:daily_pnl_cancel' pnl.pk %}" data-confirm-title="Cancel this Daily P&L?" data-confirm-body="The snapshot stays on file as cancelled. Nothing reverses in the ledger." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'reports:daily_pnl_cancel' pnl.pk %}" data-confirm-title="Cancel this Daily P&L?" data-confirm-body="The snapshot stays on file as cancelled. Nothing reverses in the ledger." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50">Cancel</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50">Cancel</button>
         </form>
       {% else %}
-        <form method="post" action="{% url 'reports:daily_pnl_amend' pnl.pk %}">
+        <form method="post" action="{% url 'reports:daily_pnl_amend' pnl.pk %}" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold">Amend</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold">Amend</button>
         </form>
       {% endif %}
     </div>

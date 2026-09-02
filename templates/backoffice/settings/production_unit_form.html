@@ -10,7 +10,7 @@
   </div>
 
   {% partialdef form inline %}
-  <form method="post" class="space-y-5">
+  <form method="post" class="space-y-5" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
@@ -24,7 +24,7 @@
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
           {% if field.name == "name" or field.name == "department" or field.name == "warehouse" or field.name == "income_account" %}
-            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+            {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
       </div>
@@ -38,7 +38,7 @@
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
           {% if field.name == "printer_ip" or field.name == "printer_paper_width" or field.name == "printer_cut_mode" or field.name == "block_takeaway_kot" %}
-            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+            {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
       </div>
@@ -46,7 +46,7 @@
 
     <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
       <a href="{% url 'settings:production_unit_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
-      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+      <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
         <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
         {% if is_create %}Create unit{% else %}Save changes{% endif %}
       </button>

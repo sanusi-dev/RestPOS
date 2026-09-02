@@ -15,24 +15,24 @@
         {% if journal.voucher_type == "OPENING" %}
         <a href="{% url 'accounting:journal_entry_review' journal.pk %}" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Review &amp; submit</a>
         {% else %}
-        <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline" data-confirm-title="Submit this journal entry?" data-confirm-body="This posts the entry to the general ledger. It becomes immutable." data-confirm-button="Submit">
+        <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline" data-confirm-title="Submit this journal entry?" data-confirm-body="This posts the entry to the general ledger. It becomes immutable." data-confirm-button="Submit" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Submit</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Submit</button>
         </form>
         {% endif %}
       {% elif journal.status == "SUBMITTED" %}
-        <form method="post" action="{% url 'accounting:journal_entry_cancel' journal.pk %}" class="inline" data-confirm-title="Cancel this journal entry?" data-confirm-body="This posts mirrored reversal entries to the general ledger." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'accounting:journal_entry_cancel' journal.pk %}" class="inline" data-confirm-title="Cancel this journal entry?" data-confirm-body="This posts mirrored reversal entries to the general ledger." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
         </form>
       {% else %}
         {% with existing_amendment=journal.amendments.first %}
         {% if existing_amendment %}
           <a href="{% url 'accounting:journal_entry_detail' existing_amendment.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">View amendment #{{ existing_amendment.pk }}</a>
         {% else %}
-          <form method="post" action="{% url 'accounting:journal_entry_amend' journal.pk %}" class="inline">
+          <form method="post" action="{% url 'accounting:journal_entry_amend' journal.pk %}" class="inline" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
             {% csrf_token %}
-            <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Amend</button>
+            <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Amend</button>
           </form>
         {% endif %}
         {% endwith %}
@@ -62,12 +62,6 @@
         <div>
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Difference</dt>
           <dd class="text-base font-mono font-bold text-red-600">{{ journal.difference }}</dd>
-        </div>
-      {% endif %}
-      {% if journal.write_off_amount %}
-        <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Write-off Amount</dt>
-          <dd class="text-base font-mono font-bold text-gray-900">{{ journal.write_off_amount }}</dd>
         </div>
       {% endif %}
       {% if journal.reference_no %}

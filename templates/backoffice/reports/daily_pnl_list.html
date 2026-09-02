@@ -14,7 +14,7 @@
     </a>
   </div>
 
-  <form method="get" class="mb-6 flex flex-wrap items-end gap-3">
+  <form method="get" class="mb-6 flex flex-wrap items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <div>
       <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Status</label>
       <select name="status" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
@@ -32,7 +32,7 @@
       <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">To</label>
       <input type="date" name="to" value="{{ date_to }}" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
     </div>
-    <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white">Filter</button>
+    <button type="submit" class="backend-submit px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white">Filter</button>
   </form>
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">

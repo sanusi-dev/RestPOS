@@ -12,10 +12,10 @@
     </div>
     <div class="flex items-center gap-2">
       <a href="{% url 'accounting:journal_entry_update' journal.pk %}" class="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors">Back to edit</a>
-      <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline">
+      <form method="post" action="{% url 'accounting:journal_entry_submit' journal.pk %}" class="inline" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
         {% csrf_token %}
         <input type="hidden" name="confirmed" value="1">
-        <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Confirm submit</button>
+        <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Confirm submit</button>
       </form>
     </div>
   </div>

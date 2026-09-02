@@ -1,4 +1,5 @@
 {% extends "web/app/app_base.html" %}
+{% load humanize %}
 {% block app %}
 <div class="w-full">
 
@@ -16,7 +17,7 @@
   </div>
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
-    <form method="get" class="flex flex-wrap items-center gap-3" x-data>
+    <form method="get" class="flex flex-wrap items-center gap-3" x-data hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <label for="status-filter" class="text-sm font-semibold text-gray-700">Status:</label>
       <select id="status-filter" name="status"
               class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
@@ -30,7 +31,7 @@
       <input id="supplier-filter" type="text" name="supplier" value="{{ selected_supplier }}"
              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
              placeholder="Search supplier">
-      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Filter</button>
+      <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Filter</button>
     </form>
   </div>
 
@@ -70,7 +71,7 @@
                 {% endif %}
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ receipt.warehouse|default:"-" }}</td>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900 text-right">{{ receipt.total }}</td>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900 text-right">{{ receipt.total|floatformat:2|intcomma }}</td>
               <td class="px-6 py-4 text-right">
                 <a href="{% url 'inventory:purchase_receipt_detail' receipt.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">View</a>
               </td>

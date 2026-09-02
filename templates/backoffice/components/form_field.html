@@ -1,5 +1,5 @@
 {% comment %}
-Params: field (required, bound form field); show_errors (optional, default False).
+Params: field (required, bound form field). Field errors render instead of help text.
 {% endcomment %}
 {% if field.is_hidden %}
   {{ field }}
@@ -9,7 +9,7 @@ Params: field (required, bound form field); show_errors (optional, default False
       {{ field }}
       <label for="{{ field.id_for_label }}" class="text-sm font-semibold text-gray-700 cursor-pointer select-none">{{ field.label }}</label>
     </div>
-    {% if show_errors|default:False and field.errors %}
+    {% if field.errors %}
       <p class="text-xs font-semibold text-red-500">{{ field.errors|join:", " }}</p>
     {% elif field.help_text %}
       <p class="text-xs text-gray-500">{{ field.help_text }}</p>
@@ -21,7 +21,7 @@ Params: field (required, bound form field); show_errors (optional, default False
       {{ field.label }}{% if field.field.required %} <span class="text-red-500">*</span>{% endif %}
     </label>
     {{ field }}
-    {% if show_errors|default:False and field.errors %}
+    {% if field.errors %}
       <p class="text-xs font-semibold text-red-500">{{ field.errors|join:", " }}</p>
     {% elif field.help_text %}
       <p class="text-xs text-gray-500">{{ field.help_text }}</p>

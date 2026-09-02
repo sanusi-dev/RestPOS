@@ -5,14 +5,13 @@
 
   <div class="mb-8 flex flex-col gap-3 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Configuration</p>
       <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Restaurant settings</h1>
       <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Set the defaults that shape ordering, stock movement, and financial posting across the restaurant.</p>
     </div>
   </div>
 
   {% partialdef form inline %}
-  <form method="post" class="space-y-5">
+  <form method="post" class="space-y-5" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
@@ -26,7 +25,7 @@
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
           {% if field.name == "company" or field.name == "invoice_series_prefix" or field.name == "address" %}
-            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+            {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
       </div>
@@ -40,7 +39,7 @@
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
           {% if field.name == "active_menu" or field.name == "store_warehouse" or field.name == "default_warehouse" or field.name == "max_open_drafts" or field.name == "pos_allow_full_history" %}
-            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+            {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
       </div>
@@ -54,7 +53,7 @@
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
           {% if field.name != "company" and field.name != "invoice_series_prefix" and field.name != "address" and field.name != "active_menu" and field.name != "store_warehouse" and field.name != "default_warehouse" and field.name != "max_open_drafts" and field.name != "pos_allow_full_history" %}
-            {% include "backoffice/components/form_field.html" with field=field show_errors=True %}
+            {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
       </div>
@@ -62,7 +61,7 @@
 
     <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
       <a href="{% url 'settings:dashboard' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
-      <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+      <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
         <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
         {% if restaurant %}Save changes{% else %}Create settings{% endif %}
       </button>

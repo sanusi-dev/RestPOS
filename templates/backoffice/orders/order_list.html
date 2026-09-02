@@ -16,7 +16,7 @@
   </div>
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
-    <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] items-end gap-3">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <div class="flex flex-col gap-1">
         <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-search">Search</label>
         <input id="order-search" type="search" name="search" value="{{ search }}" placeholder="Invoice, customer, order #"
@@ -36,7 +36,7 @@
           {% for value, label in order_type_choices %}<option value="{{ value }}" {% if order_type_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
-      <button type="submit" class="h-[2.75rem] px-5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all">Apply filters</button>
+      <button type="submit" class="backend-submit h-[2.75rem] px-5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all">Apply filters</button>
     </form>
   </div>
 

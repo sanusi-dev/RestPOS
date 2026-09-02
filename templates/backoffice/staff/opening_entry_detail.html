@@ -14,21 +14,21 @@
         <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline"
               data-confirm-title="Cancel this draft?"
               data-confirm-body="This will discard the opening entry. It cannot be undone."
-              data-confirm-button="Cancel">
+              data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
             Cancel
           </button>
         </form>
-        <button type="submit" form="opening-float-form" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
+        <button type="submit" form="opening-float-form" hx-indicator="this" hx-disabled-elt="this" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
           Save Float
         </button>
         <form method="post" action="{% url 'staff:opening_entry_submit' entry.pk %}" id="submit-open-form" class="inline"
               data-confirm-title="Submit and open the shift?"
               data-confirm-body="This starts the shift. The entry becomes immutable once submitted (it can be cancelled, but not edited)."
-              data-confirm-button="Submit & Open Shift">
+              data-confirm-button="Submit & Open Shift" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
             Submit &amp; Open Shift
           </button>
         </form>
@@ -36,9 +36,9 @@
         <a href="{% url 'staff:closing_entry_create' %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
           Close Shift
         </a>
-        <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline" data-confirm-title="Cancel this open shift?" data-confirm-body="The shift will be marked cancelled. If the shift has sales they will remain in the ledger but the session will be invalid." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline" data-confirm-title="Cancel this open shift?" data-confirm-body="The shift will be marked cancelled. If the shift has sales they will remain in the ledger but the session will be invalid." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
             Cancel Shift
           </button>
         </form>
@@ -98,7 +98,7 @@
     </div>
 
     {% if entry.status == "DRAFT" and form %}
-      <form method="post" action="{% url 'staff:opening_entry_detail' entry.pk %}" id="opening-float-form" class="space-y-0">
+      <form method="post" action="{% url 'staff:opening_entry_detail' entry.pk %}" id="opening-float-form" class="space-y-0" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
         {% csrf_token %}
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-100">

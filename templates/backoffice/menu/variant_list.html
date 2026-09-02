@@ -16,7 +16,7 @@
   </div>
 
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
-    <form method="get" class="flex items-center gap-3">
+    <form method="get" class="flex items-center gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <label for="parent-filter" class="text-sm font-semibold text-gray-700">Filter by parent item:</label>
       <select id="parent-filter" name="parent_item"
               class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
@@ -54,7 +54,7 @@
                         data-confirm-icon="warning"
                         data-confirm-color="#dc2626"
                         data-confirm-btn="Yes, delete"
-                        class="text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors">
+                        class="backend-submit text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors" hx-indicator="this" hx-disabled-elt="this">
                   Delete
                 </button>
               </td>

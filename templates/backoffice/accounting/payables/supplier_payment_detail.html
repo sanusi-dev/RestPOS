@@ -12,14 +12,14 @@
     <div class="flex items-center gap-2">
       {% if payment.status == "DRAFT" %}
         <a href="{% url 'accounting:supplier_payment_update' payment.pk %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Edit</a>
-        <form method="post" action="{% url 'accounting:supplier_payment_submit' payment.pk %}" class="inline" data-confirm-title="Submit this supplier payment?" data-confirm-body="This posts the payment to the general ledger and reduces the allocated invoices' outstanding balances. It becomes immutable." data-confirm-button="Submit">
+        <form method="post" action="{% url 'accounting:supplier_payment_submit' payment.pk %}" class="inline" data-confirm-title="Submit this supplier payment?" data-confirm-body="This posts the payment to the general ledger and reduces the allocated invoices' outstanding balances. It becomes immutable." data-confirm-button="Submit" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Submit</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 transition-all duration-300">Submit</button>
         </form>
       {% elif payment.status == "SUBMITTED" %}
-        <form method="post" action="{% url 'accounting:supplier_payment_cancel' payment.pk %}" class="inline" data-confirm-title="Cancel this supplier payment?" data-confirm-body="This posts mirrored reversal entries and restores the allocated invoices' outstanding balances." data-confirm-button="Cancel">
+        <form method="post" action="{% url 'accounting:supplier_payment_cancel' payment.pk %}" class="inline" data-confirm-title="Cancel this supplier payment?" data-confirm-body="This posts mirrored reversal entries and restores the allocated invoices' outstanding balances." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
         </form>
       {% endif %}
     </div>

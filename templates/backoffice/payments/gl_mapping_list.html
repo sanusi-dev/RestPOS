@@ -35,9 +35,9 @@
               <td class="px-6 py-4 text-right">
                 <div class="inline-flex items-center gap-3">
                   <a href="{% url 'payments:gl_mapping_update' mapping.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
-                  <form method="post" action="{% url 'payments:gl_mapping_delete' mapping.pk %}" class="inline" data-confirm-title="Remove GL mapping?" data-confirm-body="This will remove the mapping for {{ mapping.mode_of_payment.name }}. Any historical orders are unaffected." data-confirm-button="Remove">
+                  <form method="post" action="{% url 'payments:gl_mapping_delete' mapping.pk %}" class="inline" data-confirm-title="Remove GL mapping?" data-confirm-body="This will remove the mapping for {{ mapping.mode_of_payment.name }}. Any historical orders are unaffected." data-confirm-button="Remove" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
                     {% csrf_token %}
-                    <button type="submit" class="text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors">Delete</button>
+                    <button type="submit" class="backend-submit text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors">Delete</button>
                   </form>
                 </div>
               </td>
