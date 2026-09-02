@@ -33,7 +33,7 @@ class Supplier(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Payable account",
-        help_text="Per-supplier accounts-payable account override; falls back to the Restaurant default.",
+        help_text="The account used to track what you owe this supplier. Leave blank to use the default payable account.",
     )
     is_default = models.BooleanField(default=False)
     disabled = models.BooleanField(default=False)

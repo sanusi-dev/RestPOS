@@ -25,7 +25,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="default_for_restaurants",
         verbose_name="Bar / POS sales warehouse",
-        help_text="Warehouse used for Bar stock and POS drink deductions.",
+        help_text="The warehouse that holds bar stock and supplies drink sales.",
     )
     store_warehouse = models.ForeignKey(
         "inventory.Warehouse",
@@ -34,11 +34,11 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="store_for_restaurants",
         verbose_name="Central Store warehouse",
-        help_text="Central Store used for all receipts and as the source of material transfers.",
+        help_text="The main store where all goods are received before moving to the kitchen or bar.",
     )
     max_open_drafts = models.PositiveIntegerField(
         default=50,
-        help_text="Maximum normal POS drafts allowed on one active shift.",
+        help_text="The maximum number of open orders allowed on a shift at one time.",
     )
     pos_allow_full_history = models.BooleanField(
         default=False,
@@ -52,7 +52,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Default income account",
-        help_text="Fallback income account for orders (item group and production unit accounts take precedence).",
+        help_text="The income account used for sales when no category or kitchen/bar account is set.",
     )
     default_expense_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -61,7 +61,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Default expense account",
-        help_text="Fallback expense account for COGS when the item group has none.",
+        help_text="The expense account used to record the cost of drinks sold when no category account is set.",
     )
     round_off_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -95,7 +95,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Wastage account",
-        help_text="Expense account for non-restockable returned drinks.",
+        help_text="The expense account used when returned drinks cannot be put back into stock.",
     )
     cash_shortage_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -119,7 +119,7 @@ class Restaurant(BaseModel):
         null=True,
         blank=True,
         verbose_name="Variance approval threshold",
-        help_text="Absolute cash variance that requires a manager note to close. Blank = no approval gate.",
+        help_text="Cash difference that requires a manager note before a shift can be closed. Leave blank to allow any variance without a note.",
     )
 
     default_payable_account = models.ForeignKey(
@@ -129,7 +129,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Default payable account",
-        help_text="Accounts-payable account credited by supplier invoices and debited by supplier payments.",
+        help_text="The account used to track amounts owed to suppliers.",
     )
     default_supplier_expense_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -138,7 +138,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Default supplier expense account",
-        help_text="Expense account debited by supplier invoice expense lines.",
+        help_text="The expense account used for non-stock costs on supplier invoices.",
     )
     default_stock_in_hand_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -147,7 +147,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Default stock-in-hand account",
-        help_text="Stock account debited by supplier invoice stock lines when the item group has no expense account.",
+        help_text="The stock account used for supplier invoice items when no category account is set.",
     )
 
     stock_received_but_not_billed_account = models.ForeignKey(
@@ -157,7 +157,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Stock received but not billed (GRNI)",
-        help_text="Liability account credited by goods receipts and debited by linked supplier invoices.",
+        help_text="The account that holds the value of goods received before the supplier invoice arrives.",
     )
     inventory_price_variance_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -166,10 +166,7 @@ class Restaurant(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Inventory price variance account",
-        help_text=(
-            "Expense account for cancellation WAC drift "
-            "(receipt cancellations only; sale-return variance posts to COGS)."
-        ),
+        help_text="The expense account used when cancelled receipts leave a small difference in stock value.",
     )
 
     class Meta:
@@ -273,7 +270,7 @@ class ProductionUnit(BaseModel):
         blank=True,
         related_name="+",
         verbose_name="Income account",
-        help_text="Departmental income hook — Kitchen = FOOD income, Bar = DRINKS income.",
+        help_text="The income account used for sales from this station.",
     )
 
     class Meta:

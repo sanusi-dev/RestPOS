@@ -21,23 +21,23 @@ class PnLConfiguration(BaseModel):
     singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     business_day_start_hour = models.PositiveSmallIntegerField(
         default=0,
-        help_text="Hour the business day starts (0 = midnight). Date D covers [D+hour, next D+hour).",
+        help_text="The hour your business day starts (0 is midnight). For example, 6 means the day runs from 6am to 6am.",
     )
     electricity_rate = models.DecimalField(
         max_digits=14,
         decimal_places=4,
         default=Decimal("0"),
-        help_text="NGN per meter unit.",
+        help_text="Cost in naira for each unit of electricity.",
     )
     daily_depreciation = models.DecimalField(
         max_digits=14,
         decimal_places=2,
         default=Decimal("0"),
-        help_text="Flat daily amount. Not an asset schedule.",
+        help_text="A fixed amount recorded each day for depreciation.",
     )
     include_cash_variance = models.BooleanField(
         default=True,
-        help_text="Pull shift-close short/excess onto the Daily P&L as an indirect line.",
+        help_text="When enabled, cash shortages or excesses at shift close appear on the Daily P&L.",
     )
 
     class Meta:

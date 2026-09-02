@@ -181,7 +181,7 @@ class POSClosingEntry(BaseModel):
     total_short_excess = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     variance_note = models.TextField(
         blank=True,
-        help_text="Required when the absolute variance exceeds the configured approval threshold.",
+        help_text="Required when the cash difference is large enough to need manager approval.",
     )
     variance_journal_entry = models.OneToOneField(
         "accounting.JournalEntry",

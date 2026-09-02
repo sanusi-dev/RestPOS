@@ -131,10 +131,12 @@ class ProductionUnitForm(SettingsModelForm):
             ("", "Select department..."),
             *self.fields["department"].choices,
         ]
-        self.fields["block_takeaway_kot"].help_text = "Prevent this station from receiving tickets marked for takeaway."
+        self.fields["block_takeaway_kot"].help_text = "When enabled, this station will not receive takeaway orders."
         self.fields["printer_ip"].widget.attrs["placeholder"] = "e.g. 192.168.1.51"
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
-        self.fields["warehouse"].help_text = "FOOD uses Kitchen; DRINKS uses the Bar / POS sales warehouse."
+        self.fields[
+            "warehouse"
+        ].help_text = "The warehouse that supplies this station — Kitchen for food, Bar for drinks."
         self.fields["income_account"].queryset = active_choices(
             LedgerAccount, self.instance.income_account_id, disabled=False, is_group=False
         )

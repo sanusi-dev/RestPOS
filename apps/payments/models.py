@@ -80,7 +80,7 @@ class PaymentGLMapping(BaseModel):
         on_delete=models.PROTECT,
         related_name="payment_gl_mappings",
         verbose_name="Default account",
-        help_text="Leaf ledger account debited/credited when this mode is used.",
+        help_text="The account where payments made with this method are recorded.",
     )
 
     class Meta:

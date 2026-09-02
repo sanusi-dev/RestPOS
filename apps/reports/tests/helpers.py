@@ -34,9 +34,8 @@ class DailyPnLTestMixin:
         stock_in_hand = LedgerAccount.objects.create(
             name=f"Stock in Hand — Bar {cls.restaurant.pk}",
             parent=cls.accounts["assets"],
-            root_type=LedgerAccount.ASSET,
+            account_type=LedgerAccount.ASSET,
             report_type=LedgerAccount.BALANCE_SHEET,
-            account_type=LedgerAccount.ACCOUNT_TYPE_STOCK,
         )
         cls.bar_wh = Warehouse.objects.create(name="Bar", account=stock_in_hand)
         cls.food = Item.objects.create(

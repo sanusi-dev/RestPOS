@@ -392,7 +392,7 @@ class OrderItem(BaseModel):
     )
     not_restockable = models.BooleanField(
         default=False,
-        help_text="Return lines only: when set, the returned stock is not restored (wastage).",
+        help_text="For returns only: when set, the returned items are treated as wastage and not put back into stock.",
     )
 
     class Meta:
