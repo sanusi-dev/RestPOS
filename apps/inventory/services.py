@@ -8,7 +8,6 @@ from django.db import transaction
 from .models import (
     Bin,
     Item,
-    ItemGroup,
     PurchaseReceipt,
     PurchaseReceiptItem,
     StockEntry,
@@ -26,12 +25,6 @@ def _resolve_account(account, label):
     if not account.is_leaf:
         raise ValidationError(f"{label} ({account.name}) must be a leaf account.")
     return account
-
-
-def _expense_account_for(item_group, default_expense):
-    if item_group is not None and getattr(item_group, "expense_account_id", None):
-        return item_group.expense_account
-    return default_expense
 
 
 def _post_gl_rows(posting_date, voucher_type, voucher_no, rows, remarks):
@@ -139,11 +132,6 @@ def submit_stock_entry(entry):
     updated_items = set()
     gl_rows = []
     default_expense = restaurant.default_expense_account if restaurant else None
-    groups = {}
-    if locked.purpose == "MATERIAL_RECEIPT":
-        group_ids = {d.item.item_group_id for d in details if getattr(d.item, "item_group_id", None)}
-        if group_ids:
-            groups = {g.pk: g for g in ItemGroup.objects.select_related("expense_account").filter(pk__in=group_ids)}
     for detail in details:
         store_bin = locked_bins[(detail.item_id, restaurant.store_warehouse_id)]
         if locked.purpose == "MATERIAL_RECEIPT":
@@ -166,11 +154,7 @@ def submit_stock_entry(entry):
             # GL: Dr SIH / Cr Expense (market purchase, no GRNI)
             if detail.basic_rate and detail.qty:
                 sih_account = _resolve_account(restaurant.store_warehouse.account, "The Store warehouse account")
-                group = groups.get(detail.item.item_group_id) if getattr(detail.item, "item_group_id", None) else None
-                if group is None:
-                    group = getattr(detail.item, "item_group", None)
-                expense_acct = _expense_account_for(group, default_expense)
-                expense_acct = _resolve_account(expense_acct, "The default expense account")
+                expense_acct = _resolve_account(default_expense, "The default expense account")
                 amount = (detail.qty * detail.basic_rate).quantize(Decimal("0.01"))
                 if amount:
                     gl_rows.append({"account": sih_account, "debit": amount})
@@ -332,10 +316,6 @@ def cancel_stock_entry(entry):
                 )
                 .order_by("item_id", "warehouse_id")
             }
-            group_ids = {s.item.item_group_id for s in sles if getattr(s.item, "item_group_id", None)}
-            groups = {}
-            if group_ids:
-                groups = {g.pk: g for g in ItemGroup.objects.select_related("expense_account").filter(pk__in=group_ids)}
             pre_wac_map = {}
             for sle in sles:
                 bin_obj = locked_bins[(sle.item_id, sle.warehouse_id)]
@@ -383,11 +363,9 @@ def cancel_stock_entry(entry):
                 for sle in sles:
                     pre_wac = pre_wac_map[sle.pk]
                     sih_acct = _resolve_account(sle.warehouse.account, "The warehouse account")
-                    group = groups.get(sle.item.item_group_id) if getattr(sle.item, "item_group_id", None) else None
-                    if group is None and getattr(sle.item, "item_group", None) is not None:
-                        group = sle.item.item_group
-                    exp_acct = _expense_account_for(group, restaurant.default_expense_account if restaurant else None)
-                    exp_acct = _resolve_account(exp_acct, "The default expense account")
+                    exp_acct = _resolve_account(
+                        restaurant.default_expense_account if restaurant else None, "The default expense account"
+                    )
                     orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
                     curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
                     new_rows.append({"account": sih_acct, "credit": curr_amount})

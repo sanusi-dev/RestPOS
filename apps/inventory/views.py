@@ -673,9 +673,9 @@ def stock_ledger_list(request: HttpRequest) -> HttpResponse:
     if warehouse_id:
         entries = entries.filter(warehouse_id=warehouse_id)
     if date_from:
-        entries = entries.filter(posting_datetime__date__gte=date_from)
+        entries = entries.filter(posting_date__gte=date_from)
     if date_to:
-        entries = entries.filter(posting_datetime__date__lte=date_to)
+        entries = entries.filter(posting_date__lte=date_to)
     items = Item.objects.all().order_by("item_name")
     warehouses = Warehouse.objects.all().order_by("name")
     return render(

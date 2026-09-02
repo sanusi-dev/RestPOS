@@ -14,7 +14,6 @@
 
 ## Inventory Queries
 
-- Low stock: `Bin.actual_qty <= Item.safety_stock` and positive safety stock, using `F()`.
 - Item details: `Exists(MenuItem...)` annotates whether variants are on a menu.
 - Ledger pages filter item, warehouse, and posting date with `select_related`.
 - FIFO reads the latest non-cancelled SLE ordered by posting time and primary key.
