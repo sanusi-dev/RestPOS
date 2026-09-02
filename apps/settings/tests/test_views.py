@@ -217,7 +217,8 @@ class TestStaffManagementViews(TestCase):
             HTTP_HX_TARGET="body",
         )
 
-        self.assertRedirects(response, reverse("settings:staff_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["HX-Redirect"], reverse("settings:staff_list"))
 
         self.cashier.groups.add(self.cashier_group)
         response = self.client.post(
@@ -226,7 +227,8 @@ class TestStaffManagementViews(TestCase):
             HTTP_HX_TARGET="body",
         )
 
-        self.assertRedirects(response, reverse("settings:staff_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["HX-Redirect"], reverse("settings:staff_list"))
 
     def test_cannot_remove_admin(self):
         self.admin_user.groups.add(self.admin_group)
