@@ -102,7 +102,9 @@ class ItemAddOn(BaseModel):
         elif add_on.department == "FOOD" and add_on.is_sales_item:
             if add_on.is_stock_item or add_on.is_purchase_item:
                 raise ValidationError(
-                    {"add_on_item": "Sellable food add-ons are virtual — they must not be stock-tracked or purchasable."}
+                    {
+                        "add_on_item": "Sellable food add-ons are virtual — they must not be stock-tracked or purchasable."
+                    }
                 )
         if not MenuItem.objects.filter(item=add_on, disabled=False).exists():
             raise ValidationError(

@@ -512,7 +512,9 @@ class StockEntryDetail(BaseModel):
                     raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
             elif item.department == "FOOD":
                 if item.is_sales_item:
-                    raise ValidationError(f"{item.item_name} is a sellable food item and cannot be received into stock.")
+                    raise ValidationError(
+                        f"{item.item_name} is a sellable food item and cannot be received into stock."
+                    )
                 if not (item.is_stock_item and item.is_purchase_item):
                     raise ValidationError(f"{item.item_name} must be a stock-tracked, purchasable food ingredient.")
             if self.source_warehouse_id:

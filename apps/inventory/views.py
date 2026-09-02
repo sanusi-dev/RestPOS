@@ -1,14 +1,10 @@
-from typing import cast
-
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from django_htmx.middleware import HtmxDetails
-from django.db.models import Q
-
 
 from apps.users.decorators import backoffice_required
 from apps.utils.forms import add_formset_row, remove_formset_row
@@ -235,10 +231,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         items = items.filter(disabled=True)
 
     if search_q:
-        items = items.filter(
-            Q(item_name__icontains=search_q)
-            | Q(item_code__icontains=search_q)
-        )
+        items = items.filter(Q(item_name__icontains=search_q) | Q(item_code__icontains=search_q))
 
     context = {
         "items": items,

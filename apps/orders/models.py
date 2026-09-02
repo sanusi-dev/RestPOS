@@ -327,7 +327,9 @@ class Order(BaseModel):
                 raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
         elif item.department == "FOOD" and item.is_sales_item:
             if item.is_stock_item or item.is_purchase_item:
-                raise ValidationError(f"{item.item_name} is a sellable food item and must not be stock-tracked or purchasable.")
+                raise ValidationError(
+                    f"{item.item_name} is a sellable food item and must not be stock-tracked or purchasable."
+                )
 
     def _validate_order_line_availability(self, line):
         """Reject lines whose Item or MenuItem is no longer sellable."""
@@ -339,7 +341,9 @@ class Order(BaseModel):
                 raise ValidationError(f"{line.item_name} must be a stock-tracked, sellable, purchasable drink.")
         elif item.department == "FOOD" and item.is_sales_item:
             if item.is_stock_item or item.is_purchase_item:
-                raise ValidationError(f"{line.item_name} is a sellable food item and must not be stock-tracked or purchasable.")
+                raise ValidationError(
+                    f"{line.item_name} is a sellable food item and must not be stock-tracked or purchasable."
+                )
         menu_item = line.menu_item
         if menu_item is not None and menu_item.disabled:
             raise ValidationError(f"{line.item_name} is no longer available on the active menu.")

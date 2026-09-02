@@ -73,7 +73,9 @@ class ItemForm(InventoryModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["item_name"].widget.attrs["placeholder"] = "e.g. Jollof Rice"
-        self.fields["description"].widget.attrs["placeholder"] = "e.g. Long-grain rice served with tomato stew and grilled chicken."
+        self.fields["description"].widget.attrs["placeholder"] = (
+            "e.g. Long-grain rice served with tomato stew and grilled chicken."
+        )
         department_choices = list(self.fields["department"].choices)
         department_choices[0] = ("", "Select a department...")
         self.fields["department"].choices = department_choices
@@ -124,7 +126,9 @@ class ItemForm(InventoryModelForm):
         elif dept == "FOOD" and is_stock is not None and is_sales is not None and is_purch is not None:
             if is_sales:
                 if is_stock or is_purch:
-                    raise ValidationError("Sellable food items are virtual — they must not be stock-tracked or purchasable.")
+                    raise ValidationError(
+                        "Sellable food items are virtual — they must not be stock-tracked or purchasable."
+                    )
             else:
                 if not (is_stock and is_purch):
                     raise ValidationError("Non-sellable food items must be stock-tracked and purchasable.")
