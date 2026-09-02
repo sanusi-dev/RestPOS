@@ -292,7 +292,7 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.menu.models import MenuItem
 
     item = get_object_or_404(
-        Item.objects.select_related("item_group", "stock_uom", "default_warehouse", "variant_of"),
+        Item.objects.select_related("item_group", "stock_uom", "variant_of"),
         pk=pk,
     )
     bins = item.bins.select_related("warehouse").all()
@@ -318,7 +318,7 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @backoffice_required
 def item_update(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(
-        Item.objects.select_related("item_group", "stock_uom", "default_warehouse", "variant_of"),
+        Item.objects.select_related("item_group", "stock_uom", "variant_of"),
         pk=pk,
     )
     if request.method == "POST":

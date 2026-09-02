@@ -152,6 +152,27 @@ class Item(BaseModel):
             raise ValidationError("Template items cannot be sold or purchased — sell/buy the size variants instead.")
         if self.variant_of_id and not self.variant_of.has_variants:
             raise ValidationError("Parent item must have has_variants=True")
+        if not self.has_variants and not self.variant_of_id:
+            if self.department == "DRINKS":
+                if not (self.is_stock_item and self.is_sales_item and self.is_purchase_item):
+                    raise ValidationError(
+                        {"is_stock_item": "Drinks items must be stock-tracked, sellable, and purchasable."}
+                    )
+            elif self.department == "FOOD":
+                if self.is_sales_item:
+                    if self.is_stock_item or self.is_purchase_item:
+                        raise ValidationError(
+                            {
+                                "is_stock_item": (
+                                    "Sellable food items are virtual — they must not be stock-tracked or purchasable."
+                                )
+                            }
+                        )
+                else:
+                    if not (self.is_stock_item and self.is_purchase_item):
+                        raise ValidationError(
+                            {"is_stock_item": "Non-sellable food items must be stock-tracked and purchasable."}
+                        )
         if self.pk and not self.is_sales_item:
             from apps.menu.models import MenuItem
 
@@ -482,19 +503,36 @@ class StockEntryDetail(BaseModel):
             raise ValidationError(f"Quantity for {self.item.item_name} must be greater than zero.")
         if self.item.disabled or not self.item.is_stock_item or self.item.has_variants:
             raise ValidationError(f"{self.item.item_name} is not an enabled stock item.")
+        item = self.item
         if self.stock_entry.purpose == "MATERIAL_RECEIPT":
-            if not self.item.is_purchase_item:
-                raise ValidationError(f"{self.item.item_name} is not purchasable.")
+            if not item.is_purchase_item:
+                raise ValidationError(f"{item.item_name} is not purchasable.")
+            if item.department == "DRINKS":
+                if not (item.is_stock_item and item.is_sales_item and item.is_purchase_item):
+                    raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
+            elif item.department == "FOOD":
+                if item.is_sales_item:
+                    raise ValidationError(f"{item.item_name} is a sellable food item and cannot be received into stock.")
+                if not (item.is_stock_item and item.is_purchase_item):
+                    raise ValidationError(f"{item.item_name} must be a stock-tracked, purchasable food ingredient.")
             if self.source_warehouse_id:
                 raise ValidationError("Material Receipt cannot have a source warehouse.")
             if self.target_warehouse_id and self.target_warehouse_id != restaurant.store_warehouse_id:
                 raise ValidationError("Material Receipt target must be the configured central Store.")
         else:
-            target = targets[self.item.department]
+            if item.department == "DRINKS":
+                if not (item.is_stock_item and item.is_sales_item and item.is_purchase_item):
+                    raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
+            elif item.department == "FOOD":
+                if item.is_sales_item:
+                    raise ValidationError(f"{item.item_name} is a sellable food item and cannot be transferred.")
+                if not (item.is_stock_item and item.is_purchase_item):
+                    raise ValidationError(f"{item.item_name} must be a stock-tracked, purchasable food ingredient.")
+            target = targets[item.department]
             if self.source_warehouse_id and self.source_warehouse_id != restaurant.store_warehouse_id:
                 raise ValidationError("Material Transfer source must be the configured central Store.")
             if self.target_warehouse_id and self.target_warehouse_id != target.pk:
-                raise ValidationError(f"{self.item.item_name} must transfer to {target.name}.")
+                raise ValidationError(f"{item.item_name} must transfer to {target.name}.")
 
 
 class StockReconciliation(BaseModel):
@@ -686,3 +724,12 @@ class PurchaseReceiptItem(BaseModel):
             or not self.item.is_purchase_item
         ):
             raise ValidationError(f"{self.item.item_name} is not an enabled stock and purchase item.")
+        item = self.item
+        if item.department == "DRINKS":
+            if not (item.is_stock_item and item.is_sales_item and item.is_purchase_item):
+                raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
+        elif item.department == "FOOD":
+            if item.is_sales_item:
+                raise ValidationError(f"{item.item_name} is a sellable food item and cannot be received into stock.")
+            if not (item.is_stock_item and item.is_purchase_item):
+                raise ValidationError(f"{item.item_name} must be a stock-tracked, purchasable food ingredient.")

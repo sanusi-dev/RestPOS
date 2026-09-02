@@ -41,6 +41,12 @@ class WarehouseForm(InventoryModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs["placeholder"] = "e.g. Main Store"
+        self.fields["disabled"].label = "Disable this warehouse"
+        self.fields["disabled"].help_text = (
+            "When enabled, this warehouse will be unavailable for new inventory activity. "
+            "Configured Store, Bar, or Kitchen warehouses cannot be disabled."
+        )
         self.fields["account"].queryset = active_choices(
             LedgerAccount, self.instance.account_id, disabled=False, is_group=False
         )
