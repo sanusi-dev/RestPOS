@@ -23,10 +23,22 @@ class KOTTestBase(OrderAccountingMixin, TestCase):
         cls.kitchen_warehouse = Warehouse.objects.create(name="Kitchen")
         cls.bar_warehouse = Warehouse.objects.create(name="Bar")
         cls.food_item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
+            item_name="Jollof Rice",
+            item_group=cls.group_food,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.drink_item = Item.objects.create(
-            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True, is_stock_item=True, is_purchase_item=True
+            item_name="Coke",
+            item_group=cls.group_drinks,
+            stock_uom=cls.uom,
+            department="DRINKS",
+            is_sales_item=True,
+            is_stock_item=True,
+            is_purchase_item=True,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
@@ -132,6 +144,3 @@ class KOTGenerationTest(KOTTestBase):
         self.assertEqual(kot.items.count(), 2)
         indices = {ki.customer_index for ki in kot.items.all()}
         self.assertEqual(indices, {1, 2})
-
-
-

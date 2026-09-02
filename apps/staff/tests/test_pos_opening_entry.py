@@ -127,4 +127,3 @@ class OpeningPaymentModelTest(POSOpeningEntryTestBase):
                 mode_of_payment=self.cash_mode,
                 opening_amount=Decimal("0"),
             )
-

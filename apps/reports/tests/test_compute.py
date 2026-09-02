@@ -250,4 +250,3 @@ class SubmitAndVarianceTest(DailyPnLTestMixin, TestCase):
         self.config.save()
         computation = compute_daily_pnl(self._draft())
         self.assertEqual(computation.totals["cash_variance"], Decimal("0"))
-

@@ -47,7 +47,9 @@ class ReviewFixBase(OrderAccountingMixin, TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1000"))

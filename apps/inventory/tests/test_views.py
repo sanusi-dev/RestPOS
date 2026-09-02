@@ -66,13 +66,10 @@ class TestDashboardView(InventoryViewTestBase):
 
 
 class TestUOMViews(InventoryViewTestBase):
-
-
     def test_uom_create_post(self):
         response = self.client.post(reverse("inventory:uom_create"), {"name": "TestUnit"})
         self.assertRedirects(response, reverse("inventory:uom_list"))
         self.assertTrue(UOM.objects.filter(name="TestUnit").exists())
-
 
     def test_uom_update_post(self):
         response = self.client.post(
@@ -85,7 +82,6 @@ class TestUOMViews(InventoryViewTestBase):
 
 
 class TestItemGroupViews(InventoryViewTestBase):
-
     def test_item_group_create_post(self):
         response = self.client.post(
             reverse("inventory:item_group_create"),
@@ -96,8 +92,6 @@ class TestItemGroupViews(InventoryViewTestBase):
 
 
 class TestWarehouseViews(InventoryViewTestBase):
-
-
     def test_warehouse_create_post(self):
         response = self.client.post(
             reverse("inventory:warehouse_create"),
@@ -112,7 +106,6 @@ class TestWarehouseViews(InventoryViewTestBase):
 
 
 class TestStockEntryViews(InventoryViewTestBase):
-
     def test_stock_entry_create_post(self):
         response = self.client.post(
             reverse("inventory:stock_entry_create"),
@@ -149,7 +142,6 @@ class TestStockEntryViews(InventoryViewTestBase):
             )
         self.assertFalse(StockEntry.objects.filter(remarks="atomic failure").exists())
 
-
     def test_stock_entry_submit_post(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
         StockEntryDetail.objects.create(
@@ -163,7 +155,6 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertRedirects(response, reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
         entry.refresh_from_db()
         self.assertEqual(entry.status, "SUBMITTED")
-
 
     def test_stock_entry_submit_validation_error_is_visible(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_TRANSFER")
@@ -224,7 +215,6 @@ class TestStockEntryViews(InventoryViewTestBase):
 
 
 class TestReconciliationViews(InventoryViewTestBase):
-
     def test_reconciliation_create_rolls_back_parent_when_formset_save_fails(self):
         from apps.inventory.models import StockReconciliation
 
@@ -248,8 +238,6 @@ class TestReconciliationViews(InventoryViewTestBase):
             )
         self.assertFalse(StockReconciliation.objects.filter(remarks="atomic failure").exists())
 
-
-
     def test_reconciliation_submit_validation_error_is_visible(self):
         from apps.inventory.models import StockReconciliation
 
@@ -260,8 +248,6 @@ class TestReconciliationViews(InventoryViewTestBase):
 
 
 class TestPurchaseReceiptViews(InventoryViewTestBase):
-
-
     def test_purchase_receipt_create_post(self):
         response = self.client.post(
             reverse("inventory:purchase_receipt_create"),
@@ -358,7 +344,6 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
             )
         self.assertFalse(PurchaseReceipt.objects.filter(supplier_name="Atomic Failure").exists())
 
-
     def test_purchase_receipt_submit_post(self):
         receipt = PurchaseReceipt.objects.create(
             supplier_name="ABC Suppliers",
@@ -374,7 +359,6 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         self.assertRedirects(response, reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
         receipt.refresh_from_db()
         self.assertEqual(receipt.status, "SUBMITTED")
-
 
     def test_purchase_receipt_submit_validation_error_is_visible(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="ABC Suppliers", warehouse=self.warehouse)

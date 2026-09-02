@@ -18,7 +18,9 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.add_on_item = Item.objects.create(
             item_code="CHEESE001",
@@ -26,7 +28,9 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.non_menu_item = Item.objects.create(
             item_code="BACON001",
@@ -34,7 +38,9 @@ class ItemAddOnModelTest(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Lunch Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.add_on_item, rate=Decimal("200"))
@@ -51,7 +57,9 @@ class ItemAddOnModelTest(TestCase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
-            is_sales_item=False, is_stock_item=True, is_purchase_item=True,
+            is_sales_item=False,
+            is_stock_item=True,
+            is_purchase_item=True,
         )
         add_on = ItemAddOn(parent_item=self.parent_item, add_on_item=non_sellable)
         with self.assertRaises(ValidationError) as ctx:
@@ -83,4 +91,3 @@ class ItemAddOnModelTest(TestCase):
         self.add_on_item.full_clean()
         self.add_on_item.save()
         self.assertFalse(ItemAddOn.objects.filter(add_on_item=self.add_on_item).exists())
-

@@ -48,8 +48,6 @@ class TestLoginRequired(TestCase):
 
 
 class TestModeOfPaymentViews(PaymentsViewTestBase):
-
-
     def test_mode_create_post(self):
         response = self.client.post(
             reverse("payments:mode_create"),
@@ -59,9 +57,6 @@ class TestModeOfPaymentViews(PaymentsViewTestBase):
         # happened and the new mode exists.
         self.assertEqual(response.status_code, 302)
         self.assertTrue(ModeOfPayment.objects.filter(name="Opay Transfer").exists())
-
-
-
 
     def test_mode_update_post(self):
         response = self.client.post(
@@ -74,8 +69,6 @@ class TestModeOfPaymentViews(PaymentsViewTestBase):
 
 
 class TestPaymentGLMappingViews(PaymentsViewTestBase):
-
-
     def test_gl_mapping_create_post(self):
         response = self.client.post(
             reverse("payments:gl_mapping_create"),
@@ -86,7 +79,6 @@ class TestPaymentGLMappingViews(PaymentsViewTestBase):
         )
         self.assertRedirects(response, reverse("payments:gl_mapping_list"))
         self.assertTrue(PaymentGLMapping.objects.filter(default_account=self.accounts["bank"]).exists())
-
 
     def test_gl_mapping_update_post(self):
         response = self.client.post(

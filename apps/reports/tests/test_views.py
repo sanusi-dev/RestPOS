@@ -24,7 +24,6 @@ class DailyPnLViewTest(DailyPnLTestMixin, TestCase):
             response = self.client.get(reverse(name))
             self.assertIn(response.status_code, (302, 403), name)
 
-
     def test_create_draft_and_detail(self):
         self.client.force_login(self.manager)
         response = self.client.post(reverse("reports:daily_pnl_create"), {"business_date": date.today().isoformat()})

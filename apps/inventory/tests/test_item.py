@@ -55,4 +55,3 @@ class ItemValidationTest(ItemTestBase):
         )
         with self.assertRaises(ValidationError):
             variant.full_clean()
-

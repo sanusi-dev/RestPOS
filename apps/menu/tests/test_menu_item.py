@@ -67,4 +67,3 @@ class MenuItemModelTest(TestCase):
         mi = MenuItem(menu=self.menu, item=template, rate=Decimal("100"))
         with self.assertRaises(ValidationError):
             mi.full_clean()
-

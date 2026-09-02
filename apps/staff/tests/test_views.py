@@ -51,11 +51,7 @@ class TestLoginRequired(TestCase):
         self.assertEqual(response.status_code, 302)
 
 
-
 class TestPOSOpeningEntryViews(StaffViewTestBase):
-
-
-
     def test_create_post_captures_all_methods(self):
         """Both cash and electronic mode opening balances are persisted."""
         response = self.client.post(
@@ -78,8 +74,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
             Decimal("120000"),
         )
 
-
-
     def test_create_post_blocks_when_no_modes_configured(self):
         """Re-render with error if no active ModeOfPayment exists."""
         ModeOfPayment.objects.update(enabled=False)
@@ -87,9 +81,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No active payment methods")
         self.assertEqual(POSOpeningEntry.objects.count(), 1)
-
-
-
 
     def test_detail_post_saves_amounts(self):
         """POST to the detail URL saves the edited opening amounts (PRG)."""
@@ -121,7 +112,6 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
             Decimal("50000"),
         )
 
-
     def test_submit_post(self):
         response = self.client.post(reverse("staff:opening_entry_submit", kwargs={"pk": self.entry.pk}))
         self.assertRedirects(
@@ -131,14 +121,12 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.status, POSOpeningEntry.SUBMITTED)
 
-
     def test_cancel_post(self):
         response = self.client.post(reverse("staff:opening_entry_cancel", kwargs={"pk": self.entry.pk}))
         self.assertEqual(response.status_code, 302)
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.status, POSOpeningEntry.CANCELLED)
         self.assertEqual(self.entry.cancelled_by, self.user)
-
 
     def setUp(self):
         super().setUp()

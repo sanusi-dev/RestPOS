@@ -42,10 +42,22 @@ class OrderTestBase(OrderAccountingMixin, TestCase):
         cls.group_drinks = ItemGroup.objects.create(name="Beverages")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
+            item_name="Jollof Rice",
+            item_group=cls.group_food,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.item2 = Item.objects.create(
-            item_name="Coke", item_group=cls.group_drinks, stock_uom=cls.uom, department="DRINKS", is_sales_item=True, is_stock_item=True, is_purchase_item=True
+            item_name="Coke",
+            item_group=cls.group_drinks,
+            stock_uom=cls.uom,
+            department="DRINKS",
+            is_sales_item=True,
+            is_stock_item=True,
+            is_purchase_item=True,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1500"))
@@ -89,6 +101,7 @@ class OrderModelTest(OrderTestBase):
         order2 = self._create_order()
         order2.assign_order_number()
         self.assertEqual(order2.order_number, 2)
+
 
 class OrderItemTest(OrderTestBase):
     @skipUnless(connection.vendor == "postgresql", "PostgreSQL-specific row-lock regression")

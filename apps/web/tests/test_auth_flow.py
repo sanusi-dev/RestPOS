@@ -102,7 +102,6 @@ class TestPOSView(TestLoginRequiredViewBase):
         self.assertEqual(response.status_code, 403)
 
 
-
 class TestCustomUserProperties(TestViewBase):
     def test_role_flags_flip_with_group_membership(self):
         from apps.users.models import CustomUser

@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.reports.models import DailyPnL, PnLConfiguration
+from apps.reports.models import DailyPnL
 
 from .helpers import DailyPnLTestMixin
 
@@ -30,4 +30,3 @@ class DailyPnLModelTest(DailyPnLTestMixin, TestCase):
         pnl.remarks = "nope"
         with self.assertRaises(ValidationError):
             pnl.save()
-

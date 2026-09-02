@@ -25,7 +25,13 @@ class BackofficeViewTestBase(OrderAccountingMixin, TestCase):
         cls.group_food = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.food_item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
+            item_name="Jollof Rice",
+            item_group=cls.group_food,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
@@ -74,8 +80,6 @@ class OrderCancelTest(BackofficeViewTestBase):
         order.refresh_from_db()
         self.assertEqual(order.status, "CANCELLED")
 
-
-
     def test_cancel_order_cashier_blocked(self):
         self.client.logout()
         self.client.force_login(self.cashier_user)
@@ -112,7 +116,6 @@ class OrderReturnTest(BackofficeViewTestBase):
         self.assertEqual(return_order.status, "DRAFT")
         self.assertEqual(return_order.return_against, order)
 
-
     def test_return_draft_can_reduce_qty(self):
         order = self._create_order()
         self._settle_order(order)
@@ -143,7 +146,6 @@ class OrderReturnTest(BackofficeViewTestBase):
 
 
 class KOTDetailTest(BackofficeViewTestBase):
-
     def test_kot_detail_404(self):
         response = self.client.get(reverse("orders:kot_detail", kwargs={"pk": 99999}))
         self.assertEqual(response.status_code, 404)

@@ -25,7 +25,9 @@ class MenuViewTestBase(TestCase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.item_drink = Item.objects.create(
             item_code="DRINK001",
@@ -72,7 +74,9 @@ class TestMenuItemViews(MenuViewTestBase):
             item_group=self.group,
             stock_uom=self.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         response = self.client.post(
             reverse("menu:menu_item_create"),
@@ -122,7 +126,9 @@ class TestItemAddOnViews(MenuViewTestBase):
             item_group=cls.group,
             stock_uom=cls.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         MenuItem.objects.create(menu=cls.menu, item=cls.add_on_item, rate=Decimal("100"))
         cls.add_on = ItemAddOn.objects.create(parent_item=cls.item_food, add_on_item=cls.add_on_item)
@@ -131,12 +137,14 @@ class TestItemAddOnViews(MenuViewTestBase):
         item_new = Item.objects.create(
             item_code="NEW001",
             item_name="New Add-on Item",
-            item_group=cls.group,
-            stock_uom=cls.uom,
+            item_group=self.group,
+            stock_uom=self.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
-        MenuItem.objects.create(menu=cls.menu, item=item_new, rate=Decimal("50"))
+        MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("50"))
         response = self.client.post(
             reverse("menu:add_on_create"),
             {"parent_item": self.item_food.pk, "add_on_item": item_new.pk},
@@ -149,9 +157,11 @@ class TestItemAddOnViews(MenuViewTestBase):
             item_code="NEW002",
             item_name="Another Add-on",
             item_group=self.group,
-            stock_uom=cls.uom,
+            stock_uom=self.uom,
             department="FOOD",
-            is_sales_item=True, is_stock_item=False, is_purchase_item=False,
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         MenuItem.objects.create(menu=self.menu, item=item_new, rate=Decimal("75"))
         response = self.client.post(
@@ -189,7 +199,7 @@ class TestItemVariantViews(MenuViewTestBase):
             item_code="COKE-Z",
             item_name="Zero Coke",
             item_group=self.group,
-            stock_uom=cls.uom,
+            stock_uom=self.uom,
             department="DRINKS",
             is_sales_item=True,
         )
@@ -206,7 +216,7 @@ class TestItemVariantViews(MenuViewTestBase):
             item_code="COKE-D",
             item_name="Diet Coke",
             item_group=self.group,
-            stock_uom=cls.uom,
+            stock_uom=self.uom,
             department="DRINKS",
             is_sales_item=True,
         )

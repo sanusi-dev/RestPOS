@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -167,6 +167,7 @@ class NegativeStockTest(StockLedgerEntryTestBase):
         self.assertEqual(StockLedgerEntry.objects.count(), 1)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.warehouse).actual_qty, Decimal("5"))
 
+
 class FutureDateTest(StockLedgerEntryTestBase):
     def test_future_posting_date_rejected(self):
         tomorrow = timezone.localdate() + timedelta(days=1)
@@ -180,6 +181,7 @@ class FutureDateTest(StockLedgerEntryTestBase):
                 unit_rate=Decimal("100"),
                 posting_date=tomorrow,
             )
+
 
 class VarianceFieldTest(StockLedgerEntryTestBase):
     def test_variance_and_reversal(self):
@@ -205,6 +207,3 @@ class VarianceFieldTest(StockLedgerEntryTestBase):
         self.assertEqual(sle2.variance_amount, Decimal("50"))
         self.assertEqual(sle2.variance_type, "CANCELLATION_WAC")
         self.assertEqual(sle2.reversal_of_sle_id, sle1.pk)
-
-
-

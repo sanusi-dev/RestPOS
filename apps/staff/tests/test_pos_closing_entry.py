@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.utils import IntegrityError
 from django.test import TestCase
 
 from apps.accounting.tests.helpers import setup_chart_of_accounts
@@ -168,4 +167,3 @@ class ClosingPaymentModelTest(POSClosingEntryTestBase):
         )
         with self.assertRaises(ValidationError):
             cp.full_clean()
-

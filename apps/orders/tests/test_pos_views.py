@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -33,7 +32,13 @@ class POSViewTestBase(OrderAccountingMixin, TestCase):
         cls.group_drinks = ItemGroup.objects.create(name="Drinks")
         cls.warehouse = Warehouse.objects.create(name="Kitchen")
         cls.food_item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group_food, stock_uom=cls.uom, department="FOOD", is_sales_item=True, is_stock_item=False, is_purchase_item=False
+            item_name="Jollof Rice",
+            item_group=cls.group_food,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.food_item, rate=Decimal("1500"))
@@ -176,7 +181,6 @@ class POSHomeTest(POSViewTestBase):
         self.assertTrue(response.context["draft_cap_reached"])
         self.assertContains(response, "disabled")
 
-
     def test_open_shift_saves_notes(self):
         response = self.client.post(
             reverse("pos:pos_open_shift"),
@@ -185,7 +189,6 @@ class POSHomeTest(POSViewTestBase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(POSOpeningEntry.objects.get().remarks, "Opening float checked")
-
 
     def test_draft_cap_blocks_new_order(self):
         self.restaurant.max_open_drafts = 1
@@ -202,9 +205,6 @@ class POSShiftCloseTest(POSViewTestBase):
     def setUp(self):
         super().setUp()
         self.opening = self._open_shift()
-
-
-
 
     def test_close_shift_post_rechecks_open_orders(self):
         Order.objects.create(opening_entry=self.opening)
@@ -272,8 +272,6 @@ class POSOrderHistoryTest(POSViewTestBase):
             invoice_number="CAN-103",
         )
 
-
-
     def test_history_full_filters_when_restaurant_setting_enabled(self):
         self.restaurant.pos_allow_full_history = True
         self.restaurant.save(update_fields=["pos_allow_full_history"])
@@ -281,8 +279,6 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, 'hx-get="?status=all')
         self.assertContains(response, 'hx-get="?status=returns')
         self.assertContains(response, 'hx-get="?status=cancelled')
-
-
 
     def test_history_detail_print_from_drawer_does_not_push_url(self):
         with patch(
@@ -311,7 +307,6 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertContains(response, "#101")
         self.assertContains(response, "#102")
         self.assertContains(response, "#103")
-
 
     def test_history_with_cleared_date_shows_older_orders(self):
         older_sale = Order.objects.create(
@@ -383,7 +378,6 @@ class POSOrderHistoryTest(POSViewTestBase):
         self.assertEqual(response["HX-Push-Url"], detail_url)
         self.assertContains(response, f"#{self.sale.order_number}")
         self.assertNotContains(response, "<html")
-
 
     def test_history_detail_groups_items_by_customer_and_shows_payments(self):
         order = Order.objects.create(opening_entry=self.opening, guest_count=2)
@@ -502,9 +496,6 @@ class POSAddItemTest(POSViewTestBase):
         self.assertContains(response, "Insufficient stock")
         self.assertEqual(Bin.objects.get(item=self.drink_item, warehouse=self.warehouse).reserved_qty, Decimal("2"))
 
-
-
-
     def test_add_on_dialog_adds_parent_and_selected_add_on_to_active_customer(self):
         add_on_item = Item.objects.create(
             item_name="Extra Sauce",
@@ -604,7 +595,6 @@ class POSCatalogFilterTest(POSViewTestBase):
         self.order = Order.objects.first()
         self.order_url = reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk})
 
-
     def test_catalog_category_and_special_filters(self):
         category_response = self.client.get(self.order_url, {"group": self.group_food.name})
 
@@ -619,9 +609,6 @@ class POSCatalogFilterTest(POSViewTestBase):
         self.assertTrue(specials_response.context["catalog_specials"])
         self.assertContains(specials_response, "Coke")
         self.assertNotContains(specials_response, "Jollof Rice")
-
-
-
 
     def test_cart_mutation_preserves_filtered_catalog_oob_result(self):
         response = self.client.post(
@@ -732,7 +719,6 @@ class POSSettleTest(POSViewTestBase):
             opening_amount=Decimal("0"),
         )
         return bank
-
 
     def test_settle_dine_in_marks_receipt_printed(self):
         response = self.client.post(
@@ -1032,7 +1018,6 @@ class POSNoPrintTest(POSViewTestBase):
             {"item_id": self.food_item.pk, "qty": "1"},
         )
 
-
     def test_draft_edit_allowed_without_kot(self):
         self.client.post(
             reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}),
@@ -1129,7 +1114,6 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertContains(response, "Customer #1")
         self.assertContains(response, "Customer #2")
 
-
     def test_lower_blocked_when_guest_has_items(self):
         self._set_guest_count(2)
         self._add_to_card(2)
@@ -1146,14 +1130,12 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertEqual(self.order.guest_count, 1)
         self.assertNotContains(response, "Customer 2")
 
-
     def test_active_card_switch_assigns_items(self):
         self._set_guest_count(2)
         self._add_to_card(2)
         self.order.refresh_from_db()
         self.assertEqual(self.order.items.filter(customer_index=2).count(), 1)
         self.assertEqual(self.order.items.filter(customer_index=1).count(), 1)
-
 
     def test_order_type_update_renders_selected_state(self):
         response = self.client.post(
