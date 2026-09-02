@@ -96,6 +96,15 @@ def add_formset_row(formset_class, prefix, post_data):
 
     post_data[f"{prefix}-TOTAL_FORMS"] = str(total_forms + 1)
 
+    purpose = post_data.get("purpose") if "purpose" in post_data else None
+    stock_entry = None
+    if purpose:
+        try:
+            stock_entry = formset_class.model._meta.get_field("stock_entry").remote_field.model(purpose=purpose)
+        except Exception:
+            pass
+    if stock_entry is not None:
+        return formset_class(post_data, instance=stock_entry, prefix=prefix)
     return formset_class(post_data, prefix=prefix)
 
 
@@ -124,7 +133,25 @@ def remove_formset_row(formset_class, prefix, post_data, index):
     new_data[f"{prefix}-MIN_NUM_FORMS"] = post_data.get(f"{prefix}-MIN_NUM_FORMS", "0")
     new_data[f"{prefix}-MAX_NUM_FORMS"] = post_data.get(f"{prefix}-MAX_NUM_FORMS", "1000")
 
+    for key in post_data:
+        if key.startswith(prefix + "-"):
+            continue
+        vals = post_data.getlist(key)
+        if len(vals) == 1:
+            new_data[key] = vals[0]
+        else:
+            new_data[key] = vals
+
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
 
+    purpose = post_data.get("purpose") if "purpose" in post_data else None
+    stock_entry = None
+    if purpose:
+        try:
+            stock_entry = formset_class.model._meta.get_field("stock_entry").remote_field.model(purpose=purpose)
+        except Exception:
+            pass
+    if stock_entry is not None:
+        return formset_class(rebuilt, instance=stock_entry, prefix=prefix)
     return formset_class(rebuilt, prefix=prefix)

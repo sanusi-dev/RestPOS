@@ -1,6 +1,8 @@
 import json
 
-from django.contrib import messages as django_messages
+# The browser's XHR follows a 3xx and discards its headers, so an HX-Trigger
+# toast attached to a redirect is never seen by HTMX.
+_REDIRECT_STATUSES = (301, 302, 303, 307, 308)
 
 
 class MessagesMiddleware:
@@ -19,7 +21,19 @@ class MessagesMiddleware:
         if not hasattr(request, "_messages"):
             return
 
-        storage = django_messages.get_messages(request)
+        storage = request._messages
+
+        # A redirected HTMX request would swap the body (destroying the toast)
+        # and the redirect's headers are dropped on follow. Rewrite it as a
+        # 200 with HX-Redirect so HTMX performs a full navigation; the queued
+        # messages persist in the cookie and render on the destination page.
+        if response.status_code in _REDIRECT_STATUSES and storage:
+            location = response.get("Location")
+            if location:
+                response.status_code = 200
+                response["HX-Redirect"] = location
+            return
+
         message_list = [{"message": m.message, "level": m.level_tag} for m in storage]
         if not message_list:
             return

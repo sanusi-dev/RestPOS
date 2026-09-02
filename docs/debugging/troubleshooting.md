@@ -39,7 +39,7 @@ Always distinguish database state from physical side effects. A receipt can be m
 | Backoffice route unexpectedly accessible | view decorator | `apps/users/decorators.py` on the view -> role properties in `CustomUser` |
 | Role appears stale | `CustomUser` role properties | plain `@property` group checks — no cache; changes apply next request |
 | HTMX response does not update | template target and view fragment | `HX-Target` -> partial name -> swap mode -> target ID |
-| Toast missing | response `HX-Trigger` header | MessagesMiddleware -> JSON merge -> `toast.js` `showMessages` listener |
+| Toast missing | response `HX-Trigger` header | MessagesMiddleware -> JSON merge -> `toast.js` `showMessages` listener; on a redirect with queued messages, check for `HX-Redirect` instead (headers on a followed 3xx are dropped) |
 
 ## Database Investigation Anchors
 

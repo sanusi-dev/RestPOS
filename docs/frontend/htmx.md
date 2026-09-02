@@ -26,6 +26,10 @@ The same URL supports normal progressive enhancement: non-HTMX requests receive 
 
 `pos_order_add_item()` sets `HX-Trigger: close-add-on-dialog` on success. `MessagesMiddleware` merges Django messages into `HX-Trigger.showMessages`; `toast.js` listens for that event. Existing trigger values are parsed as JSON and preserved.
 
+### Redirects and toasts
+
+A 3xx redirect's response headers are dropped when the browser follows it, so an `HX-Trigger` toast attached to a redirect is never seen. For HTMX requests that redirect with queued messages (the submit/cancel views), `MessagesMiddleware` instead sets `HX-Redirect`, forcing a full page navigation. The messages persist in Django's message storage and render as toasts via the destination page's `#django-messages` block. Non-HTMX requests keep the plain redirect.
+
 ## Formset Partials
 
 Inventory item add/remove endpoints receive the full form POST, rebuild contiguous management-form indices using `inventory.forms.add_formset_row()` or `remove_formset_row()`, and return a fragment from the same form template. They do not save rows until the parent form is submitted.

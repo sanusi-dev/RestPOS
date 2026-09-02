@@ -44,7 +44,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Settings and Routing
 
-- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `write_off_account`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them).
+- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them).
 - `ProductionUnit`: one row per department via a unique constraint. Stores station warehouse, takeaway-ticket suppression, printer metadata, and `income_account` (the departmental income hook).
 - `ItemGroup`: flat category; since Phase 6 it carries optional `income_account`/`expense_account` FKs used in GL account resolution.
 - `Warehouse`: flat stock location; since Phase 6 it carries an optional `account` FK credited with the stock value of settle-time drink deductions.
@@ -88,10 +88,10 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Accounting Entities
 
-- `LedgerAccount`: chart-of-accounts node. Flat FK `parent` tree; roots declare `root_type` (ASSET/LIABILITY/EQUITY/INCOME/EXPENSE) and children inherit it. `is_group` nodes hold children; only leaves receive postings. `freeze_account` blocks new postings; `disabled` hides the account. Deletion is PROTECTed by GL rows, journal rows, payment mappings, and configured FKs.
+- `LedgerAccount`: chart-of-accounts node. Flat FK `parent` tree; roots declare `account_type` (ASSET/LIABILITY/EQUITY/INCOME/EXPENSE) and children inherit it. `is_group` nodes hold children; only leaves receive postings. `freeze_account` blocks new postings; `disabled` hides the account. Deletion is PROTECTed by GL rows, journal rows, payment mappings, and configured FKs.
 - `FiscalYear`: enabled years must not overlap; `get_for(date)` returns the enabled year covering a date or raises.
 - `GLEntry`: one side of a posting — exactly one non-zero debit/credit. Immutable after creation: `save()` blocks edits except the `is_cancelled` reversal flag, `delete()` raises. `post()` resolves the fiscal year from the posting date.
-- `JournalEntry`: manual voucher (JOURNAL/CASH/BANK/WRITE_OFF/OPENING), DRAFT → SUBMITTED → CANCELLED. `submit()` requires balance, unique account rows, and a positive total; OPENING vouchers set `is_opening` and reject a second opening for the same fiscal year. `cancel()` posts mirrored negated GL rows and marks originals cancelled. `amend()` copies a CANCELLED entry into a new DRAFT linked via `amended_from`; only one amendment per cancelled entry — a cancelled entry that already has an amendment cannot be amended again (its amendment is the next link).
+- `JournalEntry`: manual voucher (JOURNAL/CASH/BANK/OPENING), DRAFT → SUBMITTED → CANCELLED. `submit()` requires balance, unique account rows, and a positive total; OPENING vouchers set `is_opening` and reject a second opening for the same fiscal year. `cancel()` posts mirrored negated GL rows and marks originals cancelled. `amend()` copies a CANCELLED entry into a new DRAFT linked via `amended_from`; only one amendment per cancelled entry — a cancelled entry that already has an amendment cannot be amended again (its amendment is the next link).
 - `JournalEntryAccount`: debit/credit row on a journal entry; one of debit/credit must be non-zero, leaf accounts only.
 
 ## Reports Entities

@@ -97,7 +97,7 @@ An order line snapshots the item department and stock flag. Only DRINKS lines ca
 - `UserConfig.ready()` and `InventoryConfig.ready()` register `post_migrate` seed callbacks.
 - Every backoffice and POS view declares its role requirement via `apps/users/decorators.py`; `LoginRequiredMiddleware` enforces site-wide login.
 - HTMX templates depend on exact partial anchors such as `#pos-main`, `#cart-panel`, `#catalog-workspace`, and `#order-details-drawer`.
-- `MessagesMiddleware` depends on `HX-Trigger`; `assets/javascript/toast.js` depends on the resulting `showMessages` event.
+- `MessagesMiddleware` depends on `HX-Trigger` and `HX-Redirect`; `assets/javascript/toast.js` depends on the resulting `showMessages` event.
 
 ## Execution Chains
 

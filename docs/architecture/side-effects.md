@@ -5,7 +5,7 @@
 | Trigger | Code | Effect |
 |---|---|---|
 | Any request without a session | `LoginRequiredMiddleware` | Redirects to `settings.LOGIN_URL?next=...` unless the view is `@login_not_required`. |
-| HTMX response with Django messages | `apps/web/middleware.py:15-31` | Adds `showMessages` JSON to `HX-Trigger`. |
+| HTMX response with Django messages | `apps/web/middleware.py:15-40` | Adds `showMessages` JSON to `HX-Trigger`; for a redirect with queued messages, sets `HX-Redirect` so the toast survives the full page navigation. |
 | Backoffice template context | `apps/web/context_processors.py:31-35` | Counts `ItemGroup` rows for navigation. |
 | Every template context | `apps/web/context_processors.py:10-28` | Adds metadata, page URLs, and CSRF cookie name. |
 
