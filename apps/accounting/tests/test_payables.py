@@ -223,6 +223,7 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(reversals.get(account=self.accounts["grni"]).credit, Decimal("200"))
         self.assertEqual(reversals.get(account=self.accounts["payable"]).debit, Decimal("200"))
 
+
 class SupplierPaymentTest(PayablesTestBase):
     def _paid_invoice(self, amount=200):
         invoice = self._make_receipt_invoice(rate=amount)
@@ -301,5 +302,3 @@ class SupplierPaymentTest(PayablesTestBase):
         payment = self._make_payment(invoice1, Decimal("200"))
         payment.submit()
         self.assertEqual(self.supplier.outstanding_balance, Decimal("600"))
-
-

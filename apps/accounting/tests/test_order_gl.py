@@ -1,13 +1,12 @@
 """Order GL tests — settle legs, departmental income split, change, rounding, COGS,
 cancel reversal, missing-account failures, fiscal year guard."""
 
-from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.accounting.models import FiscalYear, GLEntry, LedgerAccount
+from apps.accounting.models import GLEntry, LedgerAccount
 from apps.inventory.models import UOM, Bin, Item, ItemGroup, StockLedgerEntry, Warehouse
 from apps.menu.models import Menu, MenuItem
 from apps.orders.models import Order, OrderItem
@@ -31,12 +30,8 @@ class OrderGLTestBase(TestCase):
         cls.restaurant = Restaurant.objects.create(company="Test Co")
         cls.accounts = setup_chart_of_accounts(cls.restaurant)
         cls.uom = UOM.objects.create(name="Nos")
-        cls.group_food = ItemGroup.objects.create(
-            name="Food", income_account=cls.accounts["food_sales"], expense_account=cls.accounts["cogs"]
-        )
-        cls.group_drinks = ItemGroup.objects.create(
-            name="Beverages", income_account=cls.accounts["drinks_sales"], expense_account=cls.accounts["cogs"]
-        )
+        cls.group_food = ItemGroup.objects.create(name="Food")
+        cls.group_drinks = ItemGroup.objects.create(name="Beverages")
         cls.kitchen_wh = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         cls.bar_wh = Warehouse.objects.create(name="Bar", account=cls.accounts["cash"])  # placeholder, fixed below
         cls.bar_wh.account = LedgerAccount.objects.create(
@@ -82,8 +77,12 @@ class OrderGLTestBase(TestCase):
             opening_entry=cls.opening, mode_of_payment=cls.cash, opening_amount=Decimal("50000")
         )
         cls.opening.submit()
-        cls.kitchen = ProductionUnit.objects.create(name="Kitchen", warehouse=cls.kitchen_wh, department="FOOD")
-        cls.bar = ProductionUnit.objects.create(name="Bar", warehouse=cls.bar_wh, department="DRINKS")
+        cls.kitchen = ProductionUnit.objects.create(
+            name="Kitchen", warehouse=cls.kitchen_wh, department="FOOD", income_account=cls.accounts["food_sales"]
+        )
+        cls.bar = ProductionUnit.objects.create(
+            name="Bar", warehouse=cls.bar_wh, department="DRINKS", income_account=cls.accounts["drinks_sales"]
+        )
 
     def _create_order(self, **kwargs):
         defaults = {"opening_entry": self.opening}
@@ -162,14 +161,15 @@ class OrderSettleGLTest(OrderGLTestBase):
         self.assertEqual(stock_entry.credit, Decimal("300"))
 
     def test_missing_income_account_raises(self):
-        self.group_food.income_account = None
-        self.group_food.save()
+        self.kitchen.income_account = None
+        self.kitchen.save()
         self.restaurant.default_income_account = None
         self.restaurant.save()
         order = self._create_order()
         add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
         with self.assertRaisesMessage(ValidationError, "default income account"):
             self._settle(order)
+
 
 class OrderCancelGLTest(OrderGLTestBase):
     def test_reverse_order_gl_posts_mirrored_entries(self):
@@ -186,6 +186,7 @@ class OrderCancelGLTest(OrderGLTestBase):
         self.assertEqual(entries.filter(is_cancelled=False).count(), 2)
         reversal = entries.filter(is_cancelled=False, account=self.accounts["cash"]).first()
         self.assertEqual(reversal.credit, Decimal("1500"))
+
 
 class RefundGLTest(OrderGLTestBase):
     def test_return_posts_mirrored_refund(self):
@@ -258,4 +259,3 @@ class NotRestockableConstraintTest(OrderGLTestBase):
         # The DB constraint is the last line of defence (bypasses save()).
         with self.assertRaises(IntegrityError), transaction.atomic():
             OrderItem.objects.filter(pk=line.pk).update(not_restockable=True)
-

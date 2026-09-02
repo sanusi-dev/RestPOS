@@ -35,7 +35,6 @@ class TestLoginRequired(TestCase):
 
 
 class TestDashboardView(SettingsViewTestBase):
-
     def _post_data(self, **overrides):
         data = {
             "company": "Test Co",
@@ -49,13 +48,11 @@ class TestDashboardView(SettingsViewTestBase):
         data.update(overrides)
         return data
 
-
     def test_post_creates_singleton(self):
         response = self.client.post(reverse("settings:restaurant_settings"), self._post_data())
         self.assertRedirects(response, reverse("settings:restaurant_settings"))
         self.assertEqual(Restaurant.objects.count(), 1)
         self.assertEqual(Restaurant.objects.get().company, "Test Co")
-
 
     def test_post_updates_singleton(self):
         restaurant = Restaurant.objects.create(company="Test Co")
@@ -116,20 +113,16 @@ class TestProductionUnitViews(SettingsViewTestBase):
         data.update(overrides)
         return data
 
-
     def test_list_does_not_filter_by_department(self):
         unit_url = reverse("settings:production_unit_detail", kwargs={"pk": self.unit.pk})
         response = self.client.get(reverse("settings:production_unit_list"), {"department": "DRINKS"})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, unit_url)
 
-
     def test_create_post(self):
         response = self.client.post(reverse("settings:production_unit_create"), self._post_data())
         self.assertRedirects(response, reverse("settings:production_unit_list"))
         self.assertTrue(ProductionUnit.objects.filter(name="Bar").exists())
-
-
 
     def test_update_post(self):
         response = self.client.post(
@@ -169,8 +162,6 @@ class TestStaffManagementViews(TestCase):
     def setUp(self):
         self.client.login(username="admin@test.com", password="testpass123")
 
-
-
     def test_staff_list_requires_login(self):
         self.client.logout()
         response = self.client.get(reverse("settings:staff_list"))
@@ -189,7 +180,6 @@ class TestStaffManagementViews(TestCase):
         self.assertRedirects(response, reverse("settings:staff_list"))
         self.assertTrue(self.newbie.groups.filter(name="RestPOS Cashier").exists())
 
-
     def test_assign_admin_role(self):
         response = self.client.post(
             reverse("settings:staff_assign_role", kwargs={"pk": self.newbie.pk, "role": "admin"})
@@ -205,7 +195,6 @@ class TestStaffManagementViews(TestCase):
         response = self.client.post(reverse("settings:staff_remove_role", kwargs={"pk": self.cashier.pk}))
         self.assertRedirects(response, reverse("settings:staff_list"))
         self.assertFalse(self.cashier.groups.filter(name="RestPOS Cashier").exists())
-
 
     def test_remove_role_htmx_returns_targeted_row(self):
         self.cashier.groups.add(self.cashier_group)
@@ -265,9 +254,6 @@ class TestStaffManagementViews(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "cashier@test.com")
         self.assertNotContains(response, "newbie@test.com")
-
-
-
 
     def test_remove_role_requires_post(self):
         response = self.client.get(reverse("settings:staff_remove_role", kwargs={"pk": self.cashier.pk}))

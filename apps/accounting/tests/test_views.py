@@ -29,7 +29,6 @@ class AccountingViewTestBase(TestCase):
 
 
 class AccountingViewAccessTest(AccountingViewTestBase):
-
     def test_cashier_cannot_access(self):
         self.client.force_login(self.cashier)
         # The backoffice middleware redirects cashiers to home.
@@ -52,7 +51,6 @@ class ChartOfAccountsViewTest(AccountingViewTestBase):
         )
         self.assertRedirects(response, reverse("accounting:chart_of_accounts"))
         self.assertTrue(LedgerAccount.objects.filter(name="Bank").exists())
-
 
 
 class JournalEntryViewTest(AccountingViewTestBase):
@@ -113,7 +111,6 @@ class JournalEntryViewTest(AccountingViewTestBase):
         journal.refresh_from_db()
         self.assertEqual(journal.status, JournalEntry.SUBMITTED)
         self.assertRedirects(response, reverse("accounting:journal_entry_detail", args=[journal.pk]))
-
 
     def test_journal_entry_account_add_returns_partial(self):
         self.client.force_login(self.admin)

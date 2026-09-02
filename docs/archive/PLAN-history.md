@@ -373,7 +373,6 @@ Seed data: Each, Kg, Gram, Litre, Millilitre, Case, Box, Dozen, Pack.
 | valuation_method | CharField, max_length=20, choices=[("FIFO","FIFO"),("MOVING_AVERAGE","Moving Average")], default="FIFO" | |
 | has_variants | BooleanField, default=False | Template item — can't be sold directly |
 | variant_of | ForeignKey→self, null=True, blank=True, on_delete=PROTECT, related_name="variants" | Set on variant items |
-| safety_stock | DecimalField, max_digits=10, decimal_places=2, default=0 | Buffer stock |
 | last_purchase_rate | DecimalField, max_digits=10, decimal_places=2, null=True, blank=True | Last purchase rate |
 
 **Methods:**

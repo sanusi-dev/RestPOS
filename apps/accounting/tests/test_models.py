@@ -50,6 +50,7 @@ class LedgerAccountTreeTest(TestCase):
         with self.assertRaises(ValidationError):
             self.assets.delete()
 
+
 class FiscalYearTest(TestCase):
     def test_end_after_start(self):
         with self.assertRaises(ValidationError):
@@ -187,4 +188,3 @@ class GLEntryImmutabilityTest(TestCase):
                 voucher_type="Order",
                 voucher_no="X-7",
             )
-

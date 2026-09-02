@@ -21,7 +21,10 @@ class JournalEntryTestBase(TestCase):
         )
         cls.sales = LedgerAccount.objects.create(name="Sales", parent=cls.income)
         cls.expenses = LedgerAccount.objects.create(
-            name="Expenses", is_group=True, account_type=LedgerAccount.EXPENSE, report_type=LedgerAccount.PROFIT_AND_LOSS
+            name="Expenses",
+            is_group=True,
+            account_type=LedgerAccount.EXPENSE,
+            report_type=LedgerAccount.PROFIT_AND_LOSS,
         )
         cls.cogs = LedgerAccount.objects.create(name="COGS", parent=cls.expenses)
         cls.year = FiscalYear.objects.create(
