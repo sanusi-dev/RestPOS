@@ -38,22 +38,6 @@ class ItemGroup(BaseModel):
 
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
-    income_account = models.ForeignKey(
-        "accounting.LedgerAccount",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name="Income account",
-    )
-    expense_account = models.ForeignKey(
-        "accounting.LedgerAccount",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name="Expense account",
-    )
 
     class Meta:
         ordering = ["name"]

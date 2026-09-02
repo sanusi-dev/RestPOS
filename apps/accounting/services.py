@@ -16,21 +16,13 @@ from .payables_models import SupplierInvoiceItem
 TWO_PLACES = Decimal("0.01")
 
 
-def _income_account_for(item_group, department):
-    """Resolve the income account: ItemGroup → ProductionUnit → Restaurant default."""
+def _income_account_for(department):
+    """Resolve the income account: ProductionUnit (by department) → Restaurant default."""
     from apps.settings.models import ProductionUnit
 
-    if item_group is not None and item_group.income_account_id:
-        return item_group.income_account
     unit = ProductionUnit.objects.filter(department=department).select_related("income_account").first()
     if unit is not None and unit.income_account_id:
         return unit.income_account
-    return None
-
-
-def _expense_account_for(item_group):
-    if item_group is not None and item_group.expense_account_id:
-        return item_group.expense_account
     return None
 
 
@@ -60,24 +52,14 @@ def _resolve_payment_account(mode):
 
 
 def _order_lines_with_accounts(order):
-    """Return order lines with their resolved income/expense accounts."""
-    from apps.inventory.models import ItemGroup
-
-    lines = list(order.items.select_related("item__item_group", "item").all())
-    groups = {
-        g.pk: g
-        for g in ItemGroup.objects.filter(pk__in={line.item.item_group_id for line in lines}).select_related(
-            "income_account", "expense_account"
-        )
-    }
+    """Return order lines with their departments for account resolution."""
+    lines = list(order.items.select_related("item").all())
     result = []
     for line in lines:
-        group = groups.get(line.item.item_group_id)
         department = line.department or line.item.department
         result.append(
             {
                 "line": line,
-                "group": group,
                 "department": department,
             }
         )
@@ -92,7 +74,7 @@ def _income_legs(order, rows):
     default_income = settings.default_income_account if settings else None
     per_account = {}
     for row in rows:
-        account = _income_account_for(row["group"], row["department"]) or default_income
+        account = _income_account_for(row["department"]) or default_income
         account = _resolve_required_account(account, label="The default income account")
         amount = row["line"].amount
         per_account[account.pk] = {
@@ -152,7 +134,7 @@ def _cogs_legs(order, rows, settings):
         line = next((r for r in rows if r["line"].item_id == sle.item_id), None)
         if line is None:
             continue
-        account = _expense_account_for(line["group"]) or default_expense
+        account = default_expense
         if account is None:
             raise ValidationError("The default expense account is not configured.")
         account = _resolve_required_account(account, label="The default expense account")
@@ -390,8 +372,7 @@ def post_refund_gl(return_order):
         value = (abs(line.qty) * rate).quantize(TWO_PLACES)
         if not value:
             continue
-        expense = _expense_account_for(line.item.item_group) or default_expense
-        expense = _resolve_required_account(expense, label="The default expense account")
+        expense = _resolve_required_account(default_expense, label="The default expense account")
         rows.append({"account": expense, "credit": value})
         rows.append({"account": warehouse_account, "debit": value})
         if line.not_restockable:

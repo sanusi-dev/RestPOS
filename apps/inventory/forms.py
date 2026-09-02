@@ -31,14 +31,7 @@ class UOMForm(InventoryModelForm):
 class ItemGroupForm(InventoryModelForm):
     class Meta:
         model = ItemGroup
-        fields = ["name", "description", "income_account", "expense_account"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field_name in ("income_account", "expense_account"):
-            self.fields[field_name].queryset = active_choices(
-                LedgerAccount, getattr(self.instance, f"{field_name}_id"), disabled=False, is_group=False
-            )
+        fields = ["name", "description"]
 
 
 class WarehouseForm(InventoryModelForm):
