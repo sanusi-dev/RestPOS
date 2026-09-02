@@ -189,58 +189,80 @@ def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @backoffice_required
 def item_list(request: HttpRequest) -> HttpResponse:
-    from django.db.models import Q
-
     item_group_id = request.GET.get("item_group")
     department = request.GET.get("department")
     sellable = request.GET.get("sellable")
     purchasable = request.GET.get("purchasable")
     kind = request.GET.get("kind")
     status = request.GET.get("status", "active")
-    q = (request.GET.get("q") or "").strip()
+    search_q = request.GET.get("q", "").strip()
 
-    items = Item.objects.select_related("item_group", "stock_uom", "variant_of")
+    items = Item.objects.select_related(
+        "item_group",
+        "stock_uom",
+        "variant_of",
+    )
+
     if item_group_id:
-        items = items.filter(item_group_id=cast(int, item_group_id))
+        items = items.filter(item_group_id=item_group_id)
+
     if department:
         items = items.filter(department=department)
+
     if sellable == "1":
         items = items.filter(is_sales_item=True)
     elif sellable == "0":
         items = items.filter(is_sales_item=False)
+
     if purchasable == "1":
         items = items.filter(is_purchase_item=True)
     elif purchasable == "0":
         items = items.filter(is_purchase_item=False)
+
     if kind == "template":
         items = items.filter(has_variants=True)
     elif kind == "variant":
         items = items.filter(variant_of__isnull=False)
     elif kind == "plain":
-        items = items.filter(has_variants=False, variant_of__isnull=True)
+        items = items.filter(
+            has_variants=False,
+            variant_of__isnull=True,
+        )
+
     if status == "active":
         items = items.filter(disabled=False)
     elif status == "disabled":
         items = items.filter(disabled=True)
-    if q:
-        items = items.filter(Q(item_name__icontains=q) | Q(item_code__icontains=q))
 
-    item_groups = ItemGroup.objects.all().order_by("name")
+    if search_q:
+        items = items.filter(
+            Q(item_name__icontains=search_q)
+            | Q(item_code__icontains=search_q)
+        )
+
+    context = {
+        "items": items,
+        "item_groups": ItemGroup.objects.all().order_by("name"),
+        "selected_item_group": item_group_id,
+        "selected_department": department,
+        "selected_sellable": sellable,
+        "selected_purchasable": purchasable,
+        "selected_kind": kind,
+        "selected_status": status,
+        "search_q": search_q,
+    }
+
+    if request.htmx and request.htmx.target == "item-table-body":
+        return render(
+            request,
+            "backoffice/inventory/item_list.html#item_rows",
+            {"items": items},
+        )
 
     return render(
         request,
         "backoffice/inventory/item_list.html",
-        {
-            "items": items,
-            "item_groups": item_groups,
-            "selected_item_group": item_group_id,
-            "selected_department": department,
-            "selected_sellable": sellable,
-            "selected_purchasable": purchasable,
-            "selected_kind": kind,
-            "selected_status": status,
-            "search_q": q,
-        },
+        context,
     )
 
 

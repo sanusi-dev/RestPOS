@@ -146,6 +146,11 @@ class StockEntryDetailForm(InventoryModelForm):
         if purpose == "MATERIAL_RECEIPT":
             filters["is_purchase_item"] = True
         self.fields["item"].queryset = active_choices(Item, self.instance.item_id, **filters)
+        if purpose == "MATERIAL_TRANSFER":
+            self.fields["basic_rate"].widget = self.fields["basic_rate"].hidden_widget()
+            self.fields["basic_rate"].required = False
+        else:
+            self.fields["basic_rate"].required = True
 
 
 class StockReconciliationForm(InventoryModelForm):

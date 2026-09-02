@@ -1,95 +1,80 @@
 {% extends "web/app/app_base.html" %}
+{% load humanize %}
 {% block app %}
 <div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Warehouses" section_url="inventory:warehouse_list" current_label=warehouse.name %}
 
-  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Warehouses" section_url="inventory:warehouse_list" current_label=warehouse.name %}
-
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+  <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ warehouse.name }}</h1>
-      <p class="text-sm text-gray-500">Warehouse configuration and stock</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{{ warehouse.name }}</h1>
+        {% if warehouse.disabled %}
+          <span class="inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-500">Disabled</span>
+        {% endif %}
+      </div>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Review this stock location, its accounting connection, and the inventory held here.</p>
     </div>
-    <a href="{% url 'inventory:warehouse_update' warehouse.pk %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all duration-300">
-      <span class="text-gray-400">{% hgi_stroke name="pencil-edit-01" size="16" color="currentColor" stroke_width="2" %}</span>
-      Edit Warehouse
+    <a href="{% url 'inventory:warehouse_update' warehouse.pk %}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</span>
+      Edit warehouse
     </a>
   </div>
 
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
-    <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
-    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Warehouse Details</h2>
-
-    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 relative z-10">
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Name</dt>
-        <dd class="text-base font-bold text-gray-900">{{ warehouse.name }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
-        <dd class="mt-1">
-          {% if warehouse.disabled %}
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
-          {% else %}
-            <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
-              <span class="relative flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              Active
-            </span>
-          {% endif %}
-        </dd>
-      </div>
-    </dl>
-  </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center justify-between">
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
+    <div class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
-          <span>{% hgi_stroke name="folder-01" size="16" color="currentColor" stroke_width="2" %}</span>
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="folder-01" size="18" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Stock in this warehouse</h2>
+          <p class="mt-1 text-xs text-gray-500">Current quantities and valuation by item.</p>
         </div>
-        <h3 class="text-base font-bold text-gray-900">Stock in this warehouse</h3>
       </div>
-      <a href="{% url 'inventory:stock_entry_create' %}" class="text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">+ New entry</a>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'inventory:stock_balance_list' %}?warehouse={{ warehouse.pk }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
+          View stock balance
+          <span class="flex size-3.5 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span>
+        </a>
+        <a href="{% url 'inventory:stock_ledger_list' %}?warehouse={{ warehouse.pk }}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
+          View stock ledger
+          <span class="flex size-3.5 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span>
+        </a>
+      </div>
     </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-100">
-          <thead class="bg-gray-50/50">
-            <tr>
-              <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
-              <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
-              <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
-              <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Value</th>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Item</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Actual quantity</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Reserved quantity</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Valuation rate</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Stock value</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for bin in bins %}
+            <tr class="transition-colors hover:bg-gray-50">
+              <td class="px-5 py-3.5 sm:px-6">
+                <a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-sm font-semibold text-gray-900 transition-colors hover:text-gray-600">{{ bin.item.item_name }}</a>
+              </td>
+              <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ bin.actual_qty|floatformat:"-2"|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ bin.reserved_qty|floatformat:"-2"|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ bin.valuation_rate|floatformat:2|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ bin.stock_value|floatformat:2|intcomma }}</td>
             </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for bin in bins %}
-              <tr class="hover:bg-gray-50/50 transition-colors">
-                <td class="px-6 py-4">
-                  <a href="{% url 'inventory:item_detail' bin.item.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">{{ bin.item.item_name }}</a>
-                </td>
-                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.actual_qty }}</td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td>
-                <td class="px-6 py-4 text-sm text-gray-500">{{ bin.stock_value }}</td>
-              </tr>
-            {% empty %}
-              <tr>
-                <td colspan="4" class="px-6 py-16 text-center text-gray-500">
-                  <div class="flex flex-col items-center gap-2">
-                    <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
-                      <span>{% hgi_stroke name="folder-01" size="24" color="currentColor" stroke_width="1.5" %}</span>
-                    </div>
-                    <span class="font-medium mt-2 text-gray-600">No stock in this warehouse.</span>
-                  </div>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
+                <div class="flex flex-col items-center gap-2">
+                  <span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="folder-01" size="23" color="currentColor" stroke_width="1.5" %}</span>
+                  <span class="mt-1 font-medium text-gray-600">No stock in this warehouse.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

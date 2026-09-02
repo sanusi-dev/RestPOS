@@ -1,222 +1,168 @@
 {% extends "web/app/app_base.html" %}
+{% load humanize %}
 {% block app %}
 <div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Items" section_url="inventory:item_list" current_label=item.item_name %}
 
-  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Items" section_url="inventory:item_list" current_label=item.item_name %}
-
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+  <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ item.item_name }}</h1>
-      <div class="mt-2 flex flex-wrap gap-1.5">
-        {% if item.has_variants %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 ring-1 ring-orange-600/10">Template</span>
-        {% endif %}
-        {% if item.variant_of %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-600/10">Variant</span>
-        {% endif %}
-        {% if item.is_sales_item %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Sellable</span>
-        {% endif %}
-        {% if item.is_purchase_item %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/10">Purchasable</span>
-        {% endif %}
-        {% if item.disabled %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Disabled</span>
-        {% else %}
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Active</span>
-        {% endif %}
-      </div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{{ item.item_name }}</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Review this item’s catalog details and stock position.</p>
     </div>
-    <a href="{% url 'inventory:item_update' item.pk %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all duration-300">
-      <span class="text-gray-400">{% hgi_stroke name="pencil-edit-01" size="16" color="currentColor" stroke_width="2" %}</span>
-      Edit Item
+    <a href="{% url 'inventory:item_update' item.pk %}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</span>
+      Edit item
     </a>
   </div>
 
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
-    <div class="absolute top-0 right-0 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+  <section class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
+    <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="folder-01" size="19" color="currentColor" stroke_width="2" %}</span>
+      <div>
+        <h2 class="text-sm font-extrabold text-gray-900">Item details</h2>
+        <p class="mt-1 text-xs text-gray-500">The current catalog and inventory configuration for this item.</p>
+      </div>
+    </div>
 
-    {% if item.image %}
-      <div class="mb-6 relative z-10">
-        <img src="{{ item.image.url }}" alt="{{ item.item_name }}" class="h-24 w-24 rounded-2xl object-cover ring-1 ring-gray-100 shadow-sm">
+    <div class="relative">
+      <div class="absolute right-0 top-0 block w-24 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 sm:w-28">
+        {% if item.image %}
+          <img src="{{ item.image.url }}" alt="{{ item.item_name }}" class="aspect-square w-full object-cover">
+        {% else %}
+          <div class="flex aspect-square w-full items-center justify-center text-gray-300">{% hgi_stroke name="image-01" size="24" color="currentColor" stroke_width="1.5" %}</div>
+        {% endif %}
       </div>
-    {% endif %}
-
-    <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Item Details</h2>
-
-    <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Item Code</dt>
-        <dd class="text-base font-mono font-bold text-gray-900">{{ item.item_code }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Item Group</dt>
-        <dd class="text-base font-bold text-gray-900">{{ item.item_group.name }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Department</dt>
-        <dd class="mt-1">
-          {% if item.department == 'FOOD' %}
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Food</span>
-          {% else %}
-            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-600/10">Drinks</span>
-          {% endif %}
-        </dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Stock UOM</dt>
-        <dd class="text-base font-bold text-gray-900">{{ item.stock_uom.name }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Default Warehouse</dt>
-        <dd class="text-base font-bold text-gray-900">{{ item.default_warehouse|default:"-" }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Sellable (POS / menu)</dt>
-        <dd class="text-base font-bold text-gray-900">{% if item.is_sales_item %}Yes{% else %}No{% endif %}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Purchasable (receipts)</dt>
-        <dd class="text-base font-bold text-gray-900">{% if item.is_purchase_item %}Yes{% else %}No{% endif %}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Stock tracked</dt>
-        <dd class="text-base font-bold text-gray-900">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Safety Stock</dt>
-        <dd class="text-base font-bold text-gray-900">{{ item.safety_stock }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Last Purchase Rate</dt>
-        <dd class="text-base font-bold text-gray-900">{{ item.last_purchase_rate|default:"-" }}</dd>
-      </div>
-      {% if item.variant_of %}
+      <dl class="grid grid-cols-1 gap-x-6 gap-y-6 pr-28 sm:grid-cols-2 sm:pr-36">
         <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Variant Of</dt>
-          <dd class="text-base font-bold text-gray-900">
-            <a href="{% url 'inventory:item_detail' item.variant_of.pk %}" class="hover:text-orange-500 transition-colors">{{ item.variant_of.item_name }}</a>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Item code</dt>
+          <dd class="mt-1.5 font-mono text-sm font-bold text-gray-900">{{ item.item_code }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Item group</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900"><a href="{% url 'inventory:item_group_detail' item.item_group.pk %}" class="transition hover:text-gray-600">{{ item.item_group.name }}</a></dd>
+        </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Department</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ item.get_department_display }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Stock UOM</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ item.stock_uom.name }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Last purchase rate</dt>
+          <dd class="mt-1.5 text-sm font-bold tabular-nums text-gray-900">
+            {% if item.last_purchase_rate is not None %}{{ item.last_purchase_rate|floatformat:2|intcomma }}{% else %}-{% endif %}
           </dd>
         </div>
-      {% endif %}
-      {% if item.description %}
-        <div class="sm:col-span-2 lg:col-span-3">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Description</dt>
-          <dd class="text-base font-medium text-gray-700">{{ item.description }}</dd>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Sell this item</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">{% if item.is_sales_item %}Yes{% else %}No{% endif %}</dd>
         </div>
-      {% endif %}
-    </dl>
-  </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Buy this item</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">{% if item.is_purchase_item %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Track stock levels</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">{% if item.is_stock_item %}Yes{% else %}No{% endif %}</dd>
+        </div>
+        {% if item.variant_of %}
+          <div>
+            <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Variant of</dt>
+            <dd class="mt-1.5 text-sm font-bold text-gray-900"><a href="{% url 'inventory:item_detail' item.variant_of.pk %}" class="transition hover:text-gray-600">{{ item.variant_of.item_name }}</a></dd>
+          </div>
+        {% endif %}
+        {% if item.description %}
+          <div class="sm:col-span-2">
+            <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Description</dt>
+            <dd class="mt-1.5 text-sm leading-6 text-gray-700">{{ item.description }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+  </section>
 
-  {% if item.has_variants %}
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
-        <span>{% hgi_stroke name="menu-02" size="16" color="currentColor" stroke_width="2" %}</span>
+  <section class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
+    <div class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div class="flex items-center gap-3">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="weight-scale-01" size="18" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Stock by warehouse</h2>
+          <p class="mt-1 text-xs text-gray-500">Current quantities and valuation for this item.</p>
+        </div>
       </div>
-      <h3 class="text-base font-bold text-gray-900">Variants</h3>
+      <a href="{% url 'inventory:stock_ledger_list' %}?item={{ item.pk }}" class="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 sm:self-auto">
+        View stock ledger
+        <span class="flex size-3.5 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span>
+      </a>
     </div>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+        <thead class="bg-gray-50">
           <tr>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Code</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Name</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">UOM</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Sellable</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">On menu</th>
-            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          {% for v in variants %}
-            <tr class="hover:bg-gray-50/50 transition-colors">
-              <td class="px-6 py-4 text-sm font-mono text-gray-500">{{ v.item_code }}</td>
-              <td class="px-6 py-4">
-                <a href="{% url 'inventory:item_detail' v.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500">{{ v.item_name }}</a>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ v.stock_uom.name }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if v.is_sales_item %}Yes{% else %}No{% endif %}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if v.on_menu %}Yes{% else %}No{% endif %}</td>
-              <td class="px-6 py-4 text-right">
-                <a href="{% url 'inventory:item_update' v.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500">Edit</a>
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No variants linked yet. Create items with this template as “Variant of”.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if menu_lines %}
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-lime-50 text-lime-600 flex items-center justify-center shadow-sm">
-        <span>{% hgi_stroke name="menu-restaurant" size="16" color="currentColor" stroke_width="2" %}</span>
-      </div>
-      <h3 class="text-base font-bold text-gray-900">On menus</h3>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
-          <tr>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Menu</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          {% for line in menu_lines %}
-            <tr class="hover:bg-gray-50/50 transition-colors">
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">
-                <a href="{% url 'menu:menu_detail' line.menu.pk %}" class="hover:text-orange-500">{{ line.menu.name }}</a>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ line.rate }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{% if line.disabled %}Disabled{% else %}Active{% endif %}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
-
-  {% if bins %}
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
-        <span>{% hgi_stroke name="credit-card" size="16" color="currentColor" stroke_width="2" %}</span>
-      </div>
-      <h3 class="text-base font-bold text-gray-900">Stock by Warehouse</h3>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
-          <tr>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Actual Qty</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Valuation Rate</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Stock Value</th>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Warehouse</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Actual quantity</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Reserved quantity</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Valuation rate</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Stock value</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           {% for bin in bins %}
-            <tr class="hover:bg-gray-50/50 transition-colors">
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.warehouse.name }}</td>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ bin.actual_qty }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.valuation_rate }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ bin.stock_value }}</td>
+            <tr class="transition-colors hover:bg-gray-50">
+              <td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:warehouse_detail' bin.warehouse.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ bin.warehouse.name }}</a></td>
+              <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ bin.actual_qty|floatformat:"-2"|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ bin.reserved_qty|floatformat:"-2"|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ bin.valuation_rate|floatformat:2|intcomma }}</td>
+              <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ bin.stock_value|floatformat:2|intcomma }}</td>
             </tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="folder-01" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No stock balances recorded for this item.</span></div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
+
+  {% if item.has_variants %}
+    <section class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
+      <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="18" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Variants</h2>
+          <p class="mt-1 text-xs text-gray-500">Item variants linked to this template.</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-100">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Code</th>
+              <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Name</th>
+              <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">UOM</th>
+              <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Sellable</th>
+              <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">On menu</th>
+              <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for variant in variants %}
+              <tr class="transition-colors hover:bg-gray-50">
+                <td class="px-5 py-3.5 font-mono text-sm text-gray-500 sm:px-6">{{ variant.item_code }}</td>
+                <td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' variant.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ variant.item_name }}</a></td>
+                <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ variant.stock_uom.name }}</td>
+                <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if variant.is_sales_item %}Yes{% else %}No{% endif %}</td>
+                <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if variant.on_menu %}Yes{% else %}No{% endif %}</td>
+                <td class="px-5 py-3.5 text-right sm:px-6"><a href="{% url 'inventory:item_update' variant.pk %}" aria-label="Edit {{ variant.item_name }}" title="Edit item" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500 sm:px-6">No variants linked yet. Create items with this template as “Variant of”.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   {% endif %}
 </div>
 {% endblock %}

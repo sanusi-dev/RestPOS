@@ -1,110 +1,99 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-  {% if is_create %}
-    {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Stock Entries" section_url="inventory:stock_entry_list" current_label="New Stock Entry" %}
-  {% else %}
-    {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Stock Entries" section_url="inventory:stock_entry_list" current_label="Edit Stock Entry" %}
-  {% endif %}
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-    <div>
-      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}New Stock Entry{% else %}Edit Stock Entry{% endif %}</h1>
-      <p class="text-sm text-gray-500">Receive stock into Store or transfer Store stock to Kitchen or Bar</p>
-    </div>
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Stock entries" section_url="inventory:stock_entry_list" current_label=is_create|yesno:"New stock entry,Edit stock entry" %}
+
+  <div class="mb-8 border-b border-gray-200 pb-6">
+    <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{% if is_create %}New stock entry{% else %}Edit stock entry{% endif %}</h1>
+    <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Receive stock into Store or transfer stock from Store to Kitchen and Bar.</p>
   </div>
 
   {% partialdef form inline %}
-  <form method="post" class="space-y-6"
+  <form method="post" class="space-y-5"
         x-data="{ purpose: '' }"
         x-init="const sel = $el.querySelector('#id_purpose'); if (sel) { purpose = sel.value; sel.addEventListener('change', () => purpose = sel.value); }">
     {% csrf_token %}
     {% if form.non_field_errors %}
-      <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium">{{ form.non_field_errors }}</div>
+      <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
-      <div class="absolute top-0 right-0 w-32 h-32 bg-teal-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-      <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3 relative z-10">
-        <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-500 flex items-center justify-center shadow-sm">
-          <span>{% hgi_stroke name="arrow-left-right" size="16" color="currentColor" stroke_width="2" %}</span>
+    <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="arrow-left-right" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Entry details</h2>
+          <p class="mt-1 text-xs text-gray-500">Choose the movement type and the business date for this entry.</p>
         </div>
-        <h3 class="text-base font-bold text-gray-900">Entry Details</h3>
       </div>
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 relative z-10">
-        <div class="sm:col-span-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
-          Receipts always enter central Store. Transfers always move from Store to Kitchen or Bar according to item department.
+
+      <div class="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600">
+        Receipts enter the central Store. Transfers leave Store and go to Kitchen or Bar according to each item’s department.
+      </div>
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        {% include "backoffice/components/form_field.html" with field=form.purpose %}
+        {% include "backoffice/components/form_field.html" with field=form.posting_date %}
+        <div class="md:col-span-2">
+          {% include "backoffice/components/form_field.html" with field=form.remarks %}
         </div>
-        {% for field in form %}
-          {% if field.name == "remarks" %}
-            <div class="sm:col-span-2">
-              {% include "backoffice/components/form_field.html" with field=field %}
-            </div>
-          {% else %}
-            {% include "backoffice/components/form_field.html" with field=field %}
-          {% endif %}
-        {% endfor %}
       </div>
-    </div>
+    </section>
 
     {% partialdef detail_items_partial inline %}
-    {% comment %}This container is replaced by HTMX; the management form preserves formset indices for validation.{% endcomment %}
-    <div id="stock-entry-items-container" class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
-      <div class="px-6 py-5 border-b border-gray-100 bg-white -mx-8 -mt-8 mb-6 flex items-center gap-3 relative z-10">
-        <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-500 flex items-center justify-center shadow-sm">
-          <span>{% hgi_stroke name="menu-02" size="16" color="currentColor" stroke_width="2" %}</span>
+    <section id="stock-entry-items-container" class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Items</h2>
+          <p class="mt-1 text-xs text-gray-500">Add the stock lines included in this movement.</p>
         </div>
-        <h3 class="text-base font-bold text-gray-900">Items</h3>
       </div>
+
       {{ detail_formset.management_form }}
-      {% if show_errors and detail_formset.non_form_errors %}
-        <div class="mb-4 rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium relative z-10">{{ detail_formset.non_form_errors }}</div>
-      {% endif %}
-      <div id="items-container" class="space-y-3 relative z-10">
-        {% for form in detail_formset %}
-          <div class="rounded-xl border border-gray-100 bg-white/60 p-4">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {% for field in form.visible_fields %}
-                {% if field.name == "basic_rate" %}
-                  <div x-show="purpose === 'MATERIAL_RECEIPT'" x-transition>
-                    {% include "backoffice/components/form_field.html" with field=field %}
-                  </div>
-                {% else %}
-                  {% include "backoffice/components/form_field.html" with field=field %}
-                {% endif %}
-              {% endfor %}
+      {% if detail_formset.non_form_errors %}<div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ detail_formset.non_form_errors }}</div>{% endif %}
+      <div id="items-container" class="space-y-3">
+        {% for detail_form in detail_formset %}
+          <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {% include "backoffice/components/form_field.html" with field=detail_form.item %}
+              {% include "backoffice/components/form_field.html" with field=detail_form.qty %}
+              <div x-show="purpose === 'MATERIAL_RECEIPT'" x-transition>
+                {% include "backoffice/components/form_field.html" with field=detail_form.basic_rate %}
+              </div>
             </div>
-            {% for field in form.hidden_fields %}{{ field }}{% endfor %}
-            {% if show_errors and form.non_field_errors %}<p class="mt-2 text-xs font-semibold text-red-500">{{ form.non_field_errors|join:", " }}</p>{% endif %}
+            {% for field in detail_form.hidden_fields %}{{ field }}{% endfor %}
+            {% if detail_form.non_field_errors %}<p class="mt-2 text-xs font-semibold text-red-500">{{ detail_form.non_field_errors|join:", " }}</p>{% endif %}
             <div class="mt-3 flex justify-end">
               <button type="button"
                       hx-post="{% url 'inventory:stock_entry_item_remove' forloop.counter0 %}"
                       hx-include="closest form"
                       hx-target="#stock-entry-items-container"
                       hx-swap="outerHTML"
-                      class="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
-                Remove
+                      class="backend-submit inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 transition hover:bg-gray-200 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this">
+                Remove item
               </button>
             </div>
           </div>
         {% endfor %}
       </div>
-      <div class="mt-4 pt-4 border-t border-gray-100">
+      <div class="mt-4 border-t border-gray-100 pt-4">
         <button type="button"
                 hx-post="{% url 'inventory:stock_entry_item_add' %}"
                 hx-include="closest form"
                 hx-target="#stock-entry-items-container"
                 hx-swap="outerHTML"
-                class="px-4 py-2 rounded-xl text-sm font-semibold text-teal-600 bg-teal-50 hover:bg-teal-100 hover:text-teal-700 transition-colors">
-          + Add Row
+                class="backend-submit inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this">
+          <span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>
+          Add item
         </button>
       </div>
-    </div>
+    </section>
     {% endpartialdef %}
 
-    <div class="flex items-center justify-end gap-3 pt-4">
-      <a href="{% url 'inventory:stock_entry_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
-      <button type="submit" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-        {% if is_create %}Create Entry{% else %}Save Changes{% endif %}
+    <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
+      <a href="{% url 'inventory:stock_entry_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
+      <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+        <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
+        {% if is_create %}Create stock entry{% else %}Save changes{% endif %}
       </button>
     </div>
   </form>
