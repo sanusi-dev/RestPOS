@@ -60,7 +60,13 @@ class ExpectedClosingAmountsTest(TestCase):
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         cls.item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice",
+            item_group=cls.group,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1500"))
@@ -131,7 +137,13 @@ class SubmitClosingEntryTest(TestCase):
         cls.group = ItemGroup.objects.create(name="Food")
         cls.warehouse = Warehouse.objects.create(name="Kitchen", account=cls.accounts["cogs"])
         cls.item = Item.objects.create(
-            item_name="Jollof Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_sales_item=True
+            item_name="Jollof Rice",
+            item_group=cls.group,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.menu = Menu.objects.create(name="Main Menu")
         cls.menu_item = MenuItem.objects.create(menu=cls.menu, item=cls.item, rate=Decimal("1500"))
@@ -167,4 +179,3 @@ class SubmitClosingEntryTest(TestCase):
         self.opening.refresh_from_db()
         self.assertFalse(self.opening.is_open)
         self.assertEqual(self.opening.closing_entry_id, closing.pk)
-
