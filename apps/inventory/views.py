@@ -437,6 +437,7 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @backoffice_required
 def reconciliation_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
+    purpose = request.GET.get("purpose")
     reason = request.GET.get("reason")
     warehouse_id = request.GET.get("warehouse")
     date_from = request.GET.get("date_from")
@@ -444,6 +445,8 @@ def reconciliation_list(request: HttpRequest) -> HttpResponse:
     reconciliations = StockReconciliation.objects.select_related("warehouse").all()
     if status:
         reconciliations = reconciliations.filter(status=status)
+    if purpose:
+        reconciliations = reconciliations.filter(purpose=purpose)
     if reason:
         reconciliations = reconciliations.filter(reason=reason)
     if warehouse_id:
@@ -458,8 +461,10 @@ def reconciliation_list(request: HttpRequest) -> HttpResponse:
         {
             "reconciliations": reconciliations,
             "warehouses": Warehouse.objects.filter(disabled=False),
+            "purpose_choices": StockReconciliation._meta.get_field("purpose").choices,
             "reason_choices": StockReconciliation._meta.get_field("reason").choices,
             "selected_status": status,
+            "selected_purpose": purpose,
             "selected_reason": reason,
             "selected_warehouse": warehouse_id,
             "date_from": date_from or "",
@@ -512,7 +517,7 @@ def reconciliation_detail(request: HttpRequest, pk: int) -> HttpResponse:
     items = reconciliation.items.select_related("item").all()
     voucher_no = str(pk)
     ledger_entries = StockLedgerEntry.objects.filter(
-        voucher_type="Stock Reconciliation", voucher_no=voucher_no
+        voucher_type__in=["Stock Reconciliation", "Stock Reconciliation Cancellation"], voucher_no=voucher_no
     ).select_related("item", "warehouse")
     return render(
         request,

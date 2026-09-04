@@ -41,7 +41,7 @@ phase completes before the next starts.
 | Phase | Apps involved | Features covered | Completed work | Remaining work | Detailed plan status | Progress status |
 |---|---|---|---|---|---|---|
 | 1 | settings | A1 | Restaurant singleton (company, invoice prefix, warehouses, draft cap, history toggle), production units with printer config, staff role assignment | — | n/a | Completed |
-| 2 | inventory | A3, A9 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations) | — | n/a | Completed |
+| 2 | inventory | A3, A9 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations) | UOM conversion rework — purchase-unit vs stock-unit (§4.10) | §4.10 | Completed / Planned rework |
 | 3 | menu | A2 | Menu, menu items, specials, disable, images, variants, add-ons, seed command | — | n/a | Completed |
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
@@ -636,7 +636,7 @@ override. Electricity optional (blank = ₦0).
 - **D1 — Backdated receipts = full WAC blend at actual cost.** Any receipt blends:
   `new_wac = (old_qty×old_wac + qty×actual)/(old_qty+qty)`. No variance at receipt; `posting_date` is audit only.
 - **D2 — Wastage = no warehouse.** Keep `WASTE_DAMAGE` as `StockReconciliation.reason` on a real warehouse, valued at current WAC → existing `Restaurant.wastage_account`.
-- **D3 — Opening stock entered rate seeds WAC.** `OPENING_STOCK` posts at user `valuation_rate`; if `Bin qty==0` and the adjustment adds stock, require `valuation_rate` to seed WAC; else current WAC.
+- **D3 — Opening stock entered rate seeds WAC.** `OPENING_STOCK` posts at user `valuation_rate`; if `Bin qty==0` and the adjustment adds stock, require `valuation_rate` to seed WAC; else current WAC. Opening Stock uses the matching `OPENING_STOCK` reconciliation reason; ordinary reconciliations use the operational reasons.
 - **D4 — GRN at receipt (accrual).** Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ receipt rate. Stock invoices must link a receipt via `SupplierInvoice.purchase_receipt` and post `Dr GRNI / Cr Payable` @ the same rate. Expense-only invoices need no receipt. No unlinked `Dr SIH / Cr Payable` path. Random market purchase without formal receipt uses `StockEntry MATERIAL_RECEIPT` → `Dr SIH / Cr expense` directly (no GRNI, no invoice).
 - **D5 — Dedicated variance account** `Restaurant.inventory_price_variance_account` for **cancellation WAC drift only**. Sale-return variance posts to **COGS**: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative. No `PURCHASE_PRICE` variance type.
 - **D6 — Block receipt cancel if downstream financial doc active** — `SupplierInvoice(status=SUBMITTED, purchase_receipt=receipt)` OR `SupplierPayment` allocation against that invoice. Cancel chain: `Payment → Invoice → Receipt`.
@@ -667,3 +667,131 @@ override. Electricity optional (blank = ₦0).
 - Sale-return variance: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative.
 
 **Settings:** `Restaurant.stock_received_but_not_billed_account` (GRNI, liability) + `Restaurant.inventory_price_variance_account` (expense). Seed defaults in `seed_chart_of_accounts`; forms validate required when inventory active.
+
+### 4.10 Item & Receipt UOM Conversion — purchase unit vs stock unit (Phase 2 rework)
+
+**Status:** planned — not yet implemented.
+
+**Problem:** `Item.stock_uom` (inventory/models.py:94) currently doubles as the purchase
+unit, so an item bought by the Crate is priced, stocked, and sold by the Crate. RestPOS
+needs the stock/sell unit (Piece, Bottle, kg) to differ from the purchase unit (Crate,
+Carton, Bag): drinks sell per bottle, ingredients are counted per kg, while purchase
+paperwork stays in the supplier's bulk unit. POS food dishes are virtual and unaffected.
+
+**Decisions:**
+
+- **D1 — Base unit convention.** `Item.stock_uom` is the sellable/countable unit (Piece,
+  Bottle, kg, litre, plate). Bins, ledger entries, stock reconciliations, and POS sales are
+  all denominated in it. It is never a bulk purchase unit.
+- **D2 — Conversion table (editable rows).** `ItemUOMConversion` holds one row per
+  alternate bulk unit, each with `conversion_factor` = how many stock UOMs make one of that
+  unit ("1 Crate = 24 Pieces"). `unique_together (item, uom)`; clean() enforces
+  `uom != item.stock_uom`, `factor > 0`, and that the parent item is stock + purchase
+  enabled. Rows are editable; submitted receipts are protected by the per-line snapshot
+  (D3). Changing `Item.stock_uom` while conversion rows exist is rejected by `Item.clean()`
+  (remove them first) so no factor is orphaned. No row for the stock UOM — it is factor 1
+  by definition.
+- **D3 — Per-line factor snapshot.** `PurchaseReceiptItem` gains `uom` (FK UOM, defaults to
+  the item's `stock_uom`) and `conversion_factor` (Decimal, default 1). The factor is
+  re-derived from the item's current conversion table in `PurchaseReceiptItem.save()`
+  whenever the line is saved; a submitted line is immutable, so its saved factor is frozen
+  for the life of the receipt. `received_qty` / `rate` / `amount` keep their as-bought
+  meaning (the supplier invoice says "5 Crates @ ₦12,000"), because the commercial record is
+  unit-agnostic money.
+- **D4 — Convert once at the receipt boundary.** On submit the ledger entry is
+  `quantity = received_qty × conversion_factor`, `unit_rate = rate ÷ conversion_factor`.
+  The GL entry is unchanged: `amount = received_qty × rate`, which is money and needs no
+  conversion. WAC then lives per stock UOM from that point forward.
+- **D5 — `last_purchase_rate` stored per stock UOM.** On submit it is set to
+  `line.rate ÷ line.conversion_factor` (per-piece / per-kg), because a Crate may be bought
+  at ₦12,000 but the per-bottle figure must feed `MenuItem` rate defaulting
+  (menu/models.py:68) and stay consistent with the ledger's per-stock-unit WAC.
+  `_revert_last_purchase_rates` must also divide — it reads `prior.rate` (an as-bought rate)
+  and so restores `prior.rate ÷ prior.conversion_factor` using the prior line's own snapshot
+  factor, not the current line's.
+- **D6 — Sales side unchanged.** The POS sells in `stock_uom` by definition; `order_item.qty`
+  maps 1:1 onto the bin (`_locked_drink_stock`), so no conversion and no `sales_uom` is
+  needed. This is what fixes the crate-at-POS bug.
+- **D7 — Seed rewrite.** Rewrite `seed_menu_catalog` to build realistic small test data under
+  the base-unit convention: bulk-purchased items (rice, palm oil, drinks) get a stock UOM in
+  the countable unit plus a conversion row for the bulk unit; drinks store `last_purchase_rate`
+  per bottle; virtual dishes stay as-is.
+
+**Models:**
+
+**ItemUOMConversion**
+
+| Field | Type | Notes |
+|---|---|---|
+| `item` | FK Item, CASCADE, related_name="uom_conversions" | parent |
+| `uom` | FK UOM, PROTECT | the alternate bulk unit (Crate, Carton, Bag) |
+| `conversion_factor` | Decimal(10,4) | `> 0`; stock UOMs per one of `uom` |
+
+`Meta.unique_together = ("item", "uom")`. Direction is always "1{uom} = {factor} stock_uom".
+
+**PurchaseReceiptItem** (additions)
+
+| Field | Type | Notes |
+|---|---|---|
+| `uom` | FK UOM, PROTECT | default = item's `stock_uom`; must be the stock UOM or a conversion row |
+| `conversion_factor` | Decimal(10,4), default 1 | snapshotted in `save()`; read-only in the form |
+
+`save()` derives `conversion_factor` from `self.item` + `self.uom` (1 if `uom == stock_uom`,
+else the matching conversion row, else raise `ValidationError`); `amount` stays
+`received_qty × rate`.
+
+**Item** — no new field; only the `clean()` guard that `stock_uom` cannot change while
+`uom_conversions` exist (D2).
+
+**Posting rules:**
+
+- Receipt submit: SLE `quantity = received_qty × conversion_factor`, `unit_rate = rate ÷
+  conversion_factor`. WAC blend unchanged. GL `Debit SIH / Credit GRNI @ amount` unchanged.
+- Receipt cancellation: reversal at current WAC in stock UOM, as today; `_revert_last_purchase_rates`
+  stores `prior rate` already in per-stock-unit terms.
+- Transfers, reconciliations, sales: all already in `stock_uom`; no conversion anywhere.
+
+**Frontend:**
+
+- **Item form** (`item_form.html`): a "UOM conversions" inline formset below the
+  `stock_uom` field (`ItemUOMConversionFormSet = inlineformset_factory(Item, ItemUOMConversion, ...)`),
+  rendered as a table of (Unit, Factor), with the same HTMX add/remove-row partial pattern
+  as `purchase_receipt_form.html`.
+- **Purchase receipt line form** (`PurchaseReceiptItemForm`): add a `uom` dropdown filtered
+  to the item's stock UOM + its conversion rows, defaulting to `stock_uom`. `conversion_factor`
+  is not a form field (derived). A read-only "stock qty" preview shows `received_qty × factor`
+  in `stock_uom` (e.g. "5 Crate = 120 Bottle"), updated via an `hx-get` partial when the
+  item or uom changes. `PurchaseReceiptItemForm.clean()` validates the chosen `uom` against
+  the item's table.
+
+**Seeds:**
+
+- UOMs: add `Piece`, `Bottle`, `Crate`, `Carton`, `Bag`, `kg`, `Litre` (whichever the seed
+  needs).
+- Drinks (Coke etc.): `stock_uom = Bottle`, conversion row `1 Crate = 24 Bottle`,
+  `last_purchase_rate` per bottle.
+- Raw ingredients (rice): `stock_uom = Kg`, conversion row `1 Bag = 50 Kg`.
+- Virtual dishes (Jollof etc.): unchanged, `stock_uom = Plate`.
+- Command stays idempotent and clears/recreates the seeded Items so re-running after a wipe
+  yields the new convention.
+
+**Migration & rollout:**
+
+- `makemigrations` for `ItemUOMConversion` (CreateModel) and the two `PurchaseReceiptItem`
+  additions (AddField). No hand-written schema.
+- Wipe inventory transactional + receipt data (PurchaseReceipt, StockLedgerEntry, Bin,
+  SupplierInvoice/Payment as needed) and reseed per D7 — existing data is dummy; the seed is
+  the canonical test dataset.
+
+**Tests:**
+
+- Model: `ItemUOMConversion.clean()` (uom != stock_uom, factor > 0, stock+purchase parent);
+  unique (item, uom); `PurchaseReceiptItem.save()` factor derivation (stock_uom → 1,
+  conversion row → its factor, unknown uom → error).
+- Service: `submit_purchase_receipt` posts `qty×factor` / `rate÷factor` into the SLE and
+  blends WAC correctly; `last_purchase_rate` stored per stock UOM; cancellation reverts to
+  the prior per-stock-unit rate.
+- Form: uom dropdown filtering; factor auto-fill; stock-qty preview value; clean() rejects an
+  out-of-table uom.
+- Seed: command is idempotent and produces the base-unit convention (drinks per bottle with a
+  crate conversion, rice per kg with a bag conversion, virtual dishes per plate).

@@ -140,6 +140,15 @@ class StockEntryForm(InventoryModelForm):
         model = StockEntry
         fields = ["purpose", "posting_date", "remarks"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = list(self.fields["purpose"].choices)
+        if choices and choices[0][0] == "":
+            choices[0] = ("", "Select purpose...")
+        else:
+            choices.insert(0, ("", "Select purpose..."))
+        self.fields["purpose"].choices = choices
+
 
 class StockEntryDetailForm(InventoryModelForm):
     class Meta:
@@ -148,19 +157,11 @@ class StockEntryDetailForm(InventoryModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        filters = {"disabled": False, "is_stock_item": True, "has_variants": False}
         purpose = self.data.get("purpose") if self.is_bound else None
-        stock_entry = getattr(self.instance, "stock_entry", None)
-        if not purpose and stock_entry:
-            purpose = stock_entry.purpose
-        if purpose == "MATERIAL_RECEIPT":
-            filters["is_purchase_item"] = True
-        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, **filters)
-        if purpose == "MATERIAL_TRANSFER":
-            self.fields["basic_rate"].widget = self.fields["basic_rate"].hidden_widget()
-            self.fields["basic_rate"].required = False
-        else:
-            self.fields["basic_rate"].required = True
+        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False, is_stock_item=True)
+        self.fields["basic_rate"].initial = None
+        self.fields["basic_rate"].required = purpose != "MATERIAL_TRANSFER"
+        self.fields["basic_rate"].widget.attrs["x-bind:disabled"] = "purpose === 'MATERIAL_TRANSFER'"
 
 
 class StockReconciliationForm(InventoryModelForm):
@@ -171,6 +172,22 @@ class StockReconciliationForm(InventoryModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
+        choices = list(self.fields["reason"].choices)
+        if choices and choices[0][0] == "":
+            choices[0] = ("", "Select reason...")
+        else:
+            choices.insert(0, ("", "Select reason..."))
+        self.fields["reason"].choices = choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        purpose = cleaned_data.get("purpose")
+        reason = cleaned_data.get("reason")
+        if purpose == "OPENING_STOCK" and reason != "OPENING_STOCK":
+            self.add_error("reason", "Opening Stock must use the Opening Stock reason.")
+        elif purpose == "RECONCILIATION" and reason == "OPENING_STOCK":
+            self.add_error("reason", "Opening Stock reason is only valid for Opening Stock purpose.")
+        return cleaned_data
 
 
 class StockReconciliationItemForm(InventoryModelForm):
@@ -180,9 +197,8 @@ class StockReconciliationItemForm(InventoryModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["item"].queryset = active_choices(
-            Item, self.instance.item_id, disabled=False, is_stock_item=True, has_variants=False
-        )
+        self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False, is_stock_item=True)
+        self.fields["valuation_rate"].widget.attrs["x-bind:disabled"] = "purpose !== 'OPENING_STOCK'"
 
 
 class PurchaseReceiptForm(InventoryModelForm):
@@ -234,7 +250,6 @@ class PurchaseReceiptItemForm(InventoryModelForm):
             disabled=False,
             is_stock_item=True,
             is_purchase_item=True,
-            has_variants=False,
         )
 
 

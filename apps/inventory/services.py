@@ -404,6 +404,10 @@ def submit_stock_reconciliation(reconciliation):
     valid_reasons = {value for value, _label in locked._meta.get_field("reason").choices}
     if locked.reason not in valid_reasons:
         raise ValidationError("A reconciliation reason is required.")
+    if locked.purpose == "OPENING_STOCK" and locked.reason != "OPENING_STOCK":
+        raise ValidationError("Opening Stock must use the Opening Stock reason.")
+    if locked.purpose == "RECONCILIATION" and locked.reason == "OPENING_STOCK":
+        raise ValidationError("Opening Stock reason is only valid for Opening Stock purpose.")
 
     lines = list(locked.items.select_related("item", "item__item_group"))
     if not lines:

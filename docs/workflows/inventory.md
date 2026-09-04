@@ -44,15 +44,15 @@ Supports `MATERIAL_RECEIPT` and `MATERIAL_TRANSFER`. Receipts land at `Restauran
 
 ### Purchase Receipt
 
-`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Submission also updates `Item.last_purchase_rate`. The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own.
+`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Each line records the UOM it was bought in (the item's base unit or one of its `uom_conversions`) with a snapshotted `conversion_factor`; on submit the ledger stores `received_qty × factor` at `rate ÷ factor`, so WAC and stock live in the base (sellable) unit. `Item.last_purchase_rate` is updated to the per-base-unit value (`rate ÷ factor`). The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own.
 
 ### Stock Reconciliation
 
-The user enters a count. Submission locks bins and posts `count - actual` only. Non-opening counts cannot fall below reserved quantity. `CONSUMPTION` is restricted to FOOD items at the Kitchen warehouse. Cancellation reverses the voucher entries.
+The user enters a count. Submission locks bins and posts `count - actual` only. Opening Stock uses the `OPENING_STOCK` reason and can seed valuation with an entered rate. Ordinary reconciliations use the physical-count, consumption, waste/damage, or correction reasons. Non-opening counts cannot fall below reserved quantity. `CONSUMPTION` is restricted to FOOD items at the Kitchen warehouse. Cancellation reverses the voucher entries. Reconciliation detail history includes both the original movements and any cancellation reversals.
 
 ## Reversal and Immutability
 
-Document cancellations create reversal SLEs at current WAC with `reversal_of_sle` linking back to the original, never editing it. Purchase receipt cancellation is blocked when a submitted invoice (or allocated payment) exists; allowed cancellations compute `variance = qty*(current_wac − original_rate)` as `CANCELLATION_WAC` to the variance account. Transfer cancellation reverses at dest current WAC (net zero). Parent document saves reject post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct status changes can bypass service posting.
+Document cancellations create reversal SLEs at current WAC with `reversal_of_sle` linking back to the original, never editing it. Purchase receipt cancellation is blocked when a submitted invoice (or allocated payment) exists; allowed cancellations compute `variance = qty*(current_wac − original_rate)` as `CANCELLATION_WAC` to the variance account. Transfer cancellation reverses at dest current WAC (net zero). Stock-entry detail history includes both the original movements and their cancellation reversals. Parent document saves reject post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct status changes can bypass service posting.
 
 ## Backoffice Surface
 

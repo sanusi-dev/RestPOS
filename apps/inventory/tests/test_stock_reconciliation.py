@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from apps.inventory.forms import StockReconciliationForm, StockReconciliationItemForm
 from apps.inventory.models import (
     UOM,
     Bin,
@@ -32,6 +33,30 @@ class StockReconciliationTest(TestCase):
         defaults = {"warehouse": self.kitchen, "reason": "PHYSICAL_COUNT"}
         defaults.update(kwargs)
         return StockReconciliation.objects.create(**defaults)
+
+    def test_form_uses_reason_placeholder_and_disables_rate_outside_opening_stock(self):
+        form = StockReconciliationForm()
+        item_form = StockReconciliationItemForm()
+
+        self.assertEqual(form.fields["reason"].choices[0], ("", "Select reason..."))
+        self.assertEqual(
+            item_form.fields["valuation_rate"].widget.attrs["x-bind:disabled"],
+            "purpose !== 'OPENING_STOCK'",
+        )
+
+    def test_opening_stock_requires_matching_reason(self):
+        rec = self.make_reconciliation(purpose="OPENING_STOCK", reason="PHYSICAL_COUNT")
+        StockReconciliationItem.objects.create(
+            reconciliation=rec, item=self.item, qty=Decimal("4"), valuation_rate=Decimal("100")
+        )
+        with self.assertRaisesMessage(ValidationError, "Opening Stock must use the Opening Stock reason"):
+            submit_stock_reconciliation(rec)
+
+    def test_regular_reconciliation_rejects_opening_stock_reason(self):
+        rec = self.make_reconciliation(purpose="RECONCILIATION", reason="OPENING_STOCK")
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("4"))
+        with self.assertRaisesMessage(ValidationError, "Opening Stock reason is only valid"):
+            submit_stock_reconciliation(rec)
 
     def test_submit_rereads_locked_current_qty(self):
         rec = self.make_reconciliation()

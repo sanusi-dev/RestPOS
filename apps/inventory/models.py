@@ -444,7 +444,7 @@ class StockEntry(BaseModel):
     @staticmethod
     def stock_ledger_entries_for_voucher(voucher_no):
         return StockLedgerEntry.objects.select_related("item", "warehouse").filter(
-            voucher_type="Stock Entry", voucher_no=voucher_no
+            voucher_type__in=["Stock Entry", "Stock Entry Cancellation"], voucher_no=voucher_no
         )
 
 
@@ -548,6 +548,7 @@ class StockReconciliation(BaseModel):
     reason = models.CharField(
         max_length=20,
         choices=[
+            ("OPENING_STOCK", "Opening Stock"),
             ("PHYSICAL_COUNT", "Physical Count"),
             ("CONSUMPTION", "Consumption"),
             ("WASTE_DAMAGE", "Waste / Damage"),

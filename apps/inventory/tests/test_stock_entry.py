@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from apps.inventory.forms import StockEntryDetailForm, StockEntryForm
 from apps.inventory.models import (
     UOM,
     Bin,
@@ -54,6 +55,20 @@ class StockEntryTest(TestCase):
             is_purchase_item=True,
             is_sales_item=True,
         )
+
+    def test_forms_keep_rate_visible_and_disable_it_for_transfers(self):
+        receipt_form = StockEntryDetailForm(data={"purpose": "MATERIAL_RECEIPT"})
+        transfer_form = StockEntryDetailForm(data={"purpose": "MATERIAL_TRANSFER"})
+
+        self.assertNotIn("hidden", receipt_form.fields["basic_rate"].widget.attrs)
+        self.assertEqual(receipt_form.fields["basic_rate"].required, True)
+        self.assertNotIn("hidden", transfer_form.fields["basic_rate"].widget.attrs)
+        self.assertEqual(transfer_form.fields["basic_rate"].required, False)
+        self.assertEqual(
+            transfer_form.fields["basic_rate"].widget.attrs["x-bind:disabled"],
+            "purpose === 'MATERIAL_TRANSFER'",
+        )
+        self.assertEqual(StockEntryForm().fields["purpose"].choices[0], ("", "Select purpose..."))
 
     def test_receipt_forces_store_and_requires_purchasable_stock_item(self):
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
@@ -187,3 +202,9 @@ class StockEntryTest(TestCase):
         store_bin = Bin.objects.get(item=self.food, warehouse=self.store)
         self.assertEqual(store_bin.actual_qty, Decimal("2"))
         self.assertEqual(store_bin.valuation_rate, Decimal("150"))
+        history = StockEntry.stock_ledger_entries_for_voucher(str(entry.pk))
+        self.assertEqual(history.count(), 4)
+        self.assertEqual(
+            set(history.values_list("voucher_type", flat=True)),
+            {"Stock Entry", "Stock Entry Cancellation"},
+        )

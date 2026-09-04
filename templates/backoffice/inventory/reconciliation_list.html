@@ -1,105 +1,99 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-<div class="w-full">
-
+<div class="w-full" x-data="{ filtersOpen: false }">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Reconciliations" %}
 
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+  <div class="mb-5 flex flex-col gap-5 border-b border-gray-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Stock Reconciliations</h1>
-      <p class="text-sm text-gray-500">Periodic stock counts and adjustments</p>
+      <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Reconciliations</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Record physical counts, consumption, waste, and stock corrections.</p>
     </div>
-    <a href="{% url 'inventory:reconciliation_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-      <span>{% hgi_stroke name="plus-sign-circle" size="16" color="currentColor" stroke_width="2" %}</span>
-      New Reconciliation
-    </a>
+    <div class="flex items-center gap-2">
+      <div class="relative shrink-0">
+        <button type="button" @click="filtersOpen = !filtersOpen" :aria-expanded="filtersOpen.toString()" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400 sm:w-auto">
+          <span class="flex size-4 items-center justify-center">{% hgi_stroke name="filter" size="16" color="currentColor" stroke_width="2" %}</span>
+          Filters
+          <span class="flex size-4 items-center justify-center transition-transform" :class="filtersOpen && 'rotate-180'">{% hgi_stroke name="arrow-down-01" size="16" color="currentColor" stroke_width="2" %}</span>
+        </button>
+
+        <div x-cloak x-show="filtersOpen" @click.outside="filtersOpen = false" x-transition class="absolute right-0 z-20 mt-2 w-[min(34rem,calc(100vw-2rem))] rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_12px_32px_rgb(0,0,0,0.12)]">
+          <div class="mb-4 flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-gray-900">Filter reconciliations</h2>
+              <p class="mt-0.5 text-xs text-gray-500">Narrow adjustments by purpose, status, reason, warehouse, or date.</p>
+            </div>
+            <button type="button" @click="filtersOpen = false" aria-label="Close filters" class="flex size-6 items-center justify-center text-gray-400 transition-colors hover:text-gray-700">{% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}</button>
+          </div>
+
+          <form method="get" @submit="filtersOpen = false" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label for="status-filter" class="mb-1 block text-xs font-semibold text-gray-600">Status</label>
+                <select id="status-filter" name="status" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+                  <option value="">All statuses</option>
+                  <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+                  <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+                  <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label for="purpose-filter" class="mb-1 block text-xs font-semibold text-gray-600">Purpose</label>
+                <select id="purpose-filter" name="purpose" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+                  <option value="">All purposes</option>
+                  {% for value, label in purpose_choices %}<option value="{{ value }}" {% if selected_purpose == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="reason-filter" class="mb-1 block text-xs font-semibold text-gray-600">Reason</label>
+                <select id="reason-filter" name="reason" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+                  <option value="">All reasons</option>
+                  {% for value, label in reason_choices %}<option value="{{ value }}" {% if selected_reason == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="warehouse-filter" class="mb-1 block text-xs font-semibold text-gray-600">Warehouse</label>
+                <select id="warehouse-filter" name="warehouse" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+                  <option value="">All warehouses</option>
+                  {% for warehouse in warehouses %}<option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>{% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="date-from" class="mb-1 block text-xs font-semibold text-gray-600">From posting date</label>
+                <input id="date-from" name="date_from" type="date" value="{{ date_from }}" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+              </div>
+              <div>
+                <label for="date-to" class="mb-1 block text-xs font-semibold text-gray-600">To posting date</label>
+                <input id="date-to" name="date_to" type="date" value="{{ date_to }}" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30">
+              </div>
+            </div>
+            <div class="mt-4 flex justify-between gap-3 border-t border-gray-100 pt-3">
+              <a href="{% url 'inventory:reconciliation_list' %}" class="inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900">Clear filters</a>
+              <button type="submit" class="backend-submit inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">Apply filters</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <a href="{% url 'inventory:reconciliation_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 sm:px-5">
+        <span>{% hgi_stroke name="plus-sign-circle" size="16" color="currentColor" stroke_width="2" %}</span>
+        <span class="hidden sm:inline">New reconciliation</span>
+        <span class="sm:hidden">New</span>
+      </a>
+    </div>
   </div>
 
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
-    <form method="get" class="flex flex-wrap items-end gap-3" x-data hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
-      <label for="status-filter" class="text-sm font-semibold text-gray-700">Status:</label>
-      <select id="status-filter" name="status"
-              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
-              x-on:change="$el.form.submit()">
-        <option value="">All</option>
-        <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
-        <option value="SUBMITTED" {% if selected_status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
-        <option value="CANCELLED" {% if selected_status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
-      </select>
-      <div>
-        <label for="reason-filter" class="block text-xs font-semibold text-gray-600 mb-1">Reason</label>
-        <select id="reason-filter" name="reason" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm bg-white/50" x-on:change="$el.form.submit()">
-          <option value="">All reasons</option>
-          {% for value, label in reason_choices %}<option value="{{ value }}" {% if selected_reason == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div>
-        <label for="warehouse-filter" class="block text-xs font-semibold text-gray-600 mb-1">Warehouse</label>
-        <select id="warehouse-filter" name="warehouse" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm bg-white/50" x-on:change="$el.form.submit()">
-          <option value="">All warehouses</option>
-          {% for warehouse in warehouses %}<option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <div><label for="date-from" class="block text-xs font-semibold text-gray-600 mb-1">From</label><input id="date-from" name="date_from" type="date" value="{{ date_from }}" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm bg-white/50"></div>
-      <div><label for="date-to" class="block text-xs font-semibold text-gray-600 mb-1">To</label><input id="date-to" name="date_to" type="date" value="{{ date_to }}" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm bg-white/50"></div>
-      <button class="backend-submit rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white" type="submit">Filter</button>
-    </form>
-  </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
-          <tr>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">ID</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Purpose</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Reason</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Warehouse</th>
-            <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
-          </tr>
-        </thead>
+        <thead class="bg-gray-50"><tr><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Entry</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Purpose</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Reason</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Posting date</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Warehouse</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Status</th></tr></thead>
         <tbody class="divide-y divide-gray-100">
           {% for rec in reconciliations %}
-            <tr class="hover:bg-gray-50/50 transition-colors">
-              <td class="px-6 py-4">
-                <a href="{% url 'inventory:reconciliation_detail' rec.pk %}" class="text-sm font-semibold text-gray-900 hover:text-orange-500 transition-colors">#{{ rec.pk }}</a>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ rec.get_purpose_display }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ rec.get_reason_display }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ rec.posting_date }}</td>
-              <td class="px-6 py-4 text-sm text-gray-500">{{ rec.warehouse.name }}</td>
-              <td class="px-6 py-4">
-                {% if rec.status == 'DRAFT' %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 ring-1 ring-gray-300/30">Draft</span>
-                {% elif rec.status == 'SUBMITTED' %}
-                  <span class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600">
-                    <span class="relative flex h-2 w-2">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    Submitted
-                  </span>
-                {% else %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/10">Cancelled</span>
-                {% endif %}
-              </td>
-            </tr>
+            <tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:reconciliation_detail' rec.pk %}" class="text-sm font-semibold text-gray-900 transition-colors hover:text-gray-600">#{{ rec.pk }}</a></td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ rec.get_purpose_display }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ rec.get_reason_display }}</td><td class="px-5 py-3.5 text-sm tabular-nums text-gray-500 sm:px-6">{{ rec.posting_date }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ rec.warehouse.name }}</td><td class="px-5 py-3.5 sm:px-6">{% if rec.status == 'DRAFT' %}<span class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-600/10">Draft</span>{% elif rec.status == 'SUBMITTED' %}<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>{% else %}<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}</td></tr>
           {% empty %}
-            <tr>
-              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
-                <div class="flex flex-col items-center gap-2">
-                  <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
-                    <span>{% hgi_stroke name="checkmark-circle-01" size="24" color="currentColor" stroke_width="1.5" %}</span>
-                  </div>
-                  <span class="font-medium mt-2 text-gray-600">No reconciliations yet.</span>
-                </div>
-              </td>
-            </tr>
+            <tr><td colspan="6" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="checkmark-circle-01" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No reconciliations found.</span><span class="text-xs text-gray-400">Try broadening your filters or create a new reconciliation.</span></div></td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

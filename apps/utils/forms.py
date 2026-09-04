@@ -87,24 +87,12 @@ def add_formset_row(formset_class, prefix, post_data):
 
     empty_form = formset_class(prefix=prefix).empty_form
     line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
 
     for field in line_fields:
         post_data[f"{prefix}-{total_forms}-{field}"] = ""
 
     post_data[f"{prefix}-TOTAL_FORMS"] = str(total_forms + 1)
 
-    purpose = post_data.get("purpose") if "purpose" in post_data else None
-    stock_entry = None
-    if purpose:
-        try:
-            stock_entry = formset_class.model._meta.get_field("stock_entry").remote_field.model(purpose=purpose)
-        except Exception:
-            pass
-    if stock_entry is not None:
-        return formset_class(post_data, instance=stock_entry, prefix=prefix)
     return formset_class(post_data, prefix=prefix)
 
 
@@ -114,9 +102,6 @@ def remove_formset_row(formset_class, prefix, post_data, index):
 
     empty_form = formset_class(prefix=prefix).empty_form
     line_fields = list(empty_form.fields.keys())
-    pk_field = empty_form._meta.model._meta.pk.name
-    if pk_field not in line_fields:
-        line_fields.append(pk_field)
 
     new_data = {}
     new_index = 0
@@ -145,13 +130,4 @@ def remove_formset_row(formset_class, prefix, post_data, index):
     encoded = urllib.parse.urlencode(new_data, doseq=True)
     rebuilt = QueryDict(encoded, mutable=True)
 
-    purpose = post_data.get("purpose") if "purpose" in post_data else None
-    stock_entry = None
-    if purpose:
-        try:
-            stock_entry = formset_class.model._meta.get_field("stock_entry").remote_field.model(purpose=purpose)
-        except Exception:
-            pass
-    if stock_entry is not None:
-        return formset_class(rebuilt, instance=stock_entry, prefix=prefix)
     return formset_class(rebuilt, prefix=prefix)

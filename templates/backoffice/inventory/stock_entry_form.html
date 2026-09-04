@@ -3,15 +3,13 @@
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Stock entries" section_url="inventory:stock_entry_list" current_label=is_create|yesno:"New stock entry,Edit stock entry" %}
 
-  <div class="mb-8 border-b border-gray-200 pb-6">
+  <div class="mb-6 border-b border-gray-200 pb-5">
     <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{% if is_create %}New stock entry{% else %}Edit stock entry{% endif %}</h1>
     <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Receive stock into Store or transfer stock from Store to Kitchen and Bar.</p>
   </div>
 
   {% partialdef form inline %}
-  <form method="post" class="space-y-5"
-        x-data="{ purpose: '' }"
-        x-init="const sel = $el.querySelector('#id_purpose'); if (sel) { purpose = sel.value; sel.addEventListener('change', () => purpose = sel.value); }">
+  <form method="post" class="space-y-5" x-data="{ purpose: '' }" x-init="const sel = $el.querySelector('#id_purpose'); if (sel) { purpose = sel.value; sel.addEventListener('change', () => purpose = sel.value); }" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
@@ -22,19 +20,13 @@
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="arrow-left-right" size="19" color="currentColor" stroke_width="2" %}</span>
         <div>
           <h2 class="text-sm font-extrabold text-gray-900">Entry details</h2>
-          <p class="mt-1 text-xs text-gray-500">Choose the movement type and the business date for this entry.</p>
+          <p class="mt-1 text-xs text-gray-500">Choose how stock moves and when it should be recorded.</p>
         </div>
-      </div>
-
-      <div class="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600">
-        Receipts enter the central Store. Transfers leave Store and go to Kitchen or Bar according to each item’s department.
       </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% include "backoffice/components/form_field.html" with field=form.purpose %}
         {% include "backoffice/components/form_field.html" with field=form.posting_date %}
-        <div class="md:col-span-2">
-          {% include "backoffice/components/form_field.html" with field=form.remarks %}
-        </div>
+        <div class="md:col-span-2">{% include "backoffice/components/form_field.html" with field=form.remarks %}</div>
       </div>
     </section>
 
@@ -44,7 +36,7 @@
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="19" color="currentColor" stroke_width="2" %}</span>
         <div>
           <h2 class="text-sm font-extrabold text-gray-900">Items</h2>
-          <p class="mt-1 text-xs text-gray-500">Add the stock lines included in this movement.</p>
+          <p class="mt-1 text-xs text-gray-500">Add each stock item, quantity, and rate where required.</p>
         </div>
       </div>
 
@@ -53,35 +45,30 @@
       <div id="items-container" class="space-y-3">
         {% for detail_form in detail_formset %}
           <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
               {% include "backoffice/components/form_field.html" with field=detail_form.item %}
               {% include "backoffice/components/form_field.html" with field=detail_form.qty %}
-              <div x-show="purpose === 'MATERIAL_RECEIPT'" x-transition>
-                {% include "backoffice/components/form_field.html" with field=detail_form.basic_rate %}
+              <div class="flex flex-col gap-1.5" :class="purpose === 'MATERIAL_TRANSFER' && 'opacity-60'">
+                <label for="{{ detail_form.basic_rate.id_for_label }}" class="text-sm font-bold text-gray-700">{{ detail_form.basic_rate.label }}<span x-show="purpose !== 'MATERIAL_TRANSFER'" class="text-red-500"> *</span></label>
+                <span class="relative">
+                  {{ detail_form.basic_rate }}
+                  <span x-show="purpose === 'MATERIAL_TRANSFER'" class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">{% hgi_stroke name="lock" size="15" color="currentColor" stroke_width="2" %}</span>
+                </span>
+                {% if detail_form.basic_rate.errors %}<p class="text-xs font-semibold text-red-500">{{ detail_form.basic_rate.errors|join:", " }}</p>{% elif detail_form.basic_rate.help_text %}<p class="text-xs text-gray-500">{{ detail_form.basic_rate.help_text }}</p>{% endif %}
+              </div>
+              <div class="flex justify-end pb-0.5">
+                <button type="button" aria-label="Remove item {{ forloop.counter }}" title="Remove item" hx-post="{% url 'inventory:stock_entry_item_remove' forloop.counter0 %}" hx-include="closest form" hx-target="#stock-entry-items-container" hx-swap="outerHTML" class="backend-submit inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" hx-indicator="this" hx-disabled-elt="this">
+                  {% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}
+                </button>
               </div>
             </div>
             {% for field in detail_form.hidden_fields %}{{ field }}{% endfor %}
             {% if detail_form.non_field_errors %}<p class="mt-2 text-xs font-semibold text-red-500">{{ detail_form.non_field_errors|join:", " }}</p>{% endif %}
-            <div class="mt-3 flex justify-end">
-              <button type="button"
-                      hx-post="{% url 'inventory:stock_entry_item_remove' forloop.counter0 %}"
-                      hx-include="closest form"
-                      hx-target="#stock-entry-items-container"
-                      hx-swap="outerHTML"
-                      class="backend-submit inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-500 transition hover:bg-gray-200 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this">
-                Remove item
-              </button>
-            </div>
           </div>
         {% endfor %}
       </div>
       <div class="mt-4 border-t border-gray-100 pt-4">
-        <button type="button"
-                hx-post="{% url 'inventory:stock_entry_item_add' %}"
-                hx-include="closest form"
-                hx-target="#stock-entry-items-container"
-                hx-swap="outerHTML"
-                class="backend-submit inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this">
+        <button type="button" hx-post="{% url 'inventory:stock_entry_item_add' %}" hx-include="closest form" hx-target="#stock-entry-items-container" hx-swap="outerHTML" class="backend-submit inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this">
           <span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>
           Add item
         </button>

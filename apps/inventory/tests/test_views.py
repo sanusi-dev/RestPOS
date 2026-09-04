@@ -212,6 +212,8 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertRedirects(response, reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
         entry.refresh_from_db()
         self.assertEqual(entry.status, "CANCELLED")
+        detail_response = self.client.get(reverse("inventory:stock_entry_detail", kwargs={"pk": entry.pk}))
+        self.assertContains(detail_response, "Stock Entry Cancellation")
 
 
 class TestReconciliationViews(InventoryViewTestBase):
@@ -245,6 +247,24 @@ class TestReconciliationViews(InventoryViewTestBase):
         response = self.client.post(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Add at least one item")
+
+    def test_reconciliation_detail_includes_cancellation_history_and_confirmation(self):
+        from apps.inventory.models import StockLedgerEntry, StockReconciliation, StockReconciliationItem
+        from apps.inventory.services import submit_stock_reconciliation
+
+        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("4"))
+        submit_stock_reconciliation(rec)
+        rec.refresh_from_db()
+        self.client.post(reverse("inventory:reconciliation_cancel", kwargs={"pk": rec.pk}))
+
+        response = self.client.get(reverse("inventory:reconciliation_detail", kwargs={"pk": rec.pk}))
+        self.assertContains(response, "Stock Reconciliation Cancellation")
+        self.assertContains(response, 'data-confirm-title="Cancel this reconciliation?"')
+        self.assertEqual(
+            StockLedgerEntry.objects.filter(voucher_no=str(rec.pk)).count(),
+            2,
+        )
 
 
 class TestPurchaseReceiptViews(InventoryViewTestBase):
