@@ -70,9 +70,9 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-document.body.addEventListener('htmx:afterSwap', (event) => {
-  initSearchableSelects(event.detail?.target || document);
+document.body.addEventListener('htmx:afterSwap', () => {
+  initSearchableSelects(document);
 });
-document.body.addEventListener('htmx:afterSettle', (event) => {
-  initSearchableSelects(event.detail?.target || document);
+document.body.addEventListener('htmx:afterSettle', () => {
+  initSearchableSelects(document);
 });
