@@ -47,15 +47,14 @@ class MenuViewTestBase(TestCase):
 
 
 class TestMenuViews(MenuViewTestBase):
-    def test_menu_dashboard_shows_catalog_counts_and_live_menu(self):
-        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+    def test_menu_dashboard_shows_catalog_counts(self):
         response = self.client.get(reverse("menu:dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["menu_count"], 1)
         self.assertEqual(response.context["menu_item_count"], 2)
-        self.assertEqual(response.context["active_menu"], self.menu)
-        self.assertTrue(response.context["active_menu_is_live"])
-        self.assertContains(response, "Live on POS")
+        self.assertContains(response, "Menu building blocks")
+        self.assertNotContains(response, "Catalog control")
+        self.assertNotContains(response, "Live on POS")
 
     def test_menu_list_marks_enabled_active_menu(self):
         Restaurant.objects.create(company="RestPOS", active_menu=self.menu)

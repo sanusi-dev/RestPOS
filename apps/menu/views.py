@@ -20,20 +20,11 @@ from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 @backoffice_required
 def menu_dashboard(request: HttpRequest) -> HttpResponse:
-    restaurant = Restaurant.load()
-    active_menu = (
-        restaurant.active_menu
-        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
-        else None
-    )
     context = {
         "menu_count": Menu.objects.count(),
         "menu_item_count": MenuItem.objects.count(),
         "add_on_count": ItemAddOn.objects.count(),
         "variant_count": ItemVariant.objects.count(),
-        "active_menu": active_menu,
-        "active_menu_is_live": bool(active_menu),
-        "active_menu_item_count": active_menu.items.filter(disabled=False).count() if active_menu else 0,
     }
     return render(request, "backoffice/menu/dashboard.html", context)
 
