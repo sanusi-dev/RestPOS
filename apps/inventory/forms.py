@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
-from django.forms import inlineformset_factory
+from django.forms import BaseInlineFormSet, inlineformset_factory
+from django.urls import reverse
 
 from apps.accounting.models import LedgerAccount
 from apps.utils.forms import StyledModelForm, active_choices
@@ -8,6 +9,7 @@ from .models import (
     UOM,
     Item,
     ItemGroup,
+    ItemUOMConversion,
     PurchaseReceipt,
     PurchaseReceiptItem,
     StockEntry,
@@ -110,6 +112,8 @@ class ItemForm(InventoryModelForm):
         self.fields["variant_of"].queryset = active_choices(
             Item, self.instance.variant_of_id, disabled=False, has_variants=True
         )
+        self.fields["is_stock_item"].widget.attrs["x-model"] = "isStock"
+        self.fields["is_purchase_item"].widget.attrs["x-model"] = "isPurchase"
 
     def clean(self):
         cleaned = super().clean()
@@ -133,6 +137,61 @@ class ItemForm(InventoryModelForm):
                 if not (is_stock and is_purch):
                     raise ValidationError("Non-sellable food items must be stock-tracked and purchasable.")
         return cleaned
+
+
+class ItemUOMConversionForm(InventoryModelForm):
+    class Meta:
+        model = ItemUOMConversion
+        fields = ["uom", "conversion_factor"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        item = self.instance.item if self.instance.item_id else None
+        qs = UOM.objects.all().order_by("name")
+        if item and item.stock_uom_id:
+            qs = qs.exclude(pk=item.stock_uom_id)
+        current_id = self.instance.uom_id
+        if current_id:
+            qs = qs | UOM.objects.filter(pk=current_id)
+        self.fields["uom"].queryset = qs.distinct()
+        self.fields["conversion_factor"].label = "Factor"
+        self.fields["conversion_factor"].help_text = "Stock units in one of this unit (e.g. 24 bottles per crate)"
+        self.fields["conversion_factor"].widget.attrs["placeholder"] = "e.g. 24"
+
+    def clean_conversion_factor(self):
+        factor = self.cleaned_data.get("conversion_factor")
+        if factor is not None and factor <= 0:
+            raise ValidationError("Conversion factor must be greater than zero.")
+        return factor
+
+
+class BaseItemUOMConversionFormSet(BaseInlineFormSet):
+    def _construct_form(self, i, **kwargs):
+        form = super()._construct_form(i, **kwargs)
+        if self.instance:
+            form.instance.item = self.instance
+        return form
+
+    def clean(self):
+        super().clean()
+        item = self.instance
+        if item is None:
+            return
+        has_rows = False
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data") or not form.cleaned_data:
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            if form.cleaned_data.get("uom") or form.cleaned_data.get("conversion_factor"):
+                has_rows = True
+                break
+        if not has_rows:
+            return
+        if item.has_variants or item.disabled or not item.is_stock_item or not item.is_purchase_item:
+            raise ValidationError("UOM conversions are only for enabled stock and purchase items.")
+        if getattr(item, "department", None) == "FOOD" and item.is_sales_item:
+            raise ValidationError("Sellable food items cannot have UOM conversions.")
 
 
 class StockEntryForm(InventoryModelForm):
@@ -237,10 +296,17 @@ class PurchaseReceiptForm(InventoryModelForm):
         return cleaned_data
 
 
+def _uoms_for_item(item):
+    if item is None:
+        return UOM.objects.all().order_by("name")
+    ids = [item.stock_uom_id, *item.uom_conversions.values_list("uom_id", flat=True)]
+    return UOM.objects.filter(pk__in=ids).order_by("name")
+
+
 class PurchaseReceiptItemForm(InventoryModelForm):
     class Meta:
         model = PurchaseReceiptItem
-        fields = ["item", "received_qty", "rate"]
+        fields = ["item", "received_qty", "uom", "rate"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -252,6 +318,50 @@ class PurchaseReceiptItemForm(InventoryModelForm):
             is_purchase_item=True,
         )
         self.fields["rate"].initial = None
+        item = self._bound_item()
+        self.fields["uom"].queryset = _uoms_for_item(item)
+        if item and not self.is_bound and not self.instance.uom_id:
+            self.fields["uom"].initial = item.stock_uom_id
+        prefix = self.prefix or ""
+        wrap_id = f"{prefix}-uom-wrap" if prefix else "uom-wrap"
+        preview_id = f"{prefix}-stock-qty-preview" if prefix else "stock-qty-preview"
+        self.fields["item"].widget.attrs.update(
+            {
+                "hx-get": reverse("inventory:purchase_receipt_item_meta"),
+                "hx-target": f"#{wrap_id}",
+                "hx-swap": "innerHTML",
+                "hx-include": "closest .js-receipt-line",
+                "hx-trigger": "change",
+            }
+        )
+        preview_attrs = {
+            "hx-get": reverse("inventory:purchase_receipt_stock_qty_preview"),
+            "hx-target": f"#{preview_id}",
+            "hx-swap": "innerHTML",
+            "hx-include": "closest .js-receipt-line",
+            "hx-trigger": "change, input delay:300ms",
+        }
+        self.fields["received_qty"].widget.attrs.update(preview_attrs)
+        self.fields["uom"].widget.attrs.update(preview_attrs)
+
+    def _bound_item(self):
+        if self.is_bound:
+            item_id = self.data.get(self.add_prefix("item"))
+            if item_id:
+                return Item.objects.filter(pk=item_id).select_related("stock_uom").first()
+        if self.instance.item_id:
+            return self.instance.item
+        return None
+
+    def clean(self):
+        cleaned = super().clean()
+        item = cleaned.get("item")
+        uom = cleaned.get("uom")
+        if item and uom:
+            allowed = {item.stock_uom_id, *item.uom_conversions.values_list("uom_id", flat=True)}
+            if uom.pk not in allowed:
+                self.add_error("uom", "This unit is not valid for this item.")
+        return cleaned
 
 
 StockEntryDetailFormSet = inlineformset_factory(
@@ -266,4 +376,12 @@ StockReconciliationItemFormSet = inlineformset_factory(
 )
 PurchaseReceiptItemFormSet = inlineformset_factory(
     PurchaseReceipt, PurchaseReceiptItem, form=PurchaseReceiptItemForm, extra=1, can_delete=True
+)
+ItemUOMConversionFormSet = inlineformset_factory(
+    Item,
+    ItemUOMConversion,
+    form=ItemUOMConversionForm,
+    formset=BaseItemUOMConversionFormSet,
+    extra=1,
+    can_delete=True,
 )

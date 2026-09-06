@@ -113,7 +113,7 @@
                   {{ item.item.item_name }}</a>
               </td>
               <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.received_qty|floatformat:"-2"|intcomma }}</td>
-              <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.item.stock_uom.name }}</td>
+              <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.uom.name|default:item.item.stock_uom.name }}</td>
               <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ item.rate|floatformat:2|intcomma }}</td>
               <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.amount|floatformat:2|intcomma }}</td>
             </tr>

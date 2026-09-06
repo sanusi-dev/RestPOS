@@ -133,6 +133,44 @@ class SupplierInvoiceSubmitTest(PayablesTestBase):
         self.assertEqual(entries.get(account=grni_acct).debit, Decimal("350"))
         self.assertEqual(entries.get(account=self.accounts["payable"]).credit, Decimal("350"))
 
+    def test_invoice_copies_as_bought_qty_and_rate(self):
+        crate, _ = UOM.objects.get_or_create(name="Crate")
+        from apps.inventory.models import ItemUOMConversion
+
+        ItemUOMConversion.objects.create(item=self.item, uom=crate, conversion_factor=Decimal("24"))
+        receipt = PurchaseReceipt.objects.create(
+            supplier=self.supplier,
+            supplier_name=self.supplier.supplier_name,
+            warehouse=self.store,
+            posting_date=date.today(),
+        )
+        PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt, item=self.item, received_qty=5, rate=12000, uom=crate
+        )
+        from apps.inventory.services import submit_purchase_receipt
+
+        submit_purchase_receipt(receipt)
+        invoice = self._make_invoice(purchase_receipt=receipt)
+        invoice.submit()
+        line = invoice.items.get()
+        self.assertEqual(line.qty, Decimal("5"))
+        self.assertEqual(line.rate, Decimal("12000"))
+        grni_acct = self.restaurant.stock_received_but_not_billed_account
+        receipt_gl = GLEntry.objects.get(
+            voucher_type="Purchase Receipt",
+            voucher_no=str(receipt.pk),
+            account=grni_acct,
+            is_cancelled=False,
+        )
+        invoice_gl = GLEntry.objects.get(
+            voucher_type="Supplier Invoice",
+            voucher_no=invoice.invoice_number,
+            account=grni_acct,
+            is_cancelled=False,
+        )
+        self.assertEqual(receipt_gl.credit, Decimal("60000"))
+        self.assertEqual(invoice_gl.debit, Decimal("60000"))
+
     def test_submit_posts_expense_and_payable_legs(self):
         invoice = self._make_invoice()
         SupplierInvoiceExpense.objects.create(invoice=invoice, description="Cleaning", amount=500)

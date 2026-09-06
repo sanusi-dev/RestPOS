@@ -4,7 +4,7 @@
 
 `inventory.Item` is the shared product/material record. Its sales, stock, and purchase flags are independent. `department` is `FOOD` or `DRINKS`; department drives ticket routing and the DRINKS-only POS stock policy, not whether an item is inherently stock-tracked.
 
-`Item.save()` generates an `ITEM-####` code under a lock, makes variant templates non-sellable/non-stock/purchase, and removes add-on rows when an item becomes non-sellable. `Item.clean()` prevents templates from being stock/sales/purchase items, validates variant parents, and blocks turning off sales while an enabled menu line exists.
+`Item.save()` generates an `ITEM-####` code under a lock, makes variant templates non-sellable/non-stock/purchase, and removes add-on rows when an item becomes non-sellable. `Item.clean()` prevents templates from being stock/sales/purchase items, validates variant parents, blocks turning off sales while an enabled menu line exists, and blocks changing `stock_uom` or turning off stock/purchase while UOM conversion rows exist. Stock + purchase items can carry `ItemUOMConversion` rows (bulk unit → stock unit) used only on purchase receipts.
 
 ## Menu Resolution
 
@@ -28,7 +28,7 @@ The add-on register resolves each relationship against the enabled active menu a
 
 ## Setup Commands
 
-- `seed_menu_catalog` atomically seeds Nigerian restaurant raw/finished items, variant families, menu lines, add-ons, and the active menu.
+- `seed_menu_catalog` atomically seeds Nigerian restaurant raw/finished items, variant families, menu lines, add-ons, the active menu, and purchase UOM conversions (drinks: 1 Crate = 24 Bottle; rice: 1 Bag = 50 Kg). Dummy carton/crate SKUs are no longer created.
 - `seed_pos_setup` creates Restaurant, Bar/Kitchen/Store warehouses, payment modes/mappings, production units, and invokes menu seeding when no active menu exists.
 - `InventoryConfig.ready()` seeds baseline UOMs and item groups after migrations.
 

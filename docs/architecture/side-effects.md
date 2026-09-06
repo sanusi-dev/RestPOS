@@ -24,7 +24,7 @@
 - `OrderPayment.save()` normalizes references, checks amount precision, allows negative amounts only on return orders, rejects duplicate non-cash references, and enforces draft/KOT editability.
 - `KOT.save()` and `KOTItem.save/delete()` protect ticket snapshots while allowing print/status updates through the service path.
 - `Item.save()` generates `ITEM-####` codes under a lock, converts variant templates to non-sellable/non-stock, and deletes add-on relationships when an item becomes non-sales.
-- `StockLedgerEntry._create_entry_locked()` both inserts the movement and updates the matching `Bin` snapshot/FIFO queue.
+- `StockLedgerEntry._create_entry_locked()` both inserts the movement and updates the matching `Bin` snapshot (actual qty and WAC). Purchase-receipt submit may pass an explicit inbound value so WAC blends on as-bought money rather than `qty × unit_rate`.
 
 ## Service Side Effects
 

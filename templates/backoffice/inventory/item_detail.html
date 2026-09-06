@@ -52,6 +52,16 @@
             {{ item.stock_uom.name }}
           </dd>
         </div>
+        {% if conversions %}
+          <div>
+            <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Purchase units</dt>
+            <dd class="mt-1.5 text-sm font-bold text-gray-900">
+              {% for conv in conversions %}
+                1 {{ conv.uom.name }} = {{ conv.conversion_factor|floatformat:"-4" }} {{ item.stock_uom.name }}{% if not forloop.last %}<br>{% endif %}
+              {% endfor %}
+            </dd>
+          </div>
+        {% endif %}
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Last purchase rate</dt>
           <dd class="mt-1.5 text-sm font-bold tabular-nums text-gray-900">

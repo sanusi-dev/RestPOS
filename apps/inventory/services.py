@@ -600,7 +600,7 @@ def submit_purchase_receipt(receipt):
     if not restaurant.store_warehouse.account_id:
         raise ValidationError("Configure the Store warehouse account before submitting.")
 
-    lines = list(locked.items.select_related("item"))
+    lines = list(locked.items.select_related("item", "uom"))
     if not lines:
         raise ValidationError("Add at least one item before submitting.")
     for line in lines:
@@ -615,19 +615,22 @@ def submit_purchase_receipt(receipt):
     total = Decimal("0")
     updated_items = set()
     for line in lines:
+        stock_qty = line.stock_qty()
+        unit_rate = line.stock_unit_rate()
         StockLedgerEntry._create_entry_locked(
             item=line.item,
             warehouse=restaurant.store_warehouse,
-            quantity=line.received_qty,
+            quantity=stock_qty,
             voucher_type="Purchase Receipt",
             voucher_no=str(locked.pk),
-            unit_rate=line.rate,
+            unit_rate=unit_rate,
             voucher_detail_no=str(line.pk),
             prevent_negative=False,
             posting_date=locked.posting_date,
+            inbound_value=line.amount,
             bin_obj=locked_bins[line.item_id],
         )
-        line.item.last_purchase_rate = line.rate
+        line.item.last_purchase_rate = unit_rate
         updated_items.add(line.item)
         total += line.amount
     Item.objects.bulk_update(updated_items, ["last_purchase_rate", "updated_at"])
@@ -780,7 +783,7 @@ def _revert_last_purchase_rates(receipt):
             .order_by("-purchase_receipt__posting_date", "-purchase_receipt__pk")
             .first()
         )
-        line.item.last_purchase_rate = prior.rate if prior else None
+        line.item.last_purchase_rate = prior.stock_unit_rate() if prior else None
         items_to_update.append(line.item)
     Item.objects.bulk_update(items_to_update, ["last_purchase_rate", "updated_at"])
 

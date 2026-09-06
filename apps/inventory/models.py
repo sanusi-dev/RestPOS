@@ -144,6 +144,16 @@ class Item(BaseModel):
 
             ItemAddOn.objects.filter(add_on_item_id=self.pk).delete()
 
+    def uom_factor(self, uom) -> Decimal:
+        """Return stock units per one of ``uom`` (1 when ``uom`` is the stock unit)."""
+        uom_id = getattr(uom, "pk", uom)
+        if uom_id is None or uom_id == self.stock_uom_id:
+            return Decimal("1")
+        row = self.uom_conversions.filter(uom_id=uom_id).first()
+        if row is None:
+            raise ValidationError("No conversion is defined for this unit.")
+        return row.conversion_factor
+
     def clean(self):
         super().clean()
         if self.has_variants and self.is_stock_item:
@@ -185,6 +195,53 @@ class Item(BaseModel):
                         )
                     }
                 )
+        if self.pk and self.uom_conversions.exists():
+            previous = type(self).objects.only("stock_uom_id", "is_stock_item", "is_purchase_item").get(pk=self.pk)
+            if self.stock_uom_id != previous.stock_uom_id:
+                raise ValidationError({"stock_uom": "Cannot change the stock unit while UOM conversions exist."})
+            if not self.is_stock_item:
+                raise ValidationError({"is_stock_item": "Cannot turn off stock tracking while UOM conversions exist."})
+            if not self.is_purchase_item:
+                raise ValidationError({"is_purchase_item": "Cannot turn off purchasable while UOM conversions exist."})
+
+
+class ItemUOMConversion(BaseModel):
+    """One bulk purchase unit for an item, converting to that item's stock UOM."""
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="uom_conversions")
+    uom = models.ForeignKey(UOM, on_delete=models.PROTECT, related_name="+")
+    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4)
+
+    class Meta:
+        unique_together = ("item", "uom")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(conversion_factor__gt=0),
+                name="inventory_itemuomconversion_factor_gt_0",
+            ),
+        ]
+
+    def __str__(self):
+        stock = self.item.stock_uom.name if self.item_id else ""
+        return f"1 {self.uom} = {self.conversion_factor} {stock}"
+
+    def clean(self):
+        super().clean()
+        if self.conversion_factor is not None and self.conversion_factor <= 0:
+            raise ValidationError({"conversion_factor": "Conversion factor must be greater than zero."})
+        if not self.item_id:
+            return
+        item = self.item
+        if item.disabled:
+            raise ValidationError("UOM conversions require an enabled item.")
+        if item.has_variants:
+            raise ValidationError("Template items cannot have UOM conversions.")
+        if not item.is_stock_item or not item.is_purchase_item:
+            raise ValidationError("UOM conversions are only for stock-tracked, purchasable items.")
+        if item.department == "FOOD" and item.is_sales_item:
+            raise ValidationError("Sellable food items cannot have UOM conversions.")
+        if self.uom_id and item.stock_uom_id and self.uom_id == item.stock_uom_id:
+            raise ValidationError({"uom": "Cannot convert the stock unit to itself."})
 
 
 class Bin(BaseModel):
@@ -286,6 +343,7 @@ class StockLedgerEntry(BaseModel):
         variance_amount=Decimal("0"),
         variance_type="",
         reversal_of_sle_id=None,
+        inbound_value=None,
     ):
         """Create a ledger entry and update the corresponding Bin.
 
@@ -315,6 +373,7 @@ class StockLedgerEntry(BaseModel):
                 variance_amount=variance_amount,
                 variance_type=variance_type,
                 reversal_of_sle_id=reversal_of_sle_id,
+                inbound_value=inbound_value,
                 bin_obj=bin_obj,
             )
 
@@ -335,12 +394,15 @@ class StockLedgerEntry(BaseModel):
         variance_amount=Decimal("0"),
         variance_type="",
         reversal_of_sle_id=None,
+        inbound_value=None,
     ):
         quantity = Decimal(str(quantity))
         if unit_rate is not None:
             unit_rate = Decimal(str(unit_rate))
         variance_amount = Decimal("0") if variance_amount is None else Decimal(str(variance_amount))
         variance_type = variance_type or ""
+        if inbound_value is not None:
+            inbound_value = Decimal(str(inbound_value))
 
         # Posting date is business/audit date only — valuation always blends at current WAC.
         if posting_date is None:
@@ -367,7 +429,10 @@ class StockLedgerEntry(BaseModel):
             resolved_rate = wac if unit_rate is None else unit_rate
             if resolved_rate < 0:
                 raise ValidationError("Unit rate cannot be negative.")
-            inbound_value = quantity * resolved_rate
+            if inbound_value is None:
+                inbound_value = quantity * resolved_rate
+            elif inbound_value < 0:
+                raise ValidationError("Inbound value cannot be negative.")
             new_wac = (current_qty * wac + inbound_value) / new_qty if new_qty != 0 else Decimal("0")
             stock_value_change = inbound_value
             bin_obj.valuation_rate = new_wac
@@ -697,6 +762,8 @@ class PurchaseReceiptItem(BaseModel):
         related_name="items",
     )
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="purchase_receipt_items")
+    uom = models.ForeignKey(UOM, on_delete=models.PROTECT)
+    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4, default=Decimal("1"))
     received_qty = models.DecimalField(max_digits=10, decimal_places=2)
     rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
@@ -704,10 +771,39 @@ class PurchaseReceiptItem(BaseModel):
     def __str__(self):
         return f"{self.item.item_code} x{self.received_qty}"
 
+    def stock_qty(self):
+        """Received quantity converted to the item's stock UOM."""
+        qty = (Decimal(str(self.received_qty)) * Decimal(str(self.conversion_factor))).quantize(Decimal("0.01"))
+        if qty <= 0:
+            raise ValidationError(f"Stock quantity for {self.item.item_name} must be greater than zero.")
+        return qty
+
+    def stock_unit_rate(self):
+        """As-bought amount per stock UOM (2 dp)."""
+        qty = self.stock_qty()
+        amount = self.amount if self.amount else (Decimal(str(self.received_qty)) * Decimal(str(self.rate)))
+        amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        return (amount / qty).quantize(Decimal("0.01"))
+
+    def _derive_conversion_factor(self):
+        if not self.item_id:
+            return
+        item = self.item
+        if not self.uom_id:
+            self.uom_id = item.stock_uom_id
+        if self.uom_id == item.stock_uom_id:
+            self.conversion_factor = Decimal("1")
+            return
+        row = ItemUOMConversion.objects.filter(item_id=item.pk, uom_id=self.uom_id).first()
+        if row is None:
+            raise ValidationError(f"{item.item_name} has no conversion for the selected unit.")
+        self.conversion_factor = row.conversion_factor
+
     def save(self, *args, **kwargs):
         if self.purchase_receipt_id:
             _assert_document_is_draft(self.purchase_receipt, action="modify lines on")
-        self.amount = self.received_qty * self.rate
+        self._derive_conversion_factor()
+        self.amount = (Decimal(str(self.received_qty)) * Decimal(str(self.rate))).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

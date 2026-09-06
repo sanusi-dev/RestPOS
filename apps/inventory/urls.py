@@ -19,6 +19,8 @@ urlpatterns = [
     path("warehouses/<int:pk>/edit/", view=views.warehouse_update, name="warehouse_update"),
     path("items/", view=views.item_list, name="item_list"),
     path("items/create/", view=views.item_create, name="item_create"),
+    path("items/uom/add/", view=views.item_uom_add, name="item_uom_add"),
+    path("items/uom/remove/<int:index>/", view=views.item_uom_remove, name="item_uom_remove"),
     path("items/<int:pk>/", view=views.item_detail, name="item_detail"),
     path("items/<int:pk>/edit/", view=views.item_update, name="item_update"),
     path("stock-entries/", view=views.stock_entry_list, name="stock_entry_list"),
@@ -62,6 +64,16 @@ urlpatterns = [
         "purchase-receipts/item/remove/<int:index>/",
         view=views.purchase_receipt_item_remove,
         name="purchase_receipt_item_remove",
+    ),
+    path(
+        "purchase-receipts/item/meta/",
+        view=views.purchase_receipt_item_meta,
+        name="purchase_receipt_item_meta",
+    ),
+    path(
+        "purchase-receipts/item/stock-qty/",
+        view=views.purchase_receipt_stock_qty_preview,
+        name="purchase_receipt_stock_qty_preview",
     ),
     path(
         "purchase-receipts/<int:pk>/",

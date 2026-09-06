@@ -321,6 +321,32 @@ class OrderSettleTest(OrderTestBase):
         self.assertEqual(stock_bin.reserved_qty, Decimal("0"))
         self.assertEqual(stock_bin.actual_qty, Decimal("99"))
 
+    def test_settle_one_qty_is_one_stock_unit_after_crate_receipt(self):
+        from apps.inventory.models import ItemUOMConversion, PurchaseReceipt, PurchaseReceiptItem
+        from apps.inventory.services import submit_purchase_receipt
+
+        self.restaurant.store_warehouse = self.warehouse
+        self.restaurant.save(update_fields=["store_warehouse", "updated_at"])
+        crate, _ = UOM.objects.get_or_create(name="Crate")
+        ItemUOMConversion.objects.create(item=self.item2, uom=crate, conversion_factor=Decimal("24"))
+        receipt = PurchaseReceipt.objects.create(supplier_name="Brewery", warehouse=self.warehouse)
+        PurchaseReceiptItem.objects.create(
+            purchase_receipt=receipt,
+            item=self.item2,
+            received_qty=Decimal("1"),
+            rate=Decimal("7200"),
+            uom=crate,
+        )
+        submit_purchase_receipt(receipt)
+        stock_bin = Bin.objects.get(item=self.item2, warehouse=self.warehouse)
+        self.assertEqual(stock_bin.actual_qty, Decimal("124"))
+        add_order_line(self.order, self.item2, qty=1, rate=Decimal("500"))
+        settle_order(self.order, [{"mode_of_payment": self.cash.pk, "amount": "3500"}])
+        stock_bin.refresh_from_db()
+        self.assertEqual(stock_bin.actual_qty, Decimal("123"))
+        sle = StockLedgerEntry.objects.get(voucher_type="POS Order", voucher_no=str(self.order.pk), item=self.item2)
+        self.assertEqual(sle.quantity, Decimal("-1"))
+
     def test_settle_failure_rolls_back_payment_status_stock_and_reservation(self):
         add_order_line(self.order, self.item2, qty=1, rate=Decimal("500"))
         with (

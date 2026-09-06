@@ -14,6 +14,8 @@ erDiagram
     ITEM ||--o{ MENU_ITEM : priced_as
     ITEM_GROUP ||--o{ ITEM : classifies
     UOM ||--o{ ITEM : measures
+    ITEM ||--o{ ITEM_UOM_CONVERSION : converts
+    UOM ||--o{ ITEM_UOM_CONVERSION : bulk_unit
     ITEM ||--o{ ITEM_ADD_ON : parent
     ITEM ||--o{ ITEM_ADD_ON : add_on
     POS_OPENING_ENTRY ||--o{ ORDER : owns
@@ -53,9 +55,9 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 ## Product and Menu Entities
 
 - `ItemGroup`: flat category.
-- `UOM`: stock unit. It is the base (sellable/countable) unit — e.g. Piece, Bottle, kg, plate.
-- `Item`: item master with independent `is_sales_item`, `is_stock_item`, and `is_purchase_item` flags. `has_variants=True` makes it a non-sellable/non-purchasable template in `Item.save()`. Items bought in bulk carry a `uom_conversions` child table (`ItemUOMConversion`: one row per bulk unit with a `conversion_factor` such as 1 Crate = 24 Bottles).
-- `ItemUOMConversion`: per-item flow of an alternate purchase UOM to the base unit. `unique (item, uom)`; `uom` cannot equal the item's stock UOM and `factor > 0`.
+- `UOM`: unit of measure. `Item.stock_uom` is the countable unit for bins, the ledger, counts, and POS (Bottle, Kg, Litre, Each, Plate).
+- `Item`: item master with independent `is_sales_item`, `is_stock_item`, and `is_purchase_item` flags. `has_variants=True` makes it a non-sellable/non-purchasable template in `Item.save()`. Changing `stock_uom` or turning off stock/purchase is rejected while conversion rows exist.
+- `ItemUOMConversion`: one bulk purchase unit per item (`unique (item, uom)`), converting bulk → stock (`1 Crate = 24 Bottle`). `uom` cannot equal the item's stock UOM; `conversion_factor > 0`. Only enabled stock + purchase items; virtual sellable food cannot carry rows.
 - `Menu`: named enabled collection.
 - `MenuItem`: priced item on a menu, unique per menu/item, with denormalized name and special/disabled flags.
 - `ItemAddOn`: parent/add-on relationship; the add-on price is resolved from the active menu, not stored here.
@@ -64,10 +66,10 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 ## Stock Entities
 
 - `Bin`: current actual quantity, reserved quantity, valuation rate, and stock value for one item/warehouse pair.
-- `StockLedgerEntry`: signed movement with running quantity and serialized FIFO queue. The voucher type/number/detail fields link it back to source documents.
+- `StockLedgerEntry`: signed PWAC movement (`quantity`, `unit_rate`, `stock_value_change`). The voucher type/number/detail fields link it back to source documents.
 - `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer.
 - `StockReconciliation` and `StockReconciliationItem`: counted quantity adjustment with purpose/reason and warehouse; Opening Stock uses the `OPENING_STOCK` reason while ordinary reconciliations use operational reasons.
-- `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (base unit or a conversion row) and a snapshotted `conversion_factor`; on submit the ledger stores `received_qty × factor` in the base unit at `rate ÷ factor`.
+- `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`. On submit the ledger quantity is `received_qty × factor` and inbound value is the as-bought `amount`; WAC blends on that amount. `last_purchase_rate` is per stock UOM (`amount ÷ stock_qty`).
 
 ## Order Entities
 

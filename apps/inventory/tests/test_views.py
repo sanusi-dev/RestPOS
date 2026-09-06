@@ -105,6 +105,39 @@ class TestWarehouseViews(InventoryViewTestBase):
         self.assertEqual(wh.name, "Bar Store")
 
 
+class TestItemViews(InventoryViewTestBase):
+    def test_item_form_includes_uom_conversions(self):
+        response = self.client.get(reverse("inventory:item_create"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "UOM conversions")
+
+    def test_item_create_saves_uom_conversion(self):
+        crate, _ = UOM.objects.get_or_create(name="Crate")
+        response = self.client.post(
+            reverse("inventory:item_create"),
+            {
+                "item_name": "Star Lager",
+                "item_group": self.group.pk,
+                "stock_uom": self.uom.pk,
+                "department": "DRINKS",
+                "is_stock_item": "on",
+                "is_sales_item": "on",
+                "is_purchase_item": "on",
+                "uoms-TOTAL_FORMS": "1",
+                "uoms-INITIAL_FORMS": "0",
+                "uoms-MIN_NUM_FORMS": "0",
+                "uoms-MAX_NUM_FORMS": "1000",
+                "uoms-0-uom": str(crate.pk),
+                "uoms-0-conversion_factor": "24",
+            },
+        )
+        item = Item.objects.get(item_name="Star Lager")
+        self.assertRedirects(response, reverse("inventory:item_detail", kwargs={"pk": item.pk}))
+        conv = item.uom_conversions.get()
+        self.assertEqual(conv.uom_id, crate.pk)
+        self.assertEqual(conv.conversion_factor, Decimal("24"))
+
+
 class TestStockEntryViews(InventoryViewTestBase):
     def test_stock_entry_create_post(self):
         response = self.client.post(

@@ -5,6 +5,7 @@ from .models import (
     Bin,
     Item,
     ItemGroup,
+    ItemUOMConversion,
     PurchaseReceipt,
     PurchaseReceiptItem,
     StockEntry,
@@ -82,6 +83,11 @@ class WarehouseAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
+class ItemUOMConversionInline(admin.TabularInline):
+    model = ItemUOMConversion
+    extra = 0
+
+
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
     list_display = (
@@ -97,7 +103,7 @@ class ItemAdmin(admin.ModelAdmin):
     list_select_related = ("item_group", "stock_uom")
     search_fields = ("item_code", "item_name", "description")
     ordering = ("item_name",)
-    inlines = []
+    inlines = [ItemUOMConversionInline]
 
 
 @admin.register(Bin)
@@ -180,7 +186,7 @@ class StockReconciliationAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
 class PurchaseReceiptItemInline(SubmittedInlineMixin, admin.TabularInline):
     model = PurchaseReceiptItem
     extra = 1
-    readonly_fields = ("amount",)
+    readonly_fields = ("amount", "conversion_factor")
 
 
 @admin.register(PurchaseReceipt)

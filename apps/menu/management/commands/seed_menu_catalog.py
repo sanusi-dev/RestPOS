@@ -12,7 +12,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.inventory.models import UOM, Item, ItemGroup
+from apps.inventory.models import UOM, Item, ItemGroup, ItemUOMConversion
 from apps.menu.models import ItemVariant, Menu, MenuItem
 from apps.settings.models import Restaurant
 
@@ -34,8 +34,6 @@ RAW_ITEMS: list[tuple[str, str, str, str, str | None]] = [
     ("Garri (Ijebu)", "Grains & Swallows", "Kg", "FOOD", "700"),
     ("Yam Tuber", "Grains & Swallows", "Each", "FOOD", "1200"),
     ("Plantain (unripe)", "Supplies", "Kg", "FOOD", "900"),
-    ("Soft Drink Carton (24)", "Supplies", "Carton", "DRINKS", "4800"),
-    ("Beer Crate (Star)", "Supplies", "Crate", "DRINKS", "7200"),
 ]
 
 # Finished goods sold as a single size — (name, group, uom, dept, sell_rate, special?)
@@ -137,6 +135,28 @@ EXTRA_ADDON_ITEMS: list[tuple[str, str, str, str, str]] = [
     ("Extra Yaji", "Sides", "Each", "FOOD", "200"),
 ]
 
+# Per-bottle last purchase rate for sellable drinks (stock UOM = Bottle).
+DRINK_BOTTLE_COST: dict[str, str] = {
+    "Coke (35cl)": "200",
+    "Fanta (35cl)": "200",
+    "Sprite (35cl)": "200",
+    "Maltina": "350",
+    "Chapman": "400",
+    "Zobo": "150",
+    "Bottled Water (75cl)": "100",
+    "Star Lager": "300",
+    "Gulder": "300",
+    "Heineken": "400",
+    "Legend Stout": "350",
+}
+
+# (item_name, bulk_uom, factor) — ingredient conversions in stock UOM.
+INGREDIENT_CONVERSIONS: list[tuple[str, str, str]] = [
+    ("Raw Rice (bag)", "Bag", "50"),
+    ("Palm Oil", "Paint Tin", "5"),
+    ("Vegetable Oil", "Paint Tin", "5"),
+]
+
 # (parent_item_name, add_on_item_name) — both must be sellable menu items.
 ADD_ON_LINKS: list[tuple[str, str]] = [
     # Rice plates
@@ -216,8 +236,9 @@ class Command(BaseCommand):
         self._ensure_groups_and_uoms()
 
         raw_count = self._seed_raw_items()
-        simple_items = self._seed_simple_items()
+        simple_items = self._seed_simple_items(force=force)
         variant_data = self._seed_variant_families()
+        self._seed_uom_conversions(simple_items, force=force)
 
         menu, _ = Menu.objects.get_or_create(name="Main Menu", defaults={"enabled": True})
 
@@ -249,7 +270,20 @@ class Command(BaseCommand):
             "Supplies",
         }:
             ItemGroup.objects.get_or_create(name=name)
-        for name in {"Each", "Kg", "Litre", "Plate", "Pack", "Bottle", "Can", "Carton", "Crate", "Sachet"}:
+        for name in {
+            "Each",
+            "Kg",
+            "Litre",
+            "Plate",
+            "Pack",
+            "Bottle",
+            "Can",
+            "Carton",
+            "Crate",
+            "Sachet",
+            "Bag",
+            "Paint Tin",
+        }:
             UOM.objects.get_or_create(name=name)
 
     def _get_group(self, name: str) -> ItemGroup:
@@ -283,7 +317,7 @@ class Command(BaseCommand):
                 item.save()
         return created
 
-    def _seed_simple_items(self) -> list[tuple[Item, Decimal, bool]]:
+    def _seed_simple_items(self, force: bool = False) -> list[tuple[Item, Decimal, bool]]:
         # Bought-in drinks: sellable + purchasable. Kitchen dishes: sellable only.
         drink_groups = {"Soft Drinks", "Beer", "Spirits", "Wine", "Water", "Juice & Malt"}
         result = []
@@ -306,9 +340,41 @@ class Command(BaseCommand):
             item.is_sales_item = True
             item.is_purchase_item = is_bought_in
             item.is_stock_item = is_stock
+            bottle_cost = DRINK_BOTTLE_COST.get(name)
+            if bottle_cost and (item.last_purchase_rate is None or force):
+                item.last_purchase_rate = Decimal(bottle_cost)
             item.save()
             result.append((item, Decimal(rate), special))
         return result
+
+    def _upsert_conversion(self, item: Item, uom_name: str, factor: Decimal, force: bool):
+        uom = self._get_uom(uom_name)
+        if uom.pk == item.stock_uom_id:
+            return
+        conv, created = ItemUOMConversion.objects.get_or_create(
+            item=item,
+            uom=uom,
+            defaults={"conversion_factor": factor},
+        )
+        if not created and force and conv.conversion_factor != factor:
+            conv.conversion_factor = factor
+            conv.save(update_fields=["conversion_factor", "updated_at"])
+
+    def _seed_uom_conversions(self, simple_items: list[tuple[Item, Decimal, bool]], force: bool):
+        crate = "Crate"
+        for item, _rate, _special in simple_items:
+            if item.department != "DRINKS" or item.stock_uom.name != "Bottle":
+                continue
+            self._upsert_conversion(item, crate, Decimal("24"), force)
+            bottle_cost = DRINK_BOTTLE_COST.get(item.item_name)
+            if bottle_cost and (item.last_purchase_rate is None or force):
+                item.last_purchase_rate = Decimal(bottle_cost)
+                item.save(update_fields=["last_purchase_rate", "updated_at"])
+        for name, uom_name, factor in INGREDIENT_CONVERSIONS:
+            item = Item.objects.filter(item_name=name).first()
+            if item is None:
+                continue
+            self._upsert_conversion(item, uom_name, Decimal(factor), force)
 
     def _seed_variant_families(self) -> list[dict]:
         """Create parent template items with POS-level size variants."""

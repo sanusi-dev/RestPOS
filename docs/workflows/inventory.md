@@ -34,7 +34,7 @@ FOOD POS sales intentionally do not reserve or deduct stock. Kitchen consumption
 
 ## PWAC Posting
 
-`StockLedgerEntry._create_entry_locked()` locks a Bin, reads its current WAC, then: inbound `qty > 0` blends `new_wac = (old_qty*old_wac + qty*actual)/new_qty` and records `stock_value_change = qty*actual`; outbound `qty < 0` uses current WAC (`value_change = qty*WAC`, WAC unchanged). It records `quantity`, `unit_rate`, `stock_value_change`, `posting_date` (business date, informational), and `variance` on reversals. `InsufficientStock` rejects any move that would make actual quantity negative. No queue, no replay; `posting_date` never affects valuation.
+`StockLedgerEntry._create_entry_locked()` locks a Bin, reads its current WAC, then: inbound `qty > 0` blends `new_wac = (old_qty*old_wac + inbound_value)/new_qty` and records `stock_value_change = inbound_value` (default `qty × actual`; purchase-receipt submit passes the as-bought line amount); outbound `qty < 0` uses current WAC (`value_change = qty*WAC`, WAC unchanged). It records `quantity`, `unit_rate`, `stock_value_change`, `posting_date` (business date, informational), and `variance` on reversals. `InsufficientStock` rejects any move that would make actual quantity negative. No queue, no replay; `posting_date` never affects valuation.
 
 ## Documents
 
@@ -44,7 +44,7 @@ Supports `MATERIAL_RECEIPT` and `MATERIAL_TRANSFER`. Receipts land at `Restauran
 
 ### Purchase Receipt
 
-`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Each line records the UOM it was bought in (the item's base unit or one of its `uom_conversions`) with a snapshotted `conversion_factor`; on submit the ledger stores `received_qty × factor` at `rate ÷ factor`, so WAC and stock live in the base (sellable) unit. `Item.last_purchase_rate` is updated to the per-base-unit value (`rate ÷ factor`). The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own. Purchase receipt detail history includes both the original movements and any cancellation reversals.
+`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Each line records the UOM it was bought in (the item's stock unit or one of its `uom_conversions`) with a snapshotted `conversion_factor`. On submit the ledger stores stock quantity `(received_qty × factor)` and blends WAC using the as-bought `amount` (`received_qty × rate`), not `stock_qty × (rate ÷ factor)`, so money on GRNI/SIH matches the paperwork while WAC lives per bottle/kg. `Item.last_purchase_rate` is set to `amount ÷ stock_qty`. The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own. Purchase receipt detail history includes both the original movements and any cancellation reversals. Stock Entry market receipts stay in `stock_uom` with no conversion.
 
 ### Stock Reconciliation
 
@@ -56,4 +56,4 @@ Document cancellations create reversal SLEs at current WAC with `reversal_of_sle
 
 ## Backoffice Surface
 
-Inventory views provide item/UOM/group/warehouse CRUD, document formsets, POST submit/cancel actions, stock ledger filters, stock balance filters, and a low-stock dashboard. All are login-protected; `/backoffice/` access is enforced by middleware rather than per-view manager checks.
+Inventory views provide item/UOM/group/warehouse CRUD, document formsets, POST submit/cancel actions, stock ledger filters, stock balance filters, and a low-stock dashboard. The item form includes a UOM-conversions formset (shown when the item is stock-tracked and purchasable). Purchase-receipt lines offer a UOM dropdown of the stock unit plus that item's conversions, with a stock-qty preview. All are login-protected; `/backoffice/` access is enforced by middleware rather than per-view manager checks.

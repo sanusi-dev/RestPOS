@@ -1,10 +1,12 @@
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from apps.users.decorators import backoffice_required
 from apps.utils.forms import add_formset_row, remove_formset_row
@@ -13,7 +15,9 @@ from . import services
 from .forms import (
     ItemForm,
     ItemGroupForm,
+    ItemUOMConversionFormSet,
     PurchaseReceiptForm,
+    PurchaseReceiptItemForm,
     PurchaseReceiptItemFormSet,
     StockEntryDetailFormSet,
     StockEntryForm,
@@ -28,6 +32,7 @@ from .models import (
     Item,
     ItemGroup,
     PurchaseReceipt,
+    PurchaseReceiptItem,
     StockEntry,
     StockLedgerEntry,
     StockReconciliation,
@@ -259,22 +264,36 @@ def item_list(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _item_form_context(form, uom_formset, *, is_create, item=None):
+    return {
+        "form": form,
+        "uom_formset": uom_formset,
+        "is_create": is_create,
+        "item": item,
+    }
+
+
 @backoffice_required
 def item_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES)
-        if form.is_valid():
-            item = form.save()
+        uom_fs = ItemUOMConversionFormSet(request.POST, instance=form.instance, prefix="uoms")
+        form_ok = form.is_valid()
+        uom_fs.instance = form.instance
+        uom_ok = uom_fs.is_valid()
+        if form_ok and uom_ok:
+            with transaction.atomic():
+                item = form.save()
+                uom_fs.instance = item
+                uom_fs.save()
             return redirect("inventory:item_detail", pk=item.pk)
     else:
         form = ItemForm()
+        uom_fs = ItemUOMConversionFormSet(instance=Item(), prefix="uoms")
     return render(
         request,
         "backoffice/inventory/item_form.html",
-        {
-            "form": form,
-            "is_create": True,
-        },
+        _item_form_context(form, uom_fs, is_create=True),
     )
 
 
@@ -288,6 +307,7 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
         Item.objects.select_related("item_group", "stock_uom", "variant_of"),
         pk=pk,
     )
+    conversions = item.uom_conversions.select_related("uom").order_by("uom__name")
     bins = item.bins.select_related("warehouse").all()
     on_menu = Exists(MenuItem.objects.filter(item_id=OuterRef("pk"), disabled=False))
     variants = (
@@ -302,6 +322,7 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "item": item,
             "bins": bins,
+            "conversions": conversions,
             "variants": variants,
             "menu_lines": menu_lines,
         },
@@ -316,20 +337,37 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
     )
     if request.method == "POST":
         form = ItemForm(request.POST, request.FILES, instance=item)
-        if form.is_valid():
-            form.save()
+        uom_fs = ItemUOMConversionFormSet(request.POST, instance=item, prefix="uoms")
+        form_ok = form.is_valid()
+        uom_fs.instance = form.instance
+        uom_ok = uom_fs.is_valid()
+        if form_ok and uom_ok:
+            with transaction.atomic():
+                form.save()
+                uom_fs.save()
             return redirect("inventory:item_detail", pk=item.pk)
     else:
         form = ItemForm(instance=item)
+        uom_fs = ItemUOMConversionFormSet(instance=item, prefix="uoms")
     return render(
         request,
         "backoffice/inventory/item_form.html",
-        {
-            "form": form,
-            "is_create": False,
-            "item": item,
-        },
+        _item_form_context(form, uom_fs, is_create=False, item=item),
     )
+
+
+@backoffice_required
+@require_POST
+def item_uom_add(request: HttpRequest) -> HttpResponse:
+    formset = add_formset_row(ItemUOMConversionFormSet, "uoms", request.POST)
+    return render(request, "backoffice/inventory/item_form.html#uom_conversions_partial", {"uom_formset": formset})
+
+
+@backoffice_required
+@require_POST
+def item_uom_remove(request: HttpRequest, index: int) -> HttpResponse:
+    formset = remove_formset_row(ItemUOMConversionFormSet, "uoms", request.POST, index)
+    return render(request, "backoffice/inventory/item_form.html#uom_conversions_partial", {"uom_formset": formset})
 
 
 @backoffice_required
@@ -619,7 +657,7 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
         PurchaseReceipt.objects.select_related("warehouse"),
         pk=pk,
     )
-    items = receipt.items.select_related("item", "item__stock_uom").all()
+    items = receipt.items.select_related("item", "item__stock_uom", "uom").all()
     voucher_no = str(pk)
     ledger_entries = StockLedgerEntry.objects.filter(
         voucher_type__in=["Purchase Receipt", "Purchase Receipt Cancellation"], voucher_no=voucher_no
@@ -628,6 +666,80 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
         request,
         "backoffice/inventory/purchase_receipt_detail.html",
         {"receipt": receipt, "items": items, "ledger_entries": ledger_entries},
+    )
+
+
+def _receipt_line_params(request: HttpRequest):
+    data = request.GET or request.POST
+    prefix = None
+    for key in data:
+        suffix = key.rsplit("-", 1)[-1]
+        if suffix in {"item", "uom", "received_qty"}:
+            prefix = key[: -len(suffix) - 1]
+            break
+    item_id = data.get(f"{prefix}-item") if prefix else data.get("item")
+    uom_id = data.get(f"{prefix}-uom") if prefix else data.get("uom")
+    qty = data.get(f"{prefix}-received_qty") if prefix else data.get("received_qty")
+    return prefix, item_id, uom_id, qty
+
+
+def _stock_qty_preview_text(item, uom, qty):
+    if item is None or uom is None or qty is None:
+        return ""
+    try:
+        factor = item.uom_factor(uom)
+        stock_qty = (qty * factor).quantize(Decimal("0.01"))
+    except ValidationError, InvalidOperation:
+        return ""
+    qty_display = format(qty.normalize(), "f")
+    stock_display = format(stock_qty.normalize(), "f")
+    if factor == 1:
+        return f"{qty_display} {uom.name}"
+    return f"{qty_display} {uom.name} = {stock_display} {item.stock_uom.name}"
+
+
+@backoffice_required
+@require_GET
+def purchase_receipt_item_meta(request: HttpRequest) -> HttpResponse:
+    prefix, item_id, _uom_id, qty_raw = _receipt_line_params(request)
+    item = Item.objects.filter(pk=item_id).select_related("stock_uom").first() if item_id else None
+    instance = PurchaseReceiptItem(item=item, uom=item.stock_uom if item else None)
+    form = PurchaseReceiptItemForm(instance=instance, prefix=prefix)
+    qty = None
+    if qty_raw:
+        try:
+            qty = Decimal(str(qty_raw))
+        except InvalidOperation:
+            qty = None
+    preview = _stock_qty_preview_text(item, item.stock_uom if item else None, qty)
+    return render(
+        request,
+        "backoffice/inventory/purchase_receipt_form.html#uom_widget_partial",
+        {
+            "uom_field": form["uom"],
+            "prefix": prefix or "",
+            "preview": preview,
+        },
+    )
+
+
+@backoffice_required
+@require_GET
+def purchase_receipt_stock_qty_preview(request: HttpRequest) -> HttpResponse:
+    prefix, item_id, uom_id, qty_raw = _receipt_line_params(request)
+    item = Item.objects.filter(pk=item_id).select_related("stock_uom").first() if item_id else None
+    uom = UOM.objects.filter(pk=uom_id).first() if uom_id else None
+    qty = None
+    if qty_raw:
+        try:
+            qty = Decimal(str(qty_raw))
+        except InvalidOperation:
+            qty = None
+    preview = _stock_qty_preview_text(item, uom, qty)
+    return render(
+        request,
+        "backoffice/inventory/purchase_receipt_form.html#stock_qty_preview_partial",
+        {"prefix": prefix or "", "preview": preview},
     )
 
 

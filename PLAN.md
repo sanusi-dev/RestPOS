@@ -17,7 +17,7 @@ conventions are in `AGENTS.md`.
 | App | Responsibility | FEATURES.md sections | State |
 |---|---|---|---|
 | `settings` | Restaurant singleton, production units, staff roles | A1 | built |
-| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #68, E #69 | built; remaining §4.10 UOM conversion, §4.11 recipes |
+| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69 | built; remaining §4.11 recipes |
 | `menu` | Menu definition, menu items, variants, add-ons | A2 | built |
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
@@ -33,7 +33,7 @@ conventions are in `AGENTS.md`.
 `orders` (orders stamp the active shift and reference payment modes); `orders` is the central
 app built on all of the above; `accounting` then layers GL posting on orders, payments,
 inventory, and settings; `reports` consumes everything; `printing` is a leaf built last.
-§4.10 (UOM conversion) is a Phase 2 rework and must land before §4.11 (food recipes).
+§4.10 (UOM conversion) has landed and is a prerequisite for §4.11 (food recipes).
 §4.11 is independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
 after the core phases complete. Each phase completes before the next starts.
 
@@ -42,7 +42,7 @@ after the core phases complete. Each phase completes before the next starts.
 | Phase | Apps involved | Features covered | Completed work | Remaining work | Detailed plan status | Progress status |
 |---|---|---|---|---|---|---|
 | 1 | settings | A1 | Restaurant singleton (company, invoice prefix, warehouses, draft cap, history toggle), production units with printer config, staff role assignment | — | n/a | Completed |
-| 2 | inventory | A3, A9, E #68 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations) | UOM conversion rework — purchase-unit vs stock-unit (§4.10) | §4.10 | Completed / Planned rework |
+| 2 | inventory | A3, A9 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations), purchase-unit vs stock-unit conversion | — | n/a | Completed |
 | 3 | menu | A2 | Menu, menu items, specials, disable, images, variants, add-ons, seed command | — | n/a | Completed |
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
@@ -672,7 +672,8 @@ override. Electricity optional (blank = ₦0).
 
 ### 4.10 Item & Receipt UOM Conversion — purchase unit vs stock unit (Phase 2 rework)
 
-**Status:** planned — not yet implemented. FEATURES.md E #68.
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`,
+`docs/workflows/inventory.md`, and the code.
 
 **Depends on:** nothing. Must land before §4.11.
 

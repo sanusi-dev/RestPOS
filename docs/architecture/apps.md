@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `apps.users` | `CustomUser`, roles, profile/avatar, auth customization | `models.py`, `signals.py`, `forms.py`, `adapter.py` | allauth, Django auth |
 | `apps.settings` | singleton restaurant configuration and production stations | `Restaurant`, `ProductionUnit`, `views.py` | inventory, menu, users, accounting (GL FKs) |
-| `apps.inventory` | item master, warehouses, bins, FIFO ledger, stock documents | `models.py`, `services.py`, `views.py` | settings, menu through validation, accounting (GL FKs) |
+| `apps.inventory` | item master, warehouses, bins, PWAC ledger, stock documents | `models.py`, `services.py`, `views.py` | settings, menu through validation, accounting (GL FKs) |
 | `apps.menu` | menus, priced menu lines, add-ons, variant links | `models.py`, `views.py`, `management/commands/seed_menu_catalog.py` | inventory |
 | `apps.payments` | payment method master and GL mapping | `models.py`, `views.py`, `forms.py` | accounting (LedgerAccount FK) |
 | `apps.staff` | opening/closing shift documents and drawer reconciliation | `models.py`, `services.py`, `views.py` | users, payments, orders, settings, accounting (variance JE) |
@@ -37,12 +37,12 @@
 
 ### `apps.inventory`
 
-- URLs: `inventory/urls.py` exposes masters, stock documents, formset row endpoints, ledger, and balance views under `/backoffice/inventory/`.
-- Models/forms: all inventory entities are in `inventory/models.py`; ModelForms and inline formsets are in `inventory/forms.py`.
-- Services: `inventory/services.py` owns Stock Entry, Stock Reconciliation, Purchase Receipt submit/cancel and voucher reversal.
-- Templates/frontend: `templates/backoffice/inventory/*`; Alpine toggles purpose-specific fields and HTMX adds/removes formset rows.
+- URLs: `inventory/urls.py` exposes masters, stock documents, formset row endpoints (including item UOM conversions and purchase-receipt UOM meta/preview), ledger, and balance views under `/backoffice/inventory/`.
+- Models/forms: all inventory entities are in `inventory/models.py` (including `ItemUOMConversion`); ModelForms and inline formsets are in `inventory/forms.py`.
+- Services: `inventory/services.py` owns Stock Entry, Stock Reconciliation, Purchase Receipt submit/cancel and voucher reversal. Purchase-receipt submit converts as-bought qty into stock UOM and blends WAC on the as-bought amount.
+- Templates/frontend: `templates/backoffice/inventory/*`; Alpine toggles purpose-specific fields and the UOM-conversion formset; HTMX adds/removes formset rows and refreshes receipt UOM/preview widgets.
 - Signals/startup: `InventoryConfig.ready()` seeds UOMs and ItemGroups after migrations; no model signal receivers.
-- Side effects: posting updates SLEs, Bins, FIFO queues, and last purchase rates; cancellation posts reversals.
+- Side effects: posting updates SLEs, Bins, and last purchase rates; cancellation posts reversals.
 
 ### `apps.menu`
 

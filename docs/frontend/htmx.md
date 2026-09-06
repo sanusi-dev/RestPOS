@@ -32,7 +32,7 @@ A 3xx redirect's response headers are dropped when the browser follows it, so an
 
 ## Formset Partials
 
-Inventory item add/remove endpoints receive the full form POST, rebuild contiguous management-form indices using `inventory.forms.add_formset_row()` or `remove_formset_row()`, and return a fragment from the same form template. They do not save rows until the parent form is submitted.
+Inventory item add/remove endpoints receive the full form POST, rebuild contiguous management-form indices using `inventory.forms.add_formset_row()` or `remove_formset_row()`, and return a fragment from the same form template. They do not save rows until the parent form is submitted. Item UOM conversions use the same pattern (`inventory:item_uom_add` / `item_uom_remove`). Purchase-receipt lines `hx-get` `inventory:purchase_receipt_item_meta` (replace the UOM widget when the item changes) and `inventory:purchase_receipt_stock_qty_preview` (show e.g. `5 Crate = 120 Bottle`).
 
 ## HTMX Debugging
 

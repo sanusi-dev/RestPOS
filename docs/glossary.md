@@ -5,6 +5,8 @@
 | Restaurant | Singleton `settings.Restaurant` configuration row for identity, active menu, warehouses, and POS limits. |
 | Production Unit | `settings.ProductionUnit` station for FOOD or DRINKS with a warehouse and printer metadata. |
 | Item | Inventory master record used for both sellable products and internal stock. |
+| Stock UOM | `Item.stock_uom` — the countable unit for bins, the ledger, counts, and POS (Bottle, Kg, Plate). |
+| UOM conversion | `ItemUOMConversion` row mapping one bulk purchase unit to the stock UOM (e.g. 1 Crate = 24 Bottle). Converted once on purchase-receipt submit. |
 | Menu | Named enabled collection of priced `MenuItem` rows. |
 | Menu Item | A priced link between a Menu and an inventory Item. Its rate is the POS selling price. |
 | Add-on | Separate sellable Item linked through `ItemAddOn` and added as its own order line. |
@@ -12,7 +14,7 @@
 | Department | `FOOD` or `DRINKS`; controls production routing and the DRINKS-only POS stock policy. |
 | Warehouse | Stock location. Its operational role comes from Restaurant/ProductionUnit references, not a type field. |
 | Bin | Current item/warehouse snapshot of actual, reserved, and valued stock. |
-| Stock Ledger Entry / SLE | Signed immutable-by-convention movement row with running quantity and FIFO queue. |
+| Stock Ledger Entry / SLE | Signed immutable-by-convention PWAC movement row (`quantity`, `unit_rate`, `stock_value_change`). |
 | Stock Entry | Draft document for Material Receipt or Store-to-production transfer. |
 | Stock Reconciliation | Draft count/adjustment document with a structured reason. |
 | Purchase Receipt | Draft supplier receipt into the central Store warehouse. |
