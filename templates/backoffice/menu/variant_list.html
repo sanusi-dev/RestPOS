@@ -30,7 +30,7 @@
           <tr>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Parent Item</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Variant Item</th>
-            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -38,9 +38,9 @@
             <tr class="hover:bg-gray-50/50 transition-colors">
               <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ variant.parent_item.item_name }}</td>
               <td class="px-6 py-4 text-sm text-gray-500">{{ variant.variant_item.item_name }}</td>
-              <td class="px-6 py-4 text-right space-x-4">
-                <a href="{% url 'menu:variant_update' variant.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
-                <button hx-post="{% url 'menu:variant_delete' variant.pk %}" hx-target="#app-content" hx-select="#app-content" hx-swap="outerHTML" data-confirm-message="Delete this variant?" data-confirm-icon="warning" data-confirm-color="#dc2626" data-confirm-btn="Yes, delete" class="backend-submit text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors" hx-indicator="this" hx-disabled-elt="this">Delete</button>
+              <td class="px-6 py-4 text-right">
+                <a href="{% url 'menu:variant_update' variant.pk %}" aria-label="Edit variant" title="Edit variant" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a>
+                <button hx-post="{% url 'menu:variant_delete' variant.pk %}" hx-target="#app-content" hx-select="#app-content" hx-swap="outerHTML" data-confirm-message="Delete this variant?" data-confirm-icon="warning" data-confirm-color="#dc2626" data-confirm-btn="Yes, delete" class="backend-submit ml-2 inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" hx-indicator="this" hx-disabled-elt="this" aria-label="Delete variant" title="Delete variant">{% hgi_stroke name="delete-02" size="16" color="currentColor" stroke_width="2" %}</button>
               </td>
             </tr>
           {% empty %}

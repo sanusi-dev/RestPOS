@@ -102,16 +102,20 @@ def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @backoffice_required
 def menu_item_list(request: HttpRequest) -> HttpResponse:
-    menu_id = request.GET.get("menu")
-    menu_items = MenuItem.objects.select_related("menu", "item", "item__item_group").all()
+    menu_id = request.GET.get("menu", "")
+    department = request.GET.get("department", "")
+    status = request.GET.get("status", "all")
+    menu_items = MenuItem.objects.select_related("menu", "item").all()
     if menu_id:
         menu_items = menu_items.filter(menu_id=menu_id)
-    restaurant = Restaurant.load()
-    active_menu = (
-        restaurant.active_menu
-        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
-        else None
-    )
+    if department:
+        menu_items = menu_items.filter(item__department=department)
+    if status == "active":
+        menu_items = menu_items.filter(disabled=False, special_dish=False)
+    elif status == "special":
+        menu_items = menu_items.filter(disabled=False, special_dish=True)
+    elif status == "disabled":
+        menu_items = menu_items.filter(disabled=True)
     menus = Menu.objects.all().order_by("name")
     return render(
         request,
@@ -120,7 +124,8 @@ def menu_item_list(request: HttpRequest) -> HttpResponse:
             "menu_items": menu_items,
             "menus": menus,
             "selected_menu": menu_id,
-            "active_menu_id": active_menu.pk if active_menu else None,
+            "selected_department": department,
+            "selected_status": status,
         },
     )
 
@@ -170,7 +175,8 @@ def menu_item_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @backoffice_required
 def add_on_list(request: HttpRequest) -> HttpResponse:
-    parent_id = request.GET.get("parent_item")
+    parent_id = request.GET.get("parent_item", "")
+    department = request.GET.get("department", "")
     restaurant = Restaurant.load()
     active_menu = restaurant.active_menu if restaurant else None
     active_menu_id = active_menu.pk if active_menu and active_menu.enabled else None
@@ -184,6 +190,8 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
     ).annotate(active_menu_rate=Subquery(active_price))
     if parent_id:
         add_ons = add_ons.filter(parent_item_id=cast(int, parent_id))
+    if department:
+        add_ons = add_ons.filter(add_on_item__department=department)
     parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
@@ -192,6 +200,7 @@ def add_on_list(request: HttpRequest) -> HttpResponse:
             "add_ons": add_ons,
             "parent_items": parent_items,
             "selected_parent": parent_id,
+            "selected_department": department,
             "active_menu": active_menu,
             "active_menu_is_live": bool(active_menu_id),
         },
