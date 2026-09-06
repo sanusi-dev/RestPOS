@@ -22,6 +22,11 @@ class MenuItemForm(MenuModelForm):
     class Meta:
         model = MenuItem
         fields = ["menu", "item", "item_name", "rate", "special_dish", "disabled"]
+        help_texts = {
+            "rate": "Customer-facing price shown on the POS.",
+            "special_dish": "Show this line in the POS specials filter.",
+            "disabled": "Hide this line from the POS without deleting the inventory item.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,6 +48,10 @@ class ItemAddOnForm(MenuModelForm):
     class Meta:
         model = ItemAddOn
         fields = ["parent_item", "add_on_item"]
+        help_texts = {
+            "parent_item": "The sellable item that offers this extra.",
+            "add_on_item": "The sellable item offered as a separate POS line; its menu line owns the price.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from apps.inventory.models import UOM, Item, ItemGroup
 from apps.menu.models import ItemAddOn, ItemVariant, Menu, MenuItem
+from apps.settings.models import Restaurant
 from apps.users.models import CustomUser
 
 
@@ -46,6 +47,36 @@ class MenuViewTestBase(TestCase):
 
 
 class TestMenuViews(MenuViewTestBase):
+    def test_menu_dashboard_shows_catalog_counts_and_live_menu(self):
+        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+        response = self.client.get(reverse("menu:dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["menu_count"], 1)
+        self.assertEqual(response.context["menu_item_count"], 2)
+        self.assertEqual(response.context["active_menu"], self.menu)
+        self.assertTrue(response.context["active_menu_is_live"])
+        self.assertContains(response, "Live on POS")
+
+    def test_menu_list_marks_enabled_active_menu(self):
+        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+        response = self.client.get(reverse("menu:menu_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["active_menu_id"], self.menu.pk)
+        self.assertTrue(response.context["menus"].get(pk=self.menu.pk).is_active_menu)
+        self.assertContains(response, "Live on POS")
+
+    def test_menu_detail_includes_inventory_context(self):
+        response = self.client.get(reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.item_food.item_code)
+        self.assertContains(response, self.group.name)
+
+    def test_menu_item_list_filters_by_menu(self):
+        response = self.client.get(reverse("menu:menu_item_list"), {"menu": self.menu.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["menu_items"].count(), 2)
+        self.assertEqual(response.context["selected_menu"], str(self.menu.pk))
+
     def test_menu_create_post(self):
         response = self.client.post(
             reverse("menu:menu_create"),
@@ -117,6 +148,47 @@ class TestMenuItemViews(MenuViewTestBase):
 
 
 class TestItemAddOnViews(MenuViewTestBase):
+    def test_add_on_list_shows_active_menu_price(self):
+        add_on_item = Item.objects.create(
+            item_code="EXTRA-GET",
+            item_name="Extra Sauce",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
+        )
+        MenuItem.objects.create(menu=self.menu, item=add_on_item, rate=Decimal("125"))
+        ItemAddOn.objects.create(parent_item=self.item_food, add_on_item=add_on_item)
+        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+        response = self.client.get(reverse("menu:add_on_list"))
+        self.assertEqual(response.status_code, 200)
+        priced_add_on = response.context["add_ons"].get(add_on_item=add_on_item)
+        self.assertEqual(priced_add_on.active_menu_rate, Decimal("125.00"))
+        self.assertContains(response, "125.00")
+
+    def test_add_on_list_marks_unpriced_relationship(self):
+        add_on_item = Item.objects.create(
+            item_code="EXTRA-UNPRICED",
+            item_name="Unpriced Sauce",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
+        )
+        other_menu = Menu.objects.create(name="Dinner Menu")
+        MenuItem.objects.create(menu=other_menu, item=add_on_item, rate=Decimal("125"))
+        ItemAddOn.objects.create(parent_item=self.item_food, add_on_item=add_on_item)
+        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+        response = self.client.get(reverse("menu:add_on_list"))
+        self.assertEqual(response.status_code, 200)
+        unpriced_add_on = response.context["add_ons"].get(add_on_item=add_on_item)
+        self.assertIsNone(unpriced_add_on.active_menu_rate)
+        self.assertContains(response, "Not priced on active menu")
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()

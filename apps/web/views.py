@@ -62,6 +62,7 @@ def dashboard(request):
                         {"label": "Menus", "url": "menu:menu_list"},
                         {"label": "Menu items", "url": "menu:menu_item_list"},
                         {"label": "Add-ons", "url": "menu:add_on_list"},
+                        {"label": "Variants", "url": "menu:variant_list"},
                     ],
                 },
                 {

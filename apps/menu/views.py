@@ -1,11 +1,12 @@
 from typing import cast
 
-from django.db.models import Count
+from django.db.models import BooleanField, Case, Count, OuterRef, Subquery, Value, When
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.inventory.models import Item
+from apps.settings.models import Restaurant
 from apps.users.decorators import backoffice_required
 
 from .forms import (
@@ -19,20 +20,45 @@ from .models import ItemAddOn, ItemVariant, Menu, MenuItem
 
 @backoffice_required
 def menu_dashboard(request: HttpRequest) -> HttpResponse:
+    restaurant = Restaurant.load()
+    active_menu = (
+        restaurant.active_menu
+        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
+        else None
+    )
     context = {
         "menu_count": Menu.objects.count(),
         "menu_item_count": MenuItem.objects.count(),
         "add_on_count": ItemAddOn.objects.count(),
         "variant_count": ItemVariant.objects.count(),
+        "active_menu": active_menu,
+        "active_menu_is_live": bool(active_menu),
+        "active_menu_item_count": active_menu.items.filter(disabled=False).count() if active_menu else 0,
     }
     return render(request, "backoffice/menu/dashboard.html", context)
 
 
 @backoffice_required
 def menu_list(request: HttpRequest) -> HttpResponse:
-    # Annotated count avoids a per-row COUNT in the template.
-    menus = Menu.objects.annotate(item_count=Count("items"))
-    return render(request, "backoffice/menu/menu_list.html", {"menus": menus})
+    restaurant = Restaurant.load()
+    active_menu = (
+        restaurant.active_menu
+        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
+        else None
+    )
+    active_menu_id = active_menu.pk if active_menu else None
+    menus = Menu.objects.annotate(item_count=Count("items")).annotate(
+        is_active_menu=Case(
+            When(pk=active_menu_id, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+    )
+    return render(
+        request,
+        "backoffice/menu/menu_list.html",
+        {"menus": menus, "active_menu": active_menu, "active_menu_id": active_menu_id},
+    )
 
 
 @backoffice_required
@@ -50,11 +76,19 @@ def menu_create(request: HttpRequest) -> HttpResponse:
 @backoffice_required
 def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
     menu = get_object_or_404(Menu, pk=pk)
-    menu_items = menu.items.all()
+    restaurant = Restaurant.load()
+    menu_items = menu.items.select_related("item", "item__item_group").all()
     return render(
         request,
         "backoffice/menu/menu_detail.html",
-        {"menu": menu, "menu_items": menu_items},
+        {
+            "menu": menu,
+            "menu_items": menu_items,
+            "active_menu": restaurant.active_menu if restaurant else None,
+            "is_active_menu": bool(
+                restaurant and restaurant.active_menu_id == menu.pk and menu.enabled
+            ),
+        },
     )
 
 
@@ -78,14 +112,25 @@ def menu_update(request: HttpRequest, pk: int) -> HttpResponse:
 @backoffice_required
 def menu_item_list(request: HttpRequest) -> HttpResponse:
     menu_id = request.GET.get("menu")
-    menu_items = MenuItem.objects.select_related("menu").all()
+    menu_items = MenuItem.objects.select_related("menu", "item", "item__item_group").all()
     if menu_id:
         menu_items = menu_items.filter(menu_id=menu_id)
+    restaurant = Restaurant.load()
+    active_menu = (
+        restaurant.active_menu
+        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
+        else None
+    )
     menus = Menu.objects.all().order_by("name")
     return render(
         request,
         "backoffice/menu/menu_item_list.html",
-        {"menu_items": menu_items, "menus": menus, "selected_menu": menu_id},
+        {
+            "menu_items": menu_items,
+            "menus": menus,
+            "selected_menu": menu_id,
+            "active_menu_id": active_menu.pk if active_menu else None,
+        },
     )
 
 
@@ -135,14 +180,30 @@ def menu_item_delete(request: HttpRequest, pk: int) -> HttpResponse:
 @backoffice_required
 def add_on_list(request: HttpRequest) -> HttpResponse:
     parent_id = request.GET.get("parent_item")
-    add_ons = ItemAddOn.objects.select_related("parent_item", "add_on_item").all()
+    restaurant = Restaurant.load()
+    active_menu = restaurant.active_menu if restaurant else None
+    active_menu_id = active_menu.pk if active_menu and active_menu.enabled else None
+    active_price = MenuItem.objects.filter(
+        menu_id=active_menu_id,
+        item_id=OuterRef("add_on_item_id"),
+        disabled=False,
+    ).values("rate")[:1]
+    add_ons = ItemAddOn.objects.select_related(
+        "parent_item", "parent_item__item_group", "add_on_item", "add_on_item__item_group"
+    ).annotate(active_menu_rate=Subquery(active_price))
     if parent_id:
         add_ons = add_ons.filter(parent_item_id=cast(int, parent_id))
     parent_items = Item.objects.filter(add_ons__isnull=False).distinct().order_by("item_name").only("item_name")
     return render(
         request,
         "backoffice/menu/add_on_list.html",
-        {"add_ons": add_ons, "parent_items": parent_items, "selected_parent": parent_id},
+        {
+            "add_ons": add_ons,
+            "parent_items": parent_items,
+            "selected_parent": parent_id,
+            "active_menu": active_menu,
+            "active_menu_is_live": bool(active_menu_id),
+        },
     )
 
 

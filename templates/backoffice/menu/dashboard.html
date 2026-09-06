@@ -1,63 +1,39 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
-<div class="w-full">
-  <div class="mb-8">
-    <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Menu</h1>
-    <p class="mt-2 text-sm font-medium text-gray-500">Manage menus, items, and pricing for your restaurant</p>
+<div class="w-full space-y-8">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Backoffice" root_url="web:dashboard" current_label="Menu" %}
+  <div class="flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="text-xs font-bold uppercase tracking-[0.18em] text-orange-500">Catalog control</p>
+      <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-gray-900">Menu</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Shape the prices and choices that cashiers see on the POS.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'menu:menu_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-3.5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>New menu</a>
+      <a href="{% url 'menu:menu_item_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="menu-restaurant" size="16" color="currentColor" stroke_width="2" %}</span>Add menu item</a>
+      <a href="{% url 'menu:add_on_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="add-01" size="16" color="currentColor" stroke_width="2" %}</span>New add-on</a>
+    </div>
   </div>
-  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-    <a href="{% url 'menu:menu_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-      <div class="absolute top-0 right-0 w-24 h-24 bg-orange-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-      <div class="flex items-center justify-between mb-4 relative z-10">
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Menus</h3>
-        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-orange-500 ring-1 ring-gray-100">
-          <span>{% hgi_stroke name="menu-02" size="20" color="currentColor" stroke_width="2" %}</span>
-        </div>
-      </div>
-      <div class="relative z-10">
-        <p class="text-3xl font-extrabold text-gray-900">{{ menu_count }}</p>
-        <p class="mt-3 text-xs font-bold text-orange-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage menus →</p>
-      </div>
-    </a>
-    <a href="{% url 'menu:menu_item_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-      <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-      <div class="flex items-center justify-between mb-4 relative z-10">
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Menu Items</h3>
-        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-500 ring-1 ring-gray-100">
-          <span>{% hgi_stroke name="menu-restaurant" size="20" color="currentColor" stroke_width="2" %}</span>
-        </div>
-      </div>
-      <div class="relative z-10">
-        <p class="text-3xl font-extrabold text-gray-900">{{ menu_item_count }}</p>
-        <p class="mt-3 text-xs font-bold text-emerald-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage items →</p>
-      </div>
-    </a>
-    <a href="{% url 'menu:add_on_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-      <div class="absolute top-0 right-0 w-24 h-24 bg-sky-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-      <div class="flex items-center justify-between mb-4 relative z-10">
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Item Add-ons</h3>
-        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-sky-500 ring-1 ring-gray-100">
-          <span>{% hgi_stroke name="add-01" size="20" color="currentColor" stroke_width="2" %}</span>
-        </div>
-      </div>
-      <div class="relative z-10">
-        <p class="text-3xl font-extrabold text-gray-900">{{ add_on_count }}</p>
-        <p class="mt-3 text-xs font-bold text-sky-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage add-ons →</p>
-      </div>
-    </a>
-    <a href="{% url 'menu:variant_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
-      <div class="absolute top-0 right-0 w-24 h-24 bg-rose-100/50 rounded-full blur-2xl -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-0"></div>
-      <div class="flex items-center justify-between mb-4 relative z-10">
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Item Variants</h3>
-        <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-rose-500 ring-1 ring-gray-100">
-          <span>{% hgi_stroke name="arrow-left-right" size="20" color="currentColor" stroke_width="2" %}</span>
-        </div>
-      </div>
-      <div class="relative z-10">
-        <p class="text-3xl font-extrabold text-gray-900">{{ variant_count }}</p>
-        <p class="mt-3 text-xs font-bold text-rose-500 flex items-center gap-1 group-hover:translate-x-1 transition-transform">Manage variants →</p>
-      </div>
-    </a>
-  </div>
+  {% if active_menu_is_live %}
+    <section class="flex flex-col gap-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-5 shadow-[0_5px_24px_rgb(249,115,22,0.08)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div class="flex items-start gap-4"><span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-orange-600 shadow-sm ring-1 ring-orange-200">{% hgi_stroke name="dashboard-square-01" size="22" color="currentColor" stroke_width="2" %}</span><div><p class="text-xs font-bold uppercase tracking-[0.16em] text-orange-600">Live on POS</p><h2 class="mt-1 text-lg font-extrabold text-gray-900">{{ active_menu.name }}</h2><p class="mt-1 text-sm text-gray-600">{{ active_menu_item_count }} enabled menu lines are available to cashiers.</p></div></div>
+      <a href="{% url 'menu:menu_detail' active_menu.pk %}" class="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100 focus:outline-none focus:ring-1 focus:ring-orange-500/30 sm:self-auto">Review live menu <span class="flex size-3.5 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></a>
+    </section>
+  {% else %}
+    <section class="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6" role="status">
+      <div class="flex items-start gap-4"><span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm ring-1 ring-amber-200">{% hgi_stroke name="alert-02" size="22" color="currentColor" stroke_width="2" %}</span><div><p class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">POS setup needed</p><h2 class="mt-1 text-lg font-extrabold text-gray-900">No enabled menu is live on the POS</h2><p class="mt-1 text-sm text-amber-800">Choose an enabled active menu in Restaurant settings before opening the cashier screen.</p></div></div>
+      <a href="{% url 'settings:restaurant_settings' %}" class="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100 focus:outline-none focus:ring-1 focus:ring-amber-500/30 sm:self-auto">Open restaurant settings <span class="flex size-3.5 items-center justify-center">{% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></a>
+    </section>
+  {% endif %}
+  <section class="rounded-2xl border border-gray-200 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
+    <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4"><span class="flex size-9 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="menu-restaurant" size="18" color="currentColor" stroke_width="2" %}</span><div><p class="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Catalog</p><h2 class="mt-1 text-base font-bold text-gray-900">Menu building blocks</h2></div></div>
+    <div class="grid divide-y divide-gray-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+      <a href="{% url 'menu:menu_list' %}" class="group flex gap-3 p-5 transition hover:bg-gray-50"><span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="18" color="currentColor" stroke_width="2" %}</span><span><span class="block text-2xl font-extrabold tracking-tight text-gray-900">{{ menu_count }}</span><span class="mt-1 block text-sm font-semibold text-gray-600">Menus</span><span class="mt-3 block text-xs font-semibold text-gray-400 transition group-hover:text-gray-700">Manage menus {% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></span></a>
+      <a href="{% url 'menu:menu_item_list' %}" class="group flex gap-3 border-t border-gray-100 p-5 transition hover:bg-gray-50 sm:border-t-0"><span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="package" size="18" color="currentColor" stroke_width="2" %}</span><span><span class="block text-2xl font-extrabold tracking-tight text-gray-900">{{ menu_item_count }}</span><span class="mt-1 block text-sm font-semibold text-gray-600">Menu items</span><span class="mt-3 block text-xs font-semibold text-gray-400 transition group-hover:text-gray-700">Manage prices {% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></span></a>
+      <a href="{% url 'menu:add_on_list' %}" class="group flex gap-3 p-5 transition hover:bg-gray-50 sm:border-t-0 sm:border-l"><span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="add-01" size="18" color="currentColor" stroke_width="2" %}</span><span><span class="block text-2xl font-extrabold tracking-tight text-gray-900">{{ add_on_count }}</span><span class="mt-1 block text-sm font-semibold text-gray-600">Add-ons</span><span class="mt-3 block text-xs font-semibold text-gray-400 transition group-hover:text-gray-700">Configure extras {% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></span></a>
+      <a href="{% url 'menu:variant_list' %}" class="group flex gap-3 border-t border-gray-100 p-5 transition hover:bg-gray-50 sm:border-l xl:border-t-0"><span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="arrow-left-right" size="18" color="currentColor" stroke_width="2" %}</span><span><span class="block text-2xl font-extrabold tracking-tight text-gray-900">{{ variant_count }}</span><span class="mt-1 block text-sm font-semibold text-gray-600">Variants</span><span class="mt-3 block text-xs font-semibold text-gray-400 transition group-hover:text-gray-700">Manage relationships {% hgi_stroke name="arrow-up-right-01" size="13" color="currentColor" stroke_width="2" %}</span></span></a>
+    </div>
+  </section>
+  <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] sm:p-6"><div class="flex items-start gap-3"><span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="idea-01" size="18" color="currentColor" stroke_width="2" %}</span><div><p class="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">How the POS uses this</p><h2 class="mt-1 text-base font-bold text-gray-900">One active menu, clear selling lines</h2></div></div><div class="mt-5 grid gap-4 border-t border-gray-100 pt-5 md:grid-cols-3"><div><p class="text-sm font-bold text-gray-900">1. Choose the live menu</p><p class="mt-1 text-xs leading-5 text-gray-500">Restaurant settings decides which enabled menu powers the cashier screen.</p></div><div><p class="text-sm font-bold text-gray-900">2. Enable menu lines</p><p class="mt-1 text-xs leading-5 text-gray-500">Only enabled menu items appear in the POS catalog, with their customer-facing rates.</p></div><div><p class="text-sm font-bold text-gray-900">3. Price add-ons there</p><p class="mt-1 text-xs leading-5 text-gray-500">Add-on relationships define choices; the active menu’s line rate defines the price.</p></div></div></section>
 </div>
 {% endblock %}
