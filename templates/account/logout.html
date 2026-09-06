@@ -8,15 +8,10 @@
     <form method="post" action="{% url 'account_logout' %}" class="flex flex-col gap-3">
       {% csrf_token %}
       {% if redirect_field_value %}
-      <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}"/>
+        <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
       {% endif %}
-      <input type="submit"
-             class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors cursor-pointer"
-             value="Sign Out">
-      <a href="{% url 'web:home' %}"
-         class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors">
-        Cancel
-      </a>
+      <input type="submit" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors cursor-pointer" value="Sign Out">
+      <a href="{% url 'web:home' %}" class="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancel</a>
     </form>
   </div>
 </div>

@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Menu" root_url="menu:dashboard" current_label="Menu Items" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Menu Items</h1>
@@ -14,13 +12,10 @@
       Add Menu Item
     </a>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
     <form method="get" class="flex items-center gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <label for="menu-filter" class="text-sm font-semibold text-gray-700">Filter by menu:</label>
-      <select id="menu-filter" name="menu"
-              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
-              onchange="this.form.submit()">
+      <select id="menu-filter" name="menu" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50" onchange="this.form.submit()">
         <option value="">All menus</option>
         {% for menu in menus %}
           <option value="{{ menu.pk }}" {% if selected_menu == menu.pk|stringformat:"s" %}selected{% endif %}>{{ menu.name }}</option>
@@ -28,7 +23,6 @@
       </select>
     </form>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">

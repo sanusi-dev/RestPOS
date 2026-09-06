@@ -2,7 +2,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Settings" root_url="settings:dashboard" current_label="Production units" %}
-
   <div class="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Production units</h1>
@@ -13,7 +12,6 @@
       New unit
     </a>
   </div>
-
   <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
@@ -42,9 +40,7 @@
               <td class="px-4 py-4 text-sm text-gray-500 sm:px-6">{{ production_unit.warehouse.name }}</td>
               <td class="px-4 py-4 text-sm text-gray-500 sm:px-6">{{ production_unit.printer_ip|default:"-" }}</td>
               <td class="px-4 py-4 text-right sm:px-6">
-                <a href="{% url 'settings:production_unit_update' production_unit.pk %}" aria-label="Edit {{ production_unit.name }}" title="Edit {{ production_unit.name }}" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
-                  {% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}
-                </a>
+                <a href="{% url 'settings:production_unit_update' production_unit.pk %}" aria-label="Edit {{ production_unit.name }}" title="Edit {{ production_unit.name }}" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a>
               </td>
             </tr>
           {% empty %}

@@ -2,7 +2,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Backoffice" root_url="web:dashboard" current_label="Inventory" %}
-
   <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Inventory</h1>
@@ -23,7 +22,6 @@
       </a>
     </div>
   </div>
-
   <div class="grid gap-6 xl:grid-cols-2">
     <section class="rounded-2xl border border-gray-200 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
       <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
@@ -48,7 +46,6 @@
         </a>
       </div>
     </section>
-
     <section class="rounded-2xl border border-gray-200 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
       <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
         <span class="flex size-9 items-center justify-center rounded-xl bg-gray-100 text-gray-600">{% hgi_stroke name="analytics-01" size="18" color="currentColor" stroke_width="2" %}</span>
@@ -77,6 +74,5 @@
       </div>
     </section>
   </div>
-
 </div>
 {% endblock %}

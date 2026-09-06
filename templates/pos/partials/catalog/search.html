@@ -1,16 +1,6 @@
-<form id="catalog-search-field" method="get" action="{% url 'pos:pos_order_screen' order.pk %}"
-      class="relative min-w-0 flex-1 sm:max-w-sm">
+<form id="catalog-search-field" method="get" action="{% url 'pos:pos_order_screen' order.pk %}" class="relative min-w-0 flex-1 sm:max-w-sm">
   <label for="catalog-search" class="sr-only">Search menu items</label>
-  <span class="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-slate-400">
-    {% hgi_stroke name="search-01" size="18" color="currentColor" stroke_width="2" %}
-  </span>
-  <input id="catalog-search" type="search" name="q" value="{{ catalog_query }}" x-ref="catalogSearch"
-         hx-get="{% url 'pos:pos_order_screen' order.pk %}"
-         hx-trigger="input changed delay:250ms, search"
-         hx-target="#catalog-workspace" hx-swap="outerHTML" hx-push-url="true"
-         hx-include="#catalog-filter-state"
-         @keydown.escape.prevent="$el.value = ''; $el.dispatchEvent(new Event('search', { bubbles: true }))"
-         autocomplete="off" placeholder="Search menu" aria-keyshortcuts="Control+K Meta+K"
-         class="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-16 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+  <span class="pointer-events-none absolute left-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-slate-400">{% hgi_stroke name="search-01" size="18" color="currentColor" stroke_width="2" %}</span>
+  <input id="catalog-search" type="search" name="q" value="{{ catalog_query }}" x-ref="catalogSearch" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-trigger="input changed delay:250ms, search" hx-target="#catalog-workspace" hx-swap="outerHTML" hx-push-url="true" hx-include="#catalog-filter-state" @keydown.escape.prevent="$el.value = ''; $el.dispatchEvent(new Event('search', { bubbles: true }))" autocomplete="off" placeholder="Search menu" aria-keyshortcuts="Control+K Meta+K" class="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-16 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
   <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 shadow-sm">Ctrl K</span>
 </form>

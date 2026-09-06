@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Reports" root_url="reports:daily_pnl_list" section_label="Daily P&L" section_url="reports:daily_pnl_list" current_label=pnl.business_date %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Daily P&amp;L · {{ pnl.business_date|date:"M j, Y" }}</h1>
@@ -29,89 +27,90 @@
       {% endif %}
     </div>
   </div>
-
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
     <div class="bg-white border border-gray-100 rounded-[1.5rem] p-5">
       <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
       <dd>
         {% if pnl.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
-        {% elif pnl.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
-        {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
-      </dd>
-    </div>
-    <div class="bg-white border border-gray-100 rounded-[1.5rem] p-5">
-      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Net sales</dt>
-      <dd class="text-lg font-mono font-bold">{{ pnl.net_sales }}</dd>
-    </div>
-    <div class="bg-white border border-gray-100 rounded-[1.5rem] p-5">
-      <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Net profit</dt>
-      <dd class="text-lg font-mono font-bold {% if pnl.net_profit >= 0 %}text-emerald-700{% else %}text-red-600{% endif %}">{{ pnl.net_profit }}</dd>
-    </div>
+      {% elif pnl.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+      {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+    </dd>
   </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-6">
-    {% include "backoffice/reports/_statement.html" with rows=lines %}
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] p-5">
+    <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Net sales</dt>
+    <dd class="text-lg font-mono font-bold">
+      {{ pnl.net_sales }}
+    </dd>
   </div>
-
-  {% if cogs_rows %}
-    <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
-      <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Drink COGS breakup</h3></div>
-      <table class="min-w-full divide-y divide-gray-100 text-sm">
-        <thead class="bg-gray-50/50">
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] p-5">
+    <dt class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Net profit</dt>
+    <dd class="text-lg font-mono font-bold {% if pnl.net_profit >= 0 %}text-emerald-700{% else %}text-red-600{% endif %}">{{ pnl.net_profit }}</dd>
+  </div>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-6">{% include "backoffice/reports/_statement.html" with rows=lines %}</div>
+{% if cogs_rows %}
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
+    <div class="px-6 py-5 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-900">Drink COGS breakup</h3>
+    </div>
+    <table class="min-w-full divide-y divide-gray-100 text-sm">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Kind</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in cogs_rows %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Kind</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <td class="px-6 py-3">{{ row.item_name }}</td>
+            <td class="px-6 py-3">{{ row.get_kind_display }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for row in cogs_rows %}
-            <tr>
-              <td class="px-6 py-3">{{ row.item_name }}</td>
-              <td class="px-6 py-3">{{ row.get_kind_display }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% if consumption_rows %}
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
+    <div class="px-6 py-5 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-900">Kitchen consumption</h3>
     </div>
-  {% endif %}
-
-  {% if consumption_rows %}
-    <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
-      <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Kitchen consumption</h3></div>
-      <table class="min-w-full divide-y divide-gray-100 text-sm">
-        <thead class="bg-gray-50/50">
+    <table class="min-w-full divide-y divide-gray-100 text-sm">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in consumption_rows %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <td class="px-6 py-3">{{ row.item_name }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for row in consumption_rows %}
-            <tr>
-              <td class="px-6 py-3">{{ row.item_name }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
-              <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% endif %}
-
-  {% if pnl.remarks %}
-    <div class="bg-white border border-gray-100 rounded-[1.5rem] p-6">
-      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
-      <dd class="text-sm text-gray-700 whitespace-pre-wrap">{{ pnl.remarks }}</dd>
-    </div>
-  {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% if pnl.remarks %}
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] p-6">
+    <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+    <dd class="text-sm text-gray-700 whitespace-pre-wrap">
+      {{ pnl.remarks }}
+    </dd>
+  </div>
+{% endif %}
 </div>
 {% endblock %}

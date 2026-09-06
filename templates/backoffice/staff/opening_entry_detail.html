@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Staff" root_url="staff:dashboard" section_label="Opening Entries" section_url="staff:opening_entry_list" current_label="Opening #"|add:entry.pk|stringformat:"s" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Opening Entry #{{ entry.pk }}</h1>
@@ -11,52 +9,39 @@
     </div>
     <div class="flex items-center gap-2 flex-wrap">
       {% if entry.status == "DRAFT" %}
-        <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline"
-              data-confirm-title="Cancel this draft?"
-              data-confirm-body="This will discard the opening entry. It cannot be undone."
-              data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+        <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline" data-confirm-title="Cancel this draft?" data-confirm-body="This will discard the opening entry. It cannot be undone." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
-            Cancel
-          </button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel</button>
         </form>
-        <button type="submit" form="opening-float-form" hx-indicator="this" hx-disabled-elt="this" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-          Save Float
-        </button>
-        <form method="post" action="{% url 'staff:opening_entry_submit' entry.pk %}" id="submit-open-form" class="inline"
-              data-confirm-title="Submit and open the shift?"
-              data-confirm-body="This starts the shift. The entry becomes immutable once submitted (it can be cancelled, but not edited)."
-              data-confirm-button="Submit & Open Shift" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+        <button type="submit" form="opening-float-form" hx-indicator="this" hx-disabled-elt="this" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Save Float</button>
+        <form method="post" action="{% url 'staff:opening_entry_submit' entry.pk %}" id="submit-open-form" class="inline" data-confirm-title="Submit and open the shift?" data-confirm-body="This starts the shift. The entry becomes immutable once submitted (it can be cancelled, but not edited)." data-confirm-button="Submit & Open Shift" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">
-            Submit &amp; Open Shift
-          </button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-lg hover:bg-emerald-700 hover:shadow-emerald-500/30 transition-all duration-300">Submit &amp; Open Shift</button>
         </form>
       {% elif entry.is_open %}
-        <a href="{% url 'staff:closing_entry_create' %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-          Close Shift
-        </a>
+        <a href="{% url 'staff:closing_entry_create' %}" class="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Close Shift</a>
         <form method="post" action="{% url 'staff:opening_entry_cancel' entry.pk %}" class="inline" data-confirm-title="Cancel this open shift?" data-confirm-body="The shift will be marked cancelled. If the shift has sales they will remain in the ledger but the session will be invalid." data-confirm-button="Cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
           {% csrf_token %}
-          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">
-            Cancel Shift
-          </button>
+          <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors">Cancel Shift</button>
         </form>
       {% endif %}
     </div>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
     <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
     <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Shift Details</h2>
     <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 relative z-10">
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cashier</dt>
-        <dd class="text-base font-bold text-gray-900">{{ entry.cashier.get_display_name }}</dd>
+        <dd class="text-base font-bold text-gray-900">
+          {{ entry.cashier.get_display_name }}
+        </dd>
       </div>
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Posting Date</dt>
-        <dd class="text-base font-mono text-gray-900">{{ entry.posting_date }}</dd>
+        <dd class="text-base font-mono text-gray-900">
+          {{ entry.posting_date }}
+        </dd>
       </div>
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Period</dt>
@@ -69,63 +54,37 @@
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
         <dd class="text-base font-bold text-gray-900">
           {% if entry.is_open %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Open</span>
-          {% elif entry.is_closed %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 ring-1 ring-gray-500/10">Closed</span>
-          {% elif entry.status == "CANCELLED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>
-          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>{% endif %}
+        {% elif entry.is_closed %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 ring-1 ring-gray-500/10">Closed</span>
+        {% elif entry.status == "CANCELLED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>
+        {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>{% endif %}
+      </dd>
+    </div>
+    {% if entry.closing_entry %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Closing Entry</dt>
+        <dd><a href="{% url 'staff:closing_entry_detail' entry.closing_entry.pk %}" class="text-base font-bold text-orange-500 hover:text-orange-600">#{{ entry.closing_entry.pk }}</a></dd>
+      </div>
+    {% endif %}
+    {% if entry.remarks %}
+      <div class="sm:col-span-2">
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+        <dd class="text-base font-medium text-gray-700">
+          {{ entry.remarks }}
         </dd>
       </div>
-      {% if entry.closing_entry %}
-        <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Closing Entry</dt>
-          <dd><a href="{% url 'staff:closing_entry_detail' entry.closing_entry.pk %}" class="text-base font-bold text-orange-500 hover:text-orange-600">#{{ entry.closing_entry.pk }}</a></dd>
-        </div>
-      {% endif %}
-      {% if entry.remarks %}
-        <div class="sm:col-span-2">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
-          <dd class="text-base font-medium text-gray-700">{{ entry.remarks }}</dd>
-        </div>
-      {% endif %}
-    </dl>
-  </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
-        <span>{% hgi_stroke name="credit-card" size="16" color="currentColor" stroke_width="2" %}</span>
-      </div>
-      <h3 class="text-base font-bold text-gray-900">Opening Float</h3>
+    {% endif %}
+  </dl>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+  <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shadow-sm">
+      <span>{% hgi_stroke name="credit-card" size="16" color="currentColor" stroke_width="2" %}</span>
     </div>
-
-    {% if entry.status == "DRAFT" and form %}
-      <form method="post" action="{% url 'staff:opening_entry_detail' entry.pk %}" id="opening-float-form" class="space-y-0" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
-        {% csrf_token %}
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-100">
-            <thead class="bg-gray-50/50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
-                <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              {% for field in form %}
-                <tr>
-                  <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ field.label }}</td>
-                  <td class="px-6 py-4 text-right">
-                    {{ field }}
-                    {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors|join:", " }}</p>{% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <div class="px-6 py-4 bg-gray-50/30 border-t border-gray-100 text-xs text-gray-500">
-          Tip: enter the counted float for each payment method. Leave a field at <span class="font-mono font-semibold">0.00</span> if there's no opening balance for that method.
-        </div>
-      </form>
-    {% else %}
+    <h3 class="text-base font-bold text-gray-900">Opening Float</h3>
+  </div>
+  {% if entry.status == "DRAFT" and form %}
+    <form method="post" action="{% url 'staff:opening_entry_detail' entry.pk %}" id="opening-float-form" class="space-y-0" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+      {% csrf_token %}
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-100">
           <thead class="bg-gray-50/50">
@@ -135,63 +94,88 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {% for op in opening_payments %}
+            {% for field in form %}
               <tr>
-                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ op.mode_of_payment.name }}</td>
-                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ op.opening_amount }}</td>
-              </tr>
-            {% empty %}
-              <tr>
-                <td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No payment-method rows declared.</td>
+                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ field.label }}</td>
+                <td class="px-6 py-4 text-right">
+                  {{ field }}
+                  {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors|join:", " }}</p>{% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-    {% endif %}
-  </div>
-
-  {% if closing_payments %}
-    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-      <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
-          <span>{% hgi_stroke name="checkmark-circle-01" size="16" color="currentColor" stroke_width="2" %}</span>
-        </div>
-        <h3 class="text-base font-bold text-gray-900">Closing Reconciliation</h3>
+      <div class="px-6 py-4 bg-gray-50/30 border-t border-gray-100 text-xs text-gray-500">
+        Tip: enter the counted float for each payment method. Leave a field at <span class="font-mono font-semibold">0.00</span> if there's no opening balance for that method.
       </div>
-      <div class="px-6 py-3 bg-amber-50/40 border-b border-amber-100 text-xs text-amber-800 leading-relaxed">
-        <strong>How to read this table:</strong>
-        <span class="font-mono font-semibold">Opening</span> = the float declared at shift start.
-        <span class="font-mono font-semibold">Expected</span> = opening + collected sales during the shift (there is no order tracking yet, so expected equals opening).
-        <span class="font-mono font-semibold">Closing</span> = what the cashier physically counted at shift end.
-        <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess.
-        In Phase 7, once sales are tracked, the difference will catch failed settlements and drawer discrepancies.
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-100">
-          <thead class="bg-gray-50/50">
+    </form>
+  {% else %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for op in opening_payments %}
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
-              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Opening</th>
-              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Expected</th>
-              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Closing</th>
-              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Difference</th>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ op.mode_of_payment.name }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ op.opening_amount }}</td>
             </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {% for cp in closing_payments %}
-              <tr>
-                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ cp.mode_of_payment.name }}</td>
-                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.opening_amount }}</td>
-                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.expected_amount }}</td>
-                <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.closing_amount }}</td>
-                <td class="px-6 py-4 text-right text-sm font-mono {% if cp.difference < 0 %}text-red-600{% elif cp.difference > 0 %}text-emerald-600{% endif %}">{{ cp.difference }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+          {% empty %}
+            <tr>
+              <td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No payment-method rows declared.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   {% endif %}
+</div>
+{% if closing_payments %}
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
+        <span>{% hgi_stroke name="checkmark-circle-01" size="16" color="currentColor" stroke_width="2" %}</span>
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Closing Reconciliation</h3>
+    </div>
+    <div class="px-6 py-3 bg-amber-50/40 border-b border-amber-100 text-xs text-amber-800 leading-relaxed">
+      <strong>How to read this table:</strong>
+      <span class="font-mono font-semibold">Opening</span> = the float declared at shift start.
+      <span class="font-mono font-semibold">Expected</span> = opening + collected sales during the shift (there is no order tracking yet, so expected equals opening).
+      <span class="font-mono font-semibold">Closing</span> = what the cashier physically counted at shift end.
+      <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess.
+      In Phase 7, once sales are tracked, the difference will catch failed settlements and drawer discrepancies.
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Opening</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Expected</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Closing</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Difference</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for cp in closing_payments %}
+            <tr>
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ cp.mode_of_payment.name }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.opening_amount }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.expected_amount }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ cp.closing_amount }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono {% if cp.difference < 0 %}text-red-600{% elif cp.difference > 0 %}text-emerald-600{% endif %}">{{ cp.difference }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
 </div>
 {% endblock %}

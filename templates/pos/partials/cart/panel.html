@@ -1,17 +1,11 @@
 <div id="cart-panel" hx-include="#catalog-search, #catalog-filter-state" class="flex w-full max-w-full flex-col border-l border-slate-200 bg-slate-100 shadow-[-8px_0_24px_rgb(15,23,42,0.08)] sm:w-[min(100%,22rem)] md:w-[24rem] xl:w-[26rem] 2xl:w-[28rem] shrink-0">
-
   {% include "pos/partials/cart/guests.html" %}
-
   {% if error %}
-  <div class="mx-4 mt-3 bg-red-50 text-red-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-red-600/10">
-    {{ error }}
-  </div>
+    <div class="mx-4 mt-3 bg-red-50 text-red-700 text-sm font-semibold rounded-xl px-4 py-2 ring-1 ring-red-600/10">{{ error }}</div>
   {% endif %}
-
-  <div class="flex-1 overflow-y-auto">
-    {% include "pos/partials/cart/items.html" %}
-  </div>
-
+  <div class="flex-1 overflow-y-auto">{% include "pos/partials/cart/items.html" %}</div>
   {% include "pos/partials/cart/totals.html" %}
 </div>
-{% if catalog_oob %}{% include "pos/partials/catalog/grid.html" %}{% endif %}
+{% if catalog_oob %}
+  {% include "pos/partials/catalog/grid.html" %}
+{% endif %}

@@ -1,19 +1,14 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Reports" root_url="reports:daily_pnl_list" current_label="Daily P&L" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Daily P&amp;L</h1>
       <p class="text-sm text-gray-500">One submitted snapshot per business day — management figures, not a ledger posting</p>
     </div>
-    <a href="{% url 'reports:daily_pnl_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-      New Daily P&amp;L
-    </a>
+    <a href="{% url 'reports:daily_pnl_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">New Daily P&amp;L</a>
   </div>
-
   <form method="get" class="mb-6 flex flex-wrap items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <div>
       <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Status</label>
@@ -34,7 +29,6 @@
     </div>
     <button type="submit" class="backend-submit px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white">Filter</button>
   </form>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
@@ -57,21 +51,23 @@
               </td>
               <td class="px-6 py-4">
                 {% if entry.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
-                {% elif entry.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
-                {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
-              </td>
-              <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_sales_food }}</td>
-              <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_sales_drinks }}</td>
-              <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.net_sales }}</td>
-              <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_profit }}</td>
-              <td class="px-6 py-4 text-right font-mono text-sm font-semibold">{{ entry.net_profit }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">No Daily P&amp;L documents yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+          {% elif entry.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+        </td>
+        <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_sales_food }}</td>
+        <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_sales_drinks }}</td>
+        <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.net_sales }}</td>
+        <td class="px-6 py-4 text-right font-mono text-sm">{{ entry.gross_profit }}</td>
+        <td class="px-6 py-4 text-right font-mono text-sm font-semibold">{{ entry.net_profit }}</td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">No Daily P&amp;L documents yet.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
 </div>
 {% endblock %}

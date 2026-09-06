@@ -1,20 +1,9 @@
 {% load humanize %}
 {% comment %}Alpine previews entered totals, balance, and change; the settle view remains authoritative for payment validation.{% endcomment %}
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="payment-title"
-     x-data="posModalDialog({ closeUrl: '{% url 'pos:pos_order_screen' order.pk %}' })"
-     x-show="open"
-     x-transition:enter="transition ease-out duration-200"
-     x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-     @keydown.escape.window="close()"
-     @keydown.tab="trapFocus($event)">
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="payment-title" x-data="posModalDialog({ closeUrl: '{% url 'pos:pos_order_screen' order.pk %}' })" x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" @keydown.escape.window="close()" @keydown.tab="trapFocus($event)">
   <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close()"></div>
-  <div class="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl" x-ref="panel"
-       x-data="{ total: Number('{{ order.rounded_total }}'), entered: 0, processing: false }"
-       x-transition:enter="transition ease-out duration-200"
-       x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
-    <form method="post" action="{% url 'pos:pos_order_settle' order.pk %}"
-             @input="entered = Array.from($el.querySelectorAll('input[name^=payment_]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0)"
-             @submit="processing = true">
+  <div class="relative max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl" x-ref="panel" x-data="{ total: Number('{{ order.rounded_total }}'), entered: 0, processing: false }" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+    <form method="post" action="{% url 'pos:pos_order_settle' order.pk %}" @input="entered = Array.from($el.querySelectorAll('input[name^=payment_]')).reduce((sum, input) => sum + (Number(input.value) || 0), 0)" @submit="processing = true">
       {% csrf_token %}
       <div class="grid lg:grid-cols-[1.15fr_0.85fr]">
         <section class="p-5 sm:p-7 lg:p-8">
@@ -23,27 +12,20 @@
               <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">Order #{{ order.order_number }}</p>
               <h2 id="payment-title" class="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Payment</h2>
             </div>
-             <a href="{% url 'pos:pos_order_screen' order.pk %}" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" aria-label="Close payment dialog" x-ref="closeButton"
-               class="flex size-10 items-center justify-center rounded-xl text-red-500 transition-all duration-150 hover:bg-red-50 hover:text-red-700 active:scale-90 active:bg-red-100">
+            <a href="{% url 'pos:pos_order_screen' order.pk %}" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" aria-label="Close payment dialog" x-ref="closeButton" class="flex size-10 items-center justify-center rounded-xl text-red-500 transition-all duration-150 hover:bg-red-50 hover:text-red-700 active:scale-90 active:bg-red-100">
               <span class="flex size-4 items-center justify-center">{% hgi_stroke name="cancel-circle" size="21" color="currentColor" stroke_width="2" %}</span>
             </a>
           </div>
-
           <section aria-labelledby="discount-title" class="border-b border-slate-200 pb-7">
             <div class="mb-3 flex items-center justify-between gap-3">
               <h3 id="discount-title" class="text-sm font-bold text-slate-900">Apply Discount</h3>
               <span class="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Coming soon</span>
             </div>
             <div class="flex gap-2">
-              <input type="text" disabled placeholder="Not available yet" aria-label="Discount unavailable"
-                     class="min-h-11 min-w-0 flex-1 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-400 placeholder:text-slate-400 disabled:opacity-100">
-              <button type="button" disabled
-                      class="min-h-11 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5 text-sm font-bold text-slate-400 disabled:opacity-100">
-                Apply
-              </button>
+              <input type="text" disabled placeholder="Not available yet" aria-label="Discount unavailable" class="min-h-11 min-w-0 flex-1 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-400 placeholder:text-slate-400 disabled:opacity-100">
+              <button type="button" disabled class="min-h-11 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5 text-sm font-bold text-slate-400 disabled:opacity-100">Apply</button>
             </div>
           </section>
-
           <section aria-labelledby="payment-methods-title" class="pt-7">
             <div class="mb-4">
               <h3 id="payment-methods-title" class="text-sm font-bold text-slate-900">Payment Methods</h3>
@@ -51,30 +33,26 @@
             </div>
             <div class="space-y-3">
               {% for mode in payment_modes %}
-              <div class="grid grid-cols-[minmax(6rem,0.75fr)_minmax(0,1.25fr)] items-center gap-3">
-                <label for="payment-{{ mode.pk }}" class="truncate text-sm font-semibold text-slate-700">{{ mode.name }}</label>
-                <div class="relative">
-                  <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₦</span>
-                  <input id="payment-{{ mode.pk }}" type="number" min="0" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00"
-                         class="min-h-12 w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-8 pr-4 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
-                         @focus="if (!$el.value) { const others = Array.from($el.form.querySelectorAll('input[name^=payment_]')).filter((input) => input !== $el).reduce((sum, input) => sum + (Number(input.value) || 0), 0); $el.value = Math.max(total - others, 0).toFixed(2); $el.dispatchEvent(new Event('input', { bubbles: true })); }">
+                <div class="grid grid-cols-[minmax(6rem,0.75fr)_minmax(0,1.25fr)] items-center gap-3">
+                  <label for="payment-{{ mode.pk }}" class="truncate text-sm font-semibold text-slate-700">{{ mode.name }}</label>
+                  <div class="relative">
+                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₦</span>
+                    <input id="payment-{{ mode.pk }}" type="number" min="0" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00" class="min-h-12 w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-8 pr-4 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20" @focus="if (!$el.value) { const others = Array.from($el.form.querySelectorAll('input[name^=payment_]')).filter((input) => input !== $el).reduce((sum, input) => sum + (Number(input.value) || 0), 0); $el.value = Math.max(total - others, 0).toFixed(2); $el.dispatchEvent(new Event('input', { bubbles: true })); }">
+                  </div>
                 </div>
-              </div>
               {% empty %}
-              <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">No payment methods are available for this shift.</p>
+                <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">No payment methods are available for this shift.</p>
               {% endfor %}
             </div>
-
             <div class="mt-6 flex items-baseline justify-between gap-4 rounded-2xl bg-teal-50 px-4 py-3 ring-1 ring-teal-100">
               <span class="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Total Entered</span>
               <span class="text-right font-mono text-base font-extrabold tabular-nums text-teal-900">
                 <span x-text="'₦' + entered.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })">₦0</span>
-                <span class="text-sm font-semibold text-teal-700"> / ₦{{ order.rounded_total|intcomma }}</span>
+                <span class="text-sm font-semibold text-teal-700">/ ₦{{ order.rounded_total|intcomma }}</span>
               </span>
             </div>
           </section>
         </section>
-
         <aside class="flex min-h-[28rem] flex-col border-t border-slate-200 bg-slate-50 p-5 sm:p-7 lg:border-l lg:border-t-0 lg:p-8">
           <div>
             <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Order Summary</p>
@@ -88,17 +66,16 @@
                 <span class="font-mono font-bold tabular-nums text-slate-900">₦0.00</span>
               </div>
               {% if order.rounding_adjustment %}
-              <div class="flex items-center justify-between gap-4 text-sm">
-                <span class="text-slate-500">Adjustment</span>
-                <span class="font-mono font-bold tabular-nums text-slate-900">₦{{ order.rounding_adjustment|intcomma }}</span>
-              </div>
+                <div class="flex items-center justify-between gap-4 text-sm">
+                  <span class="text-slate-500">Adjustment</span>
+                  <span class="font-mono font-bold tabular-nums text-slate-900">₦{{ order.rounding_adjustment|intcomma }}</span>
+                </div>
               {% endif %}
               <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 pt-5">
                 <span class="text-sm font-bold text-slate-900">Total</span>
                 <span class="text-right font-mono text-2xl font-extrabold leading-none tabular-nums text-slate-900">₦{{ order.rounded_total|intcomma }}</span>
               </div>
             </div>
-
             <div class="mt-6 space-y-2 border-t border-slate-200 pt-5">
               <div class="flex justify-between text-sm" x-show="total - entered > 0.005" x-cloak>
                 <span class="font-semibold text-amber-700">Remaining</span>
@@ -110,19 +87,15 @@
               </div>
             </div>
           </div>
-
           <div class="mt-auto pt-8">
-            <button type="submit" :disabled="processing || {{ payment_modes|yesno:'false,true' }}"
-                    class="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 px-5 text-base font-bold text-white shadow-lg shadow-teal-900/10 transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="submit" :disabled="processing || {{ payment_modes|yesno:'false,true' }}" class="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 px-5 text-base font-bold text-white shadow-lg shadow-teal-900/10 transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50">
               <span class="flex size-5 items-center justify-center" x-show="!processing">{% hgi_stroke name="payment-01" size="20" color="currentColor" stroke_width="2" %}</span>
               <span x-show="!processing">
                 Pay <span x-text="'₦' + entered.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 2 })">₦0</span>
               </span>
               <span x-show="processing" x-cloak>Processing...</span>
             </button>
-            <a href="{% url 'pos:pos_order_screen' order.pk %}" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-slate-500 transition-all duration-150 hover:bg-slate-100 hover:text-slate-800 active:scale-[0.98] active:bg-slate-200">
-              Back to order
-            </a>
+            <a href="{% url 'pos:pos_order_screen' order.pk %}" hx-get="{% url 'pos:pos_order_screen' order.pk %}" hx-target="#pos-main" hx-swap="innerHTML" hx-push-url="true" class="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-slate-500 transition-all duration-150 hover:bg-slate-100 hover:text-slate-800 active:scale-[0.98] active:bg-slate-200">Back to order</a>
           </div>
         </aside>
       </div>

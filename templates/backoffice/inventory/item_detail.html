@@ -3,7 +3,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Items" section_url="inventory:item_list" current_label=item.item_name %}
-
   <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{{ item.item_name }}</h1>
@@ -14,7 +13,6 @@
       Edit item
     </a>
   </div>
-
   <section class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
     <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
       <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="folder-01" size="19" color="currentColor" stroke_width="2" %}</span>
@@ -23,7 +21,6 @@
         <p class="mt-1 text-xs text-gray-500">The current catalog and inventory configuration for this item.</p>
       </div>
     </div>
-
     <div class="relative">
       <div class="absolute right-0 top-0 block w-24 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 sm:w-28">
         {% if item.image %}
@@ -35,7 +32,9 @@
       <dl class="grid grid-cols-1 gap-x-6 gap-y-6 pr-28 sm:grid-cols-2 sm:pr-36">
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Item code</dt>
-          <dd class="mt-1.5 font-mono text-sm font-bold text-gray-900">{{ item.item_code }}</dd>
+          <dd class="mt-1.5 font-mono text-sm font-bold text-gray-900">
+            {{ item.item_code }}
+          </dd>
         </div>
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Item group</dt>
@@ -43,11 +42,15 @@
         </div>
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Department</dt>
-          <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ item.get_department_display }}</dd>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">
+            {{ item.get_department_display }}
+          </dd>
         </div>
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Stock UOM</dt>
-          <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ item.stock_uom.name }}</dd>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">
+            {{ item.stock_uom.name }}
+          </dd>
         </div>
         <div>
           <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Last purchase rate</dt>
@@ -76,13 +79,14 @@
         {% if item.description %}
           <div class="sm:col-span-2">
             <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Description</dt>
-            <dd class="mt-1.5 text-sm leading-6 text-gray-700">{{ item.description }}</dd>
+            <dd class="mt-1.5 text-sm leading-6 text-gray-700">
+              {{ item.description }}
+            </dd>
           </div>
         {% endif %}
       </dl>
     </div>
   </section>
-
   <section class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
     <div class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div class="flex items-center gap-3">
@@ -124,7 +128,6 @@
       </table>
     </div>
   </section>
-
   {% if item.has_variants %}
     <section class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
       <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
@@ -157,7 +160,9 @@
                 <td class="px-5 py-3.5 text-right sm:px-6"><a href="{% url 'inventory:item_update' variant.pk %}" aria-label="Edit {{ variant.item_name }}" title="Edit item" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a></td>
               </tr>
             {% empty %}
-              <tr><td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500 sm:px-6">No variants linked yet. Create items with this template as “Variant of”.</td></tr>
+              <tr>
+                <td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500 sm:px-6">No variants linked yet. Create items with this template as “Variant of”.</td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>

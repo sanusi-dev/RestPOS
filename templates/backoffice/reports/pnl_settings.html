@@ -1,20 +1,16 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Reports" root_url="reports:daily_pnl_list" current_label="P&L settings" %}
-
   <div class="mb-8">
     <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">P&amp;L settings</h1>
     <p class="text-sm text-gray-500">Remembered rates and templates. Changing them does not rewrite submitted Daily P&amp;L documents.</p>
   </div>
-
   <form method="post" class="space-y-6" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">{{ form.non_field_errors }}</div>
     {% endif %}
-
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
       <h3 class="text-base font-bold text-gray-900 mb-4">Day and rates</h3>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -23,7 +19,6 @@
         {% endfor %}
       </div>
     </div>
-
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
       <h3 class="text-base font-bold text-gray-900 mb-4">Materials catalog</h3>
       {{ materials.management_form }}
@@ -42,7 +37,6 @@
         {% endfor %}
       </div>
     </div>
-
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
       <h3 class="text-base font-bold text-gray-900 mb-4">Recurring expenses</h3>
       {{ expenses.management_form }}
@@ -63,7 +57,6 @@
         {% endfor %}
       </div>
     </div>
-
     <div class="flex justify-end">
       <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30">Save settings</button>
     </div>

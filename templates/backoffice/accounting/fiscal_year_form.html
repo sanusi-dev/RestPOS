@@ -1,16 +1,13 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Fiscal Years" section_url="accounting:fiscal_year_list" current_label="Form" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}New Fiscal Year{% else %}Edit {{ year.name }}{% endif %}</h1>
       <p class="text-sm text-gray-500">The year end must be after the year start</p>
     </div>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8">
     <form method="post" class="space-y-6" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       {% csrf_token %}

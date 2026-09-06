@@ -2,24 +2,24 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Settings" root_url="settings:dashboard" section_label="Production units" section_url="settings:production_unit_list" current_label=is_create|yesno:"New unit,Edit unit" %}
-
   <div class="mb-8 border-b border-gray-200 pb-6">
     <p class="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-gray-400">Operations setup</p>
     <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{% if is_create %}Create production unit{% else %}Edit production unit{% endif %}</h1>
     <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Define where a station works and how its production tickets are routed.</p>
   </div>
-
   {% partialdef form inline %}
   <form method="post" class="space-y-5" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
     {% endif %}
-
     <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
       <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="store-01" size="19" color="currentColor" stroke_width="2" %}</span>
-        <div><h2 class="text-sm font-extrabold text-gray-900">Station details</h2><p class="mt-1 text-xs text-gray-500">Identify the unit and connect it to the correct department and warehouse.</p></div>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Station details</h2>
+          <p class="mt-1 text-xs text-gray-500">Identify the unit and connect it to the correct department and warehouse.</p>
+        </div>
       </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
@@ -29,11 +29,13 @@
         {% endfor %}
       </div>
     </section>
-
     <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
       <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="printer" size="19" color="currentColor" stroke_width="2" %}</span>
-        <div><h2 class="text-sm font-extrabold text-gray-900">Ticket routing</h2><p class="mt-1 text-xs text-gray-500">Configure the printer and ticket behavior for this production station.</p></div>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Ticket routing</h2>
+          <p class="mt-1 text-xs text-gray-500">Configure the printer and ticket behavior for this production station.</p>
+        </div>
       </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
@@ -43,7 +45,6 @@
         {% endfor %}
       </div>
     </section>
-
     <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
       <a href="{% url 'settings:production_unit_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
       <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">

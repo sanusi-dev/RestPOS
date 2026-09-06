@@ -6,9 +6,7 @@
   {% endwith %}
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
-      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">
-        {% if is_create %}Add Menu Item{% else %}Edit Menu Item{% endif %}
-      </h1>
+      <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{% if is_create %}Add Menu Item{% else %}Edit Menu Item{% endif %}</h1>
       <p class="text-sm text-gray-500">Add an inventory item to a menu with its selling rate</p>
     </div>
   </div>
@@ -41,9 +39,7 @@
         {% else %}
           <a href="{% url 'menu:menu_item_list' %}" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Cancel</a>
         {% endif %}
-        <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-          {% if is_create %}Add Item{% else %}Save Changes{% endif %}
-        </button>
+        <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">{% if is_create %}Add Item{% else %}Save Changes{% endif %}</button>
       </div>
     </form>
     {% endpartialdef %}

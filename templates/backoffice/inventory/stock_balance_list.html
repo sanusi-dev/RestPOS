@@ -3,12 +3,10 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" current_label="Stock balance" %}
-
   <div class="mb-5 border-b border-gray-200 pb-5">
     <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Stock balance</h1>
     <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Current quantities and valuation across each warehouse.</p>
   </div>
-
   <form method="get" class="mb-6 flex justify-end" x-data hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <label for="wh-filter" class="sr-only">Filter by warehouse</label>
     <select id="wh-filter" name="warehouse" aria-label="Filter by warehouse" class="w-40 max-w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-400/30" x-on:change="$el.form.submit()">
@@ -18,7 +16,6 @@
       {% endfor %}
     </select>
   </form>
-
   <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">

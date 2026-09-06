@@ -1,20 +1,17 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" current_label="Item Groups" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Item Groups</h1>
-       <p class="text-sm text-gray-500">{{ groups|length }} product categor{{ groups|length|pluralize:"y,ies" }}</p>
+      <p class="text-sm text-gray-500">{{ groups|length }} product categor{{ groups|length|pluralize:"y,ies" }}</p>
     </div>
     <a href="{% url 'inventory:item_group_create' %}" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
       <span>{% hgi_stroke name="plus-sign-circle" size="16" color="currentColor" stroke_width="2" %}</span>
       New Item Group
     </a>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">

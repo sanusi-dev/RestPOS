@@ -2,19 +2,16 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" section_label="Stock entries" section_url="inventory:stock_entry_list" current_label=is_create|yesno:"New stock entry,Edit stock entry" %}
-
   <div class="mb-6 border-b border-gray-200 pb-5">
     <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">{% if is_create %}New stock entry{% else %}Edit stock entry{% endif %}</h1>
     <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Receive stock into Store or transfer stock from Store to Kitchen and Bar.</p>
   </div>
-
   {% partialdef form inline %}
   <form method="post" class="space-y-5" x-data="{ purpose: '' }" x-init="const sel = $el.querySelector('#id_purpose'); if (sel) { purpose = sel.value; sel.addEventListener('change', () => purpose = sel.value); }" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>
     {% endif %}
-
     <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
       <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="arrow-left-right" size="19" color="currentColor" stroke_width="2" %}</span>
@@ -29,7 +26,6 @@
         <div class="md:col-span-2">{% include "backoffice/components/form_field.html" with field=form.remarks %}</div>
       </div>
     </section>
-
     {% partialdef detail_items_partial inline %}
     <section id="stock-entry-items-container" class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
       <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
@@ -39,7 +35,6 @@
           <p class="mt-1 text-xs text-gray-500">Add each stock item, quantity, and rate where required.</p>
         </div>
       </div>
-
       {{ detail_formset.management_form }}
       {% if detail_formset.non_form_errors %}<div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ detail_formset.non_form_errors }}</div>{% endif %}
       <div id="items-container" class="space-y-3">
@@ -57,9 +52,7 @@
                 {% if detail_form.basic_rate.errors %}<p class="text-xs font-semibold text-red-500">{{ detail_form.basic_rate.errors|join:", " }}</p>{% elif detail_form.basic_rate.help_text %}<p class="text-xs text-gray-500">{{ detail_form.basic_rate.help_text }}</p>{% endif %}
               </div>
               <div class="flex justify-end pb-0.5">
-                <button type="button" aria-label="Remove item {{ forloop.counter }}" title="Remove item" hx-post="{% url 'inventory:stock_entry_item_remove' forloop.counter0 %}" hx-include="closest form" hx-target="#stock-entry-items-container" hx-swap="outerHTML" class="backend-submit inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" hx-indicator="this" hx-disabled-elt="this">
-                  {% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}
-                </button>
+                <button type="button" aria-label="Remove item {{ forloop.counter }}" title="Remove item" hx-post="{% url 'inventory:stock_entry_item_remove' forloop.counter0 %}" hx-include="closest form" hx-target="#stock-entry-items-container" hx-swap="outerHTML" class="backend-submit inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" hx-indicator="this" hx-disabled-elt="this">{% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}</button>
               </div>
             </div>
             {% for field in detail_form.hidden_fields %}{{ field }}{% endfor %}
@@ -75,7 +68,6 @@
       </div>
     </section>
     {% endpartialdef %}
-
     <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
       <a href="{% url 'inventory:stock_entry_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
       <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">

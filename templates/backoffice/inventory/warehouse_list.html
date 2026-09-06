@@ -2,7 +2,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" current_label="Warehouses" %}
-
   <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Warehouses</h1>
@@ -13,7 +12,6 @@
       New warehouse
     </a>
   </div>
-
   <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
@@ -38,9 +36,7 @@
                 {% endif %}
               </td>
               <td class="px-5 py-4 text-right sm:px-6">
-                <a href="{% url 'inventory:warehouse_update' wh.pk %}" aria-label="Edit {{ wh.name }}" title="Edit warehouse" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">
-                  {% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}
-                </a>
+                <a href="{% url 'inventory:warehouse_update' wh.pk %}" aria-label="Edit {{ wh.name }}" title="Edit warehouse" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a>
               </td>
             </tr>
           {% empty %}

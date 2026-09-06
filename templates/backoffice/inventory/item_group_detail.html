@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" root_icon="inventory" section_label="Item Groups" section_url="inventory:item_group_list" current_label=group.name %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ group.name }}</h1>
@@ -14,26 +12,26 @@
       Edit Group
     </a>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8 relative overflow-hidden">
     <div class="absolute top-0 right-0 w-32 h-32 bg-sky-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
     <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Group Details</h2>
-
     <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 relative z-10">
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Name</dt>
-        <dd class="text-base font-bold text-gray-900">{{ group.name }}</dd>
+        <dd class="text-base font-bold text-gray-900">
+          {{ group.name }}
+        </dd>
       </div>
       {% if group.description %}
         <div class="sm:col-span-3">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Description</dt>
-          <dd class="text-base font-medium text-gray-700">{{ group.description }}</dd>
+          <dd class="text-base font-medium text-gray-700">
+            {{ group.description }}
+          </dd>
         </div>
       {% endif %}
     </dl>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
       <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center shadow-sm">
@@ -41,27 +39,27 @@
       </div>
       <h3 class="text-base font-bold text-gray-900">Items in this group</h3>
     </div>
-      <ul class="divide-y divide-gray-50 bg-white/30">
-        {% for item in items %}
-          <li class="group transition-colors hover:bg-white">
-            <a href="{% url 'inventory:item_detail' item.pk %}" class="flex items-center justify-between p-5">
-              <div>
-                <p class="text-sm font-bold text-gray-900 group-hover:text-orange-500 transition-colors">{{ item.item_name }}</p>
-                <p class="text-xs text-gray-400 mt-0.5 font-mono">{{ item.item_code }}</p>
-              </div>
-              <span class="text-gray-300 group-hover:text-orange-500 transition-colors group-hover:translate-x-1">{% hgi_stroke name="arrow-right-01" size="20" color="currentColor" stroke_width="2" %}</span>
-            </a>
-          </li>
-        {% empty %}
-          <li class="p-8 text-center text-sm font-medium text-gray-500">
-            <div class="flex flex-col items-center gap-2">
-              <span class="text-gray-300">{% hgi_stroke name="folder-01" size="32" color="currentColor" stroke_width="1.5" %}</span>
-              No items in this group.
+    <ul class="divide-y divide-gray-50 bg-white/30">
+      {% for item in items %}
+        <li class="group transition-colors hover:bg-white">
+          <a href="{% url 'inventory:item_detail' item.pk %}" class="flex items-center justify-between p-5">
+            <div>
+              <p class="text-sm font-bold text-gray-900 group-hover:text-orange-500 transition-colors">{{ item.item_name }}</p>
+              <p class="text-xs text-gray-400 mt-0.5 font-mono">{{ item.item_code }}</p>
             </div>
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
+            <span class="text-gray-300 group-hover:text-orange-500 transition-colors group-hover:translate-x-1">{% hgi_stroke name="arrow-right-01" size="20" color="currentColor" stroke_width="2" %}</span>
+          </a>
+        </li>
+      {% empty %}
+        <li class="p-8 text-center text-sm font-medium text-gray-500">
+          <div class="flex flex-col items-center gap-2">
+            <span class="text-gray-300">{% hgi_stroke name="folder-01" size="32" color="currentColor" stroke_width="1.5" %}</span>
+            No items in this group.
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
   </div>
+</div>
 </div>
 {% endblock %}

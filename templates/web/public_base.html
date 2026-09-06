@@ -1,9 +1,7 @@
 {% extends "web/base.html" %}
 {% load static %}
 {% load django_vite %}
-
 {% block body_class %}{{ block.super }} page-public{% endblock %}
-
 {% block body_wrapper %}
 <nav class="w-full glass sticky top-0 z-40">
   <div class="max-w-5xl mx-auto px-8 py-4 flex justify-between items-center">
@@ -21,66 +19,60 @@
     </a>
     <div class="flex items-center space-x-4 md:space-x-6">
       {% if user.is_authenticated %}
-        <a href="{% url 'account_logout' %}" class="text-sm font-bold text-gray-700 bg-white/50 px-4 py-2 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-100 hover:text-gray-900 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-          Sign Out
-        </a>
+        <a href="{% url 'account_logout' %}" class="text-sm font-bold text-gray-700 bg-white/50 px-4 py-2 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-100 hover:text-gray-900 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">Sign Out</a>
       {% else %}
-        <a href="{% url 'account_login' %}" class="text-sm font-bold text-gray-700 bg-white/50 px-4 py-2 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-100 hover:text-gray-900 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-          Sign In
-        </a>
-        <a href="{% url 'account_signup' %}" class="text-sm font-semibold bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">
-          Get Started
-        </a>
+        <a href="{% url 'account_login' %}" class="text-sm font-bold text-gray-700 bg-white/50 px-4 py-2 rounded-lg border border-gray-300 shadow-sm hover:bg-gray-100 hover:text-gray-900 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">Sign In</a>
+        <a href="{% url 'account_signup' %}" class="text-sm font-semibold bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">Get Started</a>
       {% endif %}
     </div>
   </div>
 </nav>
-
 {% if messages %}
-<script id="django-messages" type="application/json">[{% for message in messages %}{"message": "{{ message.message|escapejs }}", "level": "{{ message.level_tag }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+  <script id="django-messages" type="application/json">[{% for message in messages %}{"message": "{{ message.message|escapejs }}", "level": "{{ message.level_tag }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
 {% endif %}
-
 <main class="flex-grow flex flex-col">
-    {% block body %}{% endblock %}
-  </main>
-
-  <footer class="w-full bg-white border-t border-gray-100 mt-auto relative z-10">
-    <div class="max-w-5xl mx-auto px-8 py-10 flex flex-col md:flex-row justify-between items-center">
-      <div class="text-gray-500 text-sm mb-4 md:mb-0">
-        &copy; <span id="copyright-year"></span> RestPOS System.
-      </div>
-      <p class="text-sm text-gray-500 font-medium">
-        Engineered with precision by
-        <a href="https://akorede.dev" target="_blank" rel="noopener noreferrer" class="text-gray-900 font-black tracking-wide hover:text-orange-500 transition-colors">
-          techwithbreezy
-        </a>
-      </p>
+  {% block body %}{% endblock %}
+</main>
+<footer class="w-full bg-white border-t border-gray-100 mt-auto relative z-10">
+  <div class="max-w-5xl mx-auto px-8 py-10 flex flex-col md:flex-row justify-between items-center">
+    <div class="text-gray-500 text-sm mb-4 md:mb-0">
+      © <span id="copyright-year"></span> RestPOS System.
     </div>
-  </footer>
+    <p class="text-sm text-gray-500 font-medium">
+      Engineered with precision by
+      <a href="https://akorede.dev" target="_blank" rel="noopener noreferrer" class="text-gray-900 font-black tracking-wide hover:text-orange-500 transition-colors">techwithbreezy</a>
+    </p>
+  </div>
+</footer>
 {% endblock %}
-
 {% block page_js %}
 {{ block.super }}
 {% vite_asset 'assets/javascript/landing.js' %}
 {% endblock %}
-
-
-
 <div class="flex flex-col gap-1.5">
-    <label for="id_default_warehouse-ts-control" class="text-sm font-bold text-gray-700" id="id_default_warehouse-ts-label">
-      Bar / POS sales warehouse
-    </label>
-    <select class="w-full rounded-xl text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400/20 bg-white/50 transition-shadow tomselected ts-hidden-accessible" name="default_warehouse" aria-describedby="id_default_warehouse_helptext" id="id_default_warehouse" tabindex="-1">
-  <option value="">Select bar / pos sales warehouse...</option>
-
-
-
-  <option value="2">Kitchen</option>
-
-  <option value="1">Store</option>
-
-<option value="3" selected="">Bar</option></select><div class="ts-wrapper w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400/20 bg-white/50 transition-shadow single plugin-dropdown_input full has-items"><div class="ts-control" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="id_default_warehouse-ts-dropdown" id="id_default_warehouse-ts-control" aria-labelledby="id_default_warehouse-ts-label" tabindex="0" aria-activedescendant="id_default_warehouse-opt-2"><div data-value="3" class="item" data-ts-item="">Bar</div><input class="items-placeholder" tabindex="-1" placeholder="Select bar / pos sales warehouse..."></div><div class="ts-dropdown single plugin-dropdown_input" style="display: none; visibility: visible;"><div class="dropdown-input-wrap"><input type="text" autocomplete="off" size="1" tabindex="-1" class="dropdown-input" placeholder="Select bar / pos sales warehouse..."></div><div role="listbox" tabindex="-1" class="ts-dropdown-content" id="id_default_warehouse-ts-dropdown" aria-labelledby="id_default_warehouse-ts-label"><div data-selectable="" data-value="" class="option" role="option" id="id_default_warehouse-opt-1">Select bar / pos sales warehouse...</div><div data-selectable="" data-value="3" class="option selected active" role="option" id="id_default_warehouse-opt-2" aria-selected="true">Bar</div><div data-selectable="" data-value="2" class="option" role="option" id="id_default_warehouse-opt-3">Kitchen</div><div data-selectable="" data-value="1" class="option" role="option" id="id_default_warehouse-opt-4">Store</div></div></div></div>
-
-      <p class="text-xs text-gray-500">Warehouse used for Bar stock and POS drink deductions.</p>
-
+  <label for="id_default_warehouse-ts-control" class="text-sm font-bold text-gray-700" id="id_default_warehouse-ts-label">Bar / POS sales warehouse</label>
+  <select class="w-full rounded-xl text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400/20 bg-white/50 transition-shadow tomselected ts-hidden-accessible" name="default_warehouse" aria-describedby="id_default_warehouse_helptext" id="id_default_warehouse" tabindex="-1">
+    <option value="">Select bar / pos sales warehouse...</option>
+    <option value="2">Kitchen</option>
+    <option value="1">Store</option>
+    <option value="3" selected="">Bar</option>
+  </select>
+  <div class="ts-wrapper w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400/20 bg-white/50 transition-shadow single plugin-dropdown_input full has-items">
+    <div class="ts-control" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="id_default_warehouse-ts-dropdown" id="id_default_warehouse-ts-control" aria-labelledby="id_default_warehouse-ts-label" tabindex="0" aria-activedescendant="id_default_warehouse-opt-2">
+      <div data-value="3" class="item" data-ts-item="">Bar</div>
+      <input class="items-placeholder" tabindex="-1" placeholder="Select bar / pos sales warehouse...">
+    </div>
+    <div class="ts-dropdown single plugin-dropdown_input" style="display: none; visibility: visible;">
+      <div class="dropdown-input-wrap">
+        <input type="text" autocomplete="off" size="1" tabindex="-1" class="dropdown-input" placeholder="Select bar / pos sales warehouse...">
+      </div>
+      <div role="listbox" tabindex="-1" class="ts-dropdown-content" id="id_default_warehouse-ts-dropdown" aria-labelledby="id_default_warehouse-ts-label">
+        <div data-selectable="" data-value="" class="option" role="option" id="id_default_warehouse-opt-1">Select bar / pos sales warehouse...</div>
+        <div data-selectable="" data-value="3" class="option selected active" role="option" id="id_default_warehouse-opt-2" aria-selected="true">Bar</div>
+        <div data-selectable="" data-value="2" class="option" role="option" id="id_default_warehouse-opt-3">Kitchen</div>
+        <div data-selectable="" data-value="1" class="option" role="option" id="id_default_warehouse-opt-4">Store</div>
+      </div>
+    </div>
   </div>
+  <p class="text-xs text-gray-500">Warehouse used for Bar stock and POS drink deductions.</p>
+</div>

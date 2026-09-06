@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Payables" section_url="accounting:supplier_payment_list" current_label=payment.payment_number %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ payment.payment_number }}</h1>
@@ -24,92 +22,103 @@
       {% endif %}
     </div>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
     <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
         <dd>
           {% if payment.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
-          {% elif payment.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
-          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+        {% elif payment.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+        {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Paid Amount</dt>
+      <dd class="text-base font-mono font-bold text-gray-900">
+        {{ payment.paid_amount }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Mode of Payment</dt>
+      <dd class="text-sm font-medium text-gray-700">
+        {{ payment.mode_of_payment.name }}
+      </dd>
+    </div>
+    {% if payment.reference_no %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Reference</dt>
+        <dd class="text-sm font-medium text-gray-700">{{ payment.reference_no }}{% if payment.reference_date %} ({{ payment.reference_date|date:"M j, Y" }}){% endif %}</dd>
+      </div>
+    {% endif %}
+    {% if payment.remarks %}
+      <div class="sm:col-span-2">
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+        <dd class="text-sm font-medium text-gray-700">
+          {{ payment.remarks }}
         </dd>
       </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Paid Amount</dt>
-        <dd class="text-base font-mono font-bold text-gray-900">{{ payment.paid_amount }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Mode of Payment</dt>
-        <dd class="text-sm font-medium text-gray-700">{{ payment.mode_of_payment.name }}</dd>
-      </div>
-      {% if payment.reference_no %}
-        <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Reference</dt>
-          <dd class="text-sm font-medium text-gray-700">{{ payment.reference_no }}{% if payment.reference_date %} ({{ payment.reference_date|date:"M j, Y" }}){% endif %}</dd>
-        </div>
-      {% endif %}
-      {% if payment.remarks %}
-        <div class="sm:col-span-2">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
-          <dd class="text-sm font-medium text-gray-700">{{ payment.remarks }}</dd>
-        </div>
-      {% endif %}
-    </dl>
+    {% endif %}
+  </dl>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+  <div class="px-6 py-5 border-b border-gray-100">
+    <h3 class="text-base font-bold text-gray-900">Allocations</h3>
   </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">Allocations</h3></div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Outstanding at Payment</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Allocated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for alloc in allocations %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Outstanding at Payment</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Allocated</th>
+            <td class="px-6 py-4"><a href="{% url 'accounting:supplier_invoice_detail' alloc.invoice_id %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ alloc.invoice.invoice_number }}</a></td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ alloc.outstanding_amount }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ alloc.allocated_amount }}</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for alloc in allocations %}
-            <tr>
-              <td class="px-6 py-4"><a href="{% url 'accounting:supplier_invoice_detail' alloc.invoice_id %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ alloc.invoice.invoice_number }}</a></td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ alloc.outstanding_amount }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ alloc.allocated_amount }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="3" class="px-6 py-8 text-center text-sm text-gray-500">No allocations.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">GL Entries</h3></div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+        {% empty %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fiscal Year</th>
+            <td colspan="3" class="px-6 py-8 text-center text-sm text-gray-500">No allocations.</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for gl in gl_entries %}
-            <tr>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ gl.account.name }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.debit }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.credit }}</td>
-              <td class="px-6 py-4 text-sm text-gray-600">{{ gl.fiscal_year.name }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No GL entries posted yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+  <div class="px-6 py-5 border-b border-gray-100">
+    <h3 class="text-base font-bold text-gray-900">GL Entries</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fiscal Year</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for gl in gl_entries %}
+          <tr>
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ gl.account.name }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.debit }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.credit }}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">{{ gl.fiscal_year.name }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No GL entries posted yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 </div>
 {% endblock %}

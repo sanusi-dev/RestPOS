@@ -3,7 +3,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:dashboard" section_label="Order Register" section_url="orders:order_list" current_label=order.invoice_number|default:order.pk %}
-
   <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-8">
     <div>
       <p class="text-xs font-bold text-orange-500 uppercase tracking-[0.2em] mb-2">Order record</p>
@@ -12,61 +11,57 @@
     </div>
     <div class="flex flex-wrap items-center gap-3">
       {% if order.is_return %}
-      <span class="inline-flex items-center px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Return order</span>
+        <span class="inline-flex items-center px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Return order</span>
       {% endif %}
       {% if user.is_manager or user.is_admin or user.is_superuser %}
         {% if order.status == "SUBMITTED" and not order.is_return %}
-        <button onclick="Swal.fire({title:'Process Return?',text:'This creates a return draft with negative items and payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Create Return Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-amber-200 text-amber-600 text-sm font-semibold hover:bg-amber-50 transition-all">
-          Create return
-        </button>
-        <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
+          <button onclick="Swal.fire({title:'Process Return?',text:'This creates a return draft with negative items and payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Create Return Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-amber-200 text-amber-600 text-sm font-semibold hover:bg-amber-50 transition-all">Create return</button>
+          <form id="return-form" method="post" action="{% url 'orders:order_return' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+            {% csrf_token %}
+          </form>
         {% elif order.status == "DRAFT" and order.is_return %}
-        <button onclick="Swal.fire({title:'Submit Return?',text:'This restores drink stock and records the refunds against the source payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Submit Return'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-submit-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-all">
-          Submit return
-        </button>
-        <form id="return-submit-form" method="post" action="{% url 'orders:order_return_submit' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
-        <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
-          Delete draft
-        </button>
-        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
+          <button onclick="Swal.fire({title:'Submit Return?',text:'This restores drink stock and records the refunds against the source payments.',icon:'question',showCancelButton:true,confirmButtonColor:'#f59e0b',cancelButtonColor:'#6b7280',confirmButtonText:'Submit Return'}).then((r)=>{if(r.isConfirmed)document.getElementById('return-submit-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-all">Submit return</button>
+          <form id="return-submit-form" method="post" action="{% url 'orders:order_return_submit' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+            {% csrf_token %}
+          </form>
+          <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">Delete draft</button>
+          <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+            {% csrf_token %}
+          </form>
         {% elif order.status == "DRAFT" and order.kots.exists and not order.is_return %}
-        <button onclick="document.getElementById('cancel-dialog').classList.toggle('hidden')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
-          Cancel order
-        </button>
+          <button onclick="document.getElementById('cancel-dialog').classList.toggle('hidden')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">Cancel order</button>
         {% elif order.status == "DRAFT" and not order.is_return %}
-        <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">
-          Delete draft
-        </button>
-        <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">{% csrf_token %}</form>
+          <button onclick="Swal.fire({title:'Delete Draft?',text:'This deletes the draft entirely, including its items and audit trail.',icon:'warning',showCancelButton:true,confirmButtonColor:'#dc2626',cancelButtonColor:'#6b7280',confirmButtonText:'Delete Draft'}).then((r)=>{if(r.isConfirmed)document.getElementById('delete-draft-form').submit()})" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold hover:bg-red-100 transition-all">Delete draft</button>
+          <form id="delete-draft-form" method="post" action="{% url 'orders:order_delete' order.pk %}" class="hidden" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+            {% csrf_token %}
+          </form>
         {% endif %}
       {% endif %}
     </div>
   </div>
-
   {% if order.status == "DRAFT" and order.kots.exists and not order.is_return %}
-  <div id="cancel-dialog" class="hidden bg-white border border-red-200 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 mb-8" x-data="{ cancelReason: 'wrong_order' }">
-    <div class="flex items-start justify-between gap-4 mb-5">
-      <div>
-        <h2 class="text-base font-bold text-gray-900">Cancel order</h2>
-        <p class="text-sm text-gray-500 mt-1">Choose a reason so the audit trail explains the cancellation.</p>
+    <div id="cancel-dialog" class="hidden bg-white border border-red-200 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 mb-8" x-data="{ cancelReason: 'wrong_order' }">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h2 class="text-base font-bold text-gray-900">Cancel order</h2>
+          <p class="text-sm text-gray-500 mt-1">Choose a reason so the audit trail explains the cancellation.</p>
+        </div>
+        <button type="button" onclick="document.getElementById('cancel-dialog').classList.add('hidden')" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">×</button>
       </div>
-      <button type="button" onclick="document.getElementById('cancel-dialog').classList.add('hidden')" class="p-2 rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700">×</button>
+      <form method="post" action="{% url 'orders:order_cancel' order.pk %}" class="grid grid-cols-1 md:grid-cols-[minmax(14rem,0.8fr)_minmax(18rem,1.2fr)_auto] items-end gap-4" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+        {% csrf_token %}
+        <div>
+          <label for="{{ cancel_form.cancel_reason.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
+          {{ cancel_form.cancel_reason }}
+        </div>
+        <div>
+          <label for="{{ cancel_form.cancel_reason_note.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
+          {{ cancel_form.cancel_reason_note }}
+        </div>
+        <button type="submit" class="backend-submit h-[2.75rem] px-5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition-all">Confirm cancellation</button>
+      </form>
     </div>
-    <form method="post" action="{% url 'orders:order_cancel' order.pk %}" class="grid grid-cols-1 md:grid-cols-[minmax(14rem,0.8fr)_minmax(18rem,1.2fr)_auto] items-end gap-4" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
-      {% csrf_token %}
-      <div>
-        <label for="{{ cancel_form.cancel_reason.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Reason</label>
-        {{ cancel_form.cancel_reason }}
-      </div>
-      <div>
-        <label for="{{ cancel_form.cancel_reason_note.id_for_label }}" class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Note (optional)</label>
-        {{ cancel_form.cancel_reason_note }}
-      </div>
-      <button type="submit" class="backend-submit h-[2.75rem] px-5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow hover:bg-red-700 transition-all">Confirm cancellation</button>
-    </form>
-  </div>
-{% endif %}
-
+  {% endif %}
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 mb-6 relative overflow-hidden">
     <div class="absolute -right-10 -top-12 w-36 h-36 rounded-full bg-orange-100/60 blur-3xl pointer-events-none"></div>
     <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -75,106 +70,176 @@
         <p class="text-xs text-gray-400 mt-1">Current document, payment, and ownership state.</p>
       </div>
       {% if order.status == "DRAFT" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700">Draft</span>
-      {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Submitted{% if order.is_paid %} · Paid{% endif %}</span>
-      {% elif order.status == "DISCARDED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Discarded</span>
-      {% else %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
-    </div>
-    <dl class="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-6">
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Order number</dt><dd class="mt-1 text-sm font-bold text-gray-900">#{{ order.order_number|default:"—" }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Order type</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.get_order_type_display }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Guests</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.guest_count }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cashier</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.cashier.get_display_name|default:"—" }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Posting date</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.posting_date }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Invoice receipt</dt><dd class="mt-1 text-sm font-bold {% if order.invoice_printed %}text-emerald-600{% else %}text-gray-500{% endif %}">{{ order.invoice_printed|yesno:"Printed,Not printed" }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Created</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.created_at|date:"M j, Y H:i" }}</dd></div>
-      <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Last updated</dt><dd class="mt-1 text-sm font-bold text-gray-900">{{ order.updated_at|date:"M j, Y H:i" }}</dd></div>
-    </dl>
+    {% elif order.status == "SUBMITTED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Submitted{% if order.is_paid %} · Paid{% endif %}</span>
+    {% elif order.status == "DISCARDED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Discarded</span>
+    {% else %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
   </div>
-
-  {% if order.status == "CANCELLED" and order.cancel_reason %}
+  <dl class="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-6">
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Order number</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        #{{ order.order_number|default:"—" }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Order type</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.get_order_type_display }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Guests</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.guest_count }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cashier</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.cashier.get_display_name|default:"—" }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Posting date</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.posting_date }}
+      </dd>
+    </div>
+    <div><dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Invoice receipt</dt><dd class="mt-1 text-sm font-bold {% if order.invoice_printed %}text-emerald-600{% else %}text-gray-500{% endif %}">{{ order.invoice_printed|yesno:"Printed,Not printed" }}</dd></div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Created</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.created_at|date:"M j, Y H:i" }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Last updated</dt>
+      <dd class="mt-1 text-sm font-bold text-gray-900">
+        {{ order.updated_at|date:"M j, Y H:i" }}
+      </dd>
+    </div>
+  </dl>
+</div>
+{% if order.status == "CANCELLED" and order.cancel_reason %}
   <div class="bg-red-50 border border-red-200 rounded-[1.5rem] p-6 mb-6">
     <p class="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Cancellation audit</p>
     <p class="text-sm font-bold text-red-800">{{ order.get_cancel_reason_display }}</p>
     {% if order.cancel_reason_note %}<p class="text-sm text-red-700 mt-2">{{ order.cancel_reason_note }}</p>{% endif %}
     <p class="text-xs text-red-500 mt-3">{% if order.cancelled_by %}By {{ order.cancelled_by.get_display_name }}{% endif %}{% if order.cancelled_at %} · {{ order.cancelled_at|date:"M j, Y H:i" }}{% endif %}</p>
   </div>
-  {% endif %}
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-6">
-    <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
-      <div><h2 class="text-base font-bold text-gray-900">Order items</h2><p class="text-xs text-gray-400 mt-1">Snapshot of what was entered on the order.</p></div>
-      <span class="text-xs font-semibold text-gray-400">{{ order.items.count }} line{{ order.items.count|pluralize }}</span>
+{% endif %}
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-6">
+  <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Order items</h2>
+      <p class="text-xs text-gray-400 mt-1">Snapshot of what was entered on the order.</p>
     </div>
-    {% if order.items.exists %}
+    <span class="text-xs font-semibold text-gray-400">{{ order.items.count }} line{{ order.items.count|pluralize }}</span>
+  </div>
+  {% if order.items.exists %}
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/60"><tr>
-          <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Item</th>
-          <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Department</th>
-          <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Customer</th>
-          <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Qty</th>
-          <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Rate</th>
-          <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Amount</th>
-          {% if order.status == "DRAFT" and order.is_return %}<th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Return</th>{% endif %}
-        </tr></thead>
+        <thead class="bg-gray-50/60">
+          <tr>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Item</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Department</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Customer</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Qty</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Rate</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Amount</th>
+            {% if order.status == "DRAFT" and order.is_return %}<th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Return</th>{% endif %}
+          </tr>
+        </thead>
         <tbody class="divide-y divide-gray-50">
           {% for item in order.items.all %}
-          <tr class="hover:bg-gray-50/60 transition-colors">
-            <td class="px-6 py-4"><p class="text-sm font-semibold text-gray-900">{{ item.item_name }}</p>{% if item.comments %}<p class="text-xs text-gray-400 mt-0.5">{{ item.comments }}</p>{% endif %}{% if item.not_restockable %}<p class="text-[11px] font-bold uppercase tracking-wider text-amber-600 mt-1">Wastage — not restocked</p>{% endif %}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">{% if item.department %}{{ item.get_department_display }}{% else %}{{ item.item.get_department_display }}{% endif %}</td>
-            <td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td>
-            <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
-            <td class="px-6 py-4 text-right text-sm text-gray-500">₦{{ item.rate|intcomma }}</td>
-            <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ item.amount|intcomma }}</td>
-            {% if order.status == "DRAFT" and order.is_return %}
-            <td class="px-6 py-4 text-right">
-              <form method="post" action="{% url 'orders:order_return_line_update' order.pk item.pk %}" class="flex flex-col items-end gap-2" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
-                {% csrf_token %}
-                <div class="flex items-center gap-2">
-                  <label class="sr-only" for="return-qty-{{ item.pk }}">Return qty</label>
-                  <input id="return-qty-{{ item.pk }}" type="number" name="qty" min="0" step="0.01" value="{{ item.qty|stringformat:'f'|cut:'-' }}" class="w-20 h-9 rounded-lg border border-gray-200 px-2 text-right text-sm font-semibold text-gray-900">
-                  <button type="submit" class="backend-submit h-9 px-3 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-orange-500 transition-colors">Update</button>
-                </div>
-                {% if item.department == "DRINKS" or item.item.department == "DRINKS" %}
-                <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
-                  <input type="hidden" name="not_restockable" value="0">
-                  <input type="checkbox" name="not_restockable" value="1" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" {% if item.not_restockable %}checked{% endif %} onchange="this.form.submit()">
-                  Don't restock (wastage)
-                </label>
-                {% endif %}
-              </form>
-            </td>
-            {% endif %}
-          </tr>
+            <tr class="hover:bg-gray-50/60 transition-colors">
+              <td class="px-6 py-4"><p class="text-sm font-semibold text-gray-900">{{ item.item_name }}</p>{% if item.comments %}<p class="text-xs text-gray-400 mt-0.5">{{ item.comments }}</p>{% endif %}{% if item.not_restockable %}<p class="text-[11px] font-bold uppercase tracking-wider text-amber-600 mt-1">Wastage — not restocked</p>{% endif %}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{% if item.department %}{{ item.get_department_display }}{% else %}{{ item.item.get_department_display }}{% endif %}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td>
+              <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
+              <td class="px-6 py-4 text-right text-sm text-gray-500">₦{{ item.rate|intcomma }}</td>
+              <td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ item.amount|intcomma }}</td>
+              {% if order.status == "DRAFT" and order.is_return %}
+                <td class="px-6 py-4 text-right">
+                  <form method="post" action="{% url 'orders:order_return_line_update' order.pk item.pk %}" class="flex flex-col items-end gap-2" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+                    {% csrf_token %}
+                    <div class="flex items-center gap-2">
+                      <label class="sr-only" for="return-qty-{{ item.pk }}">Return qty</label>
+                      <input id="return-qty-{{ item.pk }}" type="number" name="qty" min="0" step="0.01" value="{{ item.qty|stringformat:'f'|cut:'-' }}" class="w-20 h-9 rounded-lg border border-gray-200 px-2 text-right text-sm font-semibold text-gray-900">
+                      <button type="submit" class="backend-submit h-9 px-3 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-orange-500 transition-colors">Update</button>
+                    </div>
+                    {% if item.department == "DRINKS" or item.item.department == "DRINKS" %}
+                      <label class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
+                        <input type="hidden" name="not_restockable" value="0">
+                        <input type="checkbox" name="not_restockable" value="1" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" {% if item.not_restockable %}checked{% endif %} onchange="this.form.submit()">
+                        Don't restock (wastage)
+                      </label>
+                    {% endif %}
+                  </form>
+                </td>
+              {% endif %}
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% else %}<div class="px-6 py-12 text-center text-sm text-gray-400">This order has no item lines.</div>{% endif %}
-  </div>
-
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-      <div class="px-6 py-5 border-b border-gray-100"><h2 class="text-base font-bold text-gray-900">Payments</h2></div>
-      {% if order.payments.exists %}
-      <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-100"><thead class="bg-gray-50/60"><tr><th class="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Method</th><th class="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Reference</th><th class="px-6 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Amount</th></tr></thead><tbody class="divide-y divide-gray-50">
-        {% for payment in order.payments.all %}<tr><td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ payment.mode_of_payment.name }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ payment.reference_no|default:"—" }}</td><td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ payment.amount|intcomma }}</td></tr>{% endfor %}
-      </tbody></table></div>
-      {% else %}<p class="px-6 py-12 text-center text-sm text-gray-400">No payment has been recorded.</p>{% endif %}
-    </div>
-    <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6">
-      <h2 class="text-base font-bold text-gray-900 mb-5">Totals</h2>
-      <dl class="space-y-3"><div class="flex justify-between text-sm"><dt class="text-gray-500">Net total</dt><dd class="font-bold text-gray-900">₦{{ order.net_total|intcomma }}</dd></div><div class="flex justify-between text-lg font-extrabold text-gray-900 pt-3 border-t border-gray-100"><dt>Grand total</dt><dd>₦{{ order.grand_total|intcomma }}</dd></div><div class="flex justify-between text-sm"><dt class="text-gray-500">Paid</dt><dd class="font-bold text-emerald-600">₦{{ order.paid_amount|intcomma }}</dd></div>{% if order.change_amount > 0 %}<div class="flex justify-between text-sm"><dt class="text-gray-500">Change</dt><dd class="font-bold text-gray-900">₦{{ order.change_amount|intcomma }}</dd></div>{% endif %}</dl>
-    </div>
-  </div>
-
+  {% else %}<div class="px-6 py-12 text-center text-sm text-gray-400">This order has no item lines.</div>{% endif %}
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4"><div><h2 class="text-base font-bold text-gray-900">Kitchen &amp; Bar tickets</h2><p class="text-xs text-gray-400 mt-1">Immutable departmental snapshots created from this order.</p></div><span class="text-xs font-semibold text-gray-400">{{ order.kots.count }} ticket{{ order.kots.count|pluralize }}</span></div>
-    {% if order.kots.exists %}
-    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-100"><thead class="bg-gray-50/60"><tr><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Ticket</th><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Station</th><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Kind</th><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Document</th><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Print</th><th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Created by</th><th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Created</th></tr></thead><tbody class="divide-y divide-gray-50">
-      {% for kot in order.kots.all %}<tr class="hover:bg-gray-50/60 transition-colors"><td class="px-6 py-4"><a href="{% url 'orders:kot_detail' kot.pk %}" class="text-sm font-bold text-gray-900 hover:text-orange-600">{{ kot.kot_number }}</a><p class="text-xs text-gray-400 mt-0.5">{{ kot.items.count }} line{{ kot.items.count|pluralize }}</p></td><td class="px-6 py-4"><p class="text-sm font-semibold text-gray-800">{{ kot.production_unit.name }}</p><p class="text-xs text-gray-400 mt-0.5">{{ kot.get_ticket_type_display }}</p></td><td class="px-6 py-4 text-sm text-gray-500">{{ kot.type }}</td><td class="px-6 py-4">{% if kot.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Submitted</span>{% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}</td><td class="px-6 py-4">{% if kot.print_status == "PRINTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Printed</span>{% elif kot.print_status == "PENDING" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">Pending</span>{% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}</td><td class="px-6 py-4 text-sm text-gray-500">{{ kot.created_by.get_display_name|default:"System" }}</td><td class="px-6 py-4 text-right text-xs text-gray-400">{{ kot.created_at|date:"M j, Y H:i" }}</td></tr>{% endfor %}
-    </tbody></table></div>
-    {% else %}<div class="px-6 py-12 text-center text-sm text-gray-400">No kitchen or bar tickets have been created.</div>{% endif %}
+    <div class="px-6 py-5 border-b border-gray-100">
+      <h2 class="text-base font-bold text-gray-900">Payments</h2>
+    </div>
+    {% if order.payments.exists %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-100">
+          <thead class="bg-gray-50/60">
+            <tr>
+              <th class="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Method</th>
+              <th class="px-6 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Reference</th>
+              <th class="px-6 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            {% for payment in order.payments.all %}<tr><td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ payment.mode_of_payment.name }}</td><td class="px-6 py-4 text-sm text-gray-500">{{ payment.reference_no|default:"—" }}</td><td class="px-6 py-4 text-right text-sm font-bold text-gray-900">₦{{ payment.amount|intcomma }}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}<p class="px-6 py-12 text-center text-sm text-gray-400">No payment has been recorded.</p>{% endif %}
   </div>
+  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6">
+    <h2 class="text-base font-bold text-gray-900 mb-5">Totals</h2>
+    <dl class="space-y-3"><div class="flex justify-between text-sm"><dt class="text-gray-500">Net total</dt><dd class="font-bold text-gray-900">₦{{ order.net_total|intcomma }}</dd></div><div class="flex justify-between text-lg font-extrabold text-gray-900 pt-3 border-t border-gray-100"><dt>Grand total</dt><dd>₦{{ order.grand_total|intcomma }}</dd></div><div class="flex justify-between text-sm"><dt class="text-gray-500">Paid</dt><dd class="font-bold text-emerald-600">₦{{ order.paid_amount|intcomma }}</dd></div>{% if order.change_amount > 0 %}<div class="flex justify-between text-sm"><dt class="text-gray-500">Change</dt><dd class="font-bold text-gray-900">₦{{ order.change_amount|intcomma }}</dd></div>{% endif %}</dl>
+  </div>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+  <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Kitchen &amp; Bar tickets</h2>
+      <p class="text-xs text-gray-400 mt-1">Immutable departmental snapshots created from this order.</p>
+    </div>
+    <span class="text-xs font-semibold text-gray-400">{{ order.kots.count }} ticket{{ order.kots.count|pluralize }}</span>
+  </div>
+  {% if order.kots.exists %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/60">
+          <tr>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Ticket</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Station</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Kind</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Document</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Print</th>
+            <th class="px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-gray-400">Created by</th>
+            <th class="px-6 py-4 text-right text-[11px] font-bold uppercase tracking-wider text-gray-400">Created</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for kot in order.kots.all %}<tr class="hover:bg-gray-50/60 transition-colors"><td class="px-6 py-4"><a href="{% url 'orders:kot_detail' kot.pk %}" class="text-sm font-bold text-gray-900 hover:text-orange-600">{{ kot.kot_number }}</a><p class="text-xs text-gray-400 mt-0.5">{{ kot.items.count }} line{{ kot.items.count|pluralize }}</p></td><td class="px-6 py-4"><p class="text-sm font-semibold text-gray-800">{{ kot.production_unit.name }}</p><p class="text-xs text-gray-400 mt-0.5">{{ kot.get_ticket_type_display }}</p></td><td class="px-6 py-4 text-sm text-gray-500">{{ kot.type }}</td><td class="px-6 py-4">{% if kot.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Submitted</span>{% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}</td><td class="px-6 py-4">{% if kot.print_status == "PRINTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Printed</span>{% elif kot.print_status == "PENDING" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">Pending</span>{% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}</td><td class="px-6 py-4 text-sm text-gray-500">{{ kot.created_by.get_display_name|default:"System" }}</td><td class="px-6 py-4 text-right text-xs text-gray-400">{{ kot.created_at|date:"M j, Y H:i" }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}<div class="px-6 py-12 text-center text-sm text-gray-400">No kitchen or bar tickets have been created.</div>{% endif %}
+</div>
 </div>
 {% endblock %}

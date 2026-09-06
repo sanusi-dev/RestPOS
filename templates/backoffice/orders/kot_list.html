@@ -3,7 +3,6 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Orders" root_url="orders:dashboard" current_label="Kitchen & Bar Tickets" %}
-
   <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8">
     <div>
       <p class="text-xs font-bold text-orange-500 uppercase tracking-[0.2em] mb-2">Ticket register</p>
@@ -14,13 +13,11 @@
       Order register <span aria-hidden="true">→</span>
     </a>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
     <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <div class="flex flex-col gap-1 lg:col-span-2">
         <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="ticket-search">Search</label>
-        <input id="ticket-search" type="search" name="search" value="{{ search }}" placeholder="Ticket, invoice, order #"
-               class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+        <input id="ticket-search" type="search" name="search" value="{{ search }}" placeholder="Ticket, invoice, order #" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="ticket-type">Ticket</label>
@@ -53,7 +50,6 @@
       </div>
     </form>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
       <div>
@@ -79,43 +75,48 @@
         </thead>
         <tbody class="divide-y divide-gray-50">
           {% for kot in kots %}
-          <tr class="hover:bg-gray-50/60 transition-colors">
-            <td class="px-6 py-4">
-              <a href="{% url 'orders:kot_detail' kot.pk %}" class="text-sm font-bold text-gray-900 hover:text-orange-600">{{ kot.kot_number }}</a>
-              <p class="text-xs text-gray-400 mt-0.5">{{ kot.item_count }} line{{ kot.item_count|pluralize }}</p>
-            </td>
-            <td class="px-6 py-4">
-              <a href="{% url 'orders:order_detail' kot.order.pk %}" class="text-sm font-semibold text-gray-700 hover:text-orange-600">{{ kot.order.invoice_number|default:kot.order.pk }}</a>
-              <p class="text-xs text-gray-400 mt-0.5">Order #{{ kot.order_number|default:kot.order.order_number|default:"—" }}</p>
-            </td>
-            <td class="px-6 py-4">
-              <p class="text-sm font-semibold text-gray-800">{{ kot.production_unit.name }}</p>
-              <p class="text-xs text-gray-400 mt-0.5">{{ kot.get_ticket_type_display }}</p>
-            </td>
-            <td class="px-6 py-4">
-              {% if kot.type == "New Order" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">New order</span>
-              {% elif kot.type == "Cancelled" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled ticket</span>
-              {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700">{{ kot.type }}</span>{% endif %}
-            </td>
-            <td class="px-6 py-4">
-              {% if kot.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Submitted</span>
-              {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
-            </td>
-            <td class="px-6 py-4">
-              {% if kot.print_status == "PRINTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Printed</span>
-              {% elif kot.print_status == "PENDING" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">Pending</span>
-              {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-500">{{ kot.created_by.get_display_name|default:"System" }}</td>
-            <td class="px-6 py-4 text-right text-xs text-gray-400">{{ kot.created_at|date:"M j, Y H:i" }}</td>
-            <td class="px-6 py-4 text-right"><a href="{% url 'orders:kot_detail' kot.pk %}" class="text-xs font-bold text-orange-600 hover:text-orange-700">View</a></td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="9" class="px-6 py-16 text-center text-gray-500"><p class="text-sm font-semibold text-gray-600">No tickets found.</p><p class="text-xs text-gray-400 mt-1">Try a different search or filter.</p></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+            <tr class="hover:bg-gray-50/60 transition-colors">
+              <td class="px-6 py-4">
+                <a href="{% url 'orders:kot_detail' kot.pk %}" class="text-sm font-bold text-gray-900 hover:text-orange-600">{{ kot.kot_number }}</a>
+                <p class="text-xs text-gray-400 mt-0.5">{{ kot.item_count }} line{{ kot.item_count|pluralize }}</p>
+              </td>
+              <td class="px-6 py-4">
+                <a href="{% url 'orders:order_detail' kot.order.pk %}" class="text-sm font-semibold text-gray-700 hover:text-orange-600">{{ kot.order.invoice_number|default:kot.order.pk }}</a>
+                <p class="text-xs text-gray-400 mt-0.5">Order #{{ kot.order_number|default:kot.order.order_number|default:"—" }}</p>
+              </td>
+              <td class="px-6 py-4">
+                <p class="text-sm font-semibold text-gray-800">{{ kot.production_unit.name }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ kot.get_ticket_type_display }}</p>
+              </td>
+              <td class="px-6 py-4">
+                {% if kot.type == "New Order" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">New order</span>
+          {% elif kot.type == "Cancelled" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled ticket</span>
+          {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700">{{ kot.type }}</span>{% endif %}
+        </td>
+        <td class="px-6 py-4">
+          {% if kot.status == "SUBMITTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Submitted</span>
+        {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
+      </td>
+      <td class="px-6 py-4">
+        {% if kot.print_status == "PRINTED" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700">Printed</span>
+      {% elif kot.print_status == "PENDING" %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700">Pending</span>
+      {% else %}<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
+    </td>
+    <td class="px-6 py-4 text-sm text-gray-500">{{ kot.created_by.get_display_name|default:"System" }}</td>
+    <td class="px-6 py-4 text-right text-xs text-gray-400">{{ kot.created_at|date:"M j, Y H:i" }}</td>
+    <td class="px-6 py-4 text-right"><a href="{% url 'orders:kot_detail' kot.pk %}" class="text-xs font-bold text-orange-600 hover:text-orange-700">View</a></td>
+  </tr>
+{% empty %}
+  <tr>
+    <td colspan="9" class="px-6 py-16 text-center text-gray-500">
+      <p class="text-sm font-semibold text-gray-600">No tickets found.</p>
+      <p class="text-xs text-gray-400 mt-1">Try a different search or filter.</p>
+    </td>
+  </tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
 </div>
 {% endblock %}

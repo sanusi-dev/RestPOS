@@ -1,16 +1,13 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Backoffice" root_url="web:dashboard" section_label="Accounting" section_url="accounting:dashboard" current_label="Dashboard" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Accounting</h1>
       <p class="text-sm text-gray-500">Chart of accounts, journal entries, and the general ledger</p>
     </div>
   </div>
-
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6">
       <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Accounts</p>
@@ -29,7 +26,6 @@
       <p class="text-2xl font-extrabold text-gray-900">{{ fiscal_year_count }}</p>
     </div>
   </div>
-
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
     <a href="{% url 'accounting:supplier_list' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-lg hover:border-orange-200 transition-all">
       <div class="flex items-center gap-3 mb-2">
@@ -53,7 +49,6 @@
       <p class="text-sm text-gray-500">{{ payment_count }} payments recorded</p>
     </a>
   </div>
-
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     <a href="{% url 'accounting:chart_of_accounts' %}" class="group bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-6 hover:shadow-lg hover:border-orange-200 transition-all">
       <div class="flex items-center gap-3 mb-2">

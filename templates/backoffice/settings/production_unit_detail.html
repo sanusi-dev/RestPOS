@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Settings" root_url="settings:dashboard" section_label="Production Units" section_url="settings:production_unit_list" current_label=production_unit.name %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ production_unit.name }}</h1>
@@ -14,32 +12,22 @@
         <span class="text-gray-400">{% hgi_stroke name="pencil-edit-01" size="16" color="currentColor" stroke_width="2" %}</span>
         Edit
       </a>
-      <button hx-post="{% url 'settings:production_unit_delete' production_unit.pk %}"
-              hx-target="#app-content"
-              hx-select="#app-content"
-              hx-swap="outerHTML"
-              data-confirm-message="Delete this production unit? This cannot be undone."
-              data-confirm-icon="warning"
-              data-confirm-color="#dc2626"
-              data-confirm-btn="Yes, delete"
-              class="backend-submit inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold shadow-sm hover:bg-red-50 transition-all duration-300" hx-indicator="this" hx-disabled-elt="this">
+      <button hx-post="{% url 'settings:production_unit_delete' production_unit.pk %}" hx-target="#app-content" hx-select="#app-content" hx-swap="outerHTML" data-confirm-message="Delete this production unit? This cannot be undone." data-confirm-icon="warning" data-confirm-color="#dc2626" data-confirm-btn="Yes, delete" class="backend-submit inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold shadow-sm hover:bg-red-50 transition-all duration-300" hx-indicator="this" hx-disabled-elt="this">
         <span class="text-red-400">{% hgi_stroke name="delete-01" size="16" color="currentColor" stroke_width="2" %}</span>
         Delete
       </button>
     </div>
   </div>
-
   <div class="space-y-8">
-
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
       <div class="absolute top-0 right-0 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
       <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Production Unit Details</h2>
-
       <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Name</dt>
-          <dd class="text-base font-bold text-gray-900">{{ production_unit.name }}</dd>
+          <dd class="text-base font-bold text-gray-900">
+            {{ production_unit.name }}
+          </dd>
         </div>
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Department</dt>
@@ -53,7 +41,9 @@
         </div>
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Warehouse</dt>
-          <dd class="text-base font-bold text-gray-900">{{ production_unit.warehouse.name }}</dd>
+          <dd class="text-base font-bold text-gray-900">
+            {{ production_unit.warehouse.name }}
+          </dd>
         </div>
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Block Takeaway KOT</dt>
@@ -67,28 +57,30 @@
         </div>
       </dl>
     </div>
-
     <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 relative overflow-hidden">
       <div class="absolute top-0 right-0 w-32 h-32 bg-sky-50/50 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
       <h2 class="text-lg font-bold text-gray-900 mb-6 relative z-10">Printer Configuration</h2>
-
       <dl class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Printer IP</dt>
-          <dd class="text-base font-bold text-gray-900">{{ production_unit.printer_ip|default:"-" }}</dd>
+          <dd class="text-base font-bold text-gray-900">
+            {{ production_unit.printer_ip|default:"-" }}
+          </dd>
         </div>
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Paper Width</dt>
-          <dd class="text-base font-bold text-gray-900">{{ production_unit.get_printer_paper_width_display }}</dd>
+          <dd class="text-base font-bold text-gray-900">
+            {{ production_unit.get_printer_paper_width_display }}
+          </dd>
         </div>
         <div class="sm:col-span-1">
           <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cut Mode</dt>
-          <dd class="text-base font-bold text-gray-900">{{ production_unit.get_printer_cut_mode_display }}</dd>
+          <dd class="text-base font-bold text-gray-900">
+            {{ production_unit.get_printer_cut_mode_display }}
+          </dd>
         </div>
       </dl>
     </div>
-
   </div>
 </div>
 {% endblock %}

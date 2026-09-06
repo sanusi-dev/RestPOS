@@ -7,11 +7,8 @@
       <div class="flex-1">
         <img class="img-fluid" src="{% static 'images/undraw/undraw_alert.svg' %}" alt="Uh-Oh">
       </div>
-      <div class="flex-1">
-        {% block error_details %}
-        {% endblock %}
-      </div>
+      <div class="flex-1">{% block error_details %}{% endblock %}</div>
     </div>
   </div>
 </section>
-{% endblock%}
+{% endblock %}

@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="Payables" section_url="accounting:supplier_invoice_list" current_label=invoice.invoice_number %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ invoice.invoice_number }}</h1>
@@ -24,135 +22,147 @@
       {% endif %}
     </div>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-8 mb-8">
     <dl class="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Status</dt>
         <dd>
           {% if invoice.status == "DRAFT" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-600/10">Draft</span>
-          {% elif invoice.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">{{ invoice.payment_status }}</span>
-          {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+        {% elif invoice.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">{{ invoice.payment_status }}</span>
+        {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total</dt>
+      <dd class="text-base font-mono font-bold text-gray-900">
+        {{ invoice.total }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Outstanding</dt>
+      <dd class="text-base font-mono font-bold text-gray-900">
+        {{ invoice.outstanding_amount }}
+      </dd>
+    </div>
+    <div>
+      <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Due Date</dt>
+      <dd class="text-sm font-medium text-gray-700">
+        {{ invoice.due_date|date:"M j, Y" }}
+      </dd>
+    </div>
+    {% if invoice.bill_no %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Supplier Bill</dt>
+        <dd class="text-sm font-medium text-gray-700">{{ invoice.bill_no }}{% if invoice.bill_date %} ({{ invoice.bill_date|date:"M j, Y" }}){% endif %}</dd>
+      </div>
+    {% endif %}
+    {% if invoice.purchase_receipt %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Purchase Receipt</dt>
+        <dd class="text-sm font-medium text-gray-700"><a href="{% url 'inventory:purchase_receipt_detail' invoice.purchase_receipt_id %}" class="text-orange-500">#{{ invoice.purchase_receipt_id }}</a></dd>
+      </div>
+    {% endif %}
+    {% if invoice.remarks %}
+      <div class="sm:col-span-2">
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
+        <dd class="text-sm font-medium text-gray-700">
+          {{ invoice.remarks }}
         </dd>
       </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total</dt>
-        <dd class="text-base font-mono font-bold text-gray-900">{{ invoice.total }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Outstanding</dt>
-        <dd class="text-base font-mono font-bold text-gray-900">{{ invoice.outstanding_amount }}</dd>
-      </div>
-      <div>
-        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Due Date</dt>
-        <dd class="text-sm font-medium text-gray-700">{{ invoice.due_date|date:"M j, Y" }}</dd>
-      </div>
-      {% if invoice.bill_no %}
-        <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Supplier Bill</dt>
-          <dd class="text-sm font-medium text-gray-700">{{ invoice.bill_no }}{% if invoice.bill_date %} ({{ invoice.bill_date|date:"M j, Y" }}){% endif %}</dd>
-        </div>
-      {% endif %}
-      {% if invoice.purchase_receipt %}
-        <div>
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Purchase Receipt</dt>
-          <dd class="text-sm font-medium text-gray-700"><a href="{% url 'inventory:purchase_receipt_detail' invoice.purchase_receipt_id %}" class="text-orange-500">#{{ invoice.purchase_receipt_id }}</a></dd>
-        </div>
-      {% endif %}
-      {% if invoice.remarks %}
-        <div class="sm:col-span-2">
-          <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Remarks</dt>
-          <dd class="text-sm font-medium text-gray-700">{{ invoice.remarks }}</dd>
-        </div>
-      {% endif %}
-    </dl>
+    {% endif %}
+  </dl>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+  <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="receipt-dollar" size="16" color="currentColor" stroke_width="2" %}</span></div>
+    <h3 class="text-base font-bold text-gray-900">Item Lines</h3>
+    <span class="text-xs text-gray-400 ml-1">from the linked purchase receipt</span>
   </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="receipt-dollar" size="16" color="currentColor" stroke_width="2" %}</span></div>
-      <h3 class="text-base font-bold text-gray-900">Item Lines</h3>
-      <span class="text-xs text-gray-400 ml-1">from the linked purchase receipt</span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for line in items %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ line.description|default:line.item.item_name }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.qty }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.rate }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ line.amount }}</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for line in items %}
-            <tr>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ line.description|default:line.item.item_name }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.qty }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ line.rate }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ line.amount }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No item lines — link a purchase receipt or add expense lines.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
-    <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="clipboard" size="16" color="currentColor" stroke_width="2" %}</span></div>
-      <h3 class="text-base font-bold text-gray-900">Expenses</h3>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+        {% empty %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No item lines — link a purchase receipt or add expense lines.</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for expense in expenses %}
-            <tr>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ expense.description }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ expense.amount }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No expense lines.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-
-  <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
-    <div class="px-6 py-5 border-b border-gray-100"><h3 class="text-base font-bold text-gray-900">GL Entries</h3></div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead class="bg-gray-50/50">
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+  <div class="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center"><span>{% hgi_stroke name="clipboard" size="16" color="currentColor" stroke_width="2" %}</span></div>
+    <h3 class="text-base font-bold text-gray-900">Expenses</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Description</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for expense in expenses %}
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
-            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
-            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fiscal Year</th>
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ expense.description }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono font-semibold text-gray-900">{{ expense.amount }}</td>
           </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          {% for gl in gl_entries %}
-            <tr>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ gl.account.name }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.debit }}</td>
-              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.credit }}</td>
-              <td class="px-6 py-4 text-sm text-gray-600">{{ gl.fiscal_year.name }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No GL entries posted yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        {% empty %}
+          <tr>
+            <td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No expense lines.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
+</div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
+  <div class="px-6 py-5 border-b border-gray-100">
+    <h3 class="text-base font-bold text-gray-900">GL Entries</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Fiscal Year</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for gl in gl_entries %}
+          <tr>
+            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ gl.account.name }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.debit }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ gl.credit }}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">{{ gl.fiscal_year.name }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-sm text-gray-500">No GL entries posted yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 </div>
 {% endblock %}

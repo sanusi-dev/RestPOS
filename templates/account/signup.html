@@ -12,12 +12,8 @@
       {% render_field form.username %}
       {% render_field form.password1 %}
       {% render_field form.password2 %}
-      <div class="relative overflow-hidden">
-        {% render_field form.phone_number_x %}
-      </div>
-      <button type="submit" class="w-full bg-orange-500 text-white font-bold py-3.5 rounded-xl hover:bg-orange-600 transition-colors shadow-lg">
-        Register
-      </button>
+      <div class="relative overflow-hidden">{% render_field form.phone_number_x %}</div>
+      <button type="submit" class="w-full bg-orange-500 text-white font-bold py-3.5 rounded-xl hover:bg-orange-600 transition-colors shadow-lg">Register</button>
     </form>
     <p class="mt-6 text-center text-sm text-gray-600">
       Already have an account? <a href="{% url 'account_login' %}" class="text-gray-900 font-bold hover:underline">Sign In</a>

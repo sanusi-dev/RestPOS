@@ -12,9 +12,7 @@
       {{ form.non_field_errors }}
       {% render_field form.login %}
       {% render_field form.password %}
-      <button type="submit" class="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl hover:bg-orange-500 transition-colors shadow-lg">
-        Sign In to RestPOS
-      </button>
+      <button type="submit" class="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl hover:bg-orange-500 transition-colors shadow-lg">Sign In to RestPOS</button>
     </form>
     <p class="mt-6 text-center text-sm text-gray-600">
       Don't have an account? <a href="{% url 'account_signup' %}" class="text-orange-500 font-bold hover:underline">Get Started</a>

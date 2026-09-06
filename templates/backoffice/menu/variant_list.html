@@ -1,9 +1,7 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Menu" root_url="menu:dashboard" current_label="Item Variants" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Item Variants</h1>
@@ -14,13 +12,10 @@
       New Variant
     </a>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
     <form method="get" class="flex items-center gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <label for="parent-filter" class="text-sm font-semibold text-gray-700">Filter by parent item:</label>
-      <select id="parent-filter" name="parent_item"
-              class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50"
-              onchange="this.form.submit()">
+      <select id="parent-filter" name="parent_item" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white/50" onchange="this.form.submit()">
         <option value="">All parent items</option>
         {% for item in parent_items %}
           <option value="{{ item.pk }}" {% if selected_parent == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.item_name }}</option>
@@ -28,7 +23,6 @@
       </select>
     </form>
   </div>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
@@ -46,17 +40,7 @@
               <td class="px-6 py-4 text-sm text-gray-500">{{ variant.variant_item.item_name }}</td>
               <td class="px-6 py-4 text-right space-x-4">
                 <a href="{% url 'menu:variant_update' variant.pk %}" class="text-sm font-semibold text-gray-400 hover:text-orange-500 transition-colors">Edit</a>
-                <button hx-post="{% url 'menu:variant_delete' variant.pk %}"
-                        hx-target="#app-content"
-                        hx-select="#app-content"
-                        hx-swap="outerHTML"
-                        data-confirm-message="Delete this variant?"
-                        data-confirm-icon="warning"
-                        data-confirm-color="#dc2626"
-                        data-confirm-btn="Yes, delete"
-                        class="backend-submit text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors" hx-indicator="this" hx-disabled-elt="this">
-                  Delete
-                </button>
+                <button hx-post="{% url 'menu:variant_delete' variant.pk %}" hx-target="#app-content" hx-select="#app-content" hx-swap="outerHTML" data-confirm-message="Delete this variant?" data-confirm-icon="warning" data-confirm-color="#dc2626" data-confirm-btn="Yes, delete" class="backend-submit text-sm font-semibold text-gray-400 hover:text-red-500 transition-colors" hx-indicator="this" hx-disabled-elt="this">Delete</button>
               </td>
             </tr>
           {% empty %}

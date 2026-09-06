@@ -1,16 +1,13 @@
 {% extends "web/app/app_base.html" %}
 {% block app %}
 <div class="w-full">
-
   {% include "backoffice/components/breadcrumbs.html" with root_label="Accounting" root_url="accounting:dashboard" section_label="GL Entries" section_url="accounting:gl_entry_list" current_label="Register" %}
-
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">GL Entries</h1>
       <p class="text-sm text-gray-500">Read-only posting ledger. Reversals mark originals cancelled and post negated rows.</p>
     </div>
   </div>
-
   <form method="get" class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6 flex flex-wrap items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <div class="flex flex-col gap-1.5 min-w-40">
       <label for="account" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Account</label>
@@ -36,7 +33,6 @@
     </label>
     <button type="submit" class="backend-submit px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all duration-300">Filter</button>
   </form>
-
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
@@ -64,7 +60,9 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No GL entries match the filter.</td></tr>
+            <tr>
+              <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No GL entries match the filter.</td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
