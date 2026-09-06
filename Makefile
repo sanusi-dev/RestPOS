@@ -68,6 +68,12 @@ ruff-lint:  ## Runs ruff linter on the codebase
 
 ruff: ruff-format ruff-lint ## Formatting and linting using Ruff
 
+djlint-format: ## Runs djlint formatter on HTML templates
+	@uv run djlint --reformat templates
+
+djlint-check: ## Check HTML templates with djlint
+	@uv run djlint templates
+
 type-check: ## Run Python type checking
 	@uv run mypy .
 

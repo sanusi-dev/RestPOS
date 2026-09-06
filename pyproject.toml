@@ -87,8 +87,24 @@ dev = [
     "mypy>=1.18.2",
     "django-stubs>=5.0.0",
     "types-python-dateutil>=2.9.0.20251108",
+    "djlint>=1.45.2",
 ]
 prod = [
     "gunicorn",
     "psycopg[c]",
 ]
+
+[tool.djlint]
+indent = 2
+profile = "django"
+extension = "html"
+format-js = true
+format-css = true
+# Repo keeps {% block %} and {% partialdef %} contents at the same column as
+# the tag; skip indenting their children.
+ignore_blocks = "block, partialdef"
+# Repo keeps long HTMX/Tailwind attribute strings on one line. Set the
+# attribute/length thresholds high so djlint doesn't wrap them; it still
+# expands structural elements (table headers, inline dt/dd) cleanly.
+max_line_length = 100000
+max_attribute_length = 100000
