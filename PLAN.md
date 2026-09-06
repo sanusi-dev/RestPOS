@@ -17,13 +17,13 @@ conventions are in `AGENTS.md`.
 | App | Responsibility | FEATURES.md sections | State |
 |---|---|---|---|
 | `settings` | Restaurant singleton, production units, staff roles | A1 | built |
-| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3 | built |
+| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #68, E #69 | built; remaining §4.10 UOM conversion, §4.11 recipes |
 | `menu` | Menu definition, menu items, variants, add-ons | A2 | built |
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
 | `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, supplier payables | A8, A9 | built |
-| `reports` | Daily P&L, sales reports, trial balance | A10, E #63 | built (Daily P&L); sales reports planned |
+| `reports` | Daily P&L, sales reports, trial balance | A10, E #63, E #69 | built (Daily P&L); sales reports planned; food AvT/COGS in §4.11 |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
 | `coupons` | Coupon codes, pricing rules, cashier discount | F #66 | deferred |
@@ -33,22 +33,24 @@ conventions are in `AGENTS.md`.
 `orders` (orders stamp the active shift and reference payment modes); `orders` is the central
 app built on all of the above; `accounting` then layers GL posting on orders, payments,
 inventory, and settings; `reports` consumes everything; `printing` is a leaf built last.
-Deferred apps (customers, coupons) are picked up only after the core phases complete. Each
-phase completes before the next starts.
+§4.10 (UOM conversion) is a Phase 2 rework and must land before §4.11 (food recipes).
+§4.11 is independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
+after the core phases complete. Each phase completes before the next starts.
 
 ## 3. Build Sequence
 
 | Phase | Apps involved | Features covered | Completed work | Remaining work | Detailed plan status | Progress status |
 |---|---|---|---|---|---|---|
 | 1 | settings | A1 | Restaurant singleton (company, invoice prefix, warehouses, draft cap, history toggle), production units with printer config, staff role assignment | — | n/a | Completed |
-| 2 | inventory | A3, A9 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations) | UOM conversion rework — purchase-unit vs stock-unit (§4.10) | §4.10 | Completed / Planned rework |
+| 2 | inventory | A3, A9, E #68 | Item master with independent flags, groups, warehouses, immutable PWAC stock ledger, receipts/transfers/reconciliations, purchase receipts (GRNI accrual), bins, stock reports, supplier payables (supplier master, receipt-first invoices, payments, allocations) | UOM conversion rework — purchase-unit vs stock-unit (§4.10) | §4.10 | Completed / Planned rework |
 | 3 | menu | A2 | Menu, menu items, specials, disable, images, variants, add-ons, seed command | — | n/a | Completed |
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
 | 6 | accounting | A8 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
-| 7 | reports | A10 | Daily P&L document with amendments and departmental split | — | n/a | Completed |
+| 7 | reports | A10 | Daily P&L document with amendments and departmental split | Food COGS / AvT statement changes land in §4.11 | n/a | Completed |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
+| 10 | inventory, reports | E #69 | — | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L, consumption GL | §4.11 | Planned |
 | — | customers | F #65 | Free-text customer name on orders | Customer master, groups, credit limits, POS search/create | deferred by design | Deferred |
 | — | coupons | F #66 | — | Coupon codes, pricing rules, cashier discount | deferred by design | Deferred |
 
@@ -670,52 +672,54 @@ override. Electricity optional (blank = ₦0).
 
 ### 4.10 Item & Receipt UOM Conversion — purchase unit vs stock unit (Phase 2 rework)
 
-**Status:** planned — not yet implemented.
+**Status:** planned — not yet implemented. FEATURES.md E #68.
 
-**Problem:** `Item.stock_uom` (inventory/models.py:94) currently doubles as the purchase
-unit, so an item bought by the Crate is priced, stocked, and sold by the Crate. RestPOS
-needs the stock/sell unit (Piece, Bottle, kg) to differ from the purchase unit (Crate,
-Carton, Bag): drinks sell per bottle, ingredients are counted per kg, while purchase
-paperwork stays in the supplier's bulk unit. POS food dishes are virtual and unaffected.
+**Depends on:** nothing. Must land before §4.11.
+
+**Scope:** purchase paperwork may use a bulk unit (Crate, Bag). Bins, SLE, transfers,
+reconciliations, POS, and (later) recipes stay in `Item.stock_uom`. Conversion happens
+once, on purchase-receipt submit. Stock Entry `MATERIAL_RECEIPT` (market purchase) stays
+in `stock_uom` with no conversion.
 
 **Decisions:**
 
-- **D1 — Base unit convention.** `Item.stock_uom` is the sellable/countable unit (Piece,
-  Bottle, kg, litre, plate). Bins, ledger entries, stock reconciliations, and POS sales are
-  all denominated in it. It is never a bulk purchase unit.
-- **D2 — Conversion table (editable rows).** `ItemUOMConversion` holds one row per
-  alternate bulk unit, each with `conversion_factor` = how many stock UOMs make one of that
-  unit ("1 Crate = 24 Pieces"). `unique_together (item, uom)`; clean() enforces
-  `uom != item.stock_uom`, `factor > 0`, and that the parent item is stock + purchase
-  enabled. Rows are editable; submitted receipts are protected by the per-line snapshot
-  (D3). Changing `Item.stock_uom` while conversion rows exist is rejected by `Item.clean()`
-  (remove them first) so no factor is orphaned. No row for the stock UOM — it is factor 1
-  by definition.
-- **D3 — Per-line factor snapshot.** `PurchaseReceiptItem` gains `uom` (FK UOM, defaults to
-  the item's `stock_uom`) and `conversion_factor` (Decimal, default 1). The factor is
-  re-derived from the item's current conversion table in `PurchaseReceiptItem.save()`
-  whenever the line is saved; a submitted line is immutable, so its saved factor is frozen
-  for the life of the receipt. `received_qty` / `rate` / `amount` keep their as-bought
-  meaning (the supplier invoice says "5 Crates @ ₦12,000"), because the commercial record is
-  unit-agnostic money.
-- **D4 — Convert once at the receipt boundary.** On submit the ledger entry is
-  `quantity = received_qty × conversion_factor`, `unit_rate = rate ÷ conversion_factor`.
-  The GL entry is unchanged: `amount = received_qty × rate`, which is money and needs no
-  conversion. WAC then lives per stock UOM from that point forward.
-- **D5 — `last_purchase_rate` stored per stock UOM.** On submit it is set to
-  `line.rate ÷ line.conversion_factor` (per-piece / per-kg), because a Crate may be bought
-  at ₦12,000 but the per-bottle figure must feed `MenuItem` rate defaulting
-  (menu/models.py:68) and stay consistent with the ledger's per-stock-unit WAC.
-  `_revert_last_purchase_rates` must also divide — it reads `prior.rate` (an as-bought rate)
-  and so restores `prior.rate ÷ prior.conversion_factor` using the prior line's own snapshot
-  factor, not the current line's.
-- **D6 — Sales side unchanged.** The POS sells in `stock_uom` by definition; `order_item.qty`
-  maps 1:1 onto the bin (`_locked_drink_stock`), so no conversion and no `sales_uom` is
-  needed. This is what fixes the crate-at-POS bug.
-- **D7 — Seed rewrite.** Rewrite `seed_menu_catalog` to build realistic small test data under
-  the base-unit convention: bulk-purchased items (rice, palm oil, drinks) get a stock UOM in
-  the countable unit plus a conversion row for the bulk unit; drinks store `last_purchase_rate`
-  per bottle; virtual dishes stay as-is.
+- **D1 — Base unit.** `Item.stock_uom` is the countable unit (Bottle, Kg, Litre, Each,
+  Plate). Receiving in `stock_uom` remains valid (factor 1).
+- **D2 — Conversion table.** `ItemUOMConversion`: one bulk unit per item.
+  `conversion_factor` = stock UOMs per one of that unit (`1 Crate = 24 Bottle`).
+  Direction is always bulk → stock. No row for `stock_uom`.
+- **D3 — Snapshot on the receipt line.** `PurchaseReceiptItem.uom` +
+  `conversion_factor`. `received_qty`, `rate`, and `amount` stay as-bought
+  (`5 Crate @ ₦12,000`). Factor is re-derived on every draft `save()` from the live
+  table; submitted lines are already immutable, so the snapshot is frozen.
+- **D4 — Convert at SLE, keep money on GL.** Submit posts the ledger in stock UOM.
+  GRNI/SIH GL stays `amount = received_qty × rate` (as-bought money). WAC lives per
+  stock UOM after that.
+- **D5 — Value-consistent inbound.** `qty × (rate ÷ factor)` at 2 dp does not
+  always equal as-bought money. Compute:
+
+  ```text
+  stock_qty = (received_qty × conversion_factor).quantize(0.01)
+  amount    = (received_qty × rate).quantize(0.01)   # existing line.amount
+  unit_rate = (amount ÷ stock_qty).quantize(0.01)    # stored on the SLE
+  ```
+
+  Reject the line if `stock_qty <= 0`. SLE `quantity = stock_qty`. Inbound
+  `stock_value_change` and the WAC blend use **`amount`**, not `stock_qty ×
+  unit_rate`. Add an optional inbound-value argument on
+  `StockLedgerEntry._create_entry_locked` (purchase-receipt submit is the only
+  caller that passes it). GL stays `sum(line.amount)`.
+- **D6 — `last_purchase_rate` is per stock UOM.** Submit sets it to that same
+  `unit_rate`. Cancel restores the prior submitted receipt line via the same formula
+  on that prior line's snapshot (`amount ÷ stock_qty`); if none, `None`. Stock-entry
+  market-purchase revert is unchanged (`basic_rate` is already per stock UOM).
+- **D7 — Everywhere else is already stock UOM.** Transfers, reconciliations, POS
+  drink reservation/deduction, and supplier-invoice stock lines do not convert.
+  Invoice copy stays `qty = received_qty`, `rate = rate` (as-bought); GRNI on the
+  invoice still matches the receipt GL.
+- **D8 — No sales UOM.** POS `OrderItem.qty` maps 1:1 onto the Bar bin.
+- **D9 — No transactional wipe.** Existing receipt lines backfill to `uom =
+  item.stock_uom`, `conversion_factor = 1`. Dummy bins/SLEs stay valid.
 
 **Models:**
 
@@ -723,75 +727,240 @@ paperwork stays in the supplier's bulk unit. POS food dishes are virtual and una
 
 | Field | Type | Notes |
 |---|---|---|
-| `item` | FK Item, CASCADE, related_name="uom_conversions" | parent |
-| `uom` | FK UOM, PROTECT | the alternate bulk unit (Crate, Carton, Bag) |
-| `conversion_factor` | Decimal(10,4) | `> 0`; stock UOMs per one of `uom` |
+| `item` | FK Item, CASCADE, `related_name="uom_conversions"` | parent |
+| `uom` | FK UOM, PROTECT | bulk unit |
+| `conversion_factor` | Decimal(10,4) | `> 0`; CheckConstraint |
 
-`Meta.unique_together = ("item", "uom")`. Direction is always "1{uom} = {factor} stock_uom".
+`unique_together = ("item", "uom")`.
+
+`clean()`: `uom != item.stock_uom`; factor `> 0`; parent is enabled, `is_stock_item`
+and `is_purchase_item`, not a template. Virtual sellable food cannot carry rows.
 
 **PurchaseReceiptItem** (additions)
 
 | Field | Type | Notes |
 |---|---|---|
-| `uom` | FK UOM, PROTECT | default = item's `stock_uom`; must be the stock UOM or a conversion row |
-| `conversion_factor` | Decimal(10,4), default 1 | snapshotted in `save()`; read-only in the form |
+| `uom` | FK UOM, PROTECT | default `item.stock_uom`; stock UOM or a conversion row |
+| `conversion_factor` | Decimal(10,4), default 1 | derived in `save()`; not a form field |
 
-`save()` derives `conversion_factor` from `self.item` + `self.uom` (1 if `uom == stock_uom`,
-else the matching conversion row, else raise `ValidationError`); `amount` stays
-`received_qty × rate`.
+`save()` (draft only, existing guard): `conversion_factor = 1` if `uom == stock_uom`,
+else the matching row, else `ValidationError`. `amount` stays `received_qty × rate`.
+Helper `stock_qty()` / `stock_unit_rate()` implement D5 and are used by submit and
+`_revert_last_purchase_rates`.
 
-**Item** — no new field; only the `clean()` guard that `stock_uom` cannot change while
-`uom_conversions` exist (D2).
+**Item:** no new field. `clean()` rejects changing `stock_uom` while conversion rows
+exist, and rejects turning off `is_stock_item` / `is_purchase_item` while they exist.
+Helper `uom_factor(uom) -> Decimal`.
 
-**Posting rules:**
+**Posting:**
 
-- Receipt submit: SLE `quantity = received_qty × conversion_factor`, `unit_rate = rate ÷
-  conversion_factor`. WAC blend unchanged. GL `Debit SIH / Credit GRNI @ amount` unchanged.
-- Receipt cancellation: reversal at current WAC in stock UOM, as today; `_revert_last_purchase_rates`
-  stores `prior rate` already in per-stock-unit terms.
-- Transfers, reconciliations, sales: all already in `stock_uom`; no conversion anywhere.
+- `submit_purchase_receipt`: SLE `quantity=stock_qty()`, `unit_rate=stock_unit_rate()`,
+  inbound value = `line.amount`; `last_purchase_rate = unit_rate`; GL unchanged at
+  `sum(line.amount)`.
+- Cancel: reversal SLEs already use stock-UOM quantities; `_revert_last_purchase_rates`
+  uses D6.
+- `submit_stock_entry` MATERIAL_RECEIPT: unchanged (qty and `basic_rate` in stock UOM).
 
 **Frontend:**
 
-- **Item form** (`item_form.html`): a "UOM conversions" inline formset below the
-  `stock_uom` field (`ItemUOMConversionFormSet = inlineformset_factory(Item, ItemUOMConversion, ...)`),
-  rendered as a table of (Unit, Factor), with the same HTMX add/remove-row partial pattern
-  as `purchase_receipt_form.html`.
-- **Purchase receipt line form** (`PurchaseReceiptItemForm`): add a `uom` dropdown filtered
-  to the item's stock UOM + its conversion rows, defaulting to `stock_uom`. `conversion_factor`
-  is not a form field (derived). A read-only "stock qty" preview shows `received_qty × factor`
-  in `stock_uom` (e.g. "5 Crate = 120 Bottle"), updated via an `hx-get` partial when the
-  item or uom changes. `PurchaseReceiptItemForm.clean()` validates the chosen `uom` against
-  the item's table.
+- Item form: "UOM conversions" inline formset under `stock_uom`
+  (`ItemUOMConversionFormSet`), table of (Unit, Factor). HTMX add/remove:
+  `inventory:item_uom_add` / `inventory:item_uom_remove`, same pattern as purchase
+  receipt lines. Hide the formset unless the item is stock + purchase (server still
+  validates).
+- Purchase receipt line: `uom` dropdown = stock UOM + that item's conversion rows,
+  default stock UOM. Changing item `hx-get` `inventory:purchase_receipt_item_meta`
+  replaces the uom widget. Changing qty/uom `hx-get`
+  `inventory:purchase_receipt_stock_qty_preview` shows e.g. `5 Crate = 120 Bottle`.
+  `PurchaseReceiptItemForm.clean()` rejects a uom not on that table.
 
-**Seeds:**
+**Seed (`seed_menu_catalog`):**
 
-- UOMs: add `Piece`, `Bottle`, `Crate`, `Carton`, `Bag`, `kg`, `Litre` (whichever the seed
-  needs).
-- Drinks (Coke etc.): `stock_uom = Bottle`, conversion row `1 Crate = 24 Bottle`,
+- Reuse UOMs already seeded by `InventoryConfig` (`Kg`, `Litre`, `Bottle`, `Bag`,
+  `Crate`, `Carton`, `Each`, …). Do not add a second `kg`.
+- Stop seeding `Soft Drink Carton (24)` and `Beer Crate (Star)` as separate items.
+- Sellable drinks: `stock_uom = Bottle`, conversion `1 Crate = 24 Bottle`,
   `last_purchase_rate` per bottle.
-- Raw ingredients (rice): `stock_uom = Kg`, conversion row `1 Bag = 50 Kg`.
-- Virtual dishes (Jollof etc.): unchanged, `stock_uom = Plate`.
-- Command stays idempotent and clears/recreates the seeded Items so re-running after a wipe
-  yields the new convention.
+- Ingredients: e.g. Raw Rice `stock_uom = Kg`, `1 Bag = 50 Kg`, `last_purchase_rate`
+  per kg; oils stay `Litre` with an optional jerrycan/tin conversion.
+- Virtual dishes unchanged (`Plate` / `Each` / `Pack`).
+- Idempotent `get_or_create` on conversion rows; `--force` updates factor and
+  `last_purchase_rate`. Does not delete existing dummy carton items if present.
 
-**Migration & rollout:**
+**Migrations:**
 
-- `makemigrations` for `ItemUOMConversion` (CreateModel) and the two `PurchaseReceiptItem`
-  additions (AddField). No hand-written schema.
-- Wipe inventory transactional + receipt data (PurchaseReceipt, StockLedgerEntry, Bin,
-  SupplierInvoice/Payment as needed) and reseed per D7 — existing data is dummy; the seed is
-  the canonical test dataset.
+1. `makemigrations`: `CreateModel ItemUOMConversion`; `AddField` `conversion_factor`
+   (default 1) and `uom` (nullable FK).
+2. Separate `RunPython`: set `uom_id = item.stock_uom_id` on every
+   `PurchaseReceiptItem`.
+3. `makemigrations`: `AlterField uom` null=False.
+
+No SLE/Bin wipe.
 
 **Tests:**
 
-- Model: `ItemUOMConversion.clean()` (uom != stock_uom, factor > 0, stock+purchase parent);
-  unique (item, uom); `PurchaseReceiptItem.save()` factor derivation (stock_uom → 1,
-  conversion row → its factor, unknown uom → error).
-- Service: `submit_purchase_receipt` posts `qty×factor` / `rate÷factor` into the SLE and
-  blends WAC correctly; `last_purchase_rate` stored per stock UOM; cancellation reverts to
-  the prior per-stock-unit rate.
-- Form: uom dropdown filtering; factor auto-fill; stock-qty preview value; clean() rejects an
-  out-of-table uom.
-- Seed: command is idempotent and produces the base-unit convention (drinks per bottle with a
-  crate conversion, rice per kg with a bag conversion, virtual dishes per plate).
+- Conversion `clean()` / unique; factor derivation (stock UOM → 1, row → factor,
+  unknown → error); stock+purchase parent; virtual food rejected.
+- `Item.clean()` blocks `stock_uom` change and flag-off while rows exist.
+- Submit: 5 Crate × 24 @ ₦12,000 → SLE qty 120, `stock_value_change` ₦60,000,
+  GRNI ₦60,000; WAC blends on bottles using that ₦60,000; `last_purchase_rate`
+  per bottle. A case where `rate/factor` is a repeating decimal still has
+  `stock_value_change == line.amount`.
+- Cancel restores prior per-stock-unit rate using the prior line snapshot.
+- Invoice stock lines still copy as-bought qty/rate; GRNI matches.
+- Stock Entry market receipt unchanged.
+- POS drink add/settle still 1 qty = 1 bottle.
+- Form: uom filter, preview, out-of-table uom rejected.
+- Seed: drinks per bottle with crate row; rice per kg with bag row; no new carton
+  SKU; virtual dishes per plate.
+
+### 4.11 Food recipes and actual-vs-theoretical usage (Phase 10)
+
+**Status:** planned — not yet implemented. FEATURES.md E #69.
+
+**Depends on:** §4.10 (recipes and counts are in `stock_uom`; `last_purchase_rate` is
+per stock UOM). Independent of Phases 8–9.
+
+**Scope:** keep the current food lifecycle (ingredient stock, virtual dishes, POS
+does not deduct food). Add a recipe card, compare theoretical usage (recipe × sales)
+to actual kitchen usage (consumption + waste counts), put actual usage in Daily P&L
+food COGS and on the GL.
+
+**Out of scope:** finished-plate stock, production/work orders, recipe explosion
+into the ledger, POS food availability, nested prep recipes, yield field, UOM
+conversion on recipe lines, transfer acknowledgement, staff-meal documents,
+mandatory recipes to sell, piece-tracked proteins as drink-like SKUs.
+
+**Decisions:**
+
+- **D1 — Recipe is master data**, not a financial document. Editable while active.
+  No Draft/Submit/Cancel.
+- **D2 — One active recipe per sellable FOOD item.** Variants and sellable food
+  add-ons each have their own card. Drinks have none. A dish may be sold with no
+  recipe; it is listed as unmapped and understates theoretical cost. Creating a
+  second active recipe for the same item is rejected until the current one is
+  deactivated.
+- **D3 — Qty is always `stock_uom`.** `RecipeItem.qty` is in the ingredient's
+  `stock_uom`. The form shows that UOM and does not offer Bag/Crate. Bake yield
+  into the qty (1 kg raw rice → 8 plates ⇒ 0.125 kg per plate).
+- **D4 — Theoretical usage** from submitted FOOD `OrderItem` qty in the Daily P&L
+  business-day window (including negative return lines):
+  `ingredient_qty += line.qty / recipe.output_qty × recipe_item.qty`.
+- **D5 — Actual usage** from submitted Kitchen-warehouse SLEs whose voucher is a
+  `CONSUMPTION` or `WASTE_DAMAGE` reconciliation with `posting_date = business_date`.
+  `PHYSICAL_COUNT` and `CORRECTION` are excluded. Same calendar-date vs start-hour
+  mismatch as today.
+- **D6 — Same rate for naira.** Per ingredient: if actual SLEs exist, rate =
+  `sum(abs(qty)×unit_rate) / sum(abs(qty))`; else Kitchen bin WAC; else
+  `last_purchase_rate`; else 0 (flag on the report). Variance is a quantity story.
+- **D7 — Daily P&L.** FOOD COGS = actual usage (D5). Theoretical and variance are
+  memos. The old "Kitchen consumption" memo line is removed.
+
+  ```text
+  GP food    = food sales − actual food − food-tagged directs
+  GP drinks  = drinks sales − drink COGS − drinks-tagged directs
+  GP total   = net sales − (actual food + drink COGS) − all directs
+  Prime cost = actual food + drink COGS + employee   (memo)
+  ```
+
+  `DailyPnL.cogs` becomes **total** COGS (food actual + drinks). `cogs_drinks`
+  unchanged. `kitchen_consumption` keeps storing actual food usage. Add
+  `theoretical_food_cost` and `food_cost_variance` (+ percents).
+- **D8 — Consumption GL.** On `CONSUMPTION` submit, for each SLE: outbound →
+  Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse account; inbound
+  (count high) → reverse those legs. Missing accounts hard-fail. `WASTE_DAMAGE`
+  posting is unchanged. Cancel already mirrors GL rows for this voucher type.
+- **D9 — POS unchanged.** Food still does not reserve, deduct, or grey out.
+
+**Models (`apps.inventory`):**
+
+**Recipe**
+
+| Field | Type | Notes |
+|---|---|---|
+| `item` | FK Item, PROTECT, `related_name="recipes"` | sellable FOOD, not a template |
+| `output_qty` | Decimal(10,2), default 1 | `> 0`; portions this card produces |
+| `is_active` | bool, default True | |
+| `remarks` | text, blank | |
+
+`UniqueConstraint` on `item` where `is_active=True`.
+
+**RecipeItem**
+
+| Field | Type | Notes |
+|---|---|---|
+| `recipe` | FK Recipe, CASCADE, `related_name="items"` | |
+| `ingredient` | FK Item, PROTECT | non-sellable FOOD, stock + purchase, not template, not disabled |
+| `qty` | Decimal(10,4) | `> 0`; per `output_qty`, in ingredient `stock_uom` |
+
+`unique_together = ("recipe", "ingredient")`. Ingredient cannot be the parent item.
+
+**Item.clean() additions:** reject changing `stock_uom` while the item is a recipe
+parent or an ingredient; reject turning an ingredient into a sellable / non-stock
+item while `RecipeItem` rows exist.
+
+**Services:**
+
+- `inventory.services.recipe_plate_cost(recipe)` — display only: `sum(qty ×
+  current Kitchen WAC or last_purchase_rate) / output_qty`.
+- `inventory.services.compute_food_usage(business_date)` — single source for the
+  AvT report and Daily P&L. Returns theoretical-by-ingredient, actual-by-ingredient
+  (split consumption vs waste), variance, unmapped dishes, totals. Reports must
+  call this; do not reimplement the explosion in `apps.reports`.
+
+**Frontend:**
+
+- Inventory sidebar: **Recipes** (`/backoffice/inventory/recipes/`) — list +
+  formset CRUD, HTMX add/remove ingredient rows (`inventory:recipe_item_add` /
+  `recipe_item_remove`). Live plate-cost preview. Ingredient dropdown is FOOD
+  stock+purchase only.
+- Inventory sidebar: **Food usage** (`/backoffice/inventory/food-usage/`) — date
+  (default today). Columns: ingredient, theoretical qty, actual qty, variance qty,
+  rate, theoretical ₦, actual ₦, variance ₦. Expand to dishes that built
+  theoretical. Footer: food sales, theoretical %, actual %, variance points.
+  Unmapped dishes listed. Link from Daily P&L detail.
+- Item detail (sellable FOOD) and menu-item detail: link to the active recipe or
+  "Add recipe".
+- Consumption form help text: Waste/Damage = known loss, logged when it happens;
+  Consumption = end-of-day count of what is left.
+
+**Daily P&L (`apps.reports`):**
+
+Statement order: Gross sales → Round-off → Net sales → **Cost of goods sold**
+(FOOD = actual, DRINKS = drink WAC) → **Theoretical food cost** (memo) → **Food
+cost variance** (memo) → directs → GP → Prime cost (memo, D7) → indirects → NP.
+
+New line sections `THEORETICAL_FOOD_COST`, `FOOD_COST_VARIANCE`. Stop emitting
+`KITCHEN_CONSUMPTION` as a statement line; keep the enum for old rows.
+
+`DailyPnLConsumptionRow` gains `kind` `CONSUMPTION` | `WASTE`. New snapshot
+tables written on submit:
+
+- `DailyPnLTheoreticalRow` — ingredient_name, qty, rate, amount
+- `DailyPnLUnmappedRow` — item_name, qty, sales amount
+
+Submitted snapshots do not move when a recipe is later edited.
+
+**Seed:** after §4.10 item/UOM seed, `get_or_create` example recipes (Jollof Rice,
+Egusi Soup, Quarter Chicken) in ingredient `stock_uom`. Do not recreate items or
+conversion rows.
+
+**Tests:**
+
+- Recipe validation: parent/ingredient types, one active per item, drinks
+  rejected, qty/output_qty `> 0`, unique ingredient.
+- Explosion: 50 jollof × 0.20 kg = 10 kg; variant and add-on recipes independent;
+  returns net qty; inactive recipe ignored; unmapped listed.
+- AvT: theoretical vs consumption vs waste; rate follows actual SLE WAC; missing
+  recipe does not block sales.
+- P&L: FOOD COGS = actual; theoretical/variance memos; food GP subtracts actual;
+  `cogs` total includes food; prime cost includes food; submitted snapshot stable
+  after a later recipe edit.
+- GL: consumption outbound Dr expense / Cr kitchen; inbound reverses; cancel
+  reverses; waste path unchanged.
+- POS: food still does not reserve or deduct.
+- `Item.clean()` stock_uom / flag guards with recipe rows.
+
+**Docs (same task as implementation, not now):** `FEATURES.md` A3/A10/scope move
+from E #69 into current; `docs/workflows/inventory.md`, `daily-pnl.md`,
+`products-and-menu.md`, glossary.

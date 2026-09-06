@@ -18,7 +18,8 @@ Implementation status lives in `PLAN.md`.
   tracked per department per order line.
 - **Operational stock, not recipes.** No BOM or ingredient-level consumption. POS stock
   reservation and deduction apply to drinks only; food usage is counted through kitchen
-  consumption reconciliations.
+  consumption reconciliations. Recipe cards and actual-vs-theoretical food cost are
+  planned (E #69).
 - **Local network only.** Django runs on the cashier desktop; the back office is reachable from
   any device on the same WiFi. No internet dependency.
 
@@ -48,13 +49,13 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 11 | Item master | The product database. Each item records its name, group, unit (the sellable/countable base unit — Piece, Bottle, kg, plate), department (FOOD/DRINKS), image, and independent flags: sellable, stock-tracked, purchasable. Items bought in bulk carry a UOM conversion table (e.g. 1 Crate = 24 Bottles) so purchase paperwork uses the bulk unit while stock and sales use the base unit. Department or menu membership does not imply stock tracking or purchase eligibility. |
+| 11 | Item master | The product database. Each item records its name, group, unit (`stock_uom` — the unit used for bins, the ledger, counts, and POS), department (FOOD/DRINKS), image, and independent flags: sellable, stock-tracked, purchasable. Department or menu membership does not imply stock tracking or purchase eligibility. Bulk purchase units (Crate, Bag) are planned — E #68. |
 | 12 | Item groups | Flat product categories used for POS filtering and report grouping. |
 | 13 | Warehouses | Flat physical locations: the central Store, the Bar (the POS deduction warehouse), and the Kitchen. Meaning comes from configuration, not a role field. |
 | 14 | Stock ledger entries | Immutable signed records of every stock movement under Perpetual Weighted-Average Cost (PWAC): quantity (signed), unit rate (inbound: actual rate; outbound: current WAC), value change, and variance (cancellation WAC drift or sale-return). Bin holds the current WAC; ledger is append-only audit. Cancellation posts reversals via `reversal_of_sle`, never edits; posting date is informational, valuation always at current WAC. |
 | 15 | Stock entries | Manual movements: Material Receipt (into the Store, at actual rate — market purchase posts Dr SIH / Cr expense, no GRNI) and Material Transfer (Store → Kitchen or Bar) only. Transfers value at the source WAC and dest recalculates its WAC; cannot drive source stock negative. Cancellation reverses at dest current WAC, net zero. |
 | 16 | Stock reconciliation | The one-sided adjustment workflow for opening stock, physical counts, kitchen consumption, waste/damage, and corrections, valued at current WAC. Opening Stock uses the Opening Stock reason and requires an entered rate for positive adjustments; ordinary reconciliations use the operational reasons. Consumption adjustments are restricted to the Kitchen warehouse and FOOD items. Waste posts Dr wastage / Cr warehouse. |
-| 17 | Purchase receipts | Supplier goods received into the Store: posts Dr SIH (warehouse asset) / Cr GRNI at the line's as-bought unit rate, blending WAC in the item's base (stock) unit. Each line records the UOM it was bought in (base unit or a conversion row) and a factor; on submit the ledger stores `qty × factor` / `rate ÷ factor`. Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. Cancellation blocked if a submitted supplier invoice or allocated payment exists; allowed cancellation reverses at current WAC with drift to the inventory price variance account. |
+| 17 | Purchase receipts | Supplier goods received into the Store: posts Dr SIH (warehouse asset) / Cr GRNI at the line rate, blending WAC. Quantity and rate are in the item's `stock_uom` (1:1 with the ledger). Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. Cancellation blocked if a submitted supplier invoice or allocated payment exists; allowed cancellation reverses at current WAC with drift to the inventory price variance account. Bulk-unit receiving is planned — E #68. |
 | 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation (current WAC). Drives POS drink availability and reservations. |
 | 19 | Stock reports | A stock ledger report (movement audit trail) and a stock balance report (opening/received/issued/closing) in the back office. |
 
@@ -157,6 +158,8 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
+| 68 | UOM conversion | Purchase paperwork may use a bulk unit (Crate, Bag). `Item.stock_uom` stays the countable unit for bins, ledger, counts, and POS. A per-item conversion table and a snapshotted factor on each purchase-receipt line convert once at receipt submit so WAC lives per bottle/kg. Market-purchase stock entries stay in `stock_uom`. |
+| 69 | Food recipes & AvT | Recipe cards on sellable food (ingredients in `stock_uom`). POS still does not deduct food. Theoretical usage = recipe × sales; actual usage = kitchen consumption + waste counts. Daily P&L treats actual as FOOD COGS (theoretical and variance as memos) and consumption posts Dr expense / Cr kitchen. Requires #68. |
 
 ## F. Deferred
 
