@@ -622,7 +622,7 @@ def purchase_receipt_detail(request: HttpRequest, pk: int) -> HttpResponse:
     items = receipt.items.select_related("item", "item__stock_uom").all()
     voucher_no = str(pk)
     ledger_entries = StockLedgerEntry.objects.filter(
-        voucher_type="Purchase Receipt", voucher_no=voucher_no
+        voucher_type__in=["Purchase Receipt", "Purchase Receipt Cancellation"], voucher_no=voucher_no
     ).select_related("item", "warehouse")
     return render(
         request,

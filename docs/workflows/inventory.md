@@ -44,7 +44,7 @@ Supports `MATERIAL_RECEIPT` and `MATERIAL_TRANSFER`. Receipts land at `Restauran
 
 ### Purchase Receipt
 
-`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Each line records the UOM it was bought in (the item's base unit or one of its `uom_conversions`) with a snapshotted `conversion_factor`; on submit the ledger stores `received_qty × factor` at `rate ÷ factor`, so WAC and stock live in the base (sellable) unit. `Item.last_purchase_rate` is updated to the per-base-unit value (`rate ÷ factor`). The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own.
+`PurchaseReceiptForm.clean()` and `submit_purchase_receipt()` force the configured Store warehouse. Each line must be enabled, stock-tracked, purchase-enabled, non-template, positive quantity, and non-negative rate. Each line records the UOM it was bought in (the item's base unit or one of its `uom_conversions`) with a snapshotted `conversion_factor`; on submit the ledger stores `received_qty × factor` at `rate ÷ factor`, so WAC and stock live in the base (sellable) unit. `Item.last_purchase_rate` is updated to the per-base-unit value (`rate ÷ factor`). The `supplier_name` free-text field is required unless a `Supplier` master is selected, in which case the master's name is copied onto the receipt so it stays readable on its own. Purchase receipt detail history includes both the original movements and any cancellation reversals.
 
 ### Stock Reconciliation
 

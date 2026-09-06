@@ -698,7 +698,7 @@ class PurchaseReceiptItem(BaseModel):
     )
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="purchase_receipt_items")
     received_qty = models.DecimalField(max_digits=10, decimal_places=2)
-    rate = models.DecimalField(max_digits=10, decimal_places=2)
+    rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
 
     def __str__(self):

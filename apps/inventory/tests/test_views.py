@@ -390,6 +390,23 @@ class TestPurchaseReceiptViews(InventoryViewTestBase):
         receipt.refresh_from_db()
         self.assertEqual(receipt.status, "DRAFT")
 
+    def test_purchase_receipt_detail_includes_cancellation_history_and_confirmations(self):
+        from apps.inventory.models import PurchaseReceiptItem
+
+        receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.warehouse)
+        PurchaseReceiptItem.objects.create(purchase_receipt=receipt, item=self.item, received_qty=2, rate=100)
+        submit_purchase_receipt(receipt)
+        submitted_response = self.client.get(reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+        self.assertContains(submitted_response, 'data-confirm-title="Cancel this purchase receipt?"')
+
+        self.client.post(reverse("inventory:purchase_receipt_cancel", kwargs={"pk": receipt.pk}))
+        response = self.client.get(reverse("inventory:purchase_receipt_detail", kwargs={"pk": receipt.pk}))
+        self.assertContains(response, "Purchase Receipt Cancellation")
+
+        draft_receipt = PurchaseReceipt.objects.create(supplier_name="Draft Supplier", warehouse=self.warehouse)
+        draft_response = self.client.get(reverse("inventory:purchase_receipt_detail", kwargs={"pk": draft_receipt.pk}))
+        self.assertContains(draft_response, 'data-confirm-title="Submit this purchase receipt?"')
+
     def test_purchase_receipt_cancel_post(self):
         receipt = PurchaseReceipt.objects.create(
             supplier_name="ABC Suppliers",

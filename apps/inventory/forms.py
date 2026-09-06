@@ -251,6 +251,7 @@ class PurchaseReceiptItemForm(InventoryModelForm):
             is_stock_item=True,
             is_purchase_item=True,
         )
+        self.fields["rate"].initial = None
 
 
 StockEntryDetailFormSet = inlineformset_factory(

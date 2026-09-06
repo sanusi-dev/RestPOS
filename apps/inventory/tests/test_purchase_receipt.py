@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from apps.inventory.forms import PurchaseReceiptItemForm
 from apps.inventory.models import (
     UOM,
     Bin,
@@ -44,6 +45,10 @@ class PurchaseReceiptTest(TestCase):
             is_stock_item=True,
             is_purchase_item=True,
         )
+
+    def test_blank_rate_stays_empty_on_new_line(self):
+        form = PurchaseReceiptItemForm()
+        self.assertIsNone(form.fields["rate"].initial)
 
     def test_submit_forces_configured_store(self):
         receipt = PurchaseReceipt.objects.create(supplier_name="Supplier", warehouse=self.store)
