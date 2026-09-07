@@ -56,7 +56,7 @@ export default defineConfig({
     // Ignore large directories to avoid exhausting system-wide inotify watchers limit
     // when running multiple Vite instances in parallel (e.g., in multiple git worktrees)
     watch: {
-      ignored: ['**/.venv/**', '**/node_modules/**', '**/.git/**'],
+      ignored: ['**/.venv/**', '**/node_modules/**', '**/.git/**', '**/references/**', '**/static/**', '**/media/**', '**/.ruff_cache/**', '**/.mypy_cache/**'],
     },
   },
 });
