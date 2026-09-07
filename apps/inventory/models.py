@@ -721,7 +721,7 @@ class PurchaseReceipt(BaseModel):
         ordering = ["-posting_date", "-created_at"]
 
     def __str__(self):
-        return f"PR - {self.supplier_name} - {self.posting_date}"
+        return f"#{self.id} - {self.supplier_name} - {self.posting_date}"
 
     def save(self, *args, **kwargs):
         if self.pk:
