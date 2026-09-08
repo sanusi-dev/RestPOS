@@ -19,6 +19,7 @@ from .forms import (
     PurchaseReceiptForm,
     PurchaseReceiptItemForm,
     PurchaseReceiptItemFormSet,
+    StockEntryDetailForm,
     StockEntryDetailFormSet,
     StockEntryForm,
     StockReconciliationForm,
@@ -34,6 +35,7 @@ from .models import (
     PurchaseReceipt,
     PurchaseReceiptItem,
     StockEntry,
+    StockEntryDetail,
     StockLedgerEntry,
     StockReconciliation,
     Warehouse,
@@ -431,10 +433,68 @@ def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
     )
 
 
+def _entry_line_params(request: HttpRequest):
+    """Pull the bound prefix and entry-UOM params from an HTMX line request."""
+    data = request.GET or request.POST
+    prefix = None
+    for key in data:
+        suffix = key.rsplit("-", 1)[-1]
+        if suffix in {"item", "uom", "qty"}:
+            prefix = key[: -len(suffix) - 1]
+            break
+    item_id = data.get(f"{prefix}-item") if prefix else data.get("item")
+    uom_id = data.get(f"{prefix}-uom") if prefix else data.get("uom")
+    qty = data.get(f"{prefix}-qty") if prefix else data.get("qty")
+    return prefix, item_id, uom_id, qty
+
+
+@backoffice_required
+@require_GET
+def stock_entry_item_meta(request: HttpRequest) -> HttpResponse:
+    prefix, item_id, _uom_id, qty_raw = _entry_line_params(request)
+    item = Item.objects.filter(pk=item_id).select_related("stock_uom").first() if item_id else None
+    purpose = request.GET.get("purpose") or "MATERIAL_RECEIPT"
+    instance = StockEntryDetail(item=item, uom=item.stock_uom if item else None)
+    instance.stock_entry = StockEntry(purpose=purpose)
+    form = StockEntryDetailForm(instance=instance, prefix=prefix)
+    qty = None
+    if qty_raw:
+        try:
+            qty = Decimal(str(qty_raw))
+        except InvalidOperation:
+            qty = None
+    preview = _stock_qty_preview_text(item, item.stock_uom if item else None, qty)
+    return render(
+        request,
+        "backoffice/inventory/stock_entry_form.html#uom_widget_partial",
+        {"uom_field": form["uom"], "prefix": prefix or "", "preview": preview},
+    )
+
+
+@backoffice_required
+@require_GET
+def stock_entry_stock_qty_preview(request: HttpRequest) -> HttpResponse:
+    prefix, item_id, uom_id, qty_raw = _entry_line_params(request)
+    item = Item.objects.filter(pk=item_id).select_related("stock_uom").first() if item_id else None
+    uom = UOM.objects.filter(pk=uom_id).first() if uom_id else None
+    qty = None
+    if qty_raw:
+        try:
+            qty = Decimal(str(qty_raw))
+        except InvalidOperation:
+            qty = None
+    preview = _stock_qty_preview_text(item, uom, qty)
+    return render(
+        request,
+        "backoffice/inventory/stock_entry_form.html#stock_qty_preview_partial",
+        {"prefix": prefix or "", "preview": preview},
+    )
+
+
 @backoffice_required
 def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(StockEntry.objects.select_related("mode_of_payment"), pk=pk)
-    items = entry.items.select_related("item", "source_warehouse", "target_warehouse").all()
+    items = entry.items.select_related("item", "source_warehouse", "target_warehouse", "uom").all()
     voucher_no = str(entry.pk)
     ledger_entries = StockEntry.stock_ledger_entries_for_voucher(voucher_no)
     return render(

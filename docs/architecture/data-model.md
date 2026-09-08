@@ -67,7 +67,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 - `Bin`: current actual quantity, reserved quantity, valuation rate, and stock value for one item/warehouse pair.
 - `StockLedgerEntry`: signed PWAC movement (`quantity`, `unit_rate`, `stock_value_change`). The voucher type/number/detail fields link it back to source documents.
-- `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer. `StockEntry.mode_of_payment` records the funding account ("Paid from") for market receipts.
+- `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer. Receipt lines record the `uom` bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`; submit posts `qty × factor` and blends WAC on the as-bought `amount`, mirroring `PurchaseReceiptItem`. Transfer lines stay in the stock unit. `StockEntry.mode_of_payment` records the funding account ("Paid from") for market receipts.
 - `StockReconciliation` and `StockReconciliationItem`: counted quantity adjustment with purpose/reason and warehouse; Opening Stock uses the `OPENING_STOCK` reason while ordinary reconciliations use operational reasons.
 - `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`. On submit the ledger quantity is `received_qty × factor` and inbound value is the as-bought `amount`; WAC blends on that amount. `last_purchase_rate` is per stock UOM (`amount ÷ stock_qty`).
 

@@ -679,8 +679,9 @@ override. Electricity optional (blank = ₦0).
 
 **Scope:** purchase paperwork may use a bulk unit (Crate, Bag). Bins, SLE, transfers,
 reconciliations, POS, and (later) recipes stay in `Item.stock_uom`. Conversion happens
-once, on purchase-receipt submit. Stock Entry `MATERIAL_RECEIPT` (market purchase) stays
-in `stock_uom` with no conversion.
+once, on purchase-receipt submit. Stock Entry `MATERIAL_RECEIPT` (market purchase) is
+now treated the same: receipt lines carry the as-bought unit and convert on submit
+(amended post-retirement — see FEATURES.md #15/#17).
 
 **Decisions:**
 
@@ -713,7 +714,8 @@ in `stock_uom` with no conversion.
 - **D6 — `last_purchase_rate` is per stock UOM.** Submit sets it to that same
   `unit_rate`. Cancel restores the prior submitted receipt line via the same formula
   on that prior line's snapshot (`amount ÷ stock_qty`); if none, `None`. Stock-entry
-  market-purchase revert is unchanged (`basic_rate` is already per stock UOM).
+  market-purchase submit and revert use the same per-stock-UOM formula after the
+  amendment.
 - **D7 — Everywhere else is already stock UOM.** Transfers, reconciliations, POS
   drink reservation/deduction, and supplier-invoice stock lines do not convert.
   Invoice copy stays `qty = received_qty`, `rate = rate` (as-bought); GRNI on the
@@ -760,7 +762,8 @@ Helper `uom_factor(uom) -> Decimal`.
   `sum(line.amount)`.
 - Cancel: reversal SLEs already use stock-UOM quantities; `_revert_last_purchase_rates`
   uses D6.
-- `submit_stock_entry` MATERIAL_RECEIPT: unchanged (qty and `basic_rate` in stock UOM).
+- `submit_stock_entry` MATERIAL_RECEIPT: same as-bought conversion as purchase
+  receipts (D4/D5) after the amendment.
 
 **Frontend:**
 
@@ -809,7 +812,8 @@ No SLE/Bin wipe.
   `stock_value_change == line.amount`.
 - Cancel restores prior per-stock-unit rate using the prior line snapshot.
 - Invoice stock lines still copy as-bought qty/rate; GRNI matches.
-- Stock Entry market receipt unchanged.
+- Stock Entry market receipt converts identically to a purchase receipt (same
+  snapshot, SLE qty, as-bought money, WAC blend, and revert).
 - POS drink add/settle still 1 qty = 1 bottle.
 - Form: uom filter, preview, out-of-table uom rejected.
 - Seed: drinks per bottle with crate row; rice per kg with bag row; no new carton

@@ -540,14 +540,68 @@ class StockEntryDetail(BaseModel):
         related_name="incoming_details",
     )
     qty = models.DecimalField(max_digits=10, decimal_places=2)
+    uom = models.ForeignKey(
+        UOM,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="Unit the quantity is entered in — the stock unit or a bulk unit from the item's conversion table.",
+    )
+    conversion_factor = models.DecimalField(max_digits=10, decimal_places=4, default=Decimal("1"))
     basic_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
 
     def __str__(self):
         return f"{self.item.item_code} x{self.qty}"
 
+    def stock_qty(self):
+        """Entered quantity converted to the item's stock UOM (2 dp)."""
+        if self.stock_entry_id and self.stock_entry.purpose == "MATERIAL_TRANSFER":
+            return self.qty
+        qty = (Decimal(str(self.qty)) * Decimal(str(self.conversion_factor))).quantize(Decimal("0.01"))
+        if qty <= 0:
+            raise ValidationError(f"Stock quantity for {self.item.item_name} must be greater than zero.")
+        return qty
+
+    def stock_unit_rate(self):
+        """As-bought amount per stock UOM (2 dp)."""
+        qty = self.stock_qty()
+        amount = self.amount if self.amount else (Decimal(str(self.qty)) * Decimal(str(self.basic_rate)))
+        amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        return (amount / qty).quantize(Decimal("0.01"))
+
+    def _derive_conversion(self):
+        """Populate uom/conversion_factor from the line's item, transfer-safe."""
+        if not self.item_id:
+            return
+        item = self.item
+        purpose = self.stock_entry.purpose if self.stock_entry_id else None
+        if purpose == "MATERIAL_TRANSFER":
+            if self.uom_id not in {None, item.stock_uom_id}:
+                raise ValidationError("Transfer lines are entered in the item's stock unit.")
+            self.uom_id = item.stock_uom_id
+            self.conversion_factor = Decimal("1")
+            return
+        if not self.uom_id:
+            self.uom_id = item.stock_uom_id
+        if self.uom_id == item.stock_uom_id:
+            self.conversion_factor = Decimal("1")
+            return
+        row = ItemUOMConversion.objects.filter(item_id=item.pk, uom_id=self.uom_id).first()
+        if row is None:
+            raise ValidationError(f"{item.item_name} has no conversion for the selected unit.")
+        self.conversion_factor = row.conversion_factor
+
     def save(self, *args, **kwargs):
         if self.stock_entry_id:
             _assert_document_is_draft(self.stock_entry, action="modify lines on")
+        # Submit-time warehouse saves must not refresh the frozen draft snapshot.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or self._state.adding or {"item_id", "uom_id"} & set(update_fields):
+            self._derive_conversion()
+            if self.stock_entry_id and self.stock_entry.purpose == "MATERIAL_RECEIPT":
+                self.amount = (Decimal(str(self.qty)) * Decimal(str(self.basic_rate))).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):

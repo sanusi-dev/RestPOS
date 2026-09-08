@@ -27,6 +27,12 @@ urlpatterns = [
     path("stock-entries/create/", view=views.stock_entry_create, name="stock_entry_create"),
     path("stock-entries/item/add/", view=views.stock_entry_item_add, name="stock_entry_item_add"),
     path("stock-entries/item/remove/<int:index>/", view=views.stock_entry_item_remove, name="stock_entry_item_remove"),
+    path("stock-entries/item/meta/", view=views.stock_entry_item_meta, name="stock_entry_item_meta"),
+    path(
+        "stock-entries/item/stock-qty/",
+        view=views.stock_entry_stock_qty_preview,
+        name="stock_entry_stock_qty_preview",
+    ),
     path("stock-entries/<int:pk>/", view=views.stock_entry_detail, name="stock_entry_detail"),
     path("stock-entries/<int:pk>/submit/", view=views.stock_entry_submit, name="stock_entry_submit"),
     path("stock-entries/<int:pk>/cancel/", view=views.stock_entry_cancel, name="stock_entry_cancel"),

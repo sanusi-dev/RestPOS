@@ -149,24 +149,27 @@ def submit_stock_entry(entry):
         if locked.purpose == "MATERIAL_RECEIPT":
             detail.source_warehouse = None
             detail.target_warehouse = restaurant.store_warehouse
+            stock_qty = detail.stock_qty()
+            unit_rate = detail.stock_unit_rate()
             StockLedgerEntry._create_entry_locked(
                 item=detail.item,
                 warehouse=restaurant.store_warehouse,
-                quantity=detail.qty,
+                quantity=stock_qty,
                 voucher_type="Stock Entry",
                 voucher_no=voucher_no,
-                unit_rate=detail.basic_rate,
+                unit_rate=unit_rate,
                 voucher_detail_no=str(detail.pk),
                 prevent_negative=False,
                 posting_date=locked.posting_date,
+                inbound_value=detail.amount,
                 bin_obj=store_bin,
             )
-            detail.item.last_purchase_rate = detail.basic_rate
+            detail.item.last_purchase_rate = unit_rate
             updated_items.add(detail.item)
             # GL: Dr SIH / Cr funding account (market purchase, no GRNI)
-            if detail.basic_rate and detail.qty:
+            if detail.amount:
                 sih_account = _resolve_account(restaurant.store_warehouse.account, "The Store warehouse account")
-                amount = (detail.qty * detail.basic_rate).quantize(Decimal("0.01"))
+                amount = detail.amount.quantize(Decimal("0.01"))
                 gl_rows.append({"account": sih_account, "debit": amount})
                 gl_rows.append({"account": funding_acct, "credit": amount})
         else:
@@ -360,6 +363,12 @@ def cancel_stock_entry(entry):
 
                 mode = ModeOfPayment.objects.get(pk=locked.mode_of_payment_id)
                 funding_acct = _resolve_payment_account(mode)
+                # Original as-bought money per receipt line — qty × per-stock-unit rate can round.
+                detail_amounts = {}
+                if locked.purpose == "MATERIAL_RECEIPT":
+                    detail_amounts = {
+                        d.pk: d.amount for d in StockEntryDetail.objects.filter(stock_entry_id=locked.pk)
+                    }
                 # SIH moves by the bin's current value; the funding leg returns the original
                 # money. Any difference (WAC drift or rate rounding) goes to the variance account.
                 line_amounts = []
@@ -367,6 +376,9 @@ def cancel_stock_entry(entry):
                     pre_wac = pre_wac_map[sle.pk]
                     curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
                     orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
+                    detail_amount = detail_amounts.get(int(sle.voucher_detail_no or 0))
+                    if detail_amount:
+                        orig_amount = detail_amount
                     line_amounts.append((sle, curr_amount, orig_amount))
                 variance_acct = None
                 if any(curr != orig for _sle, curr, orig in line_amounts):
@@ -818,7 +830,7 @@ def _revert_last_purchase_rates_for_stock_entry(entry, sles):
             .order_by("-stock_entry__posting_date", "-stock_entry__pk")
             .first()
         )
-        sle.item.last_purchase_rate = prior.basic_rate if prior else None
+        sle.item.last_purchase_rate = prior.stock_unit_rate() if prior else None
         items_to_update.append(sle.item)
     if items_to_update:
         Item.objects.bulk_update(items_to_update, ["last_purchase_rate", "updated_at"])

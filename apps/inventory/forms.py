@@ -231,15 +231,74 @@ class StockEntryForm(InventoryModelForm):
 class StockEntryDetailForm(InventoryModelForm):
     class Meta:
         model = StockEntryDetail
-        fields = ["item", "qty", "basic_rate"]
+        fields = ["item", "qty", "uom", "basic_rate"]
+
+    def _purpose(self):
+        purpose = self.data.get("purpose") if self.is_bound else None
+        if purpose is None:
+            # Meta rebuilds attach an unsaved parent so the line knows its purpose.
+            parent = getattr(self.instance, "stock_entry", None)
+            if parent is not None:
+                purpose = getattr(parent, "purpose", None)
+        return purpose
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        purpose = self.data.get("purpose") if self.is_bound else None
+        purpose = self._purpose()
         self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False, is_stock_item=True)
         self.fields["basic_rate"].initial = None
         self.fields["basic_rate"].required = purpose != "MATERIAL_TRANSFER"
         self.fields["basic_rate"].widget.attrs["x-bind:disabled"] = "purpose === 'MATERIAL_TRANSFER'"
+        item = self._bound_item()
+        self.fields["uom"].queryset = _uoms_for_item(item)
+        if purpose == "MATERIAL_TRANSFER":
+            # Transfers are always entered in the item's stock unit — offer that only.
+            if item:
+                self.fields["uom"].queryset = UOM.objects.filter(pk=item.stock_uom_id)
+            self.fields["uom"].widget.attrs["x-bind:disabled"] = "purpose === 'MATERIAL_TRANSFER'"
+        if item and not self.is_bound and not self.instance.uom_id:
+            self.fields["uom"].initial = item.stock_uom_id
+        prefix = self.prefix or ""
+        wrap_id = f"{prefix}-uom-wrap" if prefix else "uom-wrap"
+        preview_id = f"{prefix}-stock-qty-preview" if prefix else "stock-qty-preview"
+        self.fields["item"].widget.attrs.update(
+            {
+                "hx-get": reverse("inventory:stock_entry_item_meta"),
+                "hx-target": f"#{wrap_id}",
+                "hx-swap": "innerHTML",
+                "hx-include": "closest .js-entry-line",
+                "hx-trigger": "change",
+            }
+        )
+        preview_attrs = {
+            "hx-get": reverse("inventory:stock_entry_stock_qty_preview"),
+            "hx-target": f"#{preview_id}",
+            "hx-swap": "innerHTML",
+            "hx-include": "closest .js-entry-line",
+            "hx-trigger": "change, input delay:300ms",
+        }
+        self.fields["qty"].widget.attrs.update(preview_attrs)
+        self.fields["uom"].widget.attrs.update(preview_attrs)
+
+    def _bound_item(self):
+        if self.is_bound:
+            item_id = self.data.get(self.add_prefix("item"))
+            if item_id:
+                return Item.objects.filter(pk=item_id).select_related("stock_uom").first()
+        if self.instance.item_id:
+            return self.instance.item
+        return None
+
+    def clean(self):
+        cleaned = super().clean()
+        purpose = self._purpose()
+        item = cleaned.get("item")
+        uom = cleaned.get("uom")
+        if purpose == "MATERIAL_RECEIPT" and item and uom:
+            allowed = {item.stock_uom_id, *item.uom_conversions.values_list("uom_id", flat=True)}
+            if uom.pk not in allowed:
+                self.add_error("uom", "This unit is not valid for this item.")
+        return cleaned
 
 
 class StockReconciliationForm(InventoryModelForm):

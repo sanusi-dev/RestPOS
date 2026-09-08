@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounting.models import GLEntry
-from apps.inventory.forms import PurchaseReceiptItemForm
+from apps.inventory.forms import PurchaseReceiptItemForm, StockEntryDetailForm
 from apps.inventory.models import (
     UOM,
     Bin,
@@ -19,7 +19,12 @@ from apps.inventory.models import (
     StockLedgerEntry,
     Warehouse,
 )
-from apps.inventory.services import cancel_purchase_receipt, submit_purchase_receipt, submit_stock_entry
+from apps.inventory.services import (
+    cancel_purchase_receipt,
+    cancel_stock_entry,
+    submit_purchase_receipt,
+    submit_stock_entry,
+)
 from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import Restaurant
 
@@ -250,7 +255,7 @@ class PurchaseReceiptConversionTest(UOMConversionTestBase):
         self.drink.refresh_from_db()
         self.assertIsNone(self.drink.last_purchase_rate)
 
-    def test_stock_entry_market_receipt_stays_in_stock_uom(self):
+    def test_stock_entry_market_receipt_converts_uom(self):
         self._conversion()
         mode, _ = ModeOfPayment.objects.get_or_create(
             name="Cash UOM", defaults={"type": "CASH", "enabled": True}
@@ -259,13 +264,47 @@ class PurchaseReceiptConversionTest(UOMConversionTestBase):
             mode_of_payment=mode, defaults={"default_account": self.accounts["cash"]}
         )
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=mode)
-        StockEntryDetail.objects.create(stock_entry=entry, item=self.drink, qty=Decimal("5"), basic_rate=Decimal("500"))
+        line = StockEntryDetail.objects.create(
+            stock_entry=entry, item=self.drink, qty=Decimal("5"), basic_rate=Decimal("12000"), uom=self.crate
+        )
         submit_stock_entry(entry)
         sle = StockLedgerEntry.objects.get(voucher_type="Stock Entry", voucher_no=str(entry.pk))
-        self.assertEqual(sle.quantity, Decimal("5"))
+        self.assertEqual(line.conversion_factor, Decimal("24"))
+        self.assertEqual(sle.quantity, Decimal("120"))
+        self.assertEqual(sle.stock_value_change, Decimal("60000"))
         self.assertEqual(sle.unit_rate, Decimal("500"))
+        stock_bin = Bin.objects.get(item=self.drink, warehouse=self.store)
+        self.assertEqual(stock_bin.actual_qty, Decimal("120"))
+        self.assertEqual(stock_bin.valuation_rate, Decimal("500"))
+        gl = GLEntry.objects.filter(
+            voucher_type="Stock Entry", voucher_no=str(entry.pk), is_cancelled=False, credit__gt=0
+        ).get()
+        self.assertEqual(gl.credit, Decimal("60000"))
         self.drink.refresh_from_db()
         self.assertEqual(self.drink.last_purchase_rate, Decimal("500"))
+
+    def test_stock_entry_market_receipt_cancel_uses_original_amount(self):
+        self._conversion()
+        mode, _ = ModeOfPayment.objects.get_or_create(
+            name="Cash UOM2", defaults={"type": "CASH", "enabled": True}
+        )
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=mode, defaults={"default_account": self.accounts["cash"]}
+        )
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=mode)
+        StockEntryDetail.objects.create(
+            stock_entry=entry, item=self.drink, qty=Decimal("1"), basic_rate=Decimal("100"), uom=self.crate
+        )
+        submit_stock_entry(entry)
+        cancel_stock_entry(entry)
+        funding_gl = GLEntry.objects.filter(
+            voucher_type="Stock Entry",
+            voucher_no=str(entry.pk),
+            is_cancelled=False,
+            account=self.accounts["cash"],
+        ).get()
+        # The funding leg returns the original as-bought money, not qty × rounded WAC.
+        self.assertEqual(funding_gl.debit, Decimal("100"))
 
 
 class PurchaseReceiptUOMFormTest(UOMConversionTestBase):
@@ -317,6 +356,62 @@ class PurchaseReceiptUOMFormTest(UOMConversionTestBase):
         response = self.client.get(
             reverse("inventory:purchase_receipt_item_meta"),
             {"items-0-item": self.drink.pk, "items-0-received_qty": "5"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.bottle.name)
+        self.assertContains(response, self.crate.name)
+        self.assertContains(response, f'value="{self.bottle.pk}"', html=False)
+
+
+class StockEntryUOMFormTest(UOMConversionTestBase):
+    def _form_data(self, **overrides):
+        data = {
+            "purpose": "MATERIAL_RECEIPT",
+            "item": str(self.drink.pk),
+            "qty": "5",
+            "uom": str(self.crate.pk),
+            "basic_rate": "12000",
+        }
+        data.update(overrides)
+        return data
+
+    def test_uom_queryset_is_stock_plus_conversions(self):
+        self._conversion()
+        form = StockEntryDetailForm(instance=StockEntryDetail(item=self.drink))
+        ids = set(form.fields["uom"].queryset.values_list("pk", flat=True))
+        self.assertEqual(ids, {self.bottle.pk, self.crate.pk})
+
+    def test_clean_rejects_uom_not_on_table(self):
+        form = StockEntryDetailForm(data=self._form_data())
+        self.assertFalse(form.is_valid())
+        self.assertIn("uom", form.errors)
+
+    def _login(self, username):
+        from django.contrib.auth.models import Group
+
+        from apps.users.models import CustomUser
+
+        user = CustomUser.objects.create_user(username=username, password="x", email=username)
+        mgr, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        user.groups.add(mgr)
+        self.client.login(username=username, password="x")
+
+    def test_stock_entry_stock_qty_preview_endpoint(self):
+        self._login("mgr3@test.com")
+        self._conversion()
+        response = self.client.get(
+            reverse("inventory:stock_entry_stock_qty_preview"),
+            {"items-0-item": self.drink.pk, "items-0-uom": self.crate.pk, "items-0-qty": "5"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "5 Crate = 120 Bottle")
+
+    def test_stock_entry_item_meta_defaults_to_stock_uom(self):
+        self._login("mgr4@test.com")
+        self._conversion()
+        response = self.client.get(
+            reverse("inventory:stock_entry_item_meta"),
+            {"items-0-item": self.drink.pk, "items-0-qty": "5"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.bottle.name)

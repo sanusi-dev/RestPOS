@@ -83,15 +83,17 @@
           <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Item</th>
           <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Source</th>
           <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Target</th>
+          <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Unit</th>
           <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Quantity</th>
           <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Rate</th>
+          <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Amount</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
         {% for item in items %}
-          <tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ item.item.item_name }}</a></td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.source_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.target_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.qty|floatformat:"-2"|intcomma }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ item.basic_rate|floatformat:2|intcomma }}</td></tr>
+          <tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ item.item.item_name }}</a></td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.source_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.target_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if item.uom_id %}{{ item.uom.name }}{% elif item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.item.stock_uom.name }}{% else %}—{% endif %}</td><td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.qty|floatformat:"-2"|intcomma }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ item.basic_rate|floatformat:2|intcomma }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{% if item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.amount|floatformat:2|intcomma }}{% else %}—{% endif %}</td></tr>
         {% empty %}
-          <tr><td colspan="5" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No items in this entry.</span></div></td></tr>
+          <tr><td colspan="7" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No items in this entry.</span></div></td></tr>
         {% endfor %}
       </tbody>
     </table>
