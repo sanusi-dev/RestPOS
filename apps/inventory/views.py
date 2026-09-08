@@ -374,7 +374,7 @@ def item_uom_remove(request: HttpRequest, index: int) -> HttpResponse:
 def stock_entry_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
     purpose = request.GET.get("purpose")
-    entries = StockEntry.objects.all()
+    entries = StockEntry.objects.select_related("mode_of_payment").all()
     if status:
         entries = entries.filter(status=status)
     if purpose:
@@ -433,7 +433,7 @@ def stock_entry_item_remove(request: HttpRequest, index: int) -> HttpResponse:
 
 @backoffice_required
 def stock_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    entry = get_object_or_404(StockEntry, pk=pk)
+    entry = get_object_or_404(StockEntry.objects.select_related("mode_of_payment"), pk=pk)
     items = entry.items.select_related("item", "source_warehouse", "target_warehouse").all()
     voucher_no = str(entry.pk)
     ledger_entries = StockEntry.stock_ledger_entries_for_voucher(voucher_no)

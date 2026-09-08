@@ -69,6 +69,12 @@ def submit_stock_entry(entry):
         raise ValidationError("Configure an enabled central Store warehouse before submitting.")
     if locked.purpose not in {"MATERIAL_RECEIPT", "MATERIAL_TRANSFER"}:
         raise ValidationError("Unsupported stock entry purpose.")
+    if locked.purpose == "MATERIAL_RECEIPT":
+        if not locked.mode_of_payment_id:
+            raise ValidationError("Select the payment mode that funded this receipt.")
+    else:
+        if locked.mode_of_payment_id:
+            raise ValidationError("Transfers do not have a funding account.")
 
     targets = {}
     if locked.purpose == "MATERIAL_TRANSFER":
@@ -131,7 +137,13 @@ def submit_stock_entry(entry):
     voucher_no = str(locked.pk)
     updated_items = set()
     gl_rows = []
-    default_expense = restaurant.default_expense_account if restaurant else None
+    funding_acct = None
+    if locked.purpose == "MATERIAL_RECEIPT":
+        from apps.accounting.services import _resolve_payment_account
+        from apps.payments.models import ModeOfPayment
+
+        mode = ModeOfPayment.objects.get(pk=locked.mode_of_payment_id)
+        funding_acct = _resolve_payment_account(mode)
     for detail in details:
         store_bin = locked_bins[(detail.item_id, restaurant.store_warehouse_id)]
         if locked.purpose == "MATERIAL_RECEIPT":
@@ -151,14 +163,12 @@ def submit_stock_entry(entry):
             )
             detail.item.last_purchase_rate = detail.basic_rate
             updated_items.add(detail.item)
-            # GL: Dr SIH / Cr Expense (market purchase, no GRNI)
+            # GL: Dr SIH / Cr funding account (market purchase, no GRNI)
             if detail.basic_rate and detail.qty:
                 sih_account = _resolve_account(restaurant.store_warehouse.account, "The Store warehouse account")
-                expense_acct = _resolve_account(default_expense, "The default expense account")
                 amount = (detail.qty * detail.basic_rate).quantize(Decimal("0.01"))
-                if amount:
-                    gl_rows.append({"account": sih_account, "debit": amount})
-                    gl_rows.append({"account": expense_acct, "credit": amount})
+                gl_rows.append({"account": sih_account, "debit": amount})
+                gl_rows.append({"account": funding_acct, "credit": amount})
         else:
             target = targets[detail.item.department]
             detail.source_warehouse = restaurant.store_warehouse
@@ -345,31 +355,30 @@ def cancel_stock_entry(entry):
                 for gl in gl_originals:
                     gl.is_cancelled = True
                     gl.save(update_fields=["is_cancelled", "updated_at"])
-                has_drift = False
+                from apps.accounting.services import _resolve_payment_account
+                from apps.payments.models import ModeOfPayment
+
+                mode = ModeOfPayment.objects.get(pk=locked.mode_of_payment_id)
+                funding_acct = _resolve_payment_account(mode)
+                # SIH moves by the bin's current value; the funding leg returns the original
+                # money. Any difference (WAC drift or rate rounding) goes to the variance account.
+                line_amounts = []
                 for sle in sles:
                     pre_wac = pre_wac_map[sle.pk]
                     curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
                     orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
-                    if curr_amount != orig_amount:
-                        has_drift = True
-                        break
+                    line_amounts.append((sle, curr_amount, orig_amount))
                 variance_acct = None
-                if has_drift:
+                if any(curr != orig for _sle, curr, orig in line_amounts):
                     variance_acct = _resolve_account(
                         restaurant.inventory_price_variance_account if restaurant else None,
                         "The inventory price variance account",
                     )
                 new_rows = []
-                for sle in sles:
-                    pre_wac = pre_wac_map[sle.pk]
+                for sle, curr_amount, orig_amount in line_amounts:
                     sih_acct = _resolve_account(sle.warehouse.account, "The warehouse account")
-                    exp_acct = _resolve_account(
-                        restaurant.default_expense_account if restaurant else None, "The default expense account"
-                    )
-                    orig_amount = (sle.quantity * sle.unit_rate).quantize(Decimal("0.01"))
-                    curr_amount = (sle.quantity * pre_wac).quantize(Decimal("0.01"))
                     new_rows.append({"account": sih_acct, "credit": curr_amount})
-                    new_rows.append({"account": exp_acct, "debit": orig_amount})
+                    new_rows.append({"account": funding_acct, "debit": orig_amount})
                     diff = curr_amount - orig_amount
                     if diff != 0:
                         if variance_acct is None:

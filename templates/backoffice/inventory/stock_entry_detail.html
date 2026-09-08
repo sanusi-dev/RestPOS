@@ -45,6 +45,12 @@
           {{ entry.get_purpose_display }}
         </dd>
       </div>
+      {% if entry.purpose == "MATERIAL_RECEIPT" and entry.mode_of_payment_id %}
+      <div>
+        <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Paid from</dt>
+        <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ entry.mode_of_payment.name }}</dd>
+      </div>
+      {% endif %}
       <div>
         <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Status</dt>
         <dd class="mt-1.5">

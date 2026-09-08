@@ -197,7 +197,7 @@ class BaseItemUOMConversionFormSet(BaseInlineFormSet):
 class StockEntryForm(InventoryModelForm):
     class Meta:
         model = StockEntry
-        fields = ["purpose", "posting_date", "remarks"]
+        fields = ["purpose", "posting_date", "mode_of_payment", "remarks"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -207,6 +207,25 @@ class StockEntryForm(InventoryModelForm):
         else:
             choices.insert(0, ("", "Select purpose..."))
         self.fields["purpose"].choices = choices
+        from apps.payments.models import ModeOfPayment
+
+        self.fields["mode_of_payment"].queryset = active_choices(
+            ModeOfPayment, self.instance.mode_of_payment_id, enabled=True
+        )
+        self.fields["mode_of_payment"].label = "Paid from"
+        self.fields["mode_of_payment"].help_text = "Funding account for this market purchase."
+        self.fields["mode_of_payment"].required = False
+        # Visibility is handled in the template via Alpine x-show on purpose
+
+    def clean(self):
+        cleaned = super().clean()
+        purpose = cleaned.get("purpose") or getattr(self.instance, "purpose", None)
+        mode = cleaned.get("mode_of_payment")
+        if purpose == "MATERIAL_RECEIPT" and not mode:
+            self.add_error("mode_of_payment", "Select the payment mode that funded this receipt.")
+        if purpose == "MATERIAL_TRANSFER" and mode:
+            self.add_error("mode_of_payment", "Transfers do not have a funding account.")
+        return cleaned
 
 
 class StockEntryDetailForm(InventoryModelForm):

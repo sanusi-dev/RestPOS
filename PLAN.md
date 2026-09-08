@@ -84,7 +84,7 @@ receipt-first invoice UX); current product facts are in `FEATURES.md`, `docs/`, 
   `SupplierInvoiceExpense` (description + amount, user-edited on the draft).
 - **GRN at receipt (accrual).** Receipt: Dr SIH / Cr GRNI @ receipt rate. Linked invoice:
   Dr GRNI / Cr payable @ the same rate (qty/rate lock). No unlinked Dr SIH / Cr payable
-  path. Market purchases use `StockEntry MATERIAL_RECEIPT` → Dr SIH / Cr expense (no GRNI,
+  path. Market purchases use `StockEntry MATERIAL_RECEIPT` → Dr SIH / Cr the payment mode's GL account (no GRNI,
   no invoice). See §4.9.
 - Expense lines post Dr `Restaurant.default_supplier_expense_account` / Cr payable.
   Missing config is a hard error at submit.
@@ -319,7 +319,7 @@ department) → `Restaurant.default_income_account`; expense/COGS always uses
 3. No tax GL. There is no tax system.
 4. COGS at settle from the current WAC (`unit_rate`) of the settle-time drink stock deductions.
 5. Inventory documents post GL (see §4.9): purchase receipts Dr SIH / Cr GRNI; stock-entry
-   market receipts Dr SIH / Cr expense; transfers are intra-inventory (no GL); waste
+   market receipts Dr SIH / Cr the payment mode's GL account ("Paid from"); transfers are intra-inventory (no GL); waste
    reconciliations Dr wastage / Cr warehouse.
 6. Return orders post no GL in the GL core; refund GL posts in refunds completion (§4.3),
    within the same phase.
@@ -639,7 +639,7 @@ override. Electricity optional (blank = ₦0).
   `new_wac = (old_qty×old_wac + qty×actual)/(old_qty+qty)`. No variance at receipt; `posting_date` is audit only.
 - **D2 — Wastage = no warehouse.** Keep `WASTE_DAMAGE` as `StockReconciliation.reason` on a real warehouse, valued at current WAC → existing `Restaurant.wastage_account`.
 - **D3 — Opening stock entered rate seeds WAC.** `OPENING_STOCK` posts at user `valuation_rate`; if `Bin qty==0` and the adjustment adds stock, require `valuation_rate` to seed WAC; else current WAC. Opening Stock uses the matching `OPENING_STOCK` reconciliation reason; ordinary reconciliations use the operational reasons.
-- **D4 — GRN at receipt (accrual).** Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ receipt rate. Stock invoices must link a receipt via `SupplierInvoice.purchase_receipt` and post `Dr GRNI / Cr Payable` @ the same rate. Expense-only invoices need no receipt. No unlinked `Dr SIH / Cr Payable` path. Random market purchase without formal receipt uses `StockEntry MATERIAL_RECEIPT` → `Dr SIH / Cr expense` directly (no GRNI, no invoice).
+- **D4 — GRN at receipt (accrual).** Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ receipt rate. Stock invoices must link a receipt via `SupplierInvoice.purchase_receipt` and post `Dr GRNI / Cr Payable` @ the same rate. Expense-only invoices need no receipt. No unlinked `Dr SIH / Cr Payable` path. Random market purchase without formal receipt uses `StockEntry MATERIAL_RECEIPT` → `Dr SIH / Cr the GL account mapped to the selected payment mode` directly (no GRNI, no invoice).
 - **D5 — Dedicated variance account** `Restaurant.inventory_price_variance_account` for **cancellation WAC drift only**. Sale-return variance posts to **COGS**: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative. No `PURCHASE_PRICE` variance type.
 - **D6 — Block receipt cancel if downstream financial doc active** — `SupplierInvoice(status=SUBMITTED, purchase_receipt=receipt)` OR `SupplierPayment` allocation against that invoice. Cancel chain: `Payment → Invoice → Receipt`.
 - **D7 — Clean slate migration.** No production data. `RunPython` wipes `StockLedgerEntry` + `Bin` (FIFO snapshots) + drops `stock_value, stock_queue, is_cancelled, qty_after_transaction` columns. Docs stay; bins rebuild.
@@ -664,7 +664,7 @@ override. Electricity optional (blank = ₦0).
 
 - Receipt: `Dr SIH (warehouse asset) / Cr GRNI` @ `qty×rate`.
 - Linked invoice: `Dr GRNI / Cr Payable` @ same rate (rate equality enforced; no variance branch). Expense lines → `Dr Restaurant.default_supplier_expense_account / Cr Payable` (not part of GRNI).
-- Stock-entry market purchase (`MATERIAL_RECEIPT`): `Dr SIH / Cr Cash-or-Expense` directly — no GRNI, no invoice.
+- Stock-entry market purchase (`MATERIAL_RECEIPT`): `Dr SIH / Cr the GL account mapped to the selected payment mode` directly — no GRNI, no invoice.
 - Receipt cancellation: `Cr SIH @ current WAC / Dr GRNI @ original` → difference to variance account (`CANCELLATION_WAC`).
 - Sale-return variance: `variance = qty×(current WAC − original COGS rate)` → Dr COGS if positive, Cr COGS if negative.
 

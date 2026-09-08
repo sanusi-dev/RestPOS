@@ -480,6 +480,13 @@ class StockEntry(BaseModel):
         choices=[("DRAFT", "Draft"), ("SUBMITTED", "Submitted"), ("CANCELLED", "Cancelled")],
         default="DRAFT",
     )
+    mode_of_payment = models.ForeignKey(
+        "payments.ModeOfPayment",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entries",
+    )
     remarks = models.TextField(blank=True)
 
     class Meta:

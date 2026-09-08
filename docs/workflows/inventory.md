@@ -40,7 +40,7 @@ FOOD POS sales intentionally do not reserve or deduct stock. Kitchen consumption
 
 ### Stock Entry
 
-Supports `MATERIAL_RECEIPT` and `MATERIAL_TRANSFER`. Receipts land at `Restaurant.store_warehouse`. Transfers are only Store -> FOOD production warehouse or Store -> `Restaurant.default_warehouse` for DRINKS. Source/target compatibility and distinct warehouses are validated before locked bins are posted.
+Supports `MATERIAL_RECEIPT` (market purchase — posts Dr SIH / Cr the payment mode's GL account selected as "Paid from"; no GRNI) and `MATERIAL_TRANSFER`. Receipts land at `Restaurant.store_warehouse`. Transfers are only Store -> FOOD production warehouse or Store -> `Restaurant.default_warehouse` for DRINKS. Source/target compatibility and distinct warehouses are validated before locked bins are posted.
 
 ### Purchase Receipt
 
@@ -52,7 +52,7 @@ The user enters a count. Submission locks bins and posts `count - actual` only. 
 
 ## Reversal and Immutability
 
-Document cancellations create reversal SLEs at current WAC with `reversal_of_sle` linking back to the original, never editing it. Purchase receipt cancellation is blocked when a submitted invoice (or allocated payment) exists; allowed cancellations compute `variance = qty*(current_wac − original_rate)` as `CANCELLATION_WAC` to the variance account. Transfer cancellation reverses at dest current WAC (net zero). Stock-entry detail history includes both the original movements and their cancellation reversals. Parent document saves reject post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct status changes can bypass service posting.
+Document cancellations create reversal SLEs at current WAC with `reversal_of_sle` linking back to the original, never editing it. Purchase receipt cancellation is blocked when a submitted invoice (or allocated payment) exists; allowed cancellations compute `variance = qty*(current_wac − original_rate)` as `CANCELLATION_WAC` to the variance account. Transfer cancellation reverses at dest current WAC (net zero). Stock-entry market-receipt cancellation reverses `Cr SIH @ current WAC / Dr funding account @ original` with drift to the variance account. Stock-entry detail history includes both the original movements and their cancellation reversals. Parent document saves reject post-submit edits. However, `StockLedgerEntry` has no model-level save/delete guard, and direct status changes can bypass service posting.
 
 ## Backoffice Surface
 

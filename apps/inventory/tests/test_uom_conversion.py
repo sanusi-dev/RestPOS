@@ -20,6 +20,7 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.inventory.services import cancel_purchase_receipt, submit_purchase_receipt, submit_stock_entry
+from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import Restaurant
 
 
@@ -251,7 +252,13 @@ class PurchaseReceiptConversionTest(UOMConversionTestBase):
 
     def test_stock_entry_market_receipt_stays_in_stock_uom(self):
         self._conversion()
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
+        mode, _ = ModeOfPayment.objects.get_or_create(
+            name="Cash UOM", defaults={"type": "CASH", "enabled": True}
+        )
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=mode, defaults={"default_account": self.accounts["cash"]}
+        )
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=mode)
         StockEntryDetail.objects.create(stock_entry=entry, item=self.drink, qty=Decimal("5"), basic_rate=Decimal("500"))
         submit_stock_entry(entry)
         sle = StockLedgerEntry.objects.get(voucher_type="Stock Entry", voucher_no=str(entry.pk))

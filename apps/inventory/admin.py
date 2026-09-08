@@ -160,7 +160,7 @@ class StockEntryDetailInline(SubmittedInlineMixin, admin.TabularInline):
 
 @admin.register(StockEntry)
 class StockEntryAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
-    list_display = ("id", "purpose", "posting_date", "status")
+    list_display = ("id", "purpose", "posting_date", "status", "mode_of_payment")
     list_filter = ("purpose", "status")
     search_fields = ("remarks",)
     ordering = ("-posting_date", "-created_at")

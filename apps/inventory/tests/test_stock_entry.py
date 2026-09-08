@@ -71,10 +71,20 @@ class StockEntryTest(TestCase):
         self.assertEqual(StockEntryForm().fields["purpose"].choices[0], ("", "Select purpose..."))
 
     def test_receipt_forces_store_and_requires_purchasable_stock_item(self):
+        from apps.payments.models import ModeOfPayment, PaymentGLMapping
+
+        cash = ModeOfPayment.objects.create(name="Cash Test", type="CASH", enabled=True)
+        PaymentGLMapping.objects.create(mode_of_payment=cash, default_account=self.accounts["cash"])
+        # Receipt without mode → funding error
         entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
         line = StockEntryDetail.objects.create(
             stock_entry=entry, item=self.food, target_warehouse=self.bar, qty=Decimal("4"), basic_rate=Decimal("50")
         )
+        with self.assertRaisesMessage(ValidationError, "payment mode"):
+            submit_stock_entry(entry)
+        # With mode but wrong target → store error (proves funding passed)
+        entry.mode_of_payment = cash
+        entry.save(update_fields=["mode_of_payment", "updated_at"])
         with self.assertRaisesMessage(ValidationError, "central Store"):
             submit_stock_entry(entry)
         line.target_warehouse = None

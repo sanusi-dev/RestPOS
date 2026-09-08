@@ -47,6 +47,18 @@ class InventoryViewTestBase(TestCase):
             department="FOOD",
             is_purchase_item=True,
         )
+        from apps.payments.models import ModeOfPayment, PaymentGLMapping
+
+        cls.cash_mode = ModeOfPayment.objects.filter(name="Cash").first()
+        if cls.cash_mode is None:
+            cls.cash_mode = ModeOfPayment.objects.create(name="Cash View", type="CASH", enabled=True)
+        # Ensure mapping to cash account for market receipts
+        PaymentGLMapping.objects.get_or_create(
+            mode_of_payment=cls.cash_mode, defaults={"default_account": cls.accounts["cash"]}
+        )
+        # If mapping exists but points elsewhere, keep it; tests only need a valid mapping
+        if not PaymentGLMapping.objects.filter(mode_of_payment=cls.cash_mode).exists():
+            PaymentGLMapping.objects.create(mode_of_payment=cls.cash_mode, default_account=cls.accounts["cash"])
 
     def setUp(self):
         self.client.login(username="admin@test.com", password="testpass123")
@@ -145,6 +157,7 @@ class TestStockEntryViews(InventoryViewTestBase):
             {
                 "purpose": "MATERIAL_RECEIPT",
                 "posting_date": "2025-01-15",
+                "mode_of_payment": str(self.cash_mode.pk),
                 "remarks": "",
                 "items-TOTAL_FORMS": "0",
                 "items-INITIAL_FORMS": "0",
@@ -166,6 +179,7 @@ class TestStockEntryViews(InventoryViewTestBase):
                 {
                     "purpose": "MATERIAL_RECEIPT",
                     "posting_date": "2025-01-15",
+                    "mode_of_payment": str(self.cash_mode.pk),
                     "remarks": "atomic failure",
                     "items-TOTAL_FORMS": "0",
                     "items-INITIAL_FORMS": "0",
@@ -176,7 +190,7 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertFalse(StockEntry.objects.filter(remarks="atomic failure").exists())
 
     def test_stock_entry_submit_post(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=self.cash_mode)
         StockEntryDetail.objects.create(
             stock_entry=entry,
             item=self.item,
@@ -213,7 +227,7 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertContains(followed, "Bar / POS sales warehouse")
 
     def test_stock_entry_submit_htmx_success_returns_hx_redirect(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=self.cash_mode)
         StockEntryDetail.objects.create(
             stock_entry=entry,
             item=self.item,
@@ -232,7 +246,7 @@ class TestStockEntryViews(InventoryViewTestBase):
         self.assertEqual(entry.status, "SUBMITTED")
 
     def test_stock_entry_cancel_post(self):
-        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT")
+        entry = StockEntry.objects.create(purpose="MATERIAL_RECEIPT", mode_of_payment=self.cash_mode)
         StockEntryDetail.objects.create(
             stock_entry=entry,
             item=self.item,

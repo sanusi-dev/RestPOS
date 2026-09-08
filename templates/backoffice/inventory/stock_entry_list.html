@@ -63,6 +63,7 @@
           <tr>
             <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Entry</th>
             <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Purpose</th>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Paid from</th>
             <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Posting date</th>
             <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Status</th>
           </tr>
@@ -72,6 +73,7 @@
             <tr class="transition-colors hover:bg-gray-50">
               <td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:stock_entry_detail' entry.pk %}" class="text-sm font-semibold text-gray-900 transition-colors hover:text-gray-600">#{{ entry.pk }}</a></td>
               <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ entry.get_purpose_display }}</td>
+              <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if entry.purpose == "MATERIAL_RECEIPT" and entry.mode_of_payment %}{{ entry.mode_of_payment.name }}{% else %}—{% endif %}</td>
               <td class="px-5 py-3.5 text-sm tabular-nums text-gray-500 sm:px-6">{{ entry.posting_date }}</td>
               <td class="px-5 py-3.5 sm:px-6">
                 {% if entry.status == "DRAFT" %}
@@ -85,7 +87,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
+              <td colspan="5" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
                 <div class="flex flex-col items-center gap-2">
                   <span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="arrow-left-right" size="23" color="currentColor" stroke_width="1.5" %}</span>
                   <span class="mt-1 font-medium text-gray-600">No stock entries found.</span>
