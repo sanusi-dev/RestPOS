@@ -300,14 +300,18 @@ class TestReconciliationViews(InventoryViewTestBase):
         from apps.inventory.services import submit_stock_reconciliation
 
         rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("4"))
+        StockReconciliationItem.objects.create(
+            reconciliation=rec, item=self.item, qty=Decimal("4"), valuation_rate=Decimal("100")
+        )
         submit_stock_reconciliation(rec)
         rec.refresh_from_db()
+        # While submitted, the detail shows the cancel confirmation
+        submitted_response = self.client.get(reverse("inventory:reconciliation_detail", kwargs={"pk": rec.pk}))
+        self.assertContains(submitted_response, 'data-confirm-title="Cancel this reconciliation?"')
         self.client.post(reverse("inventory:reconciliation_cancel", kwargs={"pk": rec.pk}))
 
         response = self.client.get(reverse("inventory:reconciliation_detail", kwargs={"pk": rec.pk}))
         self.assertContains(response, "Stock Reconciliation Cancellation")
-        self.assertContains(response, 'data-confirm-title="Cancel this reconciliation?"')
         self.assertEqual(
             StockLedgerEntry.objects.filter(voucher_no=str(rec.pk)).count(),
             2,
