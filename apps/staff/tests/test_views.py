@@ -128,6 +128,8 @@ class TestPOSOpeningEntryViews(StaffViewTestBase):
         self.assertEqual(self.entry.status, POSOpeningEntry.CANCELLED)
         self.assertEqual(self.entry.cancelled_by, self.user)
 
+
+class TestPOSClosingEntryViews(StaffViewTestBase):
     def setUp(self):
         super().setUp()
         # Open the shift so the closing entry is allowed
