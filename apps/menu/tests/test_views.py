@@ -56,12 +56,16 @@ class TestMenuViews(MenuViewTestBase):
         self.assertNotContains(response, "Catalog control")
         self.assertNotContains(response, "Live on POS")
 
-    def test_menu_list_marks_enabled_active_menu(self):
-        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+    def test_menu_list_renders_enabled_status(self):
         response = self.client.get(reverse("menu:menu_list"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["active_menu_id"], self.menu.pk)
-        self.assertTrue(response.context["menus"].get(pk=self.menu.pk).is_active_menu)
+        self.assertContains(response, "Lunch Menu")
+        self.assertContains(response, "Enabled")
+
+    def test_menu_detail_marks_active_menu(self):
+        Restaurant.objects.create(company="RestPOS", active_menu=self.menu)
+        response = self.client.get(reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
+        self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Live on POS")
 
     def test_menu_detail_includes_inventory_context(self):
@@ -92,7 +96,6 @@ class TestMenuViews(MenuViewTestBase):
         )
         self.assertRedirects(response, reverse("menu:menu_detail", kwargs={"pk": self.menu.pk}))
         self.menu.refresh_from_db()
-        self.assertEqual(self.menu.name, "Updated Menu")
         self.assertEqual(self.menu.name, "Updated Menu")
 
 

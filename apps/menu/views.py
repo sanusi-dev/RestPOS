@@ -1,6 +1,6 @@
 from typing import cast
 
-from django.db.models import BooleanField, Case, Count, OuterRef, Subquery, Value, When
+from django.db.models import Count, OuterRef, Subquery
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -31,25 +31,8 @@ def menu_dashboard(request: HttpRequest) -> HttpResponse:
 
 @backoffice_required
 def menu_list(request: HttpRequest) -> HttpResponse:
-    restaurant = Restaurant.load()
-    active_menu = (
-        restaurant.active_menu
-        if restaurant and restaurant.active_menu and restaurant.active_menu.enabled
-        else None
-    )
-    active_menu_id = active_menu.pk if active_menu else None
-    menus = Menu.objects.annotate(item_count=Count("items")).annotate(
-        is_active_menu=Case(
-            When(pk=active_menu_id, then=Value(True)),
-            default=Value(False),
-            output_field=BooleanField(),
-        )
-    )
-    return render(
-        request,
-        "backoffice/menu/menu_list.html",
-        {"menus": menus, "active_menu": active_menu, "active_menu_id": active_menu_id},
-    )
+    menus = Menu.objects.annotate(item_count=Count("items"))
+    return render(request, "backoffice/menu/menu_list.html", {"menus": menus})
 
 
 @backoffice_required
@@ -76,9 +59,7 @@ def menu_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "menu": menu,
             "menu_items": menu_items,
             "active_menu": restaurant.active_menu if restaurant else None,
-            "is_active_menu": bool(
-                restaurant and restaurant.active_menu_id == menu.pk and menu.enabled
-            ),
+            "is_active_menu": bool(restaurant and restaurant.active_menu_id == menu.pk and menu.enabled),
         },
     )
 

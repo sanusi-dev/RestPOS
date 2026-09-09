@@ -22,7 +22,7 @@
 
 ## Backoffice
 
-The Menu backoffice groups menu setup into a dashboard, menu register, menu-line register, add-on register, and variant register. The dashboard and menu register identify the configured enabled `Restaurant.active_menu` as **Live on POS**; activation remains controlled from Restaurant settings. Menu-line screens show the source inventory code, group, department, customer-facing rate, and availability state.
+The Menu backoffice groups menu setup into a dashboard, menu register, menu-line register, add-on register, and variant register. The menu detail page identifies the configured enabled `Restaurant.active_menu` as **Live on POS**; activation remains controlled from Restaurant settings. Menu-line screens show the source inventory code, group, department, customer-facing rate, and availability state.
 
 The add-on register resolves each relationship against the enabled active menu and displays its effective `MenuItem.rate`, or an explicit unpriced state when no enabled active-menu line exists. The add-on editor explains that the relationship controls availability while the menu line owns the price. `apps/menu/views.py` provides direct login-protected CRUD for menus, menu lines, add-ons, and variant relationships. `Menu` and `MenuItem` have no service layer. Delete endpoints exist for menu lines, add-ons, and variants; there is no menu delete endpoint.
 
