@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.utils.admin import dev_admin_bypass
+
 from .models import (
     DailyPnL,
     DailyPnLAdHoc,
@@ -38,8 +40,13 @@ class DailyPnLLineInline(admin.TabularInline):
     can_delete = False
     readonly_fields = [f.name for f in DailyPnLLine._meta.fields if f.name != "id"]
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(DailyPnL)
@@ -48,6 +55,11 @@ class DailyPnLAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     inlines = [DailyPnLLineInline]
     readonly_fields = ("period_start", "period_end", "submitted_at", "submitted_by")
+
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
 
 
 admin.site.register(DailyPnLMaterialQty)
