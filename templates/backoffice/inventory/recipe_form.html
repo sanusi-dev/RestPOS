@@ -57,19 +57,23 @@
           Add ingredient
         </button>
         <div id="plate-cost-preview" class="text-sm text-gray-600" hx-get="{% url 'inventory:recipe_plate_cost_preview' %}" hx-include="closest form" hx-trigger="change from:closest form delay:400ms, input from:closest form delay:800ms" hx-swap="innerHTML">
-          {% partialdef plate_cost_preview_partial inline %}{% if preview is not None %}<span class="font-bold text-gray-900">Plate cost ≈ {{ preview|floatformat:2 }}</span><span class="text-gray-400"> (Kitchen WAC or last rate)</span>{% elif plate_cost is not None %}<span class="font-bold text-gray-900">Plate cost ≈ {{ plate_cost|floatformat:2 }}</span><span class="text-gray-400"> (Kitchen WAC or last rate)</span>{% else %}<span class="text-gray-400">Plate cost appears here as you type.</span>{% endif %}{% endpartialdef %}
-        </div>
+          {% partialdef plate_cost_preview_partial inline %}
+          {% if preview is not None %}<span class="font-bold text-gray-900">Plate cost ≈ {{ preview|floatformat:2 }}</span><span class="text-gray-400"> (Kitchen WAC or last rate)</span>
+        {% elif plate_cost is not None %}<span class="font-bold text-gray-900">Plate cost ≈ {{ plate_cost|floatformat:2 }}</span><span class="text-gray-400"> (Kitchen WAC or last rate)</span>
+        {% else %}<span class="text-gray-400">Plate cost appears here as you type.</span>{% endif %}
+        {% endpartialdef %}
       </div>
-    </section>
-    {% endpartialdef %}
-    <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
-      <a href="{% url 'inventory:recipe_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
-      <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
-        <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
-        {% if is_create %}Create recipe{% else %}Save changes{% endif %}
-      </button>
     </div>
-  </form>
+  </section>
   {% endpartialdef %}
+  <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
+    <a href="{% url 'inventory:recipe_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
+    <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>
+      {% if is_create %}Create recipe{% else %}Save changes{% endif %}
+    </button>
+  </div>
+</form>
+{% endpartialdef %}
 </div>
 {% endblock %}

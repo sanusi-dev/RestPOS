@@ -22,14 +22,45 @@
       </div>
       <div>
         <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Output</dt>
-        <dd class="mt-1.5 text-sm font-bold tabular-nums text-gray-900">{{ recipe.output_qty|floatformat:"-2" }}</dd>
+        <dd class="mt-1.5 text-sm font-bold tabular-nums text-gray-900">
+          {{ recipe.output_qty|floatformat:"-2" }}
+        </dd>
       </div>
       {% if recipe.remarks %}<div class="sm:col-span-3"><dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Remarks</dt><dd class="mt-1.5 text-sm leading-6 text-gray-700">{{ recipe.remarks }}</dd></div>{% endif %}
     </dl>
   </section>
   <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
-    <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6"><span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="18" color="currentColor" stroke_width="2" %}</span><div><h2 class="text-sm font-extrabold text-gray-900">Ingredients</h2><p class="mt-1 text-xs text-gray-500">Quantities per output, in each ingredient's stock unit.</p></div></div>
-    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-100"><thead class="bg-gray-50"><tr><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Ingredient</th><th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Qty</th><th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Unit</th></tr></thead><tbody class="divide-y divide-gray-100">{% for line in recipe.items.all %}<tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' line.ingredient.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ line.ingredient.item_name }}</a></td><td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ line.qty|floatformat:"-4"|intcomma }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ line.ingredient.stock_uom.name }}</td></tr>{% empty %}<tr><td colspan="3" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><span class="mt-1 font-medium text-gray-600">No ingredients yet.</span></td></tr>{% endfor %}</tbody></table></div>
+    <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="18" color="currentColor" stroke_width="2" %}</span>
+      <div>
+        <h2 class="text-sm font-extrabold text-gray-900">Ingredients</h2>
+        <p class="mt-1 text-xs text-gray-500">Quantities per output, in each ingredient's stock unit.</p>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Ingredient</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Qty</th>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Unit</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for line in recipe.items.all %}
+            <tr class="transition-colors hover:bg-gray-50">
+              <td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' line.ingredient.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ line.ingredient.item_name }}</a></td>
+              <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ line.qty|floatformat:"-4"|intcomma }}</td>
+              <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ line.ingredient.stock_uom.name }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><span class="mt-1 font-medium text-gray-600">No ingredients yet.</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 </div>
 {% endblock %}

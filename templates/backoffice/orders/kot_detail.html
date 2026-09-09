@@ -22,8 +22,18 @@
         <p class="text-xs text-gray-400 mt-1">Routing and print audit for this snapshot.</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        {% if kot.status == "SUBMITTED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Submitted</span>{% else %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Cancelled</span>{% endif %}
-        {% if kot.print_status == "PRINTED" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Printed</span>{% elif kot.print_status == "PENDING" %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700">Print pending</span>{% else %}<span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Print cancelled</span>{% endif %}
+        {% if kot.status == "SUBMITTED" %}
+          <span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Submitted</span>
+        {% else %}
+          <span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Cancelled</span>
+        {% endif %}
+        {% if kot.print_status == "PRINTED" %}
+          <span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Printed</span>
+        {% elif kot.print_status == "PENDING" %}
+          <span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700">Print pending</span>
+        {% else %}
+          <span class="inline-flex px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-700">Print cancelled</span>
+        {% endif %}
       </div>
     </div>
     <dl class="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-6">
@@ -98,7 +108,19 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
-          {% for item in kot.items.all %}<tr class="hover:bg-gray-50/60 transition-colors"><td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ item.item_name }}</td><td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td><td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td><td class="px-6 py-4 text-right text-sm text-gray-500">{% if item.cancelled_qty > 0 %}{{ item.cancelled_qty }}{% else %}—{% endif %}</td><td class="px-6 py-4 text-sm text-gray-500">{{ item.comments|default:"—" }}</td></tr>{% empty %}<tr><td colspan="5" class="px-6 py-12 text-center text-sm text-gray-400">This ticket has no item lines.</td></tr>{% endfor %}
+          {% for item in kot.items.all %}
+            <tr class="hover:bg-gray-50/60 transition-colors">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ item.item_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">Customer {{ item.customer_index }}</td>
+              <td class="px-6 py-4 text-right text-sm text-gray-500">{{ item.qty }}</td>
+              <td class="px-6 py-4 text-right text-sm text-gray-500">{% if item.cancelled_qty > 0 %}{{ item.cancelled_qty }}{% else %}—{% endif %}</td>
+              <td class="px-6 py-4 text-sm text-gray-500">{{ item.comments|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-400">This ticket has no item lines.</td>
+            </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>

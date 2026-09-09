@@ -46,10 +46,12 @@
         </dd>
       </div>
       {% if entry.purpose == "MATERIAL_RECEIPT" and entry.mode_of_payment_id %}
-      <div>
-        <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Paid from</dt>
-        <dd class="mt-1.5 text-sm font-bold text-gray-900">{{ entry.mode_of_payment.name }}</dd>
-      </div>
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Paid from</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">
+            {{ entry.mode_of_payment.name }}
+          </dd>
+        </div>
       {% endif %}
       <div>
         <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Status</dt>
@@ -91,16 +93,37 @@
       </thead>
       <tbody class="divide-y divide-gray-100">
         {% for item in items %}
-          <tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ item.item.item_name }}</a></td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.source_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.target_warehouse|default:"-" }}</td><td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if item.uom_id %}{{ item.uom.name }}{% elif item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.item.stock_uom.name }}{% else %}—{% endif %}</td><td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.qty|floatformat:"-2"|intcomma }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ item.basic_rate|floatformat:2|intcomma }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{% if item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.amount|floatformat:2|intcomma }}{% else %}—{% endif %}</td></tr>
+          <tr class="transition-colors hover:bg-gray-50">
+            <td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:item_detail' item.item.pk %}" class="text-sm font-semibold text-gray-900 transition hover:text-gray-600">{{ item.item.item_name }}</a></td>
+            <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.source_warehouse|default:"-" }}</td>
+            <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{{ item.target_warehouse|default:"-" }}</td>
+            <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">{% if item.uom_id %}{{ item.uom.name }}{% elif item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.item.stock_uom.name }}{% else %}—{% endif %}</td>
+            <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ item.qty|floatformat:"-2"|intcomma }}</td>
+            <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ item.basic_rate|floatformat:2|intcomma }}</td>
+            <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{% if item.stock_entry.purpose == "MATERIAL_RECEIPT" %}{{ item.amount|floatformat:2|intcomma }}{% else %}—{% endif %}</td>
+          </tr>
         {% empty %}
-          <tr><td colspan="7" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No items in this entry.</span></div></td></tr>
+          <tr>
+            <td colspan="7" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
+              <div class="flex flex-col items-center gap-2">
+                <span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span>
+                <span class="mt-1 font-medium text-gray-600">No items in this entry.</span>
+              </div>
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
 <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
-  <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6"><span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="book-open-01" size="18" color="currentColor" stroke_width="2" %}</span><div><h2 class="text-sm font-extrabold text-gray-900">Stock movements</h2><p class="mt-1 text-xs text-gray-500">The original movements and any cancellation reversals recorded for this entry.</p></div></div>
+  <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="book-open-01" size="18" color="currentColor" stroke_width="2" %}</span>
+    <div>
+      <h2 class="text-sm font-extrabold text-gray-900">Stock movements</h2>
+      <p class="mt-1 text-xs text-gray-500">The original movements and any cancellation reversals recorded for this entry.</p>
+    </div>
+  </div>
   <div class="overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-100">
       <thead class="bg-gray-50">
@@ -123,10 +146,21 @@
             <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums {% if sle.quantity >= 0 %}text-emerald-600{% else %}text-red-600{% endif %} sm:px-6">{{ sle.quantity|floatformat:"-2"|intcomma }}</td>
             <td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ sle.unit_rate|floatformat:2|intcomma }}</td>
             <td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums {% if sle.stock_value_change >= 0 %}text-emerald-600{% else %}text-red-600{% endif %} sm:px-6">{{ sle.stock_value_change|floatformat:2|intcomma }}</td>
-            <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6"><span>{{ sle.voucher_type }} #{{ sle.voucher_no }}</span>{% if sle.reversal_of_sle_id %}<span class="block text-xs text-gray-400">↩ #{{ sle.reversal_of_sle_id }}</span>{% endif %}{% if sle.variance_amount %}<span class="block text-xs text-gray-400">{{ sle.variance_type }} {{ sle.variance_amount|floatformat:2|intcomma }}</span>{% endif %}</td>
+            <td class="px-5 py-3.5 text-sm text-gray-500 sm:px-6">
+              <span>{{ sle.voucher_type }} #{{ sle.voucher_no }}</span>
+              {% if sle.reversal_of_sle_id %}<span class="block text-xs text-gray-400">↩ #{{ sle.reversal_of_sle_id }}</span>{% endif %}
+              {% if sle.variance_amount %}<span class="block text-xs text-gray-400">{{ sle.variance_type }} {{ sle.variance_amount|floatformat:2|intcomma }}</span>{% endif %}
+            </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="book-open-01" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No stock movements recorded.</span></div></td></tr>
+          <tr>
+            <td colspan="7" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
+              <div class="flex flex-col items-center gap-2">
+                <span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="book-open-01" size="23" color="currentColor" stroke_width="1.5" %}</span>
+                <span class="mt-1 font-medium text-gray-600">No stock movements recorded.</span>
+              </div>
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>

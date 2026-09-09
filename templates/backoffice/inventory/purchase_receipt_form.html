@@ -11,7 +11,13 @@
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ form.non_field_errors }}</div>{% endif %}
     <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
-      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4"><span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="clipboard" size="19" color="currentColor" stroke_width="2" %}</span><div><h2 class="text-sm font-extrabold text-gray-900">Receipt details</h2><p class="mt-1 text-xs text-gray-500">Identify the supplier and set the date for goods received.</p></div></div>
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="clipboard" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Receipt details</h2>
+          <p class="mt-1 text-xs text-gray-500">Identify the supplier and set the date for goods received.</p>
+        </div>
+      </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% include "backoffice/components/form_field.html" with field=form.supplier_name %}
         {% include "backoffice/components/form_field.html" with field=form.supplier %}
@@ -22,7 +28,13 @@
     </section>
     {% partialdef items_partial inline %}
     <section id="purchase-receipt-items-container" class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_5px_24px_rgb(0,0,0,0.04)] sm:p-6">
-      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4"><span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="19" color="currentColor" stroke_width="2" %}</span><div><h2 class="text-sm font-extrabold text-gray-900">Items</h2><p class="mt-1 text-xs text-gray-500">Add each item, quantity, and purchase rate on this receipt.</p></div></div>
+      <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="menu-02" size="19" color="currentColor" stroke_width="2" %}</span>
+        <div>
+          <h2 class="text-sm font-extrabold text-gray-900">Items</h2>
+          <p class="mt-1 text-xs text-gray-500">Add each item, quantity, and purchase rate on this receipt.</p>
+        </div>
+      </div>
       {{ item_formset.management_form }}
       {% if item_formset.non_form_errors %}<div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{{ item_formset.non_form_errors }}</div>{% endif %}
       <div id="items-container" class="space-y-3">
@@ -31,9 +43,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
               {% include "backoffice/components/form_field.html" with field=item_form.item %}
               {% include "backoffice/components/form_field.html" with field=item_form.received_qty %}
-              <div id="{{ item_form.prefix }}-uom-wrap">
-                {% include "backoffice/components/form_field.html" with field=item_form.uom %}
-              </div>
+              <div id="{{ item_form.prefix }}-uom-wrap">{% include "backoffice/components/form_field.html" with field=item_form.uom %}</div>
               {% include "backoffice/components/form_field.html" with field=item_form.rate %}
               <div class="flex justify-end pb-0.5">
                 <button type="button" aria-label="Remove item {{ forloop.counter }}" title="Remove item" hx-post="{% url 'inventory:purchase_receipt_item_remove' forloop.counter0 %}" hx-include="closest form" hx-target="#purchase-receipt-items-container" hx-swap="outerHTML" class="backend-submit inline-flex size-10 items-center justify-center rounded-lg border border-transparent text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-1 focus:ring-red-400" hx-indicator="this" hx-disabled-elt="this">{% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}</button>
@@ -48,15 +58,18 @@
       <div class="mt-4 border-t border-gray-100 pt-4"><button type="button" hx-post="{% url 'inventory:purchase_receipt_item_add' %}" hx-include="closest form" hx-target="#purchase-receipt-items-container" hx-swap="outerHTML" class="backend-submit inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400" hx-indicator="this" hx-disabled-elt="this"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>Add item</button></div>
     </section>
     {% endpartialdef %}
-    <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end"><a href="{% url 'inventory:purchase_receipt_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a><button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>Create purchase receipt</button></div>
+    <div class="flex flex-col-reverse gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
+      <a href="{% url 'inventory:purchase_receipt_list' %}" class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100 hover:text-gray-900">Cancel</a>
+      <button type="submit" class="backend-submit inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="checkmark-circle-02" size="17" color="currentColor" stroke_width="2" %}</span>Create purchase receipt</button>
+    </div>
   </form>
   {% endpartialdef %}
   {% partialdef uom_widget_partial %}
-    {% include "backoffice/components/form_field.html" with field=uom_field %}
-    <p id="{{ prefix }}-stock-qty-preview" hx-swap-oob="innerHTML">{% if preview %}{{ preview }}{% endif %}</p>
+  {% include "backoffice/components/form_field.html" with field=uom_field %}
+  <p id="{{ prefix }}-stock-qty-preview" hx-swap-oob="innerHTML">{% if preview %}{{ preview }}{% endif %}</p>
   {% endpartialdef %}
   {% partialdef stock_qty_preview_partial %}
-    {% if preview %}{{ preview }}{% endif %}
+  {% if preview %}{{ preview }}{% endif %}
   {% endpartialdef %}
 </div>
 {% endblock %}

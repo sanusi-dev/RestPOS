@@ -3,7 +3,58 @@
 {% block app %}
 <div class="w-full">
   {% include "backoffice/components/breadcrumbs.html" with root_label="Menu" root_url="menu:dashboard" current_label="Menus" %}
-  <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between"><div><h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Menus</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Create and maintain the named menus that can power the POS.</p></div><a href="{% url 'menu:menu_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-3.5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500"><span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>New menu</a></div>
-  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]"><div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-100"><thead class="bg-gray-50"><tr><th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Menu</th><th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Status</th><th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Menu lines</th><th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6"></th></tr></thead><tbody class="divide-y divide-gray-100">{% for menu in menus %}<tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-4 sm:px-6"><a href="{% url 'menu:menu_detail' menu.pk %}" class="text-sm font-bold text-gray-900 transition hover:text-orange-600">{{ menu.name }}</a></td><td class="px-5 py-4 sm:px-6">{% if menu.enabled %}<span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-600/10">Enabled</span>{% else %}<span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-500">Disabled</span>{% endif %}</td><td class="px-5 py-4 text-right text-sm font-bold tabular-nums text-gray-900 sm:px-6">{{ menu.item_count|intcomma }}</td><td class="px-5 py-4 text-right sm:px-6"><a href="{% url 'menu:menu_update' menu.pk %}" aria-label="Edit {{ menu.name }}" title="Edit menu" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a></td></tr>{% empty %}<tr><td colspan="4" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span><span class="mt-1 font-medium text-gray-600">No menus yet. Create one to start building your POS catalog.</span></div></td></tr>{% endfor %}</tbody></table></div></section>
+  <div class="mb-8 flex flex-col gap-5 border-b border-gray-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Menus</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Create and maintain the named menus that can power the POS.</p>
+    </div>
+    <a href="{% url 'menu:menu_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-3.5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500">
+      <span class="flex size-4 items-center justify-center">{% hgi_stroke name="plus-sign" size="16" color="currentColor" stroke_width="2" %}</span>
+      New menu
+    </a>
+  </div>
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Menu</th>
+            <th class="px-5 py-3.5 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Status</th>
+            <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Menu lines</th>
+            <th class="px-5 py-3.5 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for menu in menus %}
+            <tr class="transition-colors hover:bg-gray-50">
+              <td class="px-5 py-4 sm:px-6">
+                <a href="{% url 'menu:menu_detail' menu.pk %}" class="text-sm font-bold text-gray-900 transition hover:text-orange-600">{{ menu.name }}</a>
+              </td>
+              <td class="px-5 py-4 sm:px-6">
+                {% if menu.enabled %}
+                  <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-600/10">Enabled</span>
+                {% else %}
+                  <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-500">Disabled</span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-4 text-right text-sm font-bold tabular-nums text-gray-900 sm:px-6">{{ menu.item_count|intcomma }}</td>
+              <td class="px-5 py-4 text-right sm:px-6">
+                <a href="{% url 'menu:menu_update' menu.pk %}" aria-label="Edit {{ menu.name }}" title="Edit menu" class="inline-flex size-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400">{% hgi_stroke name="edit-02" size="16" color="currentColor" stroke_width="2" %}</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6">
+                <div class="flex flex-col items-center gap-2">
+                  <span class="flex size-11 items-center justify-center rounded-xl bg-gray-50 text-gray-300 ring-1 ring-gray-100">{% hgi_stroke name="menu-02" size="23" color="currentColor" stroke_width="1.5" %}</span>
+                  <span class="mt-1 font-medium text-gray-600">No menus yet. Create one to start building your POS catalog.</span>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
 {% endblock %}
