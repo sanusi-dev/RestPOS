@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.utils.admin import dev_admin_bypass
+
 from .models import (
     UOM,
     Bin,
@@ -26,17 +28,23 @@ class SubmittedDocumentAdminMixin:
         return obj is not None and getattr(obj, "status", None) in self.IMMUTABLE_STATUSES
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         readonly = list(super().get_readonly_fields(request, obj))
         if self._is_immutable(obj):
             return [field.name for field in self.model._meta.fields]
         return readonly
 
     def has_delete_permission(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().has_delete_permission(request, obj)
         if self._is_immutable(obj):
             return False
         return super().has_delete_permission(request, obj)
 
     def has_change_permission(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().has_change_permission(request, obj)
         if self._is_immutable(obj):
             return False
         return super().has_change_permission(request, obj)
@@ -46,16 +54,22 @@ class SubmittedInlineMixin:
     """Make inlines read-only when the parent document is submitted or cancelled."""
 
     def has_add_permission(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().has_add_permission(request, obj)
         if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
             return False
         return super().has_add_permission(request, obj)
 
     def has_change_permission(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().has_change_permission(request, obj)
         if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
             return False
         return super().has_change_permission(request, obj)
 
     def has_delete_permission(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().has_delete_permission(request, obj)
         if obj is not None and getattr(obj, "status", None) in SubmittedDocumentAdminMixin.IMMUTABLE_STATUSES:
             return False
         return super().has_delete_permission(request, obj)
@@ -140,16 +154,18 @@ class StockLedgerEntryAdmin(admin.ModelAdmin):
     ordering = ("-posting_datetime",)
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return [field.name for field in self.model._meta.fields]
 
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 class StockEntryDetailInline(SubmittedInlineMixin, admin.TabularInline):
@@ -200,6 +216,8 @@ class PurchaseReceiptAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
     readonly_fields = ("total",)
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         readonly = list(super().get_readonly_fields(request, obj))
         if "warehouse" not in readonly:
             readonly.append("warehouse")

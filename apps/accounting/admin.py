@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.utils.admin import dev_admin_bypass
+
 from .models import (
     FiscalYear,
     GLEntry,
@@ -52,16 +54,18 @@ class GLEntryAdmin(admin.ModelAdmin):
     ordering = ("-posting_date", "-pk")
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return [field.name for field in self.model._meta.fields]
 
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 class JournalEntryAccountInline(admin.TabularInline):
@@ -70,7 +74,7 @@ class JournalEntryAccountInline(admin.TabularInline):
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(JournalEntry)
@@ -99,8 +103,13 @@ class JournalEntryAdmin(admin.ModelAdmin):
     )
     inlines = (JournalEntryAccountInline,)
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(JournalEntryAccount)
@@ -111,16 +120,18 @@ class JournalEntryAccountAdmin(admin.ModelAdmin):
     ordering = ("-journal_entry__posting_date", "-pk")
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return [field.name for field in self.model._meta.fields]
 
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 class SupplierInvoiceItemInline(admin.TabularInline):
@@ -129,7 +140,7 @@ class SupplierInvoiceItemInline(admin.TabularInline):
     can_delete = False
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 class SupplierInvoiceExpenseInline(admin.TabularInline):
@@ -174,10 +185,12 @@ class SupplierInvoiceAdmin(admin.ModelAdmin):
     inlines = (SupplierInvoiceItemInline, SupplierInvoiceExpenseInline)
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return ["invoice_number", "total", "outstanding_amount"]
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(SupplierPayment)
@@ -190,10 +203,12 @@ class SupplierPaymentAdmin(admin.ModelAdmin):
     ordering = ("-posting_date", "-pk")
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return ["payment_number"]
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(SupplierPaymentAllocation)
@@ -204,10 +219,12 @@ class SupplierPaymentAllocationAdmin(admin.ModelAdmin):
     ordering = ("-payment__posting_date", "-pk")
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return ["outstanding_amount"]
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(SupplierInvoiceExpense)
@@ -218,4 +235,6 @@ class SupplierInvoiceExpenseAdmin(admin.ModelAdmin):
     ordering = ("-invoice__posting_date", "-pk")
 
     def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return super().get_readonly_fields(request, obj)
         return ["invoice"]

@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from apps.utils.admin import dev_admin_bypass
+
 from .models import KOT, KOTItem, Order, OrderAuditEvent, OrderItem, OrderPayment
 
 
@@ -10,8 +12,13 @@ class OrderItemInline(admin.TabularInline):
     readonly_fields = fields
     can_delete = False
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 class OrderPaymentInline(admin.TabularInline):
@@ -20,8 +27,13 @@ class OrderPaymentInline(admin.TabularInline):
     readonly_fields = ("mode_of_payment", "amount", "reference_no", "created_at", "updated_at")
     can_delete = False
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(Order)
@@ -65,11 +77,16 @@ class OrderAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(KOT)
@@ -105,11 +122,16 @@ class KOTAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(KOTItem)
@@ -127,11 +149,16 @@ class KOTItemAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
 
 @admin.register(OrderAuditEvent)
@@ -141,11 +168,16 @@ class OrderAuditEventAdmin(admin.ModelAdmin):
     search_fields = ("order__invoice_number", "event_type", "actor__username")
     readonly_fields = ("order", "event_type", "actor", "metadata", "created_at", "updated_at")
 
+    def get_readonly_fields(self, request, obj=None):
+        if dev_admin_bypass(request):
+            return []
+        return super().get_readonly_fields(request, obj)
+
     def has_add_permission(self, request):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return bool(dev_admin_bypass(request))
