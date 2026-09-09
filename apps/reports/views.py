@@ -132,6 +132,8 @@ def daily_pnl_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "lines": pnl.lines.all(),
             "cogs_rows": pnl.cogs_rows.all(),
             "consumption_rows": pnl.consumption_rows.all(),
+            "theoretical_rows": pnl.theoretical_rows.all(),
+            "unmapped_rows": pnl.unmapped_rows.all(),
         },
     )
 

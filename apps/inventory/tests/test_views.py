@@ -317,6 +317,108 @@ class TestReconciliationViews(InventoryViewTestBase):
         )
 
 
+class TestRecipeViews(InventoryViewTestBase):
+    def _dish_and_ingredient(self):
+        from apps.inventory.models import Item
+
+        dish = Item.objects.create(
+            item_name="Test Jollof",
+            item_group=self.group,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
+        )
+        return dish, self.item
+
+    def test_recipe_create_post(self):
+        from apps.inventory.models import Recipe
+
+        dish, ingredient = self._dish_and_ingredient()
+        response = self.client.post(
+            reverse("inventory:recipe_create"),
+            {
+                "item": str(dish.pk),
+                "output_qty": "2",
+                "is_active": "on",
+                "remarks": "",
+                "items-TOTAL_FORMS": "1",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+                "items-0-ingredient": str(ingredient.pk),
+                "items-0-qty": "0.25",
+            },
+        )
+        recipe = Recipe.objects.get(item=dish, is_active=True)
+        self.assertRedirects(response, reverse("inventory:recipe_detail", kwargs={"pk": recipe.pk}))
+        self.assertEqual(recipe.items.get().qty, Decimal("0.25"))
+
+    def test_recipe_item_add_and_remove_partials(self):
+        add = self.client.post(
+            reverse("inventory:recipe_item_add"),
+            {
+                "item": "",
+                "output_qty": "1",
+                "items-TOTAL_FORMS": "1",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+            },
+        )
+        self.assertEqual(add.status_code, 200)
+        remove = self.client.post(
+            reverse("inventory:recipe_item_remove", kwargs={"index": 0}),
+            {
+                "item": "",
+                "output_qty": "1",
+                "items-TOTAL_FORMS": "1",
+                "items-INITIAL_FORMS": "0",
+                "items-MIN_NUM_FORMS": "0",
+                "items-MAX_NUM_FORMS": "1000",
+            },
+        )
+        self.assertEqual(remove.status_code, 200)
+
+    def test_recipe_open_redirects_to_detail_or_create(self):
+        from apps.inventory.models import Recipe, RecipeItem
+
+        dish, ingredient = self._dish_and_ingredient()
+        create_url = reverse("inventory:recipe_create")
+        response = self.client.get(reverse("inventory:recipe_open", kwargs={"item_id": dish.pk}))
+        self.assertRedirects(response, f"{create_url}?item={dish.pk}")
+        recipe = Recipe.objects.create(item=dish, output_qty=Decimal("1"))
+        RecipeItem.objects.create(recipe=recipe, ingredient=ingredient, qty=Decimal("0.2"))
+        response = self.client.get(reverse("inventory:recipe_open", kwargs={"item_id": dish.pk}))
+        self.assertRedirects(response, reverse("inventory:recipe_detail", kwargs={"pk": recipe.pk}))
+
+    def test_recipe_pages_render(self):
+        from apps.inventory.models import Recipe, RecipeItem
+
+        dish, ingredient = self._dish_and_ingredient()
+        self.assertEqual(self.client.get(reverse("inventory:recipe_list")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("inventory:recipe_create")).status_code, 200)
+        recipe = Recipe.objects.create(item=dish, output_qty=Decimal("1"))
+        RecipeItem.objects.create(recipe=recipe, ingredient=ingredient, qty=Decimal("0.2"))
+        self.assertEqual(
+            self.client.get(reverse("inventory:recipe_detail", kwargs={"pk": recipe.pk})).status_code, 200
+        )
+        self.assertEqual(
+            self.client.get(reverse("inventory:recipe_update", kwargs={"pk": recipe.pk})).status_code, 200
+        )
+
+    def test_food_usage_page_200(self):
+        response = self.client.get(reverse("inventory:food_usage"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Food usage")
+
+    def test_item_detail_links_recipe_for_sellable_food(self):
+        dish, _ingredient = self._dish_and_ingredient()
+        response = self.client.get(reverse("inventory:item_detail", kwargs={"pk": dish.pk}))
+        self.assertContains(response, "Add recipe")
+
+
 class TestPurchaseReceiptViews(InventoryViewTestBase):
     def test_purchase_receipt_create_post(self):
         response = self.client.post(

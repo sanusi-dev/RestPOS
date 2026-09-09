@@ -7,6 +7,8 @@ from .models import (
     DailyPnLConsumptionRow,
     DailyPnLLine,
     DailyPnLMaterialQty,
+    DailyPnLTheoreticalRow,
+    DailyPnLUnmappedRow,
     PnLConfiguration,
     PnLMaterial,
     PnLRecurringExpense,
@@ -52,3 +54,5 @@ admin.site.register(DailyPnLMaterialQty)
 admin.site.register(DailyPnLAdHoc)
 admin.site.register(DailyPnLCogsRow)
 admin.site.register(DailyPnLConsumptionRow)
+admin.site.register(DailyPnLTheoreticalRow)
+admin.site.register(DailyPnLUnmappedRow)

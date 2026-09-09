@@ -66,6 +66,8 @@ class DailyPnL(BaseModel):
     cogs = _money()
     cogs_drinks = _money()
     kitchen_consumption = _money()
+    theoretical_food_cost = _money()
+    food_cost_variance = _money()
     total_direct_expenses = _money()
     gross_profit = _money()
     total_employee_costs = _money()
@@ -80,6 +82,8 @@ class DailyPnL(BaseModel):
     net_sales_percent = _pct()
     cogs_percent = _pct()
     kitchen_consumption_percent = _pct()
+    theoretical_food_cost_percent = _pct()
+    food_cost_variance_percent = _pct()
     total_direct_expenses_percent = _pct()
     gross_profit_percent = _pct()
     total_employee_costs_percent = _pct()
@@ -255,6 +259,8 @@ class DailyPnLLine(BaseModel):
     ROUND_OFF = "ROUND_OFF"
     NET_SALES = "NET_SALES"
     COGS = "COGS"
+    THEORETICAL_FOOD_COST = "THEORETICAL_FOOD_COST"
+    FOOD_COST_VARIANCE = "FOOD_COST_VARIANCE"
     KITCHEN_CONSUMPTION = "KITCHEN_CONSUMPTION"
     DIRECT = "DIRECT"
     GROSS_PROFIT = "GROSS_PROFIT"
@@ -269,6 +275,8 @@ class DailyPnLLine(BaseModel):
         (ROUND_OFF, "Round-off"),
         (NET_SALES, "Net sales"),
         (COGS, "COGS"),
+        (THEORETICAL_FOOD_COST, "Theoretical food cost"),
+        (FOOD_COST_VARIANCE, "Food cost variance"),
         (KITCHEN_CONSUMPTION, "Kitchen consumption"),
         (DIRECT, "Direct"),
         (GROSS_PROFIT, "Gross profit"),
@@ -330,12 +338,42 @@ class DailyPnLCogsRow(BaseModel):
 
 
 class DailyPnLConsumptionRow(BaseModel):
-    """Kitchen consumption breakup written on submit."""
+    """Kitchen actual-usage breakup written on submit (consumption + waste)."""
+
+    CONSUMPTION = "CONSUMPTION"
+    WASTE = "WASTE"
+    KIND_CHOICES = [(CONSUMPTION, "Consumption"), (WASTE, "Waste")]
 
     pnl = models.ForeignKey(DailyPnL, on_delete=models.CASCADE, related_name="consumption_rows")
     item_name = models.CharField(max_length=200)
     qty = models.DecimalField(max_digits=10, decimal_places=2)
     rate = models.DecimalField(max_digits=14, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES, default=CONSUMPTION)
+
+    class Meta:
+        ordering = ["kind", "item_name", "pk"]
+
+
+class DailyPnLTheoreticalRow(BaseModel):
+    """Theoretical usage snapshot written on submit — frozen against later recipe edits."""
+
+    pnl = models.ForeignKey(DailyPnL, on_delete=models.CASCADE, related_name="theoretical_rows")
+    ingredient_name = models.CharField(max_length=200)
+    qty = models.DecimalField(max_digits=10, decimal_places=2)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["ingredient_name", "pk"]
+
+
+class DailyPnLUnmappedRow(BaseModel):
+    """Dishes sold with no active recipe — theoretical cost understated."""
+
+    pnl = models.ForeignKey(DailyPnL, on_delete=models.CASCADE, related_name="unmapped_rows")
+    item_name = models.CharField(max_length=200)
+    qty = models.DecimalField(max_digits=10, decimal_places=2)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
 
     class Meta:

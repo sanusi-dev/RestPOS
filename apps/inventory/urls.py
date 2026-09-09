@@ -98,4 +98,13 @@ urlpatterns = [
     ),
     path("stock-ledger/", view=views.stock_ledger_list, name="stock_ledger_list"),
     path("stock-balance/", view=views.stock_balance_list, name="stock_balance_list"),
+    path("recipes/", view=views.recipe_list, name="recipe_list"),
+    path("recipes/create/", view=views.recipe_create, name="recipe_create"),
+    path("recipes/item/add/", view=views.recipe_item_add, name="recipe_item_add"),
+    path("recipes/item/remove/<int:index>/", view=views.recipe_item_remove, name="recipe_item_remove"),
+    path("recipes/item/plate-cost/", view=views.recipe_plate_cost_preview, name="recipe_plate_cost_preview"),
+    path("recipes/<int:pk>/", view=views.recipe_detail, name="recipe_detail"),
+    path("recipes/<int:pk>/edit/", view=views.recipe_update, name="recipe_update"),
+    path("recipes/by-item/<int:item_id>/", view=views.recipe_open, name="recipe_open"),
+    path("food-usage/", view=views.food_usage, name="food_usage"),
 ]

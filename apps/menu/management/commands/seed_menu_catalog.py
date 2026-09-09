@@ -157,6 +157,42 @@ INGREDIENT_CONVERSIONS: list[tuple[str, str, str]] = [
     ("Vegetable Oil", "Paint Tin", "5"),
 ]
 
+# (dish_name, output_qty, [(ingredient_name, qty_in_stock_uom)]) — yield baked into qty.
+EXAMPLE_RECIPES: list[tuple[str, str, list[tuple[str, str]]]] = [
+    (
+        "Jollof Rice",
+        "1",
+        [
+            ("Raw Rice (bag)", "0.125"),
+            ("Palm Oil", "0.03"),
+            ("Tomatoes (fresh)", "0.10"),
+            ("Onions", "0.03"),
+            ("Pepper (ata)", "0.02"),
+            ("Crayfish", "0.01"),
+        ],
+    ),
+    (
+        "Egusi Soup",
+        "1",
+        [
+            ("Palm Oil", "0.05"),
+            ("Stockfish", "0.04"),
+            ("Crayfish", "0.02"),
+            ("Pepper (ata)", "0.02"),
+            ("Onions", "0.03"),
+        ],
+    ),
+    (
+        "Quarter Chicken",
+        "1",
+        [
+            ("Raw Whole Chicken", "0.40"),
+            ("Pepper (ata)", "0.01"),
+            ("Onions", "0.02"),
+        ],
+    ),
+]
+
 # (parent_item_name, add_on_item_name) — both must be sellable menu items.
 ADD_ON_LINKS: list[tuple[str, str]] = [
     # Rice plates
@@ -245,11 +281,12 @@ class Command(BaseCommand):
         menu_count = self._seed_menu(menu, simple_items, variant_data, force=force)
         self._link_variants(variant_data, force=force)
         self._set_active_menu(menu)
+        recipe_count = self._seed_recipes(force=force)
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded {raw_count} raw items, {len(simple_items)} simple finished items, "
-                f"{len(variant_data)} variant families; Main Menu has {menu_count} lines."
+                f"{len(variant_data)} variant families, {recipe_count} recipes; Main Menu has {menu_count} lines."
             )
         )
 
@@ -485,3 +522,34 @@ class Command(BaseCommand):
             restaurant.active_menu = menu
             restaurant.save(update_fields=["active_menu", "updated_at"])
             self.stdout.write(self.style.SUCCESS(f"Set Restaurant.active_menu → {menu.name}"))
+
+    def _seed_recipes(self, force: bool = False) -> int:
+        from apps.inventory.models import Recipe, RecipeItem
+
+        count = 0
+        for dish_name, output_qty, lines in EXAMPLE_RECIPES:
+            dish = Item.objects.filter(item_name=dish_name).first()
+            if dish is None:
+                continue
+            recipe, created = Recipe.objects.get_or_create(
+                item=dish,
+                is_active=True,
+                defaults={"output_qty": Decimal(output_qty)},
+            )
+            if not created and force and recipe.output_qty != Decimal(output_qty):
+                recipe.output_qty = Decimal(output_qty)
+                recipe.save(update_fields=["output_qty", "updated_at"])
+            count += 1 if created else 0
+            for ingredient_name, qty in lines:
+                ingredient = Item.objects.filter(item_name=ingredient_name).first()
+                if ingredient is None:
+                    continue
+                row, row_created = RecipeItem.objects.get_or_create(
+                    recipe=recipe,
+                    ingredient=ingredient,
+                    defaults={"qty": Decimal(qty)},
+                )
+                if not row_created and force and row.qty != Decimal(qty):
+                    row.qty = Decimal(qty)
+                    row.save(update_fields=["qty", "updated_at"])
+        return count

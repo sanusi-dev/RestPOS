@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.inventory.models import Bin, StockLedgerEntry, StockReconciliation
+from apps.inventory.models import Bin, StockLedgerEntry
 from apps.orders.models import SUBMITTED, Order, OrderItem
 from apps.staff.models import POSClosingEntry
 
@@ -150,23 +150,6 @@ def drink_cogs(start, end, orders):
                     "kind": DailyPnLCogsRow.WASTAGE,
                 }
             )
-    return total.quantize(TWO), rows
-
-
-def kitchen_consumption(business_date):
-    recs = StockReconciliation.objects.filter(status="SUBMITTED", reason="CONSUMPTION", posting_date=business_date)
-    sles = StockLedgerEntry.objects.filter(
-        voucher_type="Stock Reconciliation",
-        voucher_no__in=[str(r.pk) for r in recs],
-        quantity__lt=0,
-    ).select_related("item")
-    rows = []
-    total = ZERO
-    for sle in sles:
-        qty = abs(sle.quantity)
-        amount = (qty * sle.unit_rate).quantize(TWO)
-        total += amount
-        rows.append({"item_name": sle.item.item_name, "qty": qty, "rate": sle.unit_rate, "amount": amount})
     return total.quantize(TWO), rows
 
 

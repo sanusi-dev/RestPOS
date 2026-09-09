@@ -19,7 +19,7 @@ Revenue
 
 RestPOS does that for **one business day**, split into **FOOD / DRINKS / TOTAL**, because the bar is a separate business sharing the same cashier.
 
-The report is a **management snapshot**, not the accounting books. Settlement already posts income, payment, rounding, and drink COGS to the GL. The Daily P&L re-reads operational data (orders, stock movements, shift closes, plus a few numbers the manager types) and presents a restaurant-shaped day: sales, drink cost, kitchen usage as a note, electricity, gas, wages, rent slice, cash shortage, net profit.
+The report is a **management snapshot**, not the accounting books. Settlement already posts income, payment, rounding, and drink COGS to the GL. The Daily P&L re-reads operational data (orders, stock movements, shift closes, plus a few numbers the manager types) and presents a restaurant-shaped day: sales, food and drink cost, theoretical-vs-actual food memos, electricity, gas, wages, rent slice, cash shortage, net profit.
 
 Think of it as the owner's end-of-day sheet, not the accountant's trial balance.
 
@@ -49,8 +49,8 @@ This restaurant has two businesses on one till:
 |---|---|---|
 | What is sold | Prepared plates | Bottles / cans / poured drinks |
 | Stock on sale | Food sales do **not** deduct inventory | Drink sales deduct bar stock at current WAC |
-| How cost is known | End-of-day kitchen count (consumption reconciliation) | Automatic from the stock ledger at sale |
-| On the P&L | Sales yes; kitchen usage shown as a **memo**, not subtracted from gross profit | Sales minus drink COGS |
+| How cost is known | Kitchen consumption + waste counts valued at kitchen WAC | Automatic from the stock ledger at sale |
+| On the P&L | Sales minus actual food usage (FOOD COGS); recipe × sales shown as theoretical memo, variance as memo | Sales minus drink COGS |
 
 Without a daily statement, the owner can see that the till took ₦80,000 and still not know:
 
@@ -61,7 +61,7 @@ Without a daily statement, the owner can see that the till took ₦80,000 and st
 
 The Daily P&L is the document that answers those questions for **one day**, in a form that can be previewed, submitted, cancelled, and amended.
 
-**Documented product intent** (`FEATURES.md` A10): a daily profit-and-loss document — management snapshot, no GL posting — with a departmental split, kitchen consumption as a memo, prime cost as a highlight, and a configurable business-day start hour.
+**Documented product intent** (`FEATURES.md` A10): a daily profit-and-loss document — management snapshot, no GL posting — with a departmental split, actual food usage as FOOD COGS, theoretical food cost and variance as memos, prime cost as a highlight, and a configurable business-day start hour.
 
 ---
 
@@ -73,7 +73,7 @@ The Daily P&L is the document that answers those questions for **one day**, in a
 | Something that posts journals | `submit_daily_pnl()` writes snapshot rows only. Tests assert `GLEntry` count does not change. |
 | Automatic at midnight | A manager creates a draft, fills inputs, previews, and submits. |
 | A live dashboard | Drafts recompute from live data; submitted documents are frozen history. |
-| A recipe-costed food COGS | Food is not deducted at the POS. Kitchen consumption is counted, then shown beside food sales as a memo. |
+| A recipe-costed food COGS | Actual kitchen usage (consumption + waste) **is** FOOD COGS; recipe × sales is a theoretical memo beside it. |
 | An asset depreciation schedule | `daily_depreciation` is a flat naira amount per day in P&L settings. |
 
 The GL already moved when orders settled and when the shift closed. Daily P&L is a **second view** of the same day, shaped for the owner, with extras the GL does not have (meter readings, cooking-gas qty, a day's slice of monthly rent).
@@ -102,15 +102,16 @@ Rows are built top to bottom in this order:
 Gross sales
 Round-off
 Net sales
-Cost of goods sold                  ← drinks only
-Kitchen consumption                 ← FOOD memo; not in profit
+Cost of goods sold                  ← FOOD = actual usage, DRINKS = drink WAC
+Theoretical food cost               ← FOOD memo; recipe × sales
+Food cost variance                  ← FOOD memo; theoretical − actual
 Direct expenses
   Electricity (optional)
   Materials (gas, etc.)
   Recurring "direct daily" templates
   Ad-hoc directs
 Gross profit
-Prime cost                          ← memo: drink COGS + labor
+Prime cost                          ← memo: food actual + drink COGS + labor
 Employee costs
 Depreciation
 Cash variance
@@ -133,7 +134,7 @@ Suppose 19 August, start hour midnight. Settled orders that day:
 | Jollof Rice | 10 | ₦1,500 | FOOD |
 | Coke | 20 | ₦500 | DRINKS |
 
-Coke's current weighted-average cost (WAC) in the bar is ₦200. Kitchen counted rice down by 10 kg at ₦200/kg.
+Coke's current weighted-average cost (WAC) in the bar is ₦200. The kitchen used 10 kg of rice at ₦200/kg (consumption count), and jollof has a recipe of 0.125 kg per plate.
 
 P&L settings: electricity ₦50/unit, daily depreciation ₦50. Manager enters meter 10 → 12 (2 units), cooking gas 2 kg at ₦100/kg, and a wages template of ₦8,000/day.
 
@@ -142,29 +143,30 @@ P&L settings: electricity ₦50/unit, daily depreciation ₦50. Manager enters m
 | Gross sales | 15,000 | 10,000 | 25,000 | Sum of submitted order lines |
 | Round-off | — | — | 0 | Sum of order rounding |
 | Net sales | 15,000 | 10,000 | 25,000 | Gross + round-off |
-| Cost of goods sold | — | 4,000 | 4,000 | 20 × ₦200 WAC |
-| Kitchen consumption *(memo)* | 2,000 | — | 2,000 | 10 kg × ₦200; **not** in GP |
+| Cost of goods sold | 2,000 | 4,000 | 6,000 | Food actual 10 × ₦200; drinks 20 × ₦200 WAC |
+| Theoretical food cost *(memo)* | 250 | — | 250 | 10 plates × 0.125 kg × ₦200 |
+| Food cost variance *(memo)* | −1,750 | — | −1,750 | 250 − 2,000 |
 | Electricity | — | — | 100 | 2 × ₦50 |
 | Cooking gas | — | — | 200 | 2 × ₦100 |
-| **Gross profit** | 15,000 | 6,000 | 20,700 | See formulas below |
-| Prime cost *(memo)* | — | 4,000 | 12,000 | 4,000 COGS + 8,000 labor |
+| **Gross profit** | 13,000 | 6,000 | 18,700 | See formulas below |
+| Prime cost *(memo)* | 2,000 | 4,000 | 14,000 | 6,000 COGS + 8,000 labor |
 | Employee costs | — | — | 8,000 | Template or override |
 | Depreciation | — | — | 50 | Settings |
 | Cash variance | — | — | 0 | No shortage |
-| **Net profit** | — | — | 12,650 | 20,700 − 8,050 |
+| **Net profit** | — | — | 10,650 | 18,700 − 8,050 |
 
 Formulas used:
 
 ```text
-GP food    = food sales − food-tagged directs          → 15,000 − 0
+GP food    = food sales − actual food − food-tagged directs   → 15,000 − 2,000 − 0
 GP drinks  = drinks sales − drink COGS − drinks directs → 10,000 − 4,000 − 0
-GP total   = net sales − drink COGS − all directs       → 25,000 − 4,000 − 300
-Net profit = GP total − all indirects                   → 20,700 − (8,000 + 50)
+GP total   = net sales − (actual food + drink COGS) − all directs → 25,000 − 6,000 − 300
+Net profit = GP total − all indirects                   → 18,700 − (8,000 + 50)
 ```
 
-Electricity and materials land in **Total** only, unless a recurring/ad-hoc row is tagged FOOD or DRINKS. That is why **GP food + GP drinks (21,000) is not equal to GP total (20,700)** in this example: ₦300 of unallocated directs sits only on the total column.
+Electricity and materials land in **Total** only, unless a recurring/ad-hoc row is tagged FOOD or DRINKS. That is why **GP food + GP drinks (19,000) is not equal to GP total (18,700)** in this example: ₦300 of unallocated directs sits only on the total column.
 
-Kitchen consumption is visible next to food sales (₦2,000 used vs ₦15,000 sold) and is **not** treated as food COGS.
+Actual usage sits inside food gross profit (₦2,000 used vs ₦15,000 sold); theoretical (₦250) and variance (−₦1,750) are memos explaining the gap between recipe expectation and counted usage.
 
 ---
 
@@ -181,7 +183,9 @@ These are queried when `compute_daily_pnl()` runs. A draft's preview will change
 | Food / drinks sales | Submitted `OrderItem.amount` summed by `department` | Orders whose `posting_date` + `posting_time` fall in the business-day window |
 | Round-off | Sum of `Order.rounding_adjustment` | Same orders |
 | Drink COGS | Drink `StockLedgerEntry` rows for those orders | Sales (`POS Order`, qty < 0) add `qty × unit_rate`; restock returns (`POS Return`, qty > 0) subtract; non-restockable return lines add wastage |
-| Kitchen consumption | `StockReconciliation` with `reason=CONSUMPTION`, status submitted | Rec `posting_date` **equals** the P&L `business_date` (calendar date, not the hour window) |
+| Food COGS (actual) | Kitchen `CONSUMPTION` + `WASTE_DAMAGE` reconciliation SLEs via `inventory.services.compute_food_usage()` | Rec `posting_date` **equals** the P&L `business_date` (calendar date, not the hour window); `ADJUSTMENT` excluded |
+| Theoretical food cost (memo) | Active recipe × submitted FOOD `OrderItem` qty in the window (returns net) | Same rate per ingredient as actual (actual-SLE WAC, else bin WAC, else last rate) |
+| Food cost variance (memo) | Theoretical − actual | Quantity story in qty and naira |
 | Cash variance | Submitted `POSClosingEntry.total_short_excess`, sign flipped | Close `period_end_date` in the business-day window; skipped if the settings toggle is off |
 | Recurring expenses | Enabled `PnLRecurringExpense` templates | Daily amount as-is; monthly ÷ days in that month; percent × gross sales |
 | Depreciation | `PnLConfiguration.daily_depreciation` | Always a line |
@@ -250,7 +254,7 @@ Returns:
 
 ### Food
 
-Selling jollof does **not** deduct rice, oil, or chicken. The kitchen is not a recipe explosion. Cost of food is observed later:
+Selling jollof does **not** deduct rice, oil, or chicken. Each sellable dish carries a recipe card (ingredients in `stock_uom`, yield baked into the qty). Cost of food is observed later:
 
 ```text
 Store receives rice
@@ -259,14 +263,14 @@ Transfer Store → Kitchen
         ↓
 Kitchen cooks (no POS stock move)
         ↓
-Manager counts kitchen (Stock Reconciliation, reason CONSUMPTION)
+Manager counts kitchen (CONSUMPTION) + records waste (WASTE_DAMAGE)
         ↓
 Ledger: −qty × current WAC
         ↓
-Daily P&L "Kitchen consumption" memo in the FOOD column
+Daily P&L FOOD COGS (actual) + theoretical/variance memos
 ```
 
-**Documented design intent:** kitchen consumption is shown beside FOOD sales as a memo, **not** included in gross profit. The owner can judge "we sold ₦15,000 food and used ₦2,000 of counted kitchen stock" without pretending the ₦2,000 is plate-level COGS.
+**Documented design intent:** actual kitchen usage **is** food COGS and sits inside food gross profit. The theoretical memo (recipe × sales) beside it lets the owner judge "we sold ₦15,000 food, recipes expected ₦250 of ingredients, but the kitchen used ₦2,000" — a quantity story about portioning and waste, not plate-level accounting.
 
 ### Direct vs indirect
 
@@ -275,7 +279,7 @@ Restaurant P&Ls usually split:
 - **Direct** — costs that vary with the day's operation (electricity used, gas used, a daily stall fee). Subtracted **before** gross profit.
 - **Indirect** — running the business (wages, rent slice, depreciation, cash shortage). Subtracted **after** gross profit to get net profit.
 
-**Prime cost** (a hospitality highlight) is drink COGS + labor. It is a memo so the owner can see "what it cost to put product and people on the floor" without double-counting it in net profit.
+**Prime cost** (a hospitality highlight) is food actual + drink COGS + labor. It is a memo so the owner can see "what it cost to put product and people on the floor" without double-counting it in net profit.
 
 ---
 
@@ -306,7 +310,7 @@ An order posted 19 Aug 05:00 belongs to 18 Aug's P&L.
 
 **What uses the calendar date only**
 
-- Kitchen consumption reconciliations: `posting_date == business_date`
+- Kitchen consumption and waste reconciliations: `posting_date == business_date`
 
 So a 6am business day and a consumption rec dated the next calendar morning will **not** land on the same P&L even if they feel like the same night. That is current behavior, not a second window.
 
@@ -481,16 +485,16 @@ The statement partial accepts either live `LineSpec` dataclasses (preview) or sa
 
 ## 14. Compute, step by step
 
-`compute_daily_pnl(pnl)` in `apps/reports/services.py` builds a `Computation` (totals, lines, cogs_rows, consumption_rows). Nothing is written yet.
+`compute_daily_pnl(pnl)` in `apps/reports/services.py` builds a `Computation` (totals, lines, cogs_rows, consumption_rows, theoretical_rows, unmapped_rows). Nothing is written yet.
 
 1. Load settings. Build `[start, end)` from `business_date` + start hour.
 2. Collect submitted orders in that window (`orders_in_window` then `sales_by_department`, `round_off`).
-3. Drink COGS + item rows (`drink_cogs`). Kitchen consumption + item rows (`kitchen_consumption`).
-4. Append sales / round-off / net sales / COGS / kitchen-consumption lines.
+3. Drink COGS + item rows (`drink_cogs`). Food usage via `inventory.services.compute_food_usage()` — actual, theoretical, variance, unmapped.
+4. Append sales / round-off / net sales / COGS (food actual + drinks) / theoretical + variance memo lines.
 5. Directs: electricity if readings exist; each material with qty > 0; `DIRECT_DAILY` templates; ad-hoc DIRECT rows.
 6. Gross profit from the formulas in §6.
 7. Employee: override **or** employee templates.
-8. Prime cost memo = drink COGS + employee total.
+8. Prime cost memo = food actual + drink COGS + employee total.
 9. Depreciation; cash variance.
 10. Other indirects: remaining templates + ad-hoc INDIRECT rows.
 11. Net profit = GP − all indirects (employee + depreciation + variance + other indirects).
@@ -506,9 +510,9 @@ The statement partial accepts either live `LineSpec` dataclasses (preview) or sa
 - Return orders → `voucher_type="POS Return"`, qty > 0, drinks → kind `RETURN`, amount negative.
 - Return orders with `not_restockable` drink lines → kind `WASTAGE`, amount positive at `_wastage_rate()` (return SLE, else bin WAC, else original sale SLE).
 
-### Kitchen consumption (`sources.kitchen_consumption`)
+### Food usage (`inventory.services.compute_food_usage`)
 
-Submitted reconciliations, `reason="CONSUMPTION"`, `posting_date=business_date`. Outbound SLEs (`quantity < 0`) valued at `unit_rate` (current WAC at count). Consumption is reduction-only by the reconciliation rules (a count above the bin is rejected; a count equal to the bin is a no-op), so only outbound rows exist. The same submit also posts GL (Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse account); Daily P&L reads the SLEs, not the GL.
+The single source for the Food usage page and the P&L food numbers — reports call it, never reimplement it. Theoretical explodes active recipes over submitted FOOD order lines in the window (returns net, unmapped dishes listed separately). Actual reads submitted Kitchen `CONSUMPTION` + `WASTE_DAMAGE` SLEs on `posting_date == business_date` (`ADJUSTMENT` excluded). One rate per ingredient values both sides: actual-SLE weighted average, else Kitchen bin WAC, else `last_purchase_rate`, else 0 (flagged on the report).
 
 ### Cash variance (`sources.cash_variance`)
 
@@ -532,9 +536,9 @@ Daily kinds return `amount`. Monthly kinds divide by `calendar.monthrange`. Perc
 2. `FiscalYear.get_for(business_date)` — hard fail if no year.
 3. `compute_daily_pnl(locked)` again (never submit stale preview).
 4. Snapshot each material row's current catalog `rate` and `qty × rate` onto `DailyPnLMaterialQty`.
-5. Delete previous `lines`, `cogs_rows`, `consumption_rows` (a re-submit path is not exposed in the UI; this keeps the write idempotent inside the function).
+5. Delete previous `lines`, `cogs_rows`, `consumption_rows`, `theoretical_rows`, `unmapped_rows` (a re-submit path is not exposed in the UI; this keeps the write idempotent inside the function).
 6. Insert `DailyPnLLine` for every `LineSpec`.
-7. Insert `DailyPnLCogsRow` / `DailyPnLConsumptionRow` breakups.
+7. Insert `DailyPnLCogsRow` / `DailyPnLConsumptionRow` (kind `CONSUMPTION` | `WASTE`) / `DailyPnLTheoreticalRow` / `DailyPnLUnmappedRow` breakups.
 8. Copy the totals dict onto `DailyPnL` fields (`gross_sales`, `net_profit`, percents, …).
 9. Snapshot `electricity_rate` and the period window.
 10. Status `SUBMITTED`, `submitted_at`, `submitted_by`. Save with `_allow_submit`.

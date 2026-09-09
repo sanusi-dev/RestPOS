@@ -1,0 +1,39 @@
+{% extends "web/app/app_base.html" %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/components/breadcrumbs.html" with root_label="Inventory" root_url="inventory:dashboard" current_label="Recipes" %}
+  <div class="mb-5 flex flex-col gap-5 border-b border-gray-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-gray-900">Recipes</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-gray-500">Ingredient cards for sellable food — one active card per dish, quantities in stock units.</p>
+    </div>
+    <a href="{% url 'inventory:recipe_create' %}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 sm:px-5">
+      <span>{% hgi_stroke name="plus-sign-circle" size="16" color="currentColor" stroke_width="2" %}</span>
+      <span class="hidden sm:inline">New recipe</span>
+      <span class="sm:hidden">New</span>
+    </a>
+  </div>
+  <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Dish</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Output</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Ingredients</th>
+            <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Plate cost</th>
+            <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-gray-400 sm:px-6">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for recipe, cost in rows %}
+            <tr class="transition-colors hover:bg-gray-50"><td class="px-5 py-3.5 sm:px-6"><a href="{% url 'inventory:recipe_detail' recipe.pk %}" class="text-sm font-semibold text-gray-900 transition-colors hover:text-gray-600">{{ recipe.item.item_name }}</a></td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ recipe.output_qty|floatformat:"-2" }}</td><td class="px-5 py-3.5 text-right text-sm tabular-nums text-gray-500 sm:px-6">{{ recipe.items.count }}</td><td class="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-gray-900 sm:px-6">{{ cost|floatformat:2 }}</td><td class="px-5 py-3.5 sm:px-6">{% if recipe.is_active %}<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/10">Active</span>{% else %}<span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500 ring-1 ring-gray-600/10">Inactive</span>{% endif %}</td></tr>
+          {% empty %}
+            <tr><td colspan="5" class="px-5 py-16 text-center text-sm text-gray-500 sm:px-6"><div class="flex flex-col items-center gap-2"><span class="mt-1 font-medium text-gray-600">No recipes yet.</span><span class="text-xs text-gray-400">Add the first ingredient card for a dish.</span></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -17,13 +17,13 @@ conventions are in `AGENTS.md`.
 | App | Responsibility | FEATURES.md sections | State |
 |---|---|---|---|
 | `settings` | Restaurant singleton, production units, staff roles | A1 | built |
-| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69 | built; remaining §4.12 recipes |
+| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports, recipes, food usage | A3 | built |
 | `menu` | Menu definition, menu items, variants, add-ons | A2 | built |
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
 | `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, supplier payables | A8, A9 | built |
-| `reports` | Daily P&L, sales reports, trial balance | A10, E #63, E #69 | built (Daily P&L); sales reports planned; food AvT/COGS in §4.12 |
+| `reports` | Daily P&L, sales reports, trial balance | A10, E #63 | built (Daily P&L with food AvT/COGS); sales reports planned |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
 | `coupons` | Coupon codes, pricing rules, cashier discount | F #66 | deferred |
@@ -33,9 +33,8 @@ conventions are in `AGENTS.md`.
 `orders` (orders stamp the active shift and reference payment modes); `orders` is the central
 app built on all of the above; `accounting` then layers GL posting on orders, payments,
 inventory, and settings; `reports` consumes everything; `printing` is a leaf built last.
-§4.10 (UOM conversion) and §4.11 (reconciliation standardization) have landed. §4.12
-(food recipes) is next and assumes the §4.11 reason set and GL legs. §4.12 is
-independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
+§4.10 (UOM conversion), §4.11 (reconciliation standardization), and §4.12 (food
+recipes and AvT) have landed. Deferred apps (customers, coupons) are picked up only
 after the core phases complete. Each phase completes before the next starts.
 
 ## 3. Build Sequence
@@ -48,11 +47,11 @@ after the core phases complete. Each phase completes before the next starts.
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
 | 6 | accounting | A8 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
-| 7 | reports | A10 | Daily P&L document with amendments and departmental split | Food COGS / AvT statement changes land in §4.12 | n/a | Completed |
+| 7 | reports | A10 | Daily P&L document with amendments and departmental split, food AvT/COGS | — | n/a | Completed |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
 | 10 | inventory | A3 | Reconciliation standardization: Adjustment reason, waste delta-entry, consumption ceiling, opening gate, GL for every reason | — | n/a | Completed |
-| 11 | inventory, reports | E #69 | — | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L | §4.12 | Planned |
+| 11 | inventory, reports | A3, A10 | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L | — | n/a | Completed |
 | — | customers | F #65 | Free-text customer name on orders | Customer master, groups, credit limits, POS search/create | deferred by design | Deferred |
 | — | coupons | F #66 | — | Coupon codes, pricing rules, cashier discount | deferred by design | Deferred |
 
@@ -904,7 +903,7 @@ glossary; `FEATURES.md` A3 #16 and E #70.
 
 ### 4.12 Food recipes and actual-vs-theoretical usage (Phase 11)
 
-**Status:** planned — not yet implemented. FEATURES.md E #69.
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Depends on:** §4.10 (recipes and counts are in `stock_uom`; `last_purchase_rate` is
 per stock UOM) and §4.11 (reason set, entry semantics, and consumption GL that this section

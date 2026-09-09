@@ -79,13 +79,15 @@
 {% endif %}
 {% if consumption_rows %}
   <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
-    <div class="px-6 py-5 border-b border-gray-100">
-      <h3 class="text-base font-bold text-gray-900">Kitchen consumption</h3>
+    <div class="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+      <h3 class="text-base font-bold text-gray-900">Food usage (actual)</h3>
+      {% if pnl.business_date %}<a href="{% url 'inventory:food_usage' %}?date={{ pnl.business_date|date:'Y-m-d' }}" class="text-xs font-bold text-gray-500 transition hover:text-gray-900">Open food usage ↗</a>{% endif %}
     </div>
     <table class="min-w-full divide-y divide-gray-100 text-sm">
       <thead class="bg-gray-50/50">
         <tr>
           <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Item</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Kind</th>
           <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
           <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
           <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
@@ -95,8 +97,61 @@
         {% for row in consumption_rows %}
           <tr>
             <td class="px-6 py-3">{{ row.item_name }}</td>
+            <td class="px-6 py-3">{{ row.get_kind_display }}</td>
             <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
             <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% if theoretical_rows %}
+  <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden mb-6">
+    <div class="px-6 py-5 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-900">Theoretical food cost</h3>
+    </div>
+    <table class="min-w-full divide-y divide-gray-100 text-sm">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Ingredient</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rate</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in theoretical_rows %}
+          <tr>
+            <td class="px-6 py-3">{{ row.ingredient_name }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.rate }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% if unmapped_rows %}
+  <div class="bg-white border border-amber-200 rounded-[1.5rem] overflow-hidden mb-6">
+    <div class="px-6 py-5 border-b border-amber-100">
+      <h3 class="text-base font-bold text-gray-900">Dishes with no recipe</h3>
+    </div>
+    <table class="min-w-full divide-y divide-gray-100 text-sm">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Dish</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Qty</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Sales ₦</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for row in unmapped_rows %}
+          <tr>
+            <td class="px-6 py-3">{{ row.item_name }}</td>
+            <td class="px-6 py-3 text-right font-mono">{{ row.qty }}</td>
             <td class="px-6 py-3 text-right font-mono">{{ row.amount }}</td>
           </tr>
         {% endfor %}

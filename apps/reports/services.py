@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounting.models import FiscalYear
+from apps.inventory.services import compute_food_usage
 
 from .models import (
     DRINKS,
@@ -16,6 +17,8 @@ from .models import (
     DailyPnLCogsRow,
     DailyPnLConsumptionRow,
     DailyPnLLine,
+    DailyPnLTheoreticalRow,
+    DailyPnLUnmappedRow,
     PnLConfiguration,
     PnLRecurringExpense,
 )
@@ -26,7 +29,6 @@ from .sources import (
     cash_variance,
     drink_cogs,
     electricity,
-    kitchen_consumption,
     orders_in_window,
     recurring_amount,
     round_off,
@@ -69,6 +71,8 @@ class Computation:
     lines: list = field(default_factory=list)
     cogs_rows: list = field(default_factory=list)
     consumption_rows: list = field(default_factory=list)
+    theoretical_rows: list = field(default_factory=list)
+    unmapped_rows: list = field(default_factory=list)
 
 
 def _append(lines, spec):
@@ -85,22 +89,68 @@ def compute_daily_pnl(pnl):
     gross = (food + drinks).quantize(TWO)
     round_off_amount = round_off(orders)
     net = (gross + round_off_amount).quantize(TWO)
-    cogs, cogs_rows = drink_cogs(start, end, orders)
-    consumption, consumption_rows = kitchen_consumption(pnl.business_date)
+    cogs_drinks, cogs_rows = drink_cogs(start, end, orders)
+    usage = compute_food_usage(pnl.business_date)
+    food_actual = usage.actual_cost
+    cogs = (food_actual + cogs_drinks).quantize(TWO)
+    consumption_rows = []
+    for item in usage.usages:
+        if item.consumption_qty:
+            consumption_rows.append(
+                {
+                    "item_name": item.ingredient_name,
+                    "qty": item.consumption_qty,
+                    "rate": item.rate,
+                    "amount": item.consumption_amount,
+                    "kind": DailyPnLConsumptionRow.CONSUMPTION,
+                }
+            )
+        if item.waste_qty:
+            consumption_rows.append(
+                {
+                    "item_name": item.ingredient_name,
+                    "qty": item.waste_qty,
+                    "rate": item.rate,
+                    "amount": item.waste_amount,
+                    "kind": DailyPnLConsumptionRow.WASTE,
+                }
+            )
+    theoretical_rows = [
+        {
+            "ingredient_name": item.ingredient_name,
+            "qty": item.theoretical_qty,
+            "rate": item.rate,
+            "amount": item.theoretical_amount,
+        }
+        for item in usage.usages
+        if item.theoretical_qty
+    ]
+    unmapped_rows = [{"item_name": dish.item_name, "qty": dish.qty, "amount": dish.amount} for dish in usage.unmapped]
 
     lines: list[LineSpec] = []
     _append(lines, LineSpec(DailyPnLLine.GROSS_SALES, "Gross sales", food, drinks, gross))
     _append(lines, LineSpec(DailyPnLLine.ROUND_OFF, "Round-off", ZERO, ZERO, round_off_amount))
     _append(lines, LineSpec(DailyPnLLine.NET_SALES, "Net sales", food, drinks, net))
-    _append(lines, LineSpec(DailyPnLLine.COGS, "Cost of goods sold", ZERO, cogs, cogs))
+    _append(lines, LineSpec(DailyPnLLine.COGS, "Cost of goods sold", food_actual, cogs_drinks, cogs))
     _append(
         lines,
         LineSpec(
-            DailyPnLLine.KITCHEN_CONSUMPTION,
-            "Kitchen consumption",
-            consumption,
+            DailyPnLLine.THEORETICAL_FOOD_COST,
+            "Theoretical food cost",
+            usage.theoretical_cost,
             ZERO,
-            consumption,
+            usage.theoretical_cost,
+            is_memo=True,
+        ),
+    )
+    _append(
+        lines,
+        LineSpec(
+            DailyPnLLine.FOOD_COST_VARIANCE,
+            "Food cost variance",
+            usage.variance_cost,
+            ZERO,
+            usage.variance_cost,
             is_memo=True,
         ),
     )
@@ -148,8 +198,8 @@ def compute_daily_pnl(pnl):
             direct_drinks += drinks_amt
             direct_total += total_amt
 
-    gp_food = (food - direct_food).quantize(TWO)
-    gp_drinks = (drinks - cogs - direct_drinks).quantize(TWO)
+    gp_food = (food - food_actual - direct_food).quantize(TWO)
+    gp_drinks = (drinks - cogs_drinks - direct_drinks).quantize(TWO)
     gp = (net - cogs - direct_total).quantize(TWO)
     _append(lines, LineSpec(DailyPnLLine.GROSS_PROFIT, "Gross profit", gp_food, gp_drinks, gp))
 
@@ -174,7 +224,7 @@ def compute_daily_pnl(pnl):
             employee_total += total_amt
 
     prime = (cogs + employee_total).quantize(TWO)
-    _append(lines, LineSpec(DailyPnLLine.PRIME_COST, "Prime cost", ZERO, cogs, prime, is_memo=True))
+    _append(lines, LineSpec(DailyPnLLine.PRIME_COST, "Prime cost", food_actual, cogs_drinks, prime, is_memo=True))
 
     depreciation = config.daily_depreciation.quantize(TWO)
     _append(
@@ -226,8 +276,10 @@ def compute_daily_pnl(pnl):
         "round_off": round_off_amount,
         "net_sales": net,
         "cogs": cogs,
-        "cogs_drinks": cogs,
-        "kitchen_consumption": consumption,
+        "cogs_drinks": cogs_drinks,
+        "kitchen_consumption": food_actual,
+        "theoretical_food_cost": usage.theoretical_cost,
+        "food_cost_variance": usage.variance_cost,
         "total_direct_expenses": direct_total.quantize(TWO),
         "gross_profit": gp,
         "total_employee_costs": employee_total.quantize(TWO),
@@ -240,7 +292,9 @@ def compute_daily_pnl(pnl):
         "round_off_percent": _pct(round_off_amount, gross),
         "net_sales_percent": _pct(net, gross),
         "cogs_percent": _pct(cogs, gross),
-        "kitchen_consumption_percent": _pct(consumption, gross),
+        "kitchen_consumption_percent": _pct(food_actual, gross),
+        "theoretical_food_cost_percent": _pct(usage.theoretical_cost, gross),
+        "food_cost_variance_percent": _pct(usage.variance_cost, gross),
         "total_direct_expenses_percent": _pct(direct_total, gross),
         "gross_profit_percent": _pct(gp, gross),
         "total_employee_costs_percent": _pct(employee_total, gross),
@@ -250,7 +304,14 @@ def compute_daily_pnl(pnl):
         "prime_cost_percent": _pct(prime, gross),
         "net_profit_percent": _pct(np, gross),
     }
-    return Computation(totals=totals, lines=lines, cogs_rows=cogs_rows, consumption_rows=consumption_rows)
+    return Computation(
+        totals=totals,
+        lines=lines,
+        cogs_rows=cogs_rows,
+        consumption_rows=consumption_rows,
+        theoretical_rows=theoretical_rows,
+        unmapped_rows=unmapped_rows,
+    )
 
 
 @transaction.atomic
@@ -272,6 +333,8 @@ def submit_daily_pnl(pnl, actor=None):
     locked.lines.all().delete()
     locked.cogs_rows.all().delete()
     locked.consumption_rows.all().delete()
+    locked.theoretical_rows.all().delete()
+    locked.unmapped_rows.all().delete()
 
     gross = computation.totals["gross_sales"]
     for spec in computation.lines:
@@ -291,6 +354,10 @@ def submit_daily_pnl(pnl, actor=None):
         DailyPnLCogsRow.objects.create(pnl=locked, department=DRINKS, **row)
     for row in computation.consumption_rows:
         DailyPnLConsumptionRow.objects.create(pnl=locked, **row)
+    for row in computation.theoretical_rows:
+        DailyPnLTheoreticalRow.objects.create(pnl=locked, **row)
+    for row in computation.unmapped_rows:
+        DailyPnLUnmappedRow.objects.create(pnl=locked, **row)
 
     for name, value in computation.totals.items():
         setattr(locked, name, value)
