@@ -8,6 +8,8 @@ from .models import (
     ItemUOMConversion,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    Recipe,
+    RecipeItem,
     StockEntry,
     StockEntryDetail,
     StockLedgerEntry,
@@ -171,6 +173,20 @@ class StockReconciliationItemInline(SubmittedInlineMixin, admin.TabularInline):
     model = StockReconciliationItem
     extra = 1
     readonly_fields = ("current_qty",)
+
+
+class RecipeItemInline(admin.TabularInline):
+    model = RecipeItem
+    extra = 1
+
+
+@admin.register(Recipe)
+class RecipeAdmin(admin.ModelAdmin):
+    list_display = ("item", "output_qty", "is_active")
+    list_filter = ("is_active",)
+    list_select_related = ("item",)
+    search_fields = ("item__item_name",)
+    inlines = [RecipeItemInline]
 
 
 @admin.register(StockReconciliation)

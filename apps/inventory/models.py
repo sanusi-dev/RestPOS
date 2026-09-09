@@ -203,6 +203,16 @@ class Item(BaseModel):
                 raise ValidationError({"is_stock_item": "Cannot turn off stock tracking while UOM conversions exist."})
             if not self.is_purchase_item:
                 raise ValidationError({"is_purchase_item": "Cannot turn off purchasable while UOM conversions exist."})
+        if self.pk:
+            if self.recipes.exists() or RecipeItem.objects.filter(ingredient_id=self.pk).exists():
+                previous = type(self).objects.only("stock_uom_id").get(pk=self.pk)
+                if self.stock_uom_id != previous.stock_uom_id:
+                    raise ValidationError({"stock_uom": "Cannot change the stock unit while recipes use this item."})
+            if RecipeItem.objects.filter(ingredient_id=self.pk).exists():
+                if self.is_sales_item or not self.is_stock_item:
+                    raise ValidationError(
+                        "This item is a recipe ingredient and must stay stock-tracked and non-sellable."
+                    )
 
 
 class ItemUOMConversion(BaseModel):
@@ -892,3 +902,75 @@ class PurchaseReceiptItem(BaseModel):
                 raise ValidationError(f"{item.item_name} is a sellable food item and cannot be received into stock.")
             if not (item.is_stock_item and item.is_purchase_item):
                 raise ValidationError(f"{item.item_name} must be a stock-tracked, purchasable food ingredient.")
+
+
+class Recipe(BaseModel):
+    """Ingredient card for one sellable FOOD item — quantities bake in the yield."""
+
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="recipes")
+    output_qty = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("1"))
+    is_active = models.BooleanField(default=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["item__item_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["item"],
+                condition=models.Q(is_active=True),
+                name="inventory_recipe_one_active_per_item",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Recipe for {self.item.item_name}"
+
+    def clean(self):
+        super().clean()
+        if not self.item_id:
+            return
+        item = self.item
+        if item.department != "FOOD" or not item.is_sales_item or item.has_variants:
+            raise ValidationError({"item": "Recipes are only for sellable FOOD items."})
+        if self.output_qty is not None and self.output_qty <= 0:
+            raise ValidationError({"output_qty": "Output quantity must be greater than zero."})
+        if (
+            self.is_active
+            and type(self).objects.filter(item_id=self.item_id, is_active=True).exclude(pk=self.pk).exists()
+        ):
+            raise ValidationError({"item": "This item already has an active recipe — deactivate it first."})
+
+
+class RecipeItem(BaseModel):
+    """One ingredient line on a recipe — qty is per recipe output, in ingredient stock UOM."""
+
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="items")
+    ingredient = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="recipe_usages")
+    qty = models.DecimalField(max_digits=10, decimal_places=4)
+
+    class Meta:
+        unique_together = ("recipe", "ingredient")
+
+    def __str__(self):
+        return f"{self.ingredient.item_name} x{self.qty}"
+
+    def clean(self):
+        super().clean()
+        if not self.ingredient_id or not self.recipe_id:
+            return
+        ingredient = self.ingredient
+        if (
+            ingredient.disabled
+            or ingredient.has_variants
+            or ingredient.is_sales_item
+            or not ingredient.is_stock_item
+            or not ingredient.is_purchase_item
+            or ingredient.department != "FOOD"
+        ):
+            raise ValidationError(
+                {"ingredient": "Ingredients must be enabled, stock-tracked, purchasable, non-sellable FOOD items."}
+            )
+        if self.ingredient_id == self.recipe.item_id:
+            raise ValidationError({"ingredient": "An item cannot be an ingredient of its own recipe."})
+        if self.qty is not None and self.qty <= 0:
+            raise ValidationError({"qty": "Quantity must be greater than zero."})

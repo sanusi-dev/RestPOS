@@ -39,8 +39,11 @@
 | Audit Event | Append-only `OrderAuditEvent` describing an order mutation or lifecycle event. |
 | POS History | `services.order_history_rows()` query and its cashier-facing filtered display. |
 | Daily P&L | Submitted management snapshot for one business day (`reports.DailyPnL`). Not a GL report and not a GL posting. |
+| Recipe | Ingredient card (`inventory.Recipe`) for one sellable FOOD item; one active card per dish, qtys in ingredient `stock_uom`. |
+| Theoretical usage | Recipe × submitted FOOD sales for the day (returns netted); memo beside actual food cost. |
+| Actual usage | Kitchen `CONSUMPTION` + `WASTE_DAMAGE` SLEs on the business date; FOOD COGS on the P&L. |
 | Business-day window | `[business_date + start_hour, next day + start_hour)` used to pick orders and shift closes for a Daily P&L. |
-| Kitchen consumption (P&L) | Memo line: submitted Kitchen `CONSUMPTION` reconciliations on that calendar date, valued at current WAC. Not subtracted from gross profit. |
+| Kitchen consumption (P&L) | Actual food-usage breakup (`CONSUMPTION` + `WASTE` rows) backing FOOD COGS; kept as a stored field and row set, no longer a statement line. |
 | Prime cost (P&L) | Memo line: drink COGS + employee costs. Not subtracted again at net profit. |
 | P&L material | Catalog consumable (`PnLMaterial`) typed as a quantity on the day's draft (e.g. cooking gas), not an inventory item. |
 | Full History | Restaurant-controlled access to returns, cancelled, discarded, and all status filters. |

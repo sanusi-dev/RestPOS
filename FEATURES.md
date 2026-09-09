@@ -16,10 +16,11 @@ Implementation status lives in `PLAN.md`.
 - **No discounts or coupons.** There is no open discount path.
 - **Departmental split.** Every item is FOOD or DRINKS. Tickets route by department; revenue is
   tracked per department per order line.
-- **Operational stock, not recipes.** No BOM or ingredient-level consumption. POS stock
+- **Operational stock plus recipe cards.** POS stock
   reservation and deduction apply to drinks only; food usage is counted through kitchen
-  consumption reconciliations. Recipe cards and actual-vs-theoretical food cost are
-  planned (E #69).
+  consumption and waste reconciliations. Sellable dishes carry recipe cards (ingredients in
+  `stock_uom`); theoretical usage (recipe × sales) is compared to actual kitchen usage, and
+  actual usage is FOOD COGS on the Daily P&L.
 - **Local network only.** Django runs on the cashier desktop; the back office is reachable from
   any device on the same WiFi. No internet dependency.
 
@@ -55,6 +56,7 @@ Implementation status lives in `PLAN.md`.
 | 14 | Stock ledger entries | Immutable signed records of every stock movement under Perpetual Weighted-Average Cost (PWAC): quantity (signed), unit rate (inbound: actual rate; outbound: current WAC), value change, and variance (cancellation WAC drift or sale-return). Bin holds the current WAC; ledger is append-only audit. Cancellation posts reversals via `reversal_of_sle`, never edits; posting date is informational, valuation always at current WAC. |
 | 15 | Stock entries | Manual movements: Material Receipt (into the Store, at actual rate — market purchase posts Dr SIH / Cr the GL account mapped to the selected payment mode ("Paid from"), no GRNI) and Material Transfer (Store → Kitchen or Bar) only. Receipt lines carry the purchase unit (stock UOM or a bulk unit from the item's conversion table) with quantity and rate as-bought; submit converts once into `stock_uom` for the ledger and WAC. Transfers value at the source WAC and dest recalculates its WAC; cannot drive source stock negative. Cancellation reverses at dest current WAC, net zero. |
 | 16 | Stock reconciliation | Four active reasons. Opening Stock: first seeding of a fresh warehouse only (zero prior ledger entries), rate required, posts Dr warehouse / Cr Temporary Opening equity. Adjustment: merges physical count and correction; counted quantity, both directions, posts Dr Stock Adjustments / Cr warehouse (inbound reverses). Consumption: end-of-day kitchen count that cannot exceed the bin (equal is a no-op); FOOD items at the Kitchen only; posts Dr default expense / Cr kitchen. Waste/Damage: records the quantity wasted (positive delta, not what is left); cannot exceed on-hand minus reserved; posts Dr wastage / Cr warehouse. Every reason posts GL legs on submit; cancellation reverses. |
+| 16b | Food recipes & AvT | Recipe cards on sellable food (ingredients in `stock_uom`, yield baked in; one active card per dish, variants and add-ons hold their own; drinks have none). POS still does not deduct food. Theoretical usage = recipe × submitted FOOD sales (returns netted, unmapped dishes listed); actual usage = kitchen consumption + waste counts. Shared per-ingredient rate (actual-SLE WAC, else bin WAC, else last rate). Back office: Recipes register with plate-cost preview, Food usage report, recipe links on item and menu pages. |
 | 17 | Purchase receipts | Supplier goods received into the Store: posts Dr SIH (warehouse asset) / Cr GRNI at the as-bought line amount. Quantity and rate on the line are as-bought (stock UOM or a bulk unit from the item's conversion table); submit converts once into `stock_uom` for the ledger and WAC. Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. Cancellation blocked if a submitted supplier invoice or allocated payment exists; allowed cancellation reverses at current WAC with drift to the inventory price variance account. Market-purchase stock entries receive the same as-bought UOM conversion. |
 | 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation (current WAC). Drives POS drink availability and reservations. |
 | 19 | Stock reports | A stock ledger report (movement audit trail) and a stock balance report (opening/received/issued/closing) in the back office. |
@@ -117,7 +119,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (drinks at current WAC) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Kitchen consumption (reconciliation at current WAC) is shown beside FOOD sales as a memo, not in GP. Sale-return variance posts to COGS (current WAC vs original). Prime cost (drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
+| 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (FOOD = actual kitchen usage, DRINKS = drinks at current WAC) → theoretical food cost and food cost variance (memos) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Sale-return variance posts to COGS (current WAC vs original). Prime cost (food actual + drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
 
 ## B. POS Frontend
 
@@ -158,7 +160,6 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
-| 69 | Food recipes & AvT | Recipe cards on sellable food (ingredients in `stock_uom`). POS still does not deduct food. Theoretical usage = recipe × sales; actual usage = kitchen consumption + waste counts. Daily P&L treats actual as FOOD COGS (theoretical and variance as memos). Requires A3 #11/#16/#17 UOM conversion and reconciliation semantics. |
 
 ## F. Deferred
 

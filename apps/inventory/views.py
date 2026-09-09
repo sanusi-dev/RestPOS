@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.users.decorators import backoffice_required
@@ -19,6 +20,8 @@ from .forms import (
     PurchaseReceiptForm,
     PurchaseReceiptItemForm,
     PurchaseReceiptItemFormSet,
+    RecipeForm,
+    RecipeItemFormSet,
     StockEntryDetailForm,
     StockEntryDetailFormSet,
     StockEntryForm,
@@ -34,6 +37,7 @@ from .models import (
     ItemGroup,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    Recipe,
     StockEntry,
     StockEntryDetail,
     StockLedgerEntry,
@@ -318,6 +322,10 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
         else Item.objects.none()
     )
     menu_lines = item.menu_items.select_related("menu").order_by("menu__name")
+    active_recipe = (
+        Recipe.objects.filter(item=item, is_active=True).prefetch_related("items__ingredient__stock_uom").first()
+    )
+    plate_cost = services.recipe_plate_cost(active_recipe) if active_recipe else None
     return render(
         request,
         "backoffice/inventory/item_detail.html",
@@ -327,6 +335,8 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
             "conversions": conversions,
             "variants": variants,
             "menu_lines": menu_lines,
+            "active_recipe": active_recipe,
+            "plate_cost": plate_cost,
         },
     )
 
@@ -873,4 +883,169 @@ def stock_balance_list(request: HttpRequest) -> HttpResponse:
             "warehouses": warehouses,
             "selected_warehouse": warehouse_id,
         },
+    )
+
+
+@backoffice_required
+def recipe_list(request: HttpRequest) -> HttpResponse:
+    recipes = (
+        Recipe.objects.select_related("item")
+        .prefetch_related("items__ingredient__stock_uom")
+        .order_by("item__item_name")
+    )
+    rows = [(recipe, services.recipe_plate_cost(recipe)) for recipe in recipes]
+    return render(request, "backoffice/inventory/recipe_list.html", {"rows": rows})
+
+
+@backoffice_required
+def recipe_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = RecipeForm(request.POST)
+        ingredient_fs = RecipeItemFormSet(request.POST, instance=Recipe(), prefix="items")
+        if form.is_valid() and ingredient_fs.is_valid():
+            with transaction.atomic():
+                recipe = form.save()
+                ingredient_fs.instance = recipe
+                ingredient_fs.save()
+            return redirect("inventory:recipe_detail", pk=recipe.pk)
+    else:
+        item_id = request.GET.get("item")
+        form = RecipeForm(initial={"item": item_id} if item_id else None)
+        ingredient_fs = RecipeItemFormSet(instance=Recipe(), prefix="items")
+    return render(
+        request,
+        "backoffice/inventory/recipe_form.html",
+        {"form": form, "is_create": True, "ingredient_formset": ingredient_fs, "plate_cost": None},
+    )
+
+
+@backoffice_required
+def recipe_open(request: HttpRequest, item_id: int) -> HttpResponse:
+    """Jump to an item's active recipe, or to the create form when it has none."""
+    recipe = Recipe.objects.filter(item_id=item_id, is_active=True).first()
+    if recipe is None:
+        return redirect(f"{reverse('inventory:recipe_create')}?item={item_id}")
+    return redirect("inventory:recipe_detail", pk=recipe.pk)
+
+
+@backoffice_required
+def recipe_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    recipe = get_object_or_404(
+        Recipe.objects.select_related("item").prefetch_related("items__ingredient__stock_uom"),
+        pk=pk,
+    )
+    return render(
+        request,
+        "backoffice/inventory/recipe_detail.html",
+        {"recipe": recipe, "plate_cost": services.recipe_plate_cost(recipe)},
+    )
+
+
+@backoffice_required
+def recipe_update(request: HttpRequest, pk: int) -> HttpResponse:
+    recipe = get_object_or_404(Recipe, pk=pk)
+    if request.method == "POST":
+        form = RecipeForm(request.POST, instance=recipe)
+        ingredient_fs = RecipeItemFormSet(request.POST, instance=recipe, prefix="items")
+        if form.is_valid() and ingredient_fs.is_valid():
+            with transaction.atomic():
+                form.save()
+                ingredient_fs.save()
+            return redirect("inventory:recipe_detail", pk=recipe.pk)
+    else:
+        form = RecipeForm(instance=recipe)
+        ingredient_fs = RecipeItemFormSet(instance=recipe, prefix="items")
+    return render(
+        request,
+        "backoffice/inventory/recipe_form.html",
+        {
+            "form": form,
+            "is_create": False,
+            "recipe": recipe,
+            "ingredient_formset": ingredient_fs,
+            "plate_cost": services.recipe_plate_cost(recipe),
+        },
+    )
+
+
+@backoffice_required
+@require_POST
+def recipe_item_add(request: HttpRequest) -> HttpResponse:
+    formset = add_formset_row(RecipeItemFormSet, "items", request.POST)
+    return render(
+        request, "backoffice/inventory/recipe_form.html#recipe_items_partial", {"ingredient_formset": formset}
+    )
+
+
+@backoffice_required
+@require_POST
+def recipe_item_remove(request: HttpRequest, index: int) -> HttpResponse:
+    formset = remove_formset_row(RecipeItemFormSet, "items", request.POST, index)
+    return render(
+        request, "backoffice/inventory/recipe_form.html#recipe_items_partial", {"ingredient_formset": formset}
+    )
+
+
+@backoffice_required
+@require_GET
+def recipe_plate_cost_preview(request: HttpRequest) -> HttpResponse:
+    from types import SimpleNamespace
+
+    data = request.GET
+    try:
+        total_forms = int(data.get("items-TOTAL_FORMS", "0"))
+    except TypeError, ValueError:
+        total_forms = 0
+    try:
+        output_qty = Decimal(str(data.get("output_qty") or "0"))
+    except InvalidOperation:
+        output_qty = Decimal("0")
+    rows = []
+    for i in range(total_forms):
+        if data.get(f"items-{i}-DELETE"):
+            continue
+        ingredient_id = data.get(f"items-{i}-ingredient")
+        qty_raw = data.get(f"items-{i}-qty")
+        if not ingredient_id or not qty_raw:
+            continue
+        try:
+            qty = Decimal(str(qty_raw))
+        except InvalidOperation:
+            continue
+        ingredient = Item.objects.select_related("stock_uom").filter(pk=ingredient_id).first()
+        if ingredient is None or qty <= 0:
+            continue
+        rows.append(SimpleNamespace(ingredient=ingredient, qty=qty))
+    preview = services._plate_cost(output_qty, rows) if rows and output_qty > 0 else None
+    return render(
+        request,
+        "backoffice/inventory/recipe_form.html#plate_cost_preview_partial",
+        {"preview": preview},
+    )
+
+
+@backoffice_required
+def food_usage(request: HttpRequest) -> HttpResponse:
+    from datetime import date as date_class
+
+    raw = request.GET.get("date")
+    try:
+        business_date = date_class.fromisoformat(raw) if raw else date_class.today()
+    except ValueError:
+        business_date = date_class.today()
+    usage = services.compute_food_usage(business_date)
+    food_sales = Decimal("0")
+    try:
+        from apps.reports.models import PnLConfiguration
+        from apps.reports.sources import business_day_window, orders_in_window, sales_by_department
+
+        config = PnLConfiguration.load()
+        start, end = business_day_window(business_date, config.business_day_start_hour)
+        food_sales, _drinks = sales_by_department(orders_in_window(start, end))
+    except ValidationError:
+        food_sales = Decimal("0")
+    return render(
+        request,
+        "backoffice/inventory/food_usage.html",
+        {"business_date": business_date, "usage": usage, "food_sales": food_sales},
     )

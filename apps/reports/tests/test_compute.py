@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.accounting.models import GLEntry
-from apps.inventory.models import StockLedgerEntry, StockReconciliation, StockReconciliationItem
+from apps.inventory.models import Recipe, RecipeItem, StockLedgerEntry, StockReconciliation, StockReconciliationItem
 from apps.inventory.services import submit_stock_reconciliation
 from apps.orders.services import add_order_line
 from apps.reports.models import DailyPnL, DailyPnLLine, PnLMaterial, PnLRecurringExpense
@@ -93,8 +93,8 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
         self.assertEqual(computation.totals["cogs"], Decimal("600"))
         self.assertTrue(any(row["kind"] == "SALE" for row in computation.cogs_rows))
 
-    def test_kitchen_consumption_is_memo_not_in_gp(self):
-        from apps.inventory.models import Bin, Item
+    def test_food_actual_is_cogs_and_memos_in_gp(self):
+        from apps.inventory.models import Bin, Item, Recipe, RecipeItem
 
         rice = Item.objects.create(
             item_name="Rice stock",
@@ -105,6 +105,8 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
             is_stock_item=True,
             is_purchase_item=True,
         )
+        recipe = Recipe.objects.create(item=self.food, output_qty=Decimal("1"))
+        RecipeItem.objects.create(recipe=recipe, ingredient=rice, qty=Decimal("0.20"))
         Bin.objects.create(item=rice, warehouse=self.kitchen_wh, actual_qty=Decimal("0"))
         StockLedgerEntry.create_entry(
             item=rice,
@@ -123,10 +125,108 @@ class SalesAndCogsTest(DailyPnLTestMixin, TestCase):
         add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
         self._settle(order)
         computation = compute_daily_pnl(self._draft())
+        self.assertEqual(computation.totals["cogs"], Decimal("2000"))
+        self.assertEqual(computation.totals["cogs_drinks"], Decimal("0"))
         self.assertEqual(computation.totals["kitchen_consumption"], Decimal("2000"))
-        self.assertEqual(computation.totals["gross_profit"], Decimal("1500"))
-        memo = next(line for line in computation.lines if line.section == DailyPnLLine.KITCHEN_CONSUMPTION)
-        self.assertTrue(memo.is_memo)
+        self.assertEqual(computation.totals["theoretical_food_cost"], Decimal("40"))
+        self.assertEqual(computation.totals["food_cost_variance"], Decimal("-1960"))
+        # Food GP subtracts actual usage now.
+        self.assertEqual(computation.totals["gross_profit"], Decimal("-500"))
+        memos = {line.section for line in computation.lines if line.is_memo}
+        self.assertIn(DailyPnLLine.THEORETICAL_FOOD_COST, memos)
+        self.assertIn(DailyPnLLine.FOOD_COST_VARIANCE, memos)
+        self.assertFalse(any(line.section == DailyPnLLine.KITCHEN_CONSUMPTION for line in computation.lines))
+        kinds = {row["kind"] for row in computation.consumption_rows}
+        self.assertEqual(kinds, {"CONSUMPTION"})
+        self.assertEqual(len(computation.theoretical_rows), 1)
+        self.assertEqual(computation.unmapped_rows, [])
+
+
+class FoodCogsTest(DailyPnLTestMixin, TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls._setup_pnl_world()
+
+    def _rice_with_recipe(self, qty="0.20", rate="200"):
+        from apps.inventory.models import Bin, Item
+
+        rice = Item.objects.create(
+            item_name="Rice AvT",
+            item_group=self.group_food,
+            stock_uom=self.uom,
+            department="FOOD",
+            is_sales_item=False,
+            is_stock_item=True,
+            is_purchase_item=True,
+        )
+        recipe = Recipe.objects.create(item=self.food, output_qty=Decimal("1"))
+        RecipeItem.objects.create(recipe=recipe, ingredient=rice, qty=Decimal(qty))
+        Bin.objects.create(item=rice, warehouse=self.kitchen_wh, actual_qty=Decimal("0"))
+        StockLedgerEntry.create_entry(
+            item=rice,
+            warehouse=self.kitchen_wh,
+            quantity=Decimal("10"),
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-AVT",
+            unit_rate=Decimal(rate),
+        )
+        return rice, recipe
+
+    def _consume_all(self, rice):
+        rec = StockReconciliation.objects.create(
+            reason="CONSUMPTION", warehouse=self.kitchen_wh, posting_date=date.today()
+        )
+        StockReconciliationItem.objects.create(reconciliation=rec, item=rice, qty=Decimal("5"))
+        submit_stock_reconciliation(rec)
+
+    def test_cogs_total_includes_food_and_drinks(self):
+        from apps.inventory.models import Bin
+
+        rice, _recipe = self._rice_with_recipe()
+        self._consume_all(rice)
+        Bin.objects.filter(item=self.drink, warehouse=self.bar_wh).update(actual_qty=0, valuation_rate=0)
+        StockLedgerEntry.create_entry(
+            item=self.drink,
+            warehouse=self.bar_wh,
+            quantity=Decimal("100"),
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-D",
+            unit_rate=Decimal("300"),
+        )
+        order = self._create_order()
+        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
+        add_order_line(order, self.drink, qty=2, rate=Decimal("500"), menu_item=self.drink_mi)
+        self._settle(order)
+        computation = compute_daily_pnl(self._draft())
+        self.assertEqual(computation.totals["cogs_drinks"], Decimal("600"))
+        self.assertEqual(computation.totals["cogs"], Decimal("1600"))
+        self.assertEqual(computation.totals["prime_cost"], Decimal("1600"))
+
+    def test_submitted_snapshot_stable_after_recipe_edit(self):
+        rice, recipe = self._rice_with_recipe()
+        self._consume_all(rice)
+        order = self._create_order()
+        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
+        self._settle(order)
+        pnl = self._draft()
+        pnl.submit(actor=self.manager)
+        self.assertEqual(pnl.theoretical_food_cost, Decimal("40"))
+        recipe.is_active = False
+        recipe.save(update_fields=["is_active", "updated_at"])
+        pnl.refresh_from_db()
+        self.assertEqual(pnl.theoretical_food_cost, Decimal("40"))
+        self.assertEqual(pnl.theoretical_rows.count(), 1)
+        self.assertEqual(pnl.consumption_rows.count(), 1)
+
+    def test_unmapped_dish_listed(self):
+        order = self._create_order()
+        add_order_line(order, self.food, qty=2, rate=Decimal("1500"), menu_item=self.food_mi)
+        self._settle(order)
+        computation = compute_daily_pnl(self._draft())
+        self.assertEqual(len(computation.unmapped_rows), 1)
+        self.assertEqual(computation.unmapped_rows[0]["item_name"], "Jollof Rice")
+        self.assertEqual(computation.unmapped_rows[0]["qty"], Decimal("2"))
+        self.assertEqual(computation.totals["theoretical_food_cost"], Decimal("0"))
 
 
 class ElectricityAndTemplatesTest(DailyPnLTestMixin, TestCase):

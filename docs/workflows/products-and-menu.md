@@ -4,7 +4,7 @@
 
 `inventory.Item` is the shared product/material record. Its sales, stock, and purchase flags are independent. `department` is `FOOD` or `DRINKS`; department drives ticket routing and the DRINKS-only POS stock policy, not whether an item is inherently stock-tracked.
 
-`Item.save()` generates an `ITEM-####` code under a lock, makes variant templates non-sellable/non-stock/purchase, and removes add-on rows when an item becomes non-sellable. `Item.clean()` prevents templates from being stock/sales/purchase items, validates variant parents, blocks turning off sales while an enabled menu line exists, and blocks changing `stock_uom` or turning off stock/purchase while UOM conversion rows exist. Stock + purchase items can carry `ItemUOMConversion` rows (bulk unit → stock unit) used only on purchase receipts.
+`Item.save()` generates an `ITEM-####` code under a lock, makes variant templates non-sellable/non-stock/purchase, and removes add-on rows when an item becomes non-sellable. `Item.clean()` prevents templates from being stock/sales/purchase items, validates variant parents, blocks turning off sales while an enabled menu line exists, blocks changing `stock_uom` or turning off stock/purchase while UOM conversion rows exist, and blocks changing `stock_uom` or turning a recipe ingredient sellable/non-stock while recipe rows exist. Stock + purchase items can carry `ItemUOMConversion` rows (bulk unit → stock unit) used only on purchase receipts.
 
 ## Menu Resolution
 
@@ -26,9 +26,13 @@ The Menu backoffice groups menu setup into a dashboard, menu register, menu-line
 
 The add-on register resolves each relationship against the enabled active menu and displays its effective `MenuItem.rate`, or an explicit unpriced state when no enabled active-menu line exists. The add-on editor explains that the relationship controls availability while the menu line owns the price. `apps/menu/views.py` provides direct login-protected CRUD for menus, menu lines, add-ons, and variant relationships. `Menu` and `MenuItem` have no service layer. Delete endpoints exist for menu lines, add-ons, and variants; there is no menu delete endpoint.
 
+## Recipes
+
+Sellable FOOD items carry ingredient cards under Inventory → Recipes: one active `Recipe` per dish (variants and add-ons hold their own; drinks have none), `RecipeItem` qtys per output in ingredient `stock_uom`. The form shows a live plate-cost preview at Kitchen WAC. Item and menu-item detail pages link to the dish's card. `seed_menu_catalog` also seeds example cards (Jollof Rice, Egusi Soup, Quarter Chicken).
+
 ## Setup Commands
 
-- `seed_menu_catalog` atomically seeds Nigerian restaurant raw/finished items, variant families, menu lines, add-ons, the active menu, and purchase UOM conversions (drinks: 1 Crate = 24 Bottle; rice: 1 Bag = 50 Kg). Dummy carton/crate SKUs are no longer created.
+- `seed_menu_catalog` atomically seeds Nigerian restaurant raw/finished items, variant families, menu lines, add-ons, the active menu, purchase UOM conversions (drinks: 1 Crate = 24 Bottle; rice: 1 Bag = 50 Kg), and example recipes. Dummy carton/crate SKUs are no longer created.
 - `seed_pos_setup` creates Restaurant, Bar/Kitchen/Store warehouses, payment modes/mappings, production units, and invokes menu seeding when no active menu exists.
 - `InventoryConfig.ready()` seeds baseline UOMs and item groups after migrations.
 

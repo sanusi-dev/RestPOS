@@ -69,6 +69,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 - `StockLedgerEntry`: signed PWAC movement (`quantity`, `unit_rate`, `stock_value_change`). The voucher type/number/detail fields link it back to source documents.
 - `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer. Receipt lines record the `uom` bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`; submit posts `qty × factor` and blends WAC on the as-bought `amount`, mirroring `PurchaseReceiptItem`. Transfer lines stay in the stock unit. `StockEntry.mode_of_payment` records the funding account ("Paid from") for market receipts.
 - `StockReconciliation` and `StockReconciliationItem`: adjustment with `reason` (`OPENING_STOCK` first seeding of a fresh warehouse only, `ADJUSTMENT` counted quantity up or down, `CONSUMPTION` end-of-day kitchen count that cannot exceed the bin, `WASTE_DAMAGE` quantity wasted as a positive delta). Opening posts Dr warehouse / Cr temporary opening; Adjustment Dr stock adjustment / Cr warehouse (inbound reverses); Consumption Dr default expense / Cr kitchen; Waste Dr wastage / Cr warehouse.
+- `Recipe` and `RecipeItem`: ingredient card per sellable FOOD item (one active card, unique constraint); lines carry per-output qty in ingredient `stock_uom` (`unique (recipe, ingredient)`).
 - `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`. On submit the ledger quantity is `received_qty × factor` and inbound value is the as-bought `amount`; WAC blends on that amount. `last_purchase_rate` is per stock UOM (`amount ÷ stock_qty`).
 
 ## Order Entities
@@ -101,9 +102,9 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 - `PnLConfiguration`: singleton (`load()` get-or-creates) for business-day start hour, electricity rate, daily depreciation, and whether to include cash variance.
 - `PnLMaterial` / `PnLRecurringExpense`: catalogs of consumables and remembered expense templates (daily, monthly ÷ days-in-month, % of gross, employee).
-- `DailyPnL`: one DRAFT and one SUBMITTED row per `business_date`. Management snapshot — submit does not post GL. `cancel()` is status-only; `amend()` copies inputs into a new draft.
-- `DailyPnLLine`: frozen statement rows written on submit (FOOD / DRINKS / TOTAL plus % of gross). Kitchen consumption and prime cost are memo lines (`is_memo`).
-- `DailyPnLMaterialQty` / `DailyPnLAdHoc`: draft inputs. `DailyPnLCogsRow` / `DailyPnLConsumptionRow`: drink COGS and kitchen-consumption breakups written on submit.
+- `DailyPnL`: one DRAFT and one SUBMITTED row per `business_date`. Management snapshot — submit does not post GL. `cancel()` is status-only; `amend()` copies inputs into a new draft. `cogs` is total COGS (food actual + drinks); `kitchen_consumption` stores actual food usage; `theoretical_food_cost` / `food_cost_variance` (+ percents) are memos.
+- `DailyPnLLine`: frozen statement rows written on submit (FOOD / DRINKS / TOTAL plus % of gross). Theoretical food cost, food cost variance, and prime cost are memo lines (`is_memo`).
+- `DailyPnLMaterialQty` / `DailyPnLAdHoc`: draft inputs. `DailyPnLCogsRow` / `DailyPnLConsumptionRow` (kind `CONSUMPTION` | `WASTE`) / `DailyPnLTheoreticalRow` / `DailyPnLUnmappedRow`: drink COGS, actual food usage, theoretical, and unmapped-dish breakups written on submit.
 
 ## Important Constraints and Methods
 

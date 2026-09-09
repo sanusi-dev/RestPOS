@@ -145,4 +145,6 @@ from .pnl_models import (  # noqa: E402,F401
     DailyPnLConsumptionRow,
     DailyPnLLine,
     DailyPnLMaterialQty,
+    DailyPnLTheoreticalRow,
+    DailyPnLUnmappedRow,
 )

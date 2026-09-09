@@ -30,7 +30,11 @@ FOOD POS sales intentionally do not reserve or deduct stock. Kitchen consumption
 
 ## Bins and Reservations
 
-`Bin` is unique per item/warehouse. DRINKS draft lines reserve `actual_qty - reserved_qty`; the order pins the configured Bar/POS warehouse on first reservation. Add, increase, decrease, remove, clear, draft cancel, draft discard, and draft deletion synchronize reservations. Settlement subtracts the order-owned reservation before creating the actual issue.
+`Bin` is unique per item/warehouse. DRINKS draft lines reserve `actual_qty - reserved_qty`; the order pins the configured Bar/POS warehouse on first reservation. Add, increase, decrease, remove, clear, draft cancel, draft discard, and draft deletion synchronize reservations. Settlement subtracts the order-owned reservation before creating the actual issue. FOOD lines never reserve or deduct.
+
+## Recipes and Actual-vs-Theoretical Usage
+
+Each sellable FOOD item may carry one active recipe card (`Recipe` + `RecipeItem` rows): ingredients in `stock_uom`, yield baked into the qty (0.125 kg per plate, not per bag). Variants and sellable add-ons hold their own cards; drinks have none; a dish with no recipe sells fine and lands on the unmapped list. `inventory.services.recipe_plate_cost()` prices one portion at Kitchen WAC (else last rate) for display; `compute_food_usage(business_date)` is the single source behind the Food usage page and the P&L — theoretical (recipe × submitted FOOD sales, returns netted) against actual (Kitchen `CONSUMPTION` + `WASTE_DAMAGE` SLEs, `ADJUSTMENT` excluded), one shared rate per ingredient, variance as a quantity story.
 
 ## PWAC Posting
 

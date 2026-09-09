@@ -12,6 +12,8 @@ from .models import (
     ItemUOMConversion,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    Recipe,
+    RecipeItem,
     StockEntry,
     StockEntryDetail,
     StockReconciliation,
@@ -467,3 +469,59 @@ ItemUOMConversionFormSet = inlineformset_factory(
     extra=1,
     can_delete=True,
 )
+
+
+class RecipeForm(InventoryModelForm):
+    class Meta:
+        model = Recipe
+        fields = ["item", "output_qty", "is_active", "remarks"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["item"].queryset = active_choices(
+            Item,
+            self.instance.item_id,
+            disabled=False,
+            department="FOOD",
+            is_sales_item=True,
+            has_variants=False,
+        )
+        self.fields["output_qty"].help_text = "Portions this card produces (yield is baked into the line qtys)."
+        self.fields["is_active"].help_text = "One active recipe per item. Deactivate this one before adding another."
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.instance.pk and not cleaned.get("is_active", True):
+            return cleaned
+        item = cleaned.get("item") or getattr(self.instance, "item", None)
+        if item is not None and cleaned.get("is_active", True):
+            clash = Recipe.objects.filter(item=item, is_active=True)
+            if self.instance.pk:
+                clash = clash.exclude(pk=self.instance.pk)
+            if clash.exists():
+                self.add_error("item", "This item already has an active recipe — deactivate it first.")
+        return cleaned
+
+
+class RecipeItemForm(InventoryModelForm):
+    class Meta:
+        model = RecipeItem
+        fields = ["ingredient", "qty"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ingredient"].queryset = active_choices(
+            Item,
+            self.instance.ingredient_id,
+            disabled=False,
+            department="FOOD",
+            is_sales_item=False,
+            is_stock_item=True,
+            is_purchase_item=True,
+            has_variants=False,
+        )
+        self.fields["qty"].label = "Qty (stock UOM)"
+        self.fields["qty"].help_text = "Per output above, in the ingredient's stock unit (e.g. 0.125 Kg per plate)."
+
+
+RecipeItemFormSet = inlineformset_factory(Recipe, RecipeItem, form=RecipeItemForm, extra=1, can_delete=True)
