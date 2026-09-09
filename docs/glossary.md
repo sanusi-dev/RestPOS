@@ -16,7 +16,7 @@
 | Bin | Current item/warehouse snapshot of actual, reserved, and valued stock. |
 | Stock Ledger Entry / SLE | Signed immutable-by-convention PWAC movement row (`quantity`, `unit_rate`, `stock_value_change`). |
 | Stock Entry | Draft document for Material Receipt or Store-to-production transfer. |
-| Stock Reconciliation | Draft count/adjustment document with a structured reason. |
+| Stock Reconciliation | Draft adjustment document with a structured reason (`OPENING_STOCK`, `ADJUSTMENT`, `CONSUMPTION`, `WASTE_DAMAGE`). |
 | Purchase Receipt | Draft supplier receipt into the central Store warehouse. |
 | Shift | The globally shared `POSOpeningEntry` period, closed by `POSClosingEntry`. |
 | Opening Payment | Payment-mode opening balance for a shift. |

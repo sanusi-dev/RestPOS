@@ -120,6 +120,18 @@ def setup_chart_of_accounts(restaurant):
         account_type=LedgerAccount.EXPENSE,
         report_type=LedgerAccount.PROFIT_AND_LOSS,
     )
+    stock_adjustment = LedgerAccount.objects.create(
+        name=f"Stock Adjustments {restaurant.pk}",
+        parent=expenses,
+        account_type=LedgerAccount.EXPENSE,
+        report_type=LedgerAccount.PROFIT_AND_LOSS,
+    )
+    temporary_opening = LedgerAccount.objects.create(
+        name=f"Temporary Opening {restaurant.pk}",
+        parent=equity,
+        account_type=LedgerAccount.EQUITY,
+        report_type=LedgerAccount.BALANCE_SHEET,
+    )
     today = date.today()
     fiscal_year = FiscalYear.objects.create(
         name=f"FY{today.year}-{restaurant.pk}",
@@ -139,6 +151,8 @@ def setup_chart_of_accounts(restaurant):
     restaurant.default_stock_in_hand_account = stock_in_hand
     restaurant.stock_received_but_not_billed_account = grni
     restaurant.inventory_price_variance_account = variance
+    restaurant.stock_adjustment_account = stock_adjustment
+    restaurant.temporary_opening_account = temporary_opening
     restaurant.save()
 
     return {
@@ -160,6 +174,8 @@ def setup_chart_of_accounts(restaurant):
         "round_off": round_off,
         "equity": equity,
         "owner_equity": owner_equity,
+        "stock_adjustment": stock_adjustment,
+        "temporary_opening": temporary_opening,
         "fiscal_year": fiscal_year,
     }
 

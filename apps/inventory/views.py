@@ -535,7 +535,6 @@ def stock_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @backoffice_required
 def reconciliation_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status")
-    purpose = request.GET.get("purpose")
     reason = request.GET.get("reason")
     warehouse_id = request.GET.get("warehouse")
     date_from = request.GET.get("date_from")
@@ -543,8 +542,6 @@ def reconciliation_list(request: HttpRequest) -> HttpResponse:
     reconciliations = StockReconciliation.objects.select_related("warehouse").all()
     if status:
         reconciliations = reconciliations.filter(status=status)
-    if purpose:
-        reconciliations = reconciliations.filter(purpose=purpose)
     if reason:
         reconciliations = reconciliations.filter(reason=reason)
     if warehouse_id:
@@ -559,10 +556,8 @@ def reconciliation_list(request: HttpRequest) -> HttpResponse:
         {
             "reconciliations": reconciliations,
             "warehouses": Warehouse.objects.filter(disabled=False),
-            "purpose_choices": StockReconciliation._meta.get_field("purpose").choices,
-            "reason_choices": StockReconciliation._meta.get_field("reason").choices,
+            "reason_choices": StockReconciliationForm.ACTIVE_REASON_CHOICES,
             "selected_status": status,
-            "selected_purpose": purpose,
             "selected_reason": reason,
             "selected_warehouse": warehouse_id,
             "date_from": date_from or "",

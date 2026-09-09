@@ -302,29 +302,26 @@ class StockEntryDetailForm(InventoryModelForm):
 
 
 class StockReconciliationForm(InventoryModelForm):
+    ACTIVE_REASON_CHOICES = [
+        ("OPENING_STOCK", "Opening Stock"),
+        ("ADJUSTMENT", "Adjustment"),
+        ("CONSUMPTION", "Consumption"),
+        ("WASTE_DAMAGE", "Waste / Damage"),
+    ]
+
     class Meta:
         model = StockReconciliation
-        fields = ["purpose", "reason", "posting_date", "warehouse", "remarks"]
+        fields = ["reason", "posting_date", "warehouse", "remarks"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["warehouse"].queryset = active_choices(Warehouse, self.instance.warehouse_id, disabled=False)
-        choices = list(self.fields["reason"].choices)
-        if choices and choices[0][0] == "":
-            choices[0] = ("", "Select reason...")
-        else:
-            choices.insert(0, ("", "Select reason..."))
-        self.fields["reason"].choices = choices
-
-    def clean(self):
-        cleaned_data = super().clean()
-        purpose = cleaned_data.get("purpose")
-        reason = cleaned_data.get("reason")
-        if purpose == "OPENING_STOCK" and reason != "OPENING_STOCK":
-            self.add_error("reason", "Opening Stock must use the Opening Stock reason.")
-        elif purpose == "RECONCILIATION" and reason == "OPENING_STOCK":
-            self.add_error("reason", "Opening Stock reason is only valid for Opening Stock purpose.")
-        return cleaned_data
+        self.fields["reason"].choices = [("", "Select reason..."), *self.ACTIVE_REASON_CHOICES]
+        self.fields["reason"].help_text = (
+            "Opening Stock seeds a fresh warehouse. Adjustment makes the bin match what you counted, up or down. "
+            "Consumption is the end-of-day count of what is left and cannot exceed the bin. "
+            "Waste / Damage records the quantity lost now, not what is left."
+        )
 
 
 class StockReconciliationItemForm(InventoryModelForm):
@@ -335,7 +332,14 @@ class StockReconciliationItemForm(InventoryModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["item"].queryset = active_choices(Item, self.instance.item_id, disabled=False, is_stock_item=True)
-        self.fields["valuation_rate"].widget.attrs["x-bind:disabled"] = "purpose !== 'OPENING_STOCK'"
+        self.fields["qty"].label = "Counted quantity"
+        self.fields["qty"].help_text = (
+            "For Waste / Damage enter the quantity wasted, not what is left. "
+            "For Consumption enter the count of what is left — it cannot exceed the bin."
+        )
+        self.fields["valuation_rate"].label = "Valuation rate"
+        self.fields["valuation_rate"].help_text = "Required to seed stock for Opening Stock and empty bins."
+        self.fields["valuation_rate"].widget.attrs["x-bind:disabled"] = "reason !== 'OPENING_STOCK'"
 
 
 class PurchaseReceiptForm(InventoryModelForm):

@@ -175,8 +175,8 @@ class StockReconciliationItemInline(SubmittedInlineMixin, admin.TabularInline):
 
 @admin.register(StockReconciliation)
 class StockReconciliationAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
-    list_display = ("id", "purpose", "reason", "posting_date", "warehouse", "status")
-    list_filter = ("purpose", "reason", "status", "posting_date")
+    list_display = ("id", "reason", "posting_date", "warehouse", "status")
+    list_filter = ("reason", "status", "posting_date")
     list_select_related = ("warehouse",)
     search_fields = ("remarks", "warehouse__name")
     ordering = ("-posting_date", "-created_at")
