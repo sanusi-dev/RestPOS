@@ -17,13 +17,13 @@ conventions are in `AGENTS.md`.
 | App | Responsibility | FEATURES.md sections | State |
 |---|---|---|---|
 | `settings` | Restaurant singleton, production units, staff roles | A1 | built |
-| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69 | built; remaining §4.11 recipes |
+| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69, E #70 | built; remaining §4.11 reconciliation rework, §4.12 recipes |
 | `menu` | Menu definition, menu items, variants, add-ons | A2 | built |
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
 | `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, supplier payables | A8, A9 | built |
-| `reports` | Daily P&L, sales reports, trial balance | A10, E #63, E #69 | built (Daily P&L); sales reports planned; food AvT/COGS in §4.11 |
+| `reports` | Daily P&L, sales reports, trial balance | A10, E #63, E #69 | built (Daily P&L); sales reports planned; food AvT/COGS in §4.12 |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
 | `coupons` | Coupon codes, pricing rules, cashier discount | F #66 | deferred |
@@ -33,8 +33,9 @@ conventions are in `AGENTS.md`.
 `orders` (orders stamp the active shift and reference payment modes); `orders` is the central
 app built on all of the above; `accounting` then layers GL posting on orders, payments,
 inventory, and settings; `reports` consumes everything; `printing` is a leaf built last.
-§4.10 (UOM conversion) has landed and is a prerequisite for §4.11 (food recipes).
-§4.11 is independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
+§4.10 (UOM conversion) has landed. §4.11 (reconciliation standardization) lands next and is a
+prerequisite for §4.12 (food recipes), which assumes its reason set and GL legs. §4.11 and
+§4.12 are independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
 after the core phases complete. Each phase completes before the next starts.
 
 ## 3. Build Sequence
@@ -47,10 +48,11 @@ after the core phases complete. Each phase completes before the next starts.
 | 4 | staff, payments | A4, A5 | Payment modes with default + GL mappings, opening/closing entries, reconciliation, refund netting | — | n/a | Completed |
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
 | 6 | accounting | A8 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
-| 7 | reports | A10 | Daily P&L document with amendments and departmental split | Food COGS / AvT statement changes land in §4.11 | n/a | Completed |
+| 7 | reports | A10 | Daily P&L document with amendments and departmental split | Food COGS / AvT statement changes land in §4.12 | n/a | Completed |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
-| 10 | inventory, reports | E #69 | — | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L, consumption GL | §4.11 | Planned |
+| 10 | inventory | E #70 | — | Reconciliation standardization: Adjustment reason, waste delta-entry, consumption ceiling, opening gate, GL for every reason | §4.11 | Planned |
+| 11 | inventory, reports | E #69 | — | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L | §4.12 | Planned |
 | — | customers | F #65 | Free-text customer name on orders | Customer master, groups, credit limits, POS search/create | deferred by design | Deferred |
 | — | coupons | F #66 | — | Coupon codes, pricing rules, cashier discount | deferred by design | Deferred |
 
@@ -675,7 +677,7 @@ override. Electricity optional (blank = ₦0).
 **Status:** complete — implemented and retired; current product facts are in `FEATURES.md`,
 `docs/workflows/inventory.md`, and the code.
 
-**Depends on:** nothing. Must land before §4.11.
+**Depends on:** nothing. Must land before §4.12.
 
 **Scope:** purchase paperwork may use a bulk unit (Crate, Bag). Bins, SLE, transfers,
 reconciliations, POS, and (later) recipes stay in `Item.stock_uom`. Conversion happens
@@ -819,12 +821,96 @@ No SLE/Bin wipe.
 - Seed: drinks per bottle with crate row; rice per kg with bag row; no new carton
   SKU; virtual dishes per plate.
 
-### 4.11 Food recipes and actual-vs-theoretical usage (Phase 10)
+### 4.11 Stock Reconciliation Standardization (Phase 10)
+
+**Status:** planned — not yet implemented. FEATURES.md E #70.
+
+**Depends on:** nothing. Must land before §4.12 (food recipes), which reads consumption and
+waste movements under these semantics.
+
+**Scope:** every reconciliation reason gets defined entry semantics, guards, and GL legs.
+Waste/damage switches from count-entry to delta-entry; consumption becomes reduction-only;
+physical count and correction merge into one Adjustment reason; opening stock is gated to a
+fresh warehouse; the `purpose` field folds into `reason`.
+
+**Out of scope:** recipes and actual-vs-theoretical usage (§4.12), Daily P&L statement
+changes (§4.12), transfer acknowledgement, count sheets, cycle-count scheduling.
+
+**Decisions:**
+
+- **D1 — Four active reasons.** `OPENING_STOCK`, `ADJUSTMENT`, `CONSUMPTION`, `WASTE_DAMAGE`.
+  Legacy `PHYSICAL_COUNT` and `CORRECTION` remain valid enum values so submitted rows render,
+  but the form offers only the four; new documents use `ADJUSTMENT` for both routine counts
+  and targeted fixes.
+- **D2 — `purpose` field removed.** `reason` alone carries the semantics (legacy `purpose`
+  always mirrored `reason`).
+- **D3 — Entry semantics.** Opening Stock, Adjustment, and Consumption are count-entry: the
+  line qty is the counted quantity on hand and the SLE posts `count − actual`. Waste/Damage
+  is delta-entry: the line qty is the quantity wasted (entered positive); the SLE posts
+  `−qty`.
+- **D4 — Guards.**
+  - Opening Stock: warehouse must have zero stock ledger entries, including cancelled ones
+    (once per warehouse, any warehouse); positive lines require the entered valuation rate.
+  - Adjustment: counted qty ≥ reserved qty (existing); both directions allowed.
+  - Consumption: FOOD items at the Kitchen warehouse only (existing); counted qty ≥ reserved;
+    **counted qty above the bin is rejected** — the manager runs an Adjustment first.
+    Counted qty equal to the bin is a no-op line.
+  - Waste/Damage: any warehouse, stock items; wasted qty > 0 and ≤ bin actual − reserved.
+- **D5 — GL for every reason**, posted per SLE on submit at `abs(qty) × SLE unit rate`
+  (outbound resolves at bin WAC; inbound at the entered seeding rate or bin WAC fallback):
+  - Opening Stock (inbound): Dr warehouse account / Cr `Restaurant.temporary_opening_account`.
+  - Adjustment outbound: Dr `Restaurant.stock_adjustment_account` / Cr warehouse account;
+    inbound reverses those legs.
+  - Consumption (outbound only — D4 makes inbound unreachable): Dr
+    `Restaurant.default_expense_account` / Cr Kitchen warehouse account.
+  - Waste/Damage: Dr `Restaurant.wastage_account` / Cr warehouse account (legs unchanged;
+    now fire on the entered delta).
+  Missing accounts hard-fail the submission. Opening legs must credit the balance-sheet
+  account, never a P&L account.
+- **D6 — Cancel unchanged.** Cancellation already mirrors and reverses every GL row for the
+  voucher; SLE reversals are unchanged. The new legs are simply covered.
+- **D7 — New accounts.** `Restaurant.stock_adjustment_account` (Expense) and
+  `Restaurant.temporary_opening_account` (Equity) join the settings surface;
+  `seed_chart_of_accounts` creates "Stock Adjustments" and "Temporary Opening" and maps them.
+- **D8 — Form.** Line label switches by reason — "Counted quantity" vs "Quantity wasted /
+  damaged". Help text: Adjustment = make the bin match what you counted, up or down;
+  Waste/Damage = record the quantity lost now, not what is left; Consumption = end-of-day
+  count of what is left and cannot exceed the bin; Opening Stock = first seeding of a fresh
+  warehouse, rate required.
+
+**Models (`apps.inventory`, `apps.settings`):**
+
+- `StockReconciliation`: `purpose` removed; `reason` choices gain `ADJUSTMENT` (legacy values
+  retained for history).
+- `StockReconciliationItem`: no schema change — `qty` semantics follow the reason;
+  `valuation_rate` stays Opening-Stock-only.
+- `Restaurant`: `stock_adjustment_account` and `temporary_opening_account` FKs
+  (`accounting.LedgerAccount`, PROTECT, nullable), added to the settings forms.
+
+**Tests:**
+
+- Opening: fresh warehouse accepted with Dr warehouse / Cr temporary opening; warehouse with
+  any prior SLE rejected; rate required; WAC blends at the entered rate.
+- Adjustment: outbound Dr stock adjustment / Cr warehouse; inbound reversed; reserved floor
+  held; legacy `PHYSICAL_COUNT` / `CORRECTION` rows still render.
+- Consumption: FOOD/Kitchen restriction retained; count above bin rejected; count equal to
+  bin is a no-op; Dr default expense / Cr kitchen on submit; cancel reverses.
+- Waste: SLE posts `−qty` (delta semantics); waste above on-hand minus reserved rejected;
+  Dr wastage / Cr warehouse; cancel reverses.
+- Form works without `purpose`; legacy rows keep their reason labels.
+- Drinks, transfers, and POS flows unaffected.
+
+**Docs (same task as implementation, not now):** `docs/workflows/inventory.md` (reasons,
+semantics, GL map), `docs/workflows/daily-pnl.md` (GL note), `docs/database/` model changes,
+glossary; `FEATURES.md` A3 #16 and E #70.
+
+### 4.12 Food recipes and actual-vs-theoretical usage (Phase 11)
 
 **Status:** planned — not yet implemented. FEATURES.md E #69.
 
 **Depends on:** §4.10 (recipes and counts are in `stock_uom`; `last_purchase_rate` is
-per stock UOM). Independent of Phases 8–9.
+per stock UOM) and §4.11 (reason set, entry semantics, and consumption GL that this section
+reads). Independent of Phases 8–9.
 
 **Scope:** keep the current food lifecycle (ingredient stock, virtual dishes, POS
 does not deduct food). Add a recipe card, compare theoretical usage (recipe × sales)
@@ -834,7 +920,8 @@ food COGS and on the GL.
 **Out of scope:** finished-plate stock, production/work orders, recipe explosion
 into the ledger, POS food availability, nested prep recipes, yield field, UOM
 conversion on recipe lines, transfer acknowledgement, staff-meal documents,
-mandatory recipes to sell, piece-tracked proteins as drink-like SKUs.
+mandatory recipes to sell, piece-tracked proteins as drink-like SKUs, reconciliation
+semantics (§4.11).
 
 **Decisions:**
 
@@ -853,7 +940,8 @@ mandatory recipes to sell, piece-tracked proteins as drink-like SKUs.
   `ingredient_qty += line.qty / recipe.output_qty × recipe_item.qty`.
 - **D5 — Actual usage** from submitted Kitchen-warehouse SLEs whose voucher is a
   `CONSUMPTION` or `WASTE_DAMAGE` reconciliation with `posting_date = business_date`.
-  `PHYSICAL_COUNT` and `CORRECTION` are excluded. Same calendar-date vs start-hour
+  Consumption is reduction-only and waste is delta-entry by §4.11, so both resolve to
+  positive usage quantities; `ADJUSTMENT` is excluded. Same calendar-date vs start-hour
   mismatch as today.
 - **D6 — Same rate for naira.** Per ingredient: if actual SLEs exist, rate =
   `sum(abs(qty)×unit_rate) / sum(abs(qty))`; else Kitchen bin WAC; else
@@ -871,10 +959,9 @@ mandatory recipes to sell, piece-tracked proteins as drink-like SKUs.
   `DailyPnL.cogs` becomes **total** COGS (food actual + drinks). `cogs_drinks`
   unchanged. `kitchen_consumption` keeps storing actual food usage. Add
   `theoretical_food_cost` and `food_cost_variance` (+ percents).
-- **D8 — Consumption GL.** On `CONSUMPTION` submit, for each SLE: outbound →
-  Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse account; inbound
-  (count high) → reverse those legs. Missing accounts hard-fail. `WASTE_DAMAGE`
-  posting is unchanged. Cancel already mirrors GL rows for this voucher type.
+- **D8 — Consumption GL is already live.** §4.11 posts `CONSUMPTION` outbound legs
+  (Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse account); no inbound legs
+  exist. This phase adds no GL work.
 - **D9 — POS unchanged.** Food still does not reserve, deduct, or grey out.
 
 **Models (`apps.inventory`):**
@@ -926,8 +1013,6 @@ item while `RecipeItem` rows exist.
   Unmapped dishes listed. Link from Daily P&L detail.
 - Item detail (sellable FOOD) and menu-item detail: link to the active recipe or
   "Add recipe".
-- Consumption form help text: Waste/Damage = known loss, logged when it happens;
-  Consumption = end-of-day count of what is left.
 
 **Daily P&L (`apps.reports`):**
 
@@ -961,8 +1046,6 @@ conversion rows.
 - P&L: FOOD COGS = actual; theoretical/variance memos; food GP subtracts actual;
   `cogs` total includes food; prime cost includes food; submitted snapshot stable
   after a later recipe edit.
-- GL: consumption outbound Dr expense / Cr kitchen; inbound reverses; cancel
-  reverses; waste path unchanged.
 - POS: food still does not reserve or deduct.
 - `Item.clean()` stock_uom / flag guards with recipe rows.
 
