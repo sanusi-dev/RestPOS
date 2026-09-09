@@ -48,7 +48,18 @@ Supports `MATERIAL_RECEIPT` (market purchase — posts Dr SIH / Cr the payment m
 
 ### Stock Reconciliation
 
-The user enters a count. Submission locks bins and posts `count - actual` only. Opening Stock uses the `OPENING_STOCK` reason and can seed valuation with an entered rate. Ordinary reconciliations use the physical-count, consumption, waste/damage, or correction reasons. Non-opening counts cannot fall below reserved quantity. `CONSUMPTION` is restricted to FOOD items at the Kitchen warehouse. Cancellation reverses the voucher entries. Reconciliation detail history includes both the original movements and any cancellation reversals.
+Four reasons (`OPENING_STOCK`, `ADJUSTMENT`, `CONSUMPTION`, `WASTE_DAMAGE`). The `purpose` field is removed — `reason` alone carries the semantics.
+
+| Reason | What the line qty means | SLE posted |
+|---|---|---|
+| Opening Stock | Counted quantity on hand (first seeding of a fresh warehouse) | `count − actual` |
+| Adjustment | Counted quantity on hand, up or down | `count − actual` |
+| Consumption | End-of-day count of what is left | `count − actual` (outbound only) |
+| Waste / Damage | Quantity wasted, entered positive | `−qty` |
+
+Guards: Opening Stock requires a warehouse with zero stock ledger entries (including cancelled ones) and an entered valuation rate for positive lines. Adjustment requires counted qty ≥ reserved. Consumption is FOOD items at the Kitchen warehouse only, requires counted qty ≥ reserved, rejects a count above the bin (run an Adjustment first), and treats a count equal to the bin as a no-op. Waste requires wasted qty > 0 and ≤ on-hand minus reserved, on any warehouse.
+
+GL posts per SLE at `abs(qty) × SLE unit rate` (outbound at bin WAC; inbound at the entered seeding rate or bin WAC fallback): Opening inbound Dr warehouse / Cr `Restaurant.temporary_opening_account` (must be a balance-sheet account, never P&L); Adjustment outbound Dr `Restaurant.stock_adjustment_account` / Cr warehouse (inbound reverses); Consumption Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse; Waste Dr `Restaurant.wastage_account` / Cr warehouse. Missing accounts hard-fail submission. Cancellation mirrors and reverses every GL row for the voucher. Reconciliation detail history includes both the original movements and any cancellation reversals.
 
 ## Reversal and Immutability
 

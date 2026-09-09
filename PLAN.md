@@ -17,7 +17,7 @@ conventions are in `AGENTS.md`.
 | App | Responsibility | FEATURES.md sections | State |
 |---|---|---|---|
 | `settings` | Restaurant singleton, production units, staff roles | A1 | built |
-| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69, E #70 | built; remaining §4.11 reconciliation rework, §4.12 recipes |
+| `inventory` | Item master, groups, warehouses, stock ledger, stock entries, reconciliations, purchase receipts, stock reports | A3, E #69 | built; remaining §4.12 recipes |
 | `menu` | Menu definition, menu items, variants, add-ons | A2 | built |
 | `payments` | Payment modes, GL mappings | A4 | built |
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
@@ -33,9 +33,9 @@ conventions are in `AGENTS.md`.
 `orders` (orders stamp the active shift and reference payment modes); `orders` is the central
 app built on all of the above; `accounting` then layers GL posting on orders, payments,
 inventory, and settings; `reports` consumes everything; `printing` is a leaf built last.
-§4.10 (UOM conversion) has landed. §4.11 (reconciliation standardization) lands next and is a
-prerequisite for §4.12 (food recipes), which assumes its reason set and GL legs. §4.11 and
-§4.12 are independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
+§4.10 (UOM conversion) and §4.11 (reconciliation standardization) have landed. §4.12
+(food recipes) is next and assumes the §4.11 reason set and GL legs. §4.12 is
+independent of Phases 8–9. Deferred apps (customers, coupons) are picked up only
 after the core phases complete. Each phase completes before the next starts.
 
 ## 3. Build Sequence
@@ -51,7 +51,7 @@ after the core phases complete. Each phase completes before the next starts.
 | 7 | reports | A10 | Daily P&L document with amendments and departmental split | Food COGS / AvT statement changes land in §4.12 | n/a | Completed |
 | 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
-| 10 | inventory | E #70 | — | Reconciliation standardization: Adjustment reason, waste delta-entry, consumption ceiling, opening gate, GL for every reason | §4.11 | Planned |
+| 10 | inventory | A3 | Reconciliation standardization: Adjustment reason, waste delta-entry, consumption ceiling, opening gate, GL for every reason | — | n/a | Completed |
 | 11 | inventory, reports | E #69 | — | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L | §4.12 | Planned |
 | — | customers | F #65 | Free-text customer name on orders | Customer master, groups, credit limits, POS search/create | deferred by design | Deferred |
 | — | coupons | F #66 | — | Coupon codes, pricing rules, cashier discount | deferred by design | Deferred |
@@ -823,7 +823,7 @@ No SLE/Bin wipe.
 
 ### 4.11 Stock Reconciliation Standardization (Phase 10)
 
-**Status:** planned — not yet implemented. FEATURES.md E #70.
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Depends on:** nothing. Must land before §4.12 (food recipes), which reads consumption and
 waste movements under these semantics.
@@ -838,10 +838,9 @@ changes (§4.12), transfer acknowledgement, count sheets, cycle-count scheduling
 
 **Decisions:**
 
-- **D1 — Four active reasons.** `OPENING_STOCK`, `ADJUSTMENT`, `CONSUMPTION`, `WASTE_DAMAGE`.
-  Legacy `PHYSICAL_COUNT` and `CORRECTION` remain valid enum values so submitted rows render,
-  but the form offers only the four; new documents use `ADJUSTMENT` for both routine counts
-  and targeted fixes.
+- **D1 — Four reasons.** `OPENING_STOCK`, `ADJUSTMENT`, `CONSUMPTION`, `WASTE_DAMAGE`.
+  Physical count and correction merge into `ADJUSTMENT`; new documents use `ADJUSTMENT`
+  for both routine counts and targeted fixes.
 - **D2 — `purpose` field removed.** `reason` alone carries the semantics (legacy `purpose`
   always mirrored `reason`).
 - **D3 — Entry semantics.** Opening Stock, Adjustment, and Consumption are count-entry: the
@@ -880,8 +879,7 @@ changes (§4.12), transfer acknowledgement, count sheets, cycle-count scheduling
 
 **Models (`apps.inventory`, `apps.settings`):**
 
-- `StockReconciliation`: `purpose` removed; `reason` choices gain `ADJUSTMENT` (legacy values
-  retained for history).
+- `StockReconciliation`: `purpose` removed; `reason` is the four reasons above.
 - `StockReconciliationItem`: no schema change — `qty` semantics follow the reason;
   `valuation_rate` stays Opening-Stock-only.
 - `Restaurant`: `stock_adjustment_account` and `temporary_opening_account` FKs
@@ -892,12 +890,12 @@ changes (§4.12), transfer acknowledgement, count sheets, cycle-count scheduling
 - Opening: fresh warehouse accepted with Dr warehouse / Cr temporary opening; warehouse with
   any prior SLE rejected; rate required; WAC blends at the entered rate.
 - Adjustment: outbound Dr stock adjustment / Cr warehouse; inbound reversed; reserved floor
-  held; legacy `PHYSICAL_COUNT` / `CORRECTION` rows still render.
+  held.
 - Consumption: FOOD/Kitchen restriction retained; count above bin rejected; count equal to
   bin is a no-op; Dr default expense / Cr kitchen on submit; cancel reverses.
 - Waste: SLE posts `−qty` (delta semantics); waste above on-hand minus reserved rejected;
   Dr wastage / Cr warehouse; cancel reverses.
-- Form works without `purpose`; legacy rows keep their reason labels.
+- Form works without `purpose`.
 - Drinks, transfers, and POS flows unaffected.
 
 **Docs (same task as implementation, not now):** `docs/workflows/inventory.md` (reasons,

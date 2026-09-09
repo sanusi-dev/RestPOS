@@ -160,6 +160,24 @@ class Restaurant(BaseModel):
         verbose_name="Inventory price variance account",
         help_text="The expense account used when cancelled receipts leave a small difference in stock value.",
     )
+    stock_adjustment_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Stock adjustment account",
+        help_text="The expense account used for stock adjustments (count corrections up or down).",
+    )
+    temporary_opening_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Temporary opening account",
+        help_text="The equity account credited when opening stock is first seeded into a fresh warehouse.",
+    )
 
     class Meta:
         ordering = ["company"]

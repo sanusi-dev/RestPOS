@@ -666,19 +666,18 @@ class StockEntryDetail(BaseModel):
 class StockReconciliation(BaseModel):
     """A document that adjusts stock to match a physical count."""
 
-    purpose = models.CharField(
-        max_length=20,
-        choices=[("OPENING_STOCK", "Opening Stock"), ("RECONCILIATION", "Stock Reconciliation")],
-        default="RECONCILIATION",
-    )
+    OPENING_STOCK = "OPENING_STOCK"
+    ADJUSTMENT = "ADJUSTMENT"
+    CONSUMPTION = "CONSUMPTION"
+    WASTE_DAMAGE = "WASTE_DAMAGE"
+
     reason = models.CharField(
         max_length=20,
         choices=[
             ("OPENING_STOCK", "Opening Stock"),
-            ("PHYSICAL_COUNT", "Physical Count"),
+            ("ADJUSTMENT", "Adjustment"),
             ("CONSUMPTION", "Consumption"),
             ("WASTE_DAMAGE", "Waste / Damage"),
-            ("CORRECTION", "Correction"),
         ],
     )
     posting_date = models.DateField(default=timezone.now)
@@ -694,7 +693,7 @@ class StockReconciliation(BaseModel):
         ordering = ["-posting_date", "-created_at"]
 
     def __str__(self):
-        return f"{self.get_purpose_display()} - {self.warehouse.name} - {self.posting_date}"
+        return f"{self.get_reason_display()} - {self.warehouse.name} - {self.posting_date}"
 
     def save(self, *args, **kwargs):
         if self.pk:

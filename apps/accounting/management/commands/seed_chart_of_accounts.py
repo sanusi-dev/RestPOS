@@ -239,6 +239,24 @@ class Command(BaseCommand):
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
             },
         )[0]
+        stock_adjustment_account = LedgerAccount.objects.get_or_create(
+            name="Stock Adjustments",
+            defaults={
+                "parent": expenses,
+                "is_group": False,
+                "account_type": LedgerAccount.EXPENSE,
+                "report_type": LedgerAccount.PROFIT_AND_LOSS,
+            },
+        )[0]
+        temporary_opening_account = LedgerAccount.objects.get_or_create(
+            name="Temporary Opening",
+            defaults={
+                "parent": equity,
+                "is_group": False,
+                "account_type": LedgerAccount.EQUITY,
+                "report_type": LedgerAccount.BALANCE_SHEET,
+            },
+        )[0]
 
         restaurant = Restaurant.load()
         if restaurant is not None:
@@ -256,6 +274,8 @@ class Command(BaseCommand):
                 ("default_stock_in_hand_account", stock_in_hand),
                 ("stock_received_but_not_billed_account", grni_account),
                 ("inventory_price_variance_account", variance_account),
+                ("stock_adjustment_account", stock_adjustment_account),
+                ("temporary_opening_account", temporary_opening_account),
             ]:
                 if getattr(restaurant, f"{field}_id") is None:
                     setattr(restaurant, field, value)
@@ -282,3 +302,5 @@ class Command(BaseCommand):
         self.stdout.write(f"  GRNI: {grni_account.name}")
         self.stdout.write(f"  Supplier expenses: {supplier_expense_account.name}")
         self.stdout.write(f"  Variance: {variance_account.name}")
+        self.stdout.write(f"  Stock adjustments: {stock_adjustment_account.name}")
+        self.stdout.write(f"  Temporary opening: {temporary_opening_account.name}")

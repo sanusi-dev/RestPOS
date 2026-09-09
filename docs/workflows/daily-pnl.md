@@ -508,7 +508,7 @@ The statement partial accepts either live `LineSpec` dataclasses (preview) or sa
 
 ### Kitchen consumption (`sources.kitchen_consumption`)
 
-Submitted reconciliations, `reason="CONSUMPTION"`, `posting_date=business_date`. Outbound SLEs (`quantity < 0`) valued at `unit_rate` (current WAC at count).
+Submitted reconciliations, `reason="CONSUMPTION"`, `posting_date=business_date`. Outbound SLEs (`quantity < 0`) valued at `unit_rate` (current WAC at count). Consumption is reduction-only by the reconciliation rules (a count above the bin is rejected; a count equal to the bin is a no-op), so only outbound rows exist. The same submit also posts GL (Dr `Restaurant.default_expense_account` / Cr Kitchen warehouse account); Daily P&L reads the SLEs, not the GL.
 
 ### Cash variance (`sources.cash_variance`)
 

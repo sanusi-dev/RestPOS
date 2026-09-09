@@ -77,6 +77,8 @@ class RestaurantForm(SettingsModelForm):
             "default_stock_in_hand_account",
             "stock_received_but_not_billed_account",
             "inventory_price_variance_account",
+            "stock_adjustment_account",
+            "temporary_opening_account",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -102,6 +104,8 @@ class RestaurantForm(SettingsModelForm):
             "default_stock_in_hand_account",
             "stock_received_but_not_billed_account",
             "inventory_price_variance_account",
+            "stock_adjustment_account",
+            "temporary_opening_account",
         ):
             self.fields[field_name].queryset = active_choices(
                 LedgerAccount, getattr(self.instance, f"{field_name}_id"), disabled=False, is_group=False

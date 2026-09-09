@@ -274,8 +274,7 @@ class TestReconciliationViews(InventoryViewTestBase):
             self.client.post(
                 reverse("inventory:reconciliation_create"),
                 {
-                    "purpose": "RECONCILIATION",
-                    "reason": "PHYSICAL_COUNT",
+                    "reason": "ADJUSTMENT",
                     "posting_date": "2025-01-15",
                     "warehouse": self.warehouse.pk,
                     "remarks": "atomic failure",
@@ -290,7 +289,7 @@ class TestReconciliationViews(InventoryViewTestBase):
     def test_reconciliation_submit_validation_error_is_visible(self):
         from apps.inventory.models import StockReconciliation
 
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
+        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="ADJUSTMENT")
         response = self.client.post(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Add at least one item")
@@ -299,7 +298,7 @@ class TestReconciliationViews(InventoryViewTestBase):
         from apps.inventory.models import StockLedgerEntry, StockReconciliation, StockReconciliationItem
         from apps.inventory.services import submit_stock_reconciliation
 
-        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="PHYSICAL_COUNT")
+        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="ADJUSTMENT")
         StockReconciliationItem.objects.create(
             reconciliation=rec, item=self.item, qty=Decimal("4"), valuation_rate=Decimal("100")
         )

@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from apps.accounting.models import GLEntry
 from apps.inventory.forms import StockReconciliationForm, StockReconciliationItemForm
 from apps.inventory.models import (
     UOM,
@@ -15,88 +16,283 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.inventory.services import cancel_stock_reconciliation, submit_stock_reconciliation
-from apps.settings.models import ProductionUnit
+from apps.settings.models import ProductionUnit, Restaurant
 
 
-class StockReconciliationTest(TestCase):
+class StockReconciliationStandardizationTest(TestCase):
     @classmethod
     def setUpTestData(cls):
+        from apps.accounting.tests.helpers import setup_chart_of_accounts
+
         cls.uom = UOM.objects.create(name="Nos")
         cls.group = ItemGroup.objects.create(name="Food")
+        cls.store = Warehouse.objects.create(name="Store")
         cls.kitchen = Warehouse.objects.create(name="Kitchen")
+        cls.bar = Warehouse.objects.create(name="Bar")
+        cls.restaurant = Restaurant.objects.create(
+            company="Test Co", store_warehouse=cls.store, default_warehouse=cls.bar
+        )
+        cls.accounts = setup_chart_of_accounts(cls.restaurant)
+        for wh in (cls.store, cls.kitchen, cls.bar):
+            wh.account = cls.accounts["stock_in_hand"]
+            wh.save(update_fields=["account", "updated_at"])
+        cls.restaurant.refresh_from_db()
         ProductionUnit.objects.create(name="Kitchen", department="FOOD", warehouse=cls.kitchen)
-        cls.item = Item.objects.create(
-            item_name="Rice", item_group=cls.group, stock_uom=cls.uom, department="FOOD", is_stock_item=True
+        ProductionUnit.objects.create(name="Bar", department="DRINKS", warehouse=cls.bar)
+        cls.rice = Item.objects.create(
+            item_name="Rice",
+            item_group=cls.group,
+            stock_uom=cls.uom,
+            department="FOOD",
+            is_stock_item=True,
+            is_purchase_item=True,
+        )
+        cls.coke = Item.objects.create(
+            item_name="Coke",
+            item_group=cls.group,
+            stock_uom=cls.uom,
+            department="DRINKS",
+            is_stock_item=True,
+            is_sales_item=True,
+            is_purchase_item=True,
         )
 
-    def make_reconciliation(self, **kwargs):
-        defaults = {"warehouse": self.kitchen, "reason": "PHYSICAL_COUNT"}
-        defaults.update(kwargs)
-        return StockReconciliation.objects.create(**defaults)
+    def make_rec(self, reason, warehouse=None, **kwargs):
+        return StockReconciliation.objects.create(reason=reason, warehouse=warehouse or self.kitchen, **kwargs)
 
-    def test_form_uses_reason_placeholder_and_disables_rate_outside_opening_stock(self):
+    def gl_for(self, rec):
+        return list(GLEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk)))
+
+    # Form
+
+    def test_form_has_no_purpose_and_offers_four_active_reasons(self):
         form = StockReconciliationForm()
-        item_form = StockReconciliationItemForm()
-
+        self.assertNotIn("purpose", form.fields)
         self.assertEqual(form.fields["reason"].choices[0], ("", "Select reason..."))
+        values = [value for value, _label in form.fields["reason"].choices if value]
+        self.assertEqual(values, ["OPENING_STOCK", "ADJUSTMENT", "CONSUMPTION", "WASTE_DAMAGE"])
+        item_form = StockReconciliationItemForm()
         self.assertEqual(
             item_form.fields["valuation_rate"].widget.attrs["x-bind:disabled"],
-            "purpose !== 'OPENING_STOCK'",
+            "reason !== 'OPENING_STOCK'",
         )
 
-    def test_opening_stock_requires_matching_reason(self):
-        rec = self.make_reconciliation(purpose="OPENING_STOCK", reason="PHYSICAL_COUNT")
+    # Opening
+
+    def test_opening_fresh_warehouse_posts_dr_warehouse_cr_temporary_opening(self):
+        fresh = Warehouse.objects.create(name="Fresh", account=self.accounts["stock_in_hand"])
+        rec = self.make_rec("OPENING_STOCK", warehouse=fresh)
         StockReconciliationItem.objects.create(
-            reconciliation=rec, item=self.item, qty=Decimal("4"), valuation_rate=Decimal("100")
+            reconciliation=rec, item=self.rice, qty=Decimal("10"), valuation_rate=Decimal("100")
         )
-        with self.assertRaisesMessage(ValidationError, "Opening Stock must use the Opening Stock reason"):
-            submit_stock_reconciliation(rec)
-
-    def test_regular_reconciliation_rejects_opening_stock_reason(self):
-        rec = self.make_reconciliation(purpose="RECONCILIATION", reason="OPENING_STOCK")
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("4"))
-        with self.assertRaisesMessage(ValidationError, "Opening Stock reason is only valid"):
-            submit_stock_reconciliation(rec)
-
-    def test_submit_rereads_locked_current_qty(self):
-        rec = self.make_reconciliation()
-        line = StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
-        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", unit_rate=Decimal("100"))
-        # The line snapshot is intentionally stale; submit must lock and re-read the current Bin.
-        self.assertEqual(line.current_qty, Decimal("0"))
         submit_stock_reconciliation(rec)
-        line.refresh_from_db()
-        self.assertEqual(line.current_qty, Decimal("5"))
-        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("8"))
+        bin_obj = Bin.objects.get(item=self.rice, warehouse=fresh)
+        self.assertEqual(bin_obj.actual_qty, Decimal("10"))
+        self.assertEqual(bin_obj.valuation_rate, Decimal("100"))
+        entries = self.gl_for(rec)
+        self.assertEqual(len(entries), 2)
+        by_acct = {e.account_id: e for e in entries}
+        wh = by_acct[self.accounts["stock_in_hand"].pk]
+        opening = by_acct[self.accounts["temporary_opening"].pk]
+        self.assertEqual(wh.debit, Decimal("1000"))
+        self.assertEqual(opening.credit, Decimal("1000"))
 
-    def test_non_opening_count_cannot_be_below_reserved_qty(self):
-        bin_obj = Bin.objects.create(item=self.item, warehouse=self.kitchen, actual_qty=10, reserved_qty=4)
-        rec = self.make_reconciliation()
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("3"))
+    def test_opening_rejected_when_warehouse_has_any_prior_sle(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("5"), "Receipt", "1", unit_rate=Decimal("50"))
+        cancel_rec = StockReconciliation.objects.filter(warehouse=self.store, status="SUBMITTED").first()
+        _ = cancel_rec
+        rec = self.make_rec("OPENING_STOCK", warehouse=self.store)
+        StockReconciliationItem.objects.create(
+            reconciliation=rec, item=self.rice, qty=Decimal("10"), valuation_rate=Decimal("100")
+        )
+        with self.assertRaisesMessage(ValidationError, "fresh warehouse"):
+            submit_stock_reconciliation(rec)
+
+    def test_opening_rejected_when_cancelled_sle_exists(self):
+        other = Warehouse.objects.create(name="OtherFresh", account=self.accounts["stock_in_hand"])
+        StockLedgerEntry.create_entry(self.rice, other, Decimal("5"), "Receipt", "1", unit_rate=Decimal("50"))
+        # Reverse it so only a cancellation pair remains in history — gate still applies.
+        bin_obj = Bin.objects.get(item=self.rice, warehouse=other)
+        StockLedgerEntry.create_entry(
+            self.rice, other, Decimal("-5"), "Receipt Cancellation", "1", reversal_of_sle_id=None
+        )
+        self.assertTrue(StockLedgerEntry.objects.filter(warehouse=other).exists())
+        rec = self.make_rec("OPENING_STOCK", warehouse=other)
+        StockReconciliationItem.objects.create(
+            reconciliation=rec, item=self.rice, qty=Decimal("3"), valuation_rate=Decimal("100")
+        )
+        with self.assertRaisesMessage(ValidationError, "fresh warehouse"):
+            submit_stock_reconciliation(rec)
+        _ = bin_obj
+
+    def test_opening_positive_line_requires_rate(self):
+        fresh = Warehouse.objects.create(name="Fresh2", account=self.accounts["stock_in_hand"])
+        rec = self.make_rec("OPENING_STOCK", warehouse=fresh)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("4"))
+        with self.assertRaisesMessage(ValidationError, "valuation rate"):
+            submit_stock_reconciliation(rec)
+
+    def test_opening_rejects_pl_temporary_opening_account(self):
+        from apps.accounting.models import LedgerAccount
+
+        pl = LedgerAccount.objects.create(
+            name="Fake P&L opening",
+            parent=self.accounts["expenses"],
+            account_type=LedgerAccount.EXPENSE,
+            report_type=LedgerAccount.PROFIT_AND_LOSS,
+        )
+        self.restaurant.temporary_opening_account = pl
+        self.restaurant.save(update_fields=["temporary_opening_account", "updated_at"])
+        try:
+            fresh = Warehouse.objects.create(name="FreshPL", account=self.accounts["stock_in_hand"])
+            rec = self.make_rec("OPENING_STOCK", warehouse=fresh)
+            StockReconciliationItem.objects.create(
+                reconciliation=rec, item=self.rice, qty=Decimal("2"), valuation_rate=Decimal("50")
+            )
+            with self.assertRaisesMessage(ValidationError, "balance-sheet"):
+                submit_stock_reconciliation(rec)
+        finally:
+            self.restaurant.temporary_opening_account = self.accounts["temporary_opening"]
+            self.restaurant.save(update_fields=["temporary_opening_account", "updated_at"])
+
+    # Adjustment
+
+    def test_adjustment_outbound_posts_dr_adjustment_cr_warehouse(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "A1", unit_rate=Decimal("100"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("6"))
+        submit_stock_reconciliation(rec)
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.store).actual_qty, Decimal("6"))
+        entries = self.gl_for(rec)
+        by_acct = {e.account_id: e for e in entries}
+        adj = by_acct[self.accounts["stock_adjustment"].pk]
+        wh = by_acct[self.accounts["stock_in_hand"].pk]
+        self.assertEqual(adj.debit, Decimal("400"))
+        self.assertEqual(wh.credit, Decimal("400"))
+
+    def test_adjustment_inbound_reverses_legs(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("5"), "Receipt", "A2", unit_rate=Decimal("100"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("8"))
+        submit_stock_reconciliation(rec)
+        entries = self.gl_for(rec)
+        by_acct = {e.account_id: e for e in entries}
+        adj = by_acct[self.accounts["stock_adjustment"].pk]
+        wh = by_acct[self.accounts["stock_in_hand"].pk]
+        self.assertEqual(wh.debit, Decimal("300"))
+        self.assertEqual(adj.credit, Decimal("300"))
+
+    def test_adjustment_reserved_floor_held(self):
+        Bin.objects.create(item=self.rice, warehouse=self.store, actual_qty=10, reserved_qty=4)
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("3"))
         with self.assertRaisesMessage(ValidationError, "reserved quantity"):
             submit_stock_reconciliation(rec)
-        bin_obj.refresh_from_db()
-        self.assertEqual(bin_obj.actual_qty, Decimal("10"))
 
-    def test_consumption_requires_kitchen_and_food(self):
-        other = Warehouse.objects.create(name="Other")
-        rec = self.make_reconciliation(reason="CONSUMPTION", warehouse=other)
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
-        with self.assertRaisesMessage(ValidationError, "configured Kitchen"):
-            submit_stock_reconciliation(rec)
-
-    def test_disabled_or_non_stock_item_rejected(self):
-        self.item.disabled = True
-        self.item.save()
-        rec = self.make_reconciliation()
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=0)
-        with self.assertRaisesMessage(ValidationError, "enabled stock item"):
-            submit_stock_reconciliation(rec)
-
-    def test_cancel_reverses_atomically_and_is_idempotent(self):
-        StockLedgerEntry.create_entry(self.item, self.kitchen, Decimal("5"), "Receipt", "1", unit_rate=Decimal("100"))
-        rec = self.make_reconciliation()
-        StockReconciliationItem.objects.create(reconciliation=rec, item=self.item, qty=Decimal("8"))
+    def test_adjustment_cancel_reverses_gl(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "A3", unit_rate=Decimal("100"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("6"))
         submit_stock_reconciliation(rec)
         cancel_stock_reconciliation(rec)
-        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.kitchen).actual_qty, Decimal("5"))
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.store).actual_qty, Decimal("10"))
+        self.assertTrue(
+            GLEntry.objects.filter(
+                voucher_type="Stock Reconciliation", voucher_no=str(rec.pk), remarks="Reversal"
+            ).exists()
+        )
+
+    # Consumption
+
+    def test_consumption_posts_dr_expense_cr_kitchen(self):
+        StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("10"), "Receipt", "C1", unit_rate=Decimal("200"))
+        rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("6"))
+        submit_stock_reconciliation(rec)
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.kitchen).actual_qty, Decimal("6"))
+        sle = StockLedgerEntry.objects.get(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk))
+        self.assertEqual(sle.quantity, Decimal("-4"))
+        self.assertEqual(sle.unit_rate, Decimal("200"))
+        entries = self.gl_for(rec)
+        by_acct = {e.account_id: e for e in entries}
+        exp = by_acct[self.accounts["cogs"].pk]
+        self.assertEqual(exp.debit, Decimal("800"))
+
+    def test_consumption_count_above_bin_rejected(self):
+        StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("5"), "Receipt", "C2", unit_rate=Decimal("100"))
+        rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("9"))
+        with self.assertRaisesMessage(ValidationError, "cannot exceed"):
+            submit_stock_reconciliation(rec)
+
+    def test_consumption_count_equal_to_bin_is_noop(self):
+        StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("5"), "Receipt", "C3", unit_rate=Decimal("100"))
+        rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("5"))
+        submit_stock_reconciliation(rec)
+        self.assertFalse(
+            StockLedgerEntry.objects.filter(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk)).exists()
+        )
+        self.assertFalse(self.gl_for(rec))
+
+    def test_consumption_requires_kitchen_and_food(self):
+        rec = self.make_rec("CONSUMPTION", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("0"))
+        with self.assertRaisesMessage(ValidationError, "configured Kitchen"):
+            submit_stock_reconciliation(rec)
+        rec2 = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec2, item=self.coke, qty=Decimal("0"))
+        with self.assertRaisesMessage(ValidationError, "FOOD"):
+            submit_stock_reconciliation(rec2)
+
+    def test_consumption_cancel_reverses(self):
+        StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("10"), "Receipt", "C4", unit_rate=Decimal("100"))
+        rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("7"))
+        submit_stock_reconciliation(rec)
+        cancel_stock_reconciliation(rec)
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.kitchen).actual_qty, Decimal("10"))
+
+    # Waste (delta-entry)
+
+    def test_waste_posts_negative_delta_and_dr_wastage(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "W1", unit_rate=Decimal("100"))
+        rec = self.make_rec("WASTE_DAMAGE", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("3"))
+        submit_stock_reconciliation(rec)
+        sle = StockLedgerEntry.objects.get(voucher_type="Stock Reconciliation", voucher_no=str(rec.pk))
+        self.assertEqual(sle.quantity, Decimal("-3"))
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.store).actual_qty, Decimal("7"))
+        entries = self.gl_for(rec)
+        by_acct = {e.account_id: e for e in entries}
+        waste = by_acct[self.accounts["cogs"].pk]
+        self.assertEqual(waste.debit, Decimal("300"))
+
+    def test_waste_above_on_hand_minus_reserved_rejected(self):
+        Bin.objects.create(item=self.rice, warehouse=self.store, actual_qty=10, reserved_qty=4)
+        Bin.objects.filter(item=self.rice, warehouse=self.store).update(valuation_rate=Decimal("100"))
+        rec = self.make_rec("WASTE_DAMAGE", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("7"))
+        with self.assertRaisesMessage(ValidationError, "on-hand"):
+            submit_stock_reconciliation(rec)
+
+    def test_waste_requires_positive_qty(self):
+        rec = self.make_rec("WASTE_DAMAGE", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("0"))
+        with self.assertRaisesMessage(ValidationError, "greater than zero"):
+            submit_stock_reconciliation(rec)
+
+    def test_waste_cancel_reverses(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "W2", unit_rate=Decimal("50"))
+        rec = self.make_rec("WASTE_DAMAGE", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("4"))
+        submit_stock_reconciliation(rec)
+        cancel_stock_reconciliation(rec)
+        self.assertEqual(Bin.objects.get(item=self.rice, warehouse=self.store).actual_qty, Decimal("10"))
+
+    def test_drinks_adjustment_unaffected(self):
+        StockLedgerEntry.create_entry(self.coke, self.bar, Decimal("24"), "Receipt", "D1", unit_rate=Decimal("200"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.bar)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.coke, qty=Decimal("20"))
+        submit_stock_reconciliation(rec)
+        self.assertEqual(Bin.objects.get(item=self.coke, warehouse=self.bar).actual_qty, Decimal("20"))

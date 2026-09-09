@@ -46,7 +46,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Settings and Routing
 
-- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them).
+- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them). Since Phase 10 it also carries `stock_adjustment_account` (Expense) and `temporary_opening_account` (Equity, balance-sheet only).
 - `ProductionUnit`: one row per department via a unique constraint. Stores station warehouse, takeaway-ticket suppression, printer metadata, and `income_account` (the departmental income hook — first stop in income account resolution before the Restaurant default).
 - `ItemGroup`: flat category.
 - `Warehouse`: flat stock location; since Phase 6 it carries an optional `account` FK credited with the stock value of settle-time drink deductions.
@@ -68,7 +68,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 - `Bin`: current actual quantity, reserved quantity, valuation rate, and stock value for one item/warehouse pair.
 - `StockLedgerEntry`: signed PWAC movement (`quantity`, `unit_rate`, `stock_value_change`). The voucher type/number/detail fields link it back to source documents.
 - `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer. Receipt lines record the `uom` bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`; submit posts `qty × factor` and blends WAC on the as-bought `amount`, mirroring `PurchaseReceiptItem`. Transfer lines stay in the stock unit. `StockEntry.mode_of_payment` records the funding account ("Paid from") for market receipts.
-- `StockReconciliation` and `StockReconciliationItem`: counted quantity adjustment with purpose/reason and warehouse; Opening Stock uses the `OPENING_STOCK` reason while ordinary reconciliations use operational reasons.
+- `StockReconciliation` and `StockReconciliationItem`: adjustment with `reason` (`OPENING_STOCK` first seeding of a fresh warehouse only, `ADJUSTMENT` counted quantity up or down, `CONSUMPTION` end-of-day kitchen count that cannot exceed the bin, `WASTE_DAMAGE` quantity wasted as a positive delta). Opening posts Dr warehouse / Cr temporary opening; Adjustment Dr stock adjustment / Cr warehouse (inbound reverses); Consumption Dr default expense / Cr kitchen; Waste Dr wastage / Cr warehouse.
 - `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`. On submit the ledger quantity is `received_qty × factor` and inbound value is the as-bought `amount`; WAC blends on that amount. `last_purchase_rate` is per stock UOM (`amount ÷ stock_qty`).
 
 ## Order Entities

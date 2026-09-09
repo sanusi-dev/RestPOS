@@ -366,9 +366,7 @@ def cancel_stock_entry(entry):
                 # Original as-bought money per receipt line — qty × per-stock-unit rate can round.
                 detail_amounts = {}
                 if locked.purpose == "MATERIAL_RECEIPT":
-                    detail_amounts = {
-                        d.pk: d.amount for d in StockEntryDetail.objects.filter(stock_entry_id=locked.pk)
-                    }
+                    detail_amounts = {d.pk: d.amount for d in StockEntryDetail.objects.filter(stock_entry_id=locked.pk)}
                 # SIH moves by the bin's current value; the funding leg returns the original
                 # money. Any difference (WAC drift or rate rounding) goes to the variance account.
                 line_amounts = []
@@ -413,7 +411,7 @@ def cancel_stock_entry(entry):
 
 @transaction.atomic
 def submit_stock_reconciliation(reconciliation):
-    """Post adjustment SLEs so each item's Bin matches the counted qty."""
+    """Post adjustment SLEs and GL legs for the four active reconciliation reasons."""
     from apps.settings.models import ProductionUnit
 
     locked = StockReconciliation.objects.select_for_update().select_related("warehouse").get(pk=reconciliation.pk)
@@ -425,10 +423,6 @@ def submit_stock_reconciliation(reconciliation):
     valid_reasons = {value for value, _label in locked._meta.get_field("reason").choices}
     if locked.reason not in valid_reasons:
         raise ValidationError("A reconciliation reason is required.")
-    if locked.purpose == "OPENING_STOCK" and locked.reason != "OPENING_STOCK":
-        raise ValidationError("Opening Stock must use the Opening Stock reason.")
-    if locked.purpose == "RECONCILIATION" and locked.reason == "OPENING_STOCK":
-        raise ValidationError("Opening Stock reason is only valid for Opening Stock purpose.")
 
     lines = list(locked.items.select_related("item", "item__item_group"))
     if not lines:
@@ -436,8 +430,14 @@ def submit_stock_reconciliation(reconciliation):
     for line in lines:
         if line.item.disabled or not line.item.is_stock_item or line.item.has_variants:
             raise ValidationError(f"{line.item.item_name} is not an enabled stock item.")
-        if line.qty < 0:
-            raise ValidationError(f"Counted quantity for {line.item.item_name} cannot be negative.")
+    if locked.reason in {"OPENING_STOCK", "ADJUSTMENT", "CONSUMPTION"}:
+        for line in lines:
+            if line.qty < 0:
+                raise ValidationError(f"Counted quantity for {line.item.item_name} cannot be negative.")
+    else:
+        for line in lines:
+            if line.qty <= 0:
+                raise ValidationError(f"Quantity wasted for {line.item.item_name} must be greater than zero.")
     if locked.reason == "CONSUMPTION":
         kitchen = ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
         if not kitchen or kitchen.warehouse_id != locked.warehouse_id:
@@ -450,6 +450,33 @@ def submit_stock_reconciliation(reconciliation):
                     f"{line.item.item_name} must be a stock-tracked, purchasable food ingredient for consumption."
                 )
 
+    from apps.settings.models import Restaurant
+
+    restaurant = Restaurant.load()
+    sih_acct = _resolve_account(locked.warehouse.account, "The warehouse account")
+    adjustment_acct = None
+    opening_acct = None
+    expense_acct = None
+    wastage_acct = None
+    if locked.reason == "OPENING_STOCK":
+        if StockLedgerEntry.objects.filter(warehouse=locked.warehouse).exists():
+            raise ValidationError("Opening Stock is only allowed for a fresh warehouse with no stock history.")
+        opening_acct = _resolve_account(
+            restaurant.temporary_opening_account if restaurant else None, "The temporary opening account"
+        )
+        if opening_acct.report_type == "PROFIT_AND_LOSS":
+            raise ValidationError("The temporary opening account must be a balance-sheet account, never a P&L account.")
+    elif locked.reason == "ADJUSTMENT":
+        adjustment_acct = _resolve_account(
+            restaurant.stock_adjustment_account if restaurant else None, "The stock adjustment account"
+        )
+    elif locked.reason == "CONSUMPTION":
+        expense_acct = _resolve_account(
+            restaurant.default_expense_account if restaurant else None, "The default expense account"
+        )
+    else:
+        wastage_acct = _resolve_account(restaurant.wastage_account if restaurant else None, "The wastage account")
+
     for line in lines:
         Bin.get_or_create_bin_id(line.item_id, locked.warehouse_id)
     locked_bins = {
@@ -460,42 +487,58 @@ def submit_stock_reconciliation(reconciliation):
     }
     voucher_no = str(locked.pk)
     gl_rows = []
-    from apps.settings.models import Restaurant
-
-    restaurant = Restaurant.load()
     for line in lines:
         bin_obj = locked_bins[line.item_id]
         current_qty = bin_obj.actual_qty
-        if locked.purpose != "OPENING_STOCK" and line.qty < bin_obj.reserved_qty:
+        line.current_qty = current_qty
+        line.save(update_fields=["current_qty", "updated_at"])
+        if locked.reason == "WASTE_DAMAGE":
+            available = current_qty - (bin_obj.reserved_qty or Decimal("0"))
+            if line.qty > available:
+                raise ValidationError(
+                    f"Quantity wasted for {line.item.item_name} cannot exceed on-hand stock ({available})."
+                )
+            sle = StockLedgerEntry._create_entry_locked(
+                item=line.item,
+                warehouse=locked.warehouse,
+                quantity=-line.qty,
+                voucher_type="Stock Reconciliation",
+                voucher_no=voucher_no,
+                unit_rate=None,
+                voucher_detail_no=str(line.pk),
+                prevent_negative=True,
+                posting_date=locked.posting_date,
+                bin_obj=bin_obj,
+            )
+            amount = (abs(sle.quantity) * sle.unit_rate).quantize(Decimal("0.01"))
+            if amount:
+                gl_rows.append({"account": wastage_acct, "debit": amount, "against": sih_acct.name})
+                gl_rows.append({"account": sih_acct, "credit": amount, "against": wastage_acct.name})
+            continue
+        if line.qty < (bin_obj.reserved_qty or Decimal("0")):
             raise ValidationError(
                 f"Counted quantity for {line.item.item_name} cannot be below reserved quantity "
                 f"({bin_obj.reserved_qty})."
             )
-        line.current_qty = current_qty
-        line.save(update_fields=["current_qty", "updated_at"])
+        if locked.reason == "CONSUMPTION" and line.qty > current_qty:
+            raise ValidationError(
+                f"Counted quantity for {line.item.item_name} cannot exceed the bin "
+                f"({current_qty}). Run an Adjustment first."
+            )
         difference = line.qty - current_qty
         if difference == 0:
             continue
         rate = None
-        if locked.purpose == "OPENING_STOCK":
+        if locked.reason == "OPENING_STOCK":
             if difference > 0:
                 if line.valuation_rate is None:
                     raise ValidationError(f"Opening stock for {line.item.item_name} requires a valuation rate.")
                 rate = line.valuation_rate
-            else:
-                rate = None
-        else:
-            if bin_obj.actual_qty == 0 and difference > 0:
-                if line.valuation_rate is None:
-                    raise ValidationError(
-                        f"A valuation rate is required to seed empty stock for {line.item.item_name}."
-                    )
-                rate = line.valuation_rate
-            else:
-                rate = None
-
-        wac_before = bin_obj.valuation_rate or Decimal("0")
-        StockLedgerEntry._create_entry_locked(
+        elif bin_obj.actual_qty == 0 and difference > 0:
+            if line.valuation_rate is None:
+                raise ValidationError(f"A valuation rate is required to seed empty stock for {line.item.item_name}.")
+            rate = line.valuation_rate
+        sle = StockLedgerEntry._create_entry_locked(
             item=line.item,
             warehouse=locked.warehouse,
             quantity=difference,
@@ -507,20 +550,35 @@ def submit_stock_reconciliation(reconciliation):
             posting_date=locked.posting_date,
             bin_obj=bin_obj,
         )
-        if locked.reason == "WASTE_DAMAGE" and difference < 0:
-            amount = (abs(difference) * wac_before).quantize(Decimal("0.01"))
-            if amount and restaurant is not None:
-                wastage_acct = _resolve_account(restaurant.wastage_account, "The wastage account")
-                sih_acct = _resolve_account(locked.warehouse.account, "The warehouse account")
-                gl_rows.append({"account": wastage_acct, "debit": amount})
-                gl_rows.append({"account": sih_acct, "credit": amount})
+        amount = (abs(sle.quantity) * sle.unit_rate).quantize(Decimal("0.01"))
+        if not amount:
+            continue
+        if locked.reason == "OPENING_STOCK":
+            if difference > 0:
+                gl_rows.append({"account": sih_acct, "debit": amount, "against": opening_acct.name})
+                gl_rows.append({"account": opening_acct, "credit": amount, "against": sih_acct.name})
+            else:
+                gl_rows.append({"account": opening_acct, "debit": amount, "against": sih_acct.name})
+                gl_rows.append({"account": sih_acct, "credit": amount, "against": opening_acct.name})
+        elif locked.reason == "ADJUSTMENT":
+            if difference > 0:
+                gl_rows.append({"account": sih_acct, "debit": amount, "against": adjustment_acct.name})
+                gl_rows.append({"account": adjustment_acct, "credit": amount, "against": sih_acct.name})
+            else:
+                gl_rows.append({"account": adjustment_acct, "debit": amount, "against": sih_acct.name})
+                gl_rows.append({"account": sih_acct, "credit": amount, "against": adjustment_acct.name})
+        else:
+            gl_rows.append({"account": expense_acct, "debit": amount, "against": sih_acct.name})
+            gl_rows.append({"account": sih_acct, "credit": amount, "against": expense_acct.name})
     if gl_rows:
-        _post_gl_rows(
-            locked.posting_date,
-            "Stock Reconciliation",
-            voucher_no,
-            gl_rows,
-            f"Stock Reconciliation {voucher_no} {locked.reason}",
+        from apps.accounting.models import GLEntry
+
+        GLEntry.post(
+            posting_date=locked.posting_date,
+            rows=gl_rows,
+            voucher_type="Stock Reconciliation",
+            voucher_no=voucher_no,
+            remarks=f"Stock Reconciliation {voucher_no} {locked.reason}",
         )
     locked.status = "SUBMITTED"
     locked.save(update_fields=["status", "updated_at"])
