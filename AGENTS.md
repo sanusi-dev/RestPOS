@@ -797,6 +797,7 @@ Rule: before creating or switching branches, check `git branch --show-current` a
 - Plan a feature without reviewing the reference material and comparable systems first
 - Plan POS work without reviewing URY's POS API (`references/ury-develop/ury/ury_pos/api.py`)
 - Write more than one feature at a time — complete and confirm one before the next
+- Never run tests after completing a task unless the user explicitly asked for tests to be run
 - Run Playwright or browser-based tests only when the user explicitly requests them
 
 ## Skills
