@@ -113,6 +113,15 @@ class Command(BaseCommand):
                 "report_type": LedgerAccount.PROFIT_AND_LOSS,
             },
         )[0]
+        food_cogs = LedgerAccount.objects.get_or_create(
+            name="Food COGS",
+            defaults={
+                "parent": expenses,
+                "is_group": False,
+                "account_type": LedgerAccount.EXPENSE,
+                "report_type": LedgerAccount.PROFIT_AND_LOSS,
+            },
+        )[0]
 
         equity = LedgerAccount.objects.get_or_create(
             name="Equity",
@@ -142,16 +151,22 @@ class Command(BaseCommand):
             )
 
         # Wire production units, warehouses, and the Restaurant singleton.
+        # Bar COGS keeps falling back to the default expense account (Cost of
+        # Goods Sold); only the Kitchen gets a dedicated Food COGS leaf.
         for unit in ProductionUnit.objects.all():
-            if unit.income_account_id:
-                continue
-            if unit.department == ProductionUnit.FOOD:
-                unit.income_account = food_sales
-            elif unit.department == ProductionUnit.DRINKS:
-                unit.income_account = drinks_sales
-            else:
-                continue
-            unit.save(update_fields=["income_account", "updated_at"])
+            changed = []
+            if not unit.income_account_id:
+                if unit.department == ProductionUnit.FOOD:
+                    unit.income_account = food_sales
+                elif unit.department == ProductionUnit.DRINKS:
+                    unit.income_account = drinks_sales
+                if unit.income_account_id:
+                    changed.append("income_account")
+            if unit.department == ProductionUnit.FOOD and not unit.expense_account_id:
+                unit.expense_account = food_cogs
+                changed.append("expense_account")
+            if changed:
+                unit.save(update_fields=[*changed, "updated_at"])
 
         # Inventory stock leaves per warehouse (credited at settle-time COGS).
         stock_group = LedgerAccount.objects.get_or_create(
@@ -302,5 +317,6 @@ class Command(BaseCommand):
         self.stdout.write(f"  GRNI: {grni_account.name}")
         self.stdout.write(f"  Supplier expenses: {supplier_expense_account.name}")
         self.stdout.write(f"  Variance: {variance_account.name}")
+        self.stdout.write(f"  Food COGS: {food_cogs.name}")
         self.stdout.write(f"  Stock adjustments: {stock_adjustment_account.name}")
         self.stdout.write(f"  Temporary opening: {temporary_opening_account.name}")

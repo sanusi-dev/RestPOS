@@ -663,9 +663,14 @@ def submit_stock_reconciliation(reconciliation):
         for line in lines:
             if line.qty <= 0:
                 raise ValidationError(f"Quantity wasted for {line.item.item_name} must be greater than zero.")
+    kitchen_unit = None
     if locked.reason == "CONSUMPTION":
-        kitchen = ProductionUnit.objects.select_related("warehouse").filter(department=ProductionUnit.FOOD).first()
-        if not kitchen or kitchen.warehouse_id != locked.warehouse_id:
+        kitchen_unit = (
+            ProductionUnit.objects.select_related("warehouse", "expense_account")
+            .filter(department=ProductionUnit.FOOD)
+            .first()
+        )
+        if not kitchen_unit or kitchen_unit.warehouse_id != locked.warehouse_id:
             raise ValidationError("Consumption reconciliation is only allowed for the configured Kitchen warehouse.")
         if any(line.item.department != "FOOD" for line in lines):
             raise ValidationError("Consumption reconciliation accepts FOOD stock items only.")
@@ -696,8 +701,10 @@ def submit_stock_reconciliation(reconciliation):
             restaurant.stock_adjustment_account if restaurant else None, "The stock adjustment account"
         )
     elif locked.reason == "CONSUMPTION":
+        unit_expense = kitchen_unit.expense_account if kitchen_unit is not None else None
         expense_acct = _resolve_account(
-            restaurant.default_expense_account if restaurant else None, "The default expense account"
+            unit_expense or (restaurant.default_expense_account if restaurant else None),
+            "The kitchen expense account",
         )
     else:
         wastage_acct = _resolve_account(restaurant.wastage_account if restaurant else None, "The wastage account")

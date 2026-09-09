@@ -47,6 +47,8 @@ class OrderGLTestBase(TestCase):
             stock_uom=cls.uom,
             department="FOOD",
             is_sales_item=True,
+            is_stock_item=False,
+            is_purchase_item=False,
         )
         cls.drink = Item.objects.create(
             item_name="Coke",
@@ -54,6 +56,8 @@ class OrderGLTestBase(TestCase):
             stock_uom=cls.uom,
             department="DRINKS",
             is_sales_item=True,
+            is_stock_item=True,
+            is_purchase_item=True,
         )
         cls.menu = Menu.objects.create(name="Main")
         cls.food_mi = MenuItem.objects.create(menu=cls.menu, item=cls.food, rate=Decimal("1500"))
@@ -160,6 +164,32 @@ class OrderSettleGLTest(OrderGLTestBase):
         stock_entry = entries.get(account=self.bar_wh.account)
         self.assertEqual(stock_entry.credit, Decimal("300"))
 
+    def test_cogs_uses_bar_unit_expense_account(self):
+        from apps.accounting.models import LedgerAccount
+
+        drinks_cogs = LedgerAccount.objects.create(
+            name="Drinks COGS",
+            parent=self.accounts["expenses"],
+            account_type=LedgerAccount.EXPENSE,
+            report_type=LedgerAccount.PROFIT_AND_LOSS,
+        )
+        self.bar.expense_account = drinks_cogs
+        self.bar.save(update_fields=["expense_account", "updated_at"])
+        StockLedgerEntry.create_entry(
+            item=self.drink,
+            warehouse=self.bar_wh,
+            quantity=Decimal("100"),
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-2",
+            unit_rate=Decimal("300"),
+        )
+        order = self._create_order()
+        add_order_line(order, self.drink, qty=2, rate=Decimal("500"), menu_item=self.drink_mi)
+        self._settle(order)
+        entries = self._order_gl(order)
+        self.assertEqual(entries.get(account=drinks_cogs).debit, Decimal("300"))
+        self.assertFalse(entries.filter(account=self.accounts["cogs"]).exists())
+
     def test_missing_income_account_raises(self):
         self.kitchen.income_account = None
         self.kitchen.save()
@@ -201,6 +231,35 @@ class RefundGLTest(OrderGLTestBase):
         self.assertEqual(entries.count(), 2)
         self.assertEqual(entries.get(account=self.accounts["food_sales"]).debit, Decimal("1500"))
         self.assertEqual(entries.get(account=self.accounts["cash"]).credit, Decimal("1500"))
+
+    def test_drink_return_reverses_bar_unit_expense(self):
+        from apps.accounting.models import LedgerAccount
+
+        drinks_cogs = LedgerAccount.objects.create(
+            name="Drinks COGS returns",
+            parent=self.accounts["expenses"],
+            account_type=LedgerAccount.EXPENSE,
+            report_type=LedgerAccount.PROFIT_AND_LOSS,
+        )
+        self.bar.expense_account = drinks_cogs
+        self.bar.save(update_fields=["expense_account", "updated_at"])
+        StockLedgerEntry.create_entry(
+            item=self.drink,
+            warehouse=self.bar_wh,
+            quantity=Decimal("100"),
+            voucher_type="Purchase Receipt",
+            voucher_no="PR-3",
+            unit_rate=Decimal("300"),
+        )
+        order = self._create_order()
+        add_order_line(order, self.drink, qty=2, rate=Decimal("500"), menu_item=self.drink_mi)
+        self._settle(order)
+        ret = make_return(order)
+        ret.recalculate_totals()
+        submit_return(ret, actor=self.user)
+        ret.refresh_from_db()
+        entries = self._order_gl(ret)
+        self.assertEqual(entries.get(account=drinks_cogs).credit, Decimal("300"))
 
     def test_partial_return_posts_proportion(self):
         order = self._create_order()

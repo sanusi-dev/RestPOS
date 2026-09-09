@@ -26,6 +26,16 @@ def _income_account_for(department):
     return None
 
 
+def _expense_account_for(department):
+    """Resolve the COGS expense account: ProductionUnit (by department) → Restaurant default."""
+    from apps.settings.models import ProductionUnit
+
+    unit = ProductionUnit.objects.filter(department=department).select_related("expense_account").first()
+    if unit is not None and unit.expense_account_id:
+        return unit.expense_account
+    return None
+
+
 def _resolve_required_account(account, *, label):
     if account is None:
         raise ValidationError(f"{label} is not configured.")
@@ -124,6 +134,7 @@ def _cogs_legs(order, rows, settings):
     from apps.inventory.models import StockLedgerEntry
 
     default_expense = settings.default_expense_account if settings else None
+    unit_expense = _expense_account_for("DRINKS")
     sle_rows = StockLedgerEntry.objects.filter(
         voucher_type="POS Order",
         voucher_no=str(order.pk),
@@ -134,7 +145,7 @@ def _cogs_legs(order, rows, settings):
         line = next((r for r in rows if r["line"].item_id == sle.item_id), None)
         if line is None:
             continue
-        account = default_expense
+        account = unit_expense or default_expense
         if account is None:
             raise ValidationError("The default expense account is not configured.")
         account = _resolve_required_account(account, label="The default expense account")
@@ -353,6 +364,7 @@ def post_refund_gl(return_order):
             )
 
     default_expense = settings.default_expense_account if settings else None
+    unit_expense = _expense_account_for("DRINKS")
     warehouse_account = None
     wastage_account = None
     drink_returns = [line for line in lines if _is_drink_line(line)]
@@ -372,7 +384,7 @@ def post_refund_gl(return_order):
         value = (abs(line.qty) * rate).quantize(TWO_PLACES)
         if not value:
             continue
-        expense = _resolve_required_account(default_expense, label="The default expense account")
+        expense = _resolve_required_account(unit_expense or default_expense, label="The default expense account")
         rows.append({"account": expense, "credit": value})
         rows.append({"account": warehouse_account, "debit": value})
         if line.not_restockable:

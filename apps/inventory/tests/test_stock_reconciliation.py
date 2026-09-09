@@ -218,6 +218,27 @@ class StockReconciliationStandardizationTest(TestCase):
         exp = by_acct[self.accounts["cogs"].pk]
         self.assertEqual(exp.debit, Decimal("800"))
 
+    def test_consumption_uses_kitchen_unit_expense_account(self):
+        from apps.accounting.models import LedgerAccount
+
+        food_cogs = LedgerAccount.objects.create(
+            name="Food COGS test",
+            parent=self.accounts["expenses"],
+            account_type=LedgerAccount.EXPENSE,
+            report_type=LedgerAccount.PROFIT_AND_LOSS,
+        )
+        kitchen_unit = ProductionUnit.objects.get(department="FOOD")
+        kitchen_unit.expense_account = food_cogs
+        kitchen_unit.save(update_fields=["expense_account", "updated_at"])
+        StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("10"), "Receipt", "C5", unit_rate=Decimal("200"))
+        rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("6"))
+        submit_stock_reconciliation(rec)
+        entries = self.gl_for(rec)
+        by_acct = {e.account_id: e for e in entries}
+        self.assertEqual(by_acct[food_cogs.pk].debit, Decimal("800"))
+        self.assertNotIn(self.accounts["cogs"].pk, by_acct)
+
     def test_consumption_count_above_bin_rejected(self):
         StockLedgerEntry.create_entry(self.rice, self.kitchen, Decimal("5"), "Receipt", "C2", unit_rate=Decimal("100"))
         rec = self.make_rec("CONSUMPTION", warehouse=self.kitchen)

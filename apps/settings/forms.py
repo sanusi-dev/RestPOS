@@ -124,6 +124,7 @@ class ProductionUnitForm(SettingsModelForm):
             "printer_paper_width",
             "printer_cut_mode",
             "income_account",
+            "expense_account",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -141,4 +142,7 @@ class ProductionUnitForm(SettingsModelForm):
         ].help_text = "The warehouse that supplies this station — Kitchen for food, Bar for drinks."
         self.fields["income_account"].queryset = active_choices(
             LedgerAccount, self.instance.income_account_id, disabled=False, is_group=False
+        )
+        self.fields["expense_account"].queryset = active_choices(
+            LedgerAccount, self.instance.expense_account_id, disabled=False, is_group=False
         )

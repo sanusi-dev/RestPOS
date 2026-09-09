@@ -282,6 +282,15 @@ class ProductionUnit(BaseModel):
         verbose_name="Income account",
         help_text="The income account used for sales from this station.",
     )
+    expense_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Expense account",
+        help_text="The expense account used for cost of goods sold from this station.",
+    )
 
     class Meta:
         ordering = ["name"]
