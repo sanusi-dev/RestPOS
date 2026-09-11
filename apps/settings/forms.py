@@ -1,8 +1,10 @@
 from django import forms
+from django.contrib.auth import password_validation
 
 from apps.accounting.models import LedgerAccount
 from apps.inventory.models import Warehouse
 from apps.menu.models import Menu
+from apps.users.models import CustomUser
 from apps.utils.forms import active_choices
 
 from .models import (
@@ -148,3 +150,65 @@ class ProductionUnitForm(SettingsModelForm):
         self.fields["expense_account"].queryset = active_choices(
             LedgerAccount, self.instance.expense_account_id, disabled=False, is_group=False
         )
+
+
+class StaffCreateForm(forms.Form):
+    """Create a login with one role. Passwords are never displayed or stored in plain text."""
+
+    ROLE_CHOICES = [
+        ("cashier", "Cashier"),
+        ("manager", "Manager"),
+        ("admin", "Admin"),
+    ]
+
+    username = forms.CharField(max_length=150)
+    first_name = forms.CharField(max_length=150, required=False)
+    last_name = forms.CharField(max_length=150, required=False)
+    password1 = forms.CharField(widget=forms.PasswordInput)
+    password2 = forms.CharField(widget=forms.PasswordInput)
+    role = forms.ChoiceField(choices=ROLE_CHOICES, initial="cashier")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if not field.widget.attrs.get("class"):
+                field.widget.attrs["class"] = TAILWIND_INPUT_CLASS
+
+    def clean_username(self):
+        username = (self.cleaned_data["username"] or "").strip()
+        if not username:
+            raise forms.ValidationError("A username is required.")
+        if CustomUser.objects.filter(username__iexact=username).exists():
+            raise forms.ValidationError("A user with this username already exists.")
+        return username
+
+    def clean(self):
+        cleaned = super().clean()
+        password1 = cleaned.get("password1")
+        password2 = cleaned.get("password2")
+        if password1 and password2 and password1 != password2:
+            self.add_error("password2", "The two passwords do not match.")
+        if password1:
+            try:
+                password_validation.validate_password(
+                    password1,
+                    user=CustomUser(
+                        username=cleaned.get("username", ""),
+                        first_name=cleaned.get("first_name", ""),
+                        last_name=cleaned.get("last_name", ""),
+                    ),
+                )
+            except forms.ValidationError as exc:
+                self.add_error("password1", exc)
+        return cleaned
+
+    def save(self):
+        user = CustomUser(
+            username=self.cleaned_data["username"],
+            first_name=self.cleaned_data.get("first_name", ""),
+            last_name=self.cleaned_data.get("last_name", ""),
+            is_active=True,
+        )
+        user.set_password(self.cleaned_data["password1"])
+        user.save()
+        return user

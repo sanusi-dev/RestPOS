@@ -14,6 +14,7 @@ from apps.users.models import CustomUser
 from .forms import (
     ProductionUnitForm,
     RestaurantForm,
+    StaffCreateForm,
 )
 from .models import (
     ProductionUnit,
@@ -96,6 +97,22 @@ def staff_list(request: HttpRequest) -> HttpResponse:
 @require_POST
 def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
     user = get_object_or_404(CustomUser, pk=pk)
+    _apply_role(user, role)
+
+    if role == "admin":
+        messages.success(request, f"{user.get_display_name()} is now an Admin.")
+    elif role == "manager":
+        messages.success(request, f"{user.get_display_name()} is now a Manager.")
+    elif role == "cashier":
+        messages.success(request, f"{user.get_display_name()} is now a Cashier.")
+
+    if _is_htmx(request) and request.htmx.target == f"staff-row-{pk}":
+        return render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
+    return redirect("settings:staff_list")
+
+
+def _apply_role(user: CustomUser, role: str) -> None:
+    """Apply one RestPOS role: exactly one group plus the matching flags."""
     groups = _ensure_restpos_groups()
     admin_group = groups["RestPOS Admin"]
     manager_group = groups["RestPOS Manager"]
@@ -108,22 +125,47 @@ def staff_assign_role(request: HttpRequest, pk: int, role: str) -> HttpResponse:
         user.is_staff = True
         user.groups.add(admin_group)
         user.save()
-        messages.success(request, f"{user.get_display_name()} is now an Admin.")
     elif role == "manager":
         if user.is_superuser:
             user.is_superuser = False
             user.is_staff = False
         user.save()
         user.groups.add(manager_group)
-        messages.success(request, f"{user.get_display_name()} is now a Manager.")
     elif role == "cashier":
         if user.is_superuser:
             user.is_superuser = False
             user.is_staff = False
         user.save()
         user.groups.add(cashier_group)
-        messages.success(request, f"{user.get_display_name()} is now a Cashier.")
 
+
+@admin_required
+def staff_create(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        form = StaffCreateForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            _apply_role(user, form.cleaned_data["role"])
+            messages.success(request, f"Login created for {user.get_display_name()}.")
+            return redirect("settings:staff_list")
+    else:
+        form = StaffCreateForm()
+    return render(request, "backoffice/settings/staff_form.html", {"form": form, "is_create": True})
+
+
+@admin_required
+@require_POST
+def staff_toggle_active(request: HttpRequest, pk: int) -> HttpResponse:
+    user = get_object_or_404(CustomUser, pk=pk)
+    if user.pk == request.user.pk and user.is_active:
+        messages.error(request, "You cannot deactivate your own login.")
+        return redirect("settings:staff_list")
+    user.is_active = not user.is_active
+    user.save(update_fields=["is_active"])
+    messages.success(
+        request,
+        f"{user.get_display_name()} is now {'active' if user.is_active else 'inactive'}.",
+    )
     if _is_htmx(request) and request.htmx.target == f"staff-row-{pk}":
         return render(request, "backoffice/settings/staff_list.html#staff-row", {"entry": _build_staff_entry(user)})
     return redirect("settings:staff_list")

@@ -32,7 +32,7 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 1 | Restaurant settings | The singleton configuration record. Holds company name, invoice prefix, address, active menu, the default (bar/POS) warehouse, the central store warehouse, the maximum number of open draft orders, and whether cashiers can browse full order history. Every other area of the system references it. |
 | 2 | Production units | One production unit per department: the Kitchen (FOOD) and the Bar (DRINKS). Each unit owns its department's warehouse, printer configuration (IP address, paper width, cut mode), and a flag to suppress ticket printing for takeaway orders. |
-| 3 | Staff roles | Three roles: Admin (everything, including Django admin), Manager (back office + POS), Cashier (POS only). Only admins assign roles. |
+| 3 | Staff roles | Three roles: Admin (everything, including Django admin), Manager (back office + POS), Cashier (POS only). Only admins assign roles. Admins create logins and toggle active status from the User-roles page. |
 
 ### A2. Menu Management
 
