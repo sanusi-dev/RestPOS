@@ -34,7 +34,7 @@ Counted amount form
   -> HX home surface or redirect
 ```
 
-`submit_closing_entry()` recalculates the authoritative period end at submission. It includes submitted non-return orders in the period and computes expected values from opening balances plus payments minus cash change and minus submitted-return refunds in the period. It writes totals and `total_short_excess`, marks the close submitted, and sets `opening_entry.closing_entry`.
+`submit_closing_entry()` recalculates the authoritative period end at submission. It includes submitted non-return orders in the period and computes expected values from opening balances plus payments minus cash change and minus submitted-return refunds in the period. It writes the frozen sales fields (`bill_count`, `total_quantity`, `net_total`, `grand_total`, `refunded_total`) and `total_short_excess`, marks the close submitted, and sets `opening_entry.closing_entry`.
 
 ## Rollback and Error Behavior
 

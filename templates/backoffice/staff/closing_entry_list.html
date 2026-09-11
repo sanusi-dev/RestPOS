@@ -20,6 +20,7 @@
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">#</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cashier</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Closed</th>
+            <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Net Sales</th>
             <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total Short/Excess</th>
             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
             <th class="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Actions</th>
@@ -31,6 +32,7 @@
               <td class="px-6 py-4 text-sm font-mono text-gray-500">#{{ entry.pk }}</td>
               <td class="px-6 py-4 text-sm text-gray-700">{{ entry.cashier.get_display_name }}</td>
               <td class="px-6 py-4 text-sm text-gray-500 font-mono">{{ entry.period_end_date|date:"M j, H:i" }}</td>
+              <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ entry.grand_total }}</td>
               <td class="px-6 py-4 text-right text-sm font-mono {% if entry.total_short_excess < 0 %}text-red-600{% elif entry.total_short_excess > 0 %}text-emerald-600{% endif %}">{{ entry.total_short_excess }}</td>
               <td class="px-6 py-4">
                 {% if entry.status == "DRAFT" %}
@@ -47,7 +49,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="px-6 py-16 text-center text-gray-500">
+              <td colspan="7" class="px-6 py-16 text-center text-gray-500">
                 <div class="flex flex-col items-center gap-2">
                   <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-300 ring-1 ring-gray-100 mx-auto">
                     <span>{% hgi_stroke name="checkmark-circle-01" size="24" color="currentColor" stroke_width="1.5" %}</span>

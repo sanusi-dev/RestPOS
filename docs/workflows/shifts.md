@@ -38,13 +38,16 @@ Backoffice `closing_entry_create()` locks the open shift to prevent duplicate cl
 2. Sets the authoritative period end to submit time.
 3. Blocks any open draft orders.
 4. Aggregates submitted non-return orders in the period.
-5. Computes expected per-mode amounts as opening float plus order payments, less cash change.
-6. Stores closing differences as `closing_amount - expected_amount`.
-7. Applies the variance approval gate: when the absolute `total_short_excess` exceeds `Restaurant.variance_approval_threshold`, a non-empty `variance_note` and a Manager/Admin actor are required.
-8. Submits the closing and links it to the opening.
-9. Posts the cash variance: when `total_short_excess != 0` and the account matching the variance sign (`cash_shortage_account` or `cash_over_short_account`) is configured, `accounting.services.post_cash_variance_gl` creates and submits a balanced JournalEntry (shortage → Dr shortage / Cr cash; excess → Dr cash / Cr over-short) linked via `POSClosingEntry.variance_journal_entry`. Unconfigured accounts skip posting but the variance stays visible.
+5. Stores the frozen shift sales: bill count, item qty, net total, grand total, plus refunded total (abs sum of submitted returns in the same period).
+6. Computes expected per-mode amounts as opening float plus order payments, less cash change and less submitted-return refunds per mode.
+7. Stores closing differences as `closing_amount - expected_amount`.
+8. Applies the variance approval gate: when the absolute `total_short_excess` exceeds `Restaurant.variance_approval_threshold`, a non-empty `variance_note` and a Manager/Admin actor are required.
+9. Submits the closing and links it to the opening.
+10. Posts the cash variance: when `total_short_excess != 0` and the account matching the variance sign (`cash_shortage_account` or `cash_over_short_account`) is configured, `accounting.services.post_cash_variance_gl` creates and submits a balanced JournalEntry (shortage → Dr shortage / Cr cash; excess → Dr cash / Cr over-short) linked via `POSClosingEntry.variance_journal_entry`. Unconfigured accounts skip posting but the variance stays visible.
 
 Returns are excluded from drawer totals. Cancelled orders are excluded through `submitted_in_shift()`.
+
+The closing detail page shows the five stored sales figures (Bills, Item qty, Net total, Grand total, Refunded total); the list shows Net sales (`grand_total`). Cancelling a close does not touch the stored sales fields; a re-submit recomputes them.
 
 ## Closing Cancellation
 

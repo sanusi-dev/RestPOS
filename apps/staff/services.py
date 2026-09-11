@@ -169,9 +169,18 @@ def submit_closing_entry(closing, actor=None):
         net_total=Sum("net_total"),
         grand_total=Sum("grand_total"),
     )
+    locked.bill_count = submitted_orders.count()
     locked.total_quantity = order_totals["total_quantity"] or Decimal("0")
     locked.net_total = order_totals["net_total"] or Decimal("0")
     locked.grand_total = order_totals["grand_total"] or Decimal("0")
+    refunded_grands = Order.objects.filter(
+        opening_entry=opening,
+        status=SUBMITTED,
+        is_return=True,
+        submitted_at__gte=locked.period_start_date,
+        submitted_at__lte=locked.period_end_date,
+    ).values_list("grand_total", flat=True)
+    locked.refunded_total = sum((abs(total or Decimal("0")) for total in refunded_grands), Decimal("0"))
 
     for cp in closing_payments:
         if cp.mode_of_payment_id not in opening_modes:
@@ -209,9 +218,11 @@ def submit_closing_entry(closing, actor=None):
     locked.save(
         update_fields=[
             "period_end_date",
+            "bill_count",
             "total_quantity",
             "net_total",
             "grand_total",
+            "refunded_total",
             "total_short_excess",
             "variance_note",
             "status",

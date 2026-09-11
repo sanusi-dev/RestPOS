@@ -48,6 +48,28 @@
         {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
       </dd>
     </div>
+    {% if closing.status == "SUBMITTED" %}
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Bills</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ closing.bill_count }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Item Qty</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ closing.total_quantity }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Net Total</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ closing.net_total }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Grand Total</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ closing.grand_total }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Refunded Total</dt>
+        <dd class="text-base font-mono font-bold text-gray-900">{{ closing.refunded_total }}</dd>
+      </div>
+    {% endif %}
     {% if closing.status == "SUBMITTED" and closing.total_short_excess is not None %}
       <div>
         <dt class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Short/Excess</dt>
@@ -79,10 +101,10 @@
   </div>
   <div class="px-6 py-3 bg-amber-50/40 border-b border-amber-100 text-xs text-amber-800 leading-relaxed">
     <strong>How to read this table:</strong>
-    <span class="font-mono font-semibold">Opening</span> = the float declared at shift start.
-    <span class="font-mono font-semibold">Expected</span> = opening + collected sales during the shift (there is no order tracking yet, so expected equals opening).
-    <span class="font-mono font-semibold">Closing</span> = what the cashier physically counted at shift end.
-    <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess. In Phase 7, once sales are tracked, the difference will catch failed settlements and drawer discrepancies.
+    <span class="font-mono font-semibold">Opening</span> = float at shift start.
+    <span class="font-mono font-semibold">Expected</span> = opening + collected sales − refunds, net of cash change given.
+    <span class="font-mono font-semibold">Closing</span> = counted.
+    <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess.
   </div>
   {% if closing.status == "DRAFT" and form_data %}
     <form method="post" action="{% url 'staff:closing_entry_detail' closing.pk %}" id="reconciliation-form" class="space-y-0" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">

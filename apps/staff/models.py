@@ -178,6 +178,8 @@ class POSClosingEntry(BaseModel):
     total_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
     net_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     grand_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
+    bill_count = models.PositiveIntegerField(default=0, editable=False)
+    refunded_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     total_short_excess = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), editable=False)
     variance_note = models.TextField(
         blank=True,

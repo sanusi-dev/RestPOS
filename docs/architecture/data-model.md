@@ -85,7 +85,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 - `POSOpeningEntry`: global shift parent. Open means `SUBMITTED` with no closing link; closed means `SUBMITTED` with a closing link.
 - `OpeningPayment`: mode-specific opening balance.
-- `POSClosingEntry`: one-to-one reconciliation document linked to the opening. Carries `variance_note` (required beyond the approval threshold) and `variance_journal_entry` (linked JE when the close posts a variance).
+- `POSClosingEntry`: one-to-one reconciliation document linked to the opening. Stores shift sales at submit (`bill_count`, `total_quantity`, `net_total`, `grand_total`, `refunded_total` — frozen, never recomputed live). Carries `variance_note` (required beyond the approval threshold) and `variance_journal_entry` (linked JE when the close posts a variance).
 - `ClosingPayment`: counted, expected, and difference values per opening mode.
 - `ModeOfPayment`: enabled payment master with one conditional default.
 - `PaymentGLMapping`: one-to-one mode-to-ledger-account mapping (`default_account` is a `LedgerAccount` FK, leaf-only).
