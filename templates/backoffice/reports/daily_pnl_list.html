@@ -7,7 +7,10 @@
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">Daily P&amp;L</h1>
       <p class="text-sm text-gray-500">One submitted snapshot per business day — management figures, not a ledger posting</p>
     </div>
-    <a href="{% url 'reports:daily_pnl_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">New Daily P&amp;L</a>
+    <div class="flex items-center gap-2">
+      <a href="?export=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all">Download CSV</a>
+      <a href="{% url 'reports:daily_pnl_create' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 hover:shadow-orange-500/30 transition-all duration-300">New Daily P&amp;L</a>
+    </div>
   </div>
   <form method="get" class="mb-6 flex flex-wrap items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <div>

@@ -59,7 +59,7 @@ Implementation status lives in `PLAN.md`.
 | 16b | Food recipes & AvT | Recipe cards on sellable food (ingredients in `stock_uom`, yield baked in; one active card per dish, variants and add-ons hold their own; drinks have none). POS still does not deduct food. Theoretical usage = recipe × submitted FOOD sales (returns netted, unmapped dishes listed); actual usage = kitchen consumption + waste counts. Shared per-ingredient rate (actual-SLE WAC, else bin WAC, else last rate). Back office: Recipes register with plate-cost preview, Food usage report, recipe links on item and menu pages. |
 | 17 | Purchase receipts | Supplier goods received into the Store: posts Dr SIH (warehouse asset) / Cr GRNI at the as-bought line amount. Quantity and rate on the line are as-bought (stock UOM or a bulk unit from the item's conversion table); submit converts once into `stock_uom` for the ledger and WAC. Supplier is a free-text name with an optional link to the Supplier master. Lines require stock + purchase eligible items. Cancellation blocked if a submitted supplier invoice or allocated payment exists; allowed cancellation reverses at current WAC with drift to the inventory price variance account. Market-purchase stock entries receive the same as-bought UOM conversion. |
 | 18 | Bins | Per item + warehouse stock position: actual quantity, reserved quantity, and valuation (current WAC). Drives POS drink availability and reservations. |
-| 19 | Stock reports | A stock ledger report (movement audit trail) and a stock balance report (opening/received/issued/closing) in the back office. |
+| 19 | Stock reports | A stock ledger report (movement audit trail, with CSV export) and a stock balance report (opening/received/issued/closing) in the back office. |
 
 ### A4. Payment Modes
 
@@ -92,7 +92,7 @@ Implementation status lives in `PLAN.md`.
 | 33 | Returns | A manager creates a return draft mirroring the paid order with negative lines. Submitting it restores drink stock, records negative refund payment rows, and reduces shift-close expectations. One active return per order. |
 | 34 | Group ordering | The guests stepper raises the guest count; each order line belongs to a customer card (Customer 1, Customer 2, …). Receipts and tickets group lines per customer. Lowering the count below a guest who still has items is blocked. |
 | 35 | Audit events | Every order mutation records an immutable event (created, item added, sent, settled, cancelled, returned…) with actor and metadata. |
-| 36 | Orders control room | Back-office orders register with status/type/search filters, order detail, ticket register, and a dashboard with today's counts, revenue, and pending tickets. |
+| 36 | Orders control room | Back-office orders register with status/type/search filters, order detail, ticket register, CSV export, and a dashboard with today's counts, revenue, and pending tickets. |
 
 ### A7. Document Workflow & Integrity
 
@@ -105,7 +105,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 57 | Accounting / GL | Chart of accounts, GL entries, journal entries (incl. opening voucher type), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS at current WAC). Food vs drinks separation uses department, production-unit income and expense accounts, and Daily P&L — not cost centers. Bar settle-time and refund COGS resolve the Bar unit expense first; kitchen consumption resolves the Kitchen unit expense first; both fall back to the default expense account. |
+| 57 | Accounting / GL | Chart of accounts, GL entries (with CSV export), journal entries (incl. opening voucher type), and fiscal years. GL posts at order settlement (income, payment, rounding, COGS at current WAC). Food vs drinks separation uses department, production-unit income and expense accounts, and Daily P&L — not cost centers. Bar settle-time and refund COGS resolve the Bar unit expense first; kitchen consumption resolves the Kitchen unit expense first; both fall back to the default expense account. |
 | 58 | Refunds completion | Refund GL on return submit, wastage posting for non-restockable items, and partial returns. Restockable drinks restore at current WAC; sale-return variance vs original COGS lands in COGS. |
 | 59 | Opening balances | A reviewed opening journal entry for go-live, with duplicate protection. |
 | 60 | Cash variance posting | Shift-close shortages/excesses post to configurable accounts, atomically with the approved close. |
@@ -120,7 +120,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (FOOD = actual kitchen usage, DRINKS = drinks at current WAC) → theoretical food cost and food cost variance (memos) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Sale-return variance posts to COGS (current WAC vs original). Prime cost (food actual + drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour. |
+| 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (FOOD = actual kitchen usage, DRINKS = drinks at current WAC) → theoretical food cost and food cost variance (memos) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Sale-return variance posts to COGS (current WAC vs original). Prime cost (food actual + drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour, CSV export on the list. |
 
 ## B. POS Frontend
 

@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.users.decorators import manager_required
+from apps.utils.csv_export import export_filename, money, over_row_cap, stream_csv, text
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .forms import (
@@ -63,10 +64,41 @@ def daily_pnl_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(business_date__gte=date_from)
     if date_to:
         qs = qs.filter(business_date__lte=date_to)
+    if request.GET.get("export") == "csv":
+        return _daily_pnl_list_csv(qs, status, date_from, date_to)
     return render(
         request,
         "backoffice/reports/daily_pnl_list.html",
         {"entries": qs, "status": status or "", "date_from": date_from or "", "date_to": date_to or ""},
+    )
+
+
+def _daily_pnl_list_csv(qs, status, date_from, date_to):
+    """Download the filtered Daily P&L list as CSV — same rows and order as the page."""
+    too_many = over_row_cap(qs)
+    if too_many is not None:
+        return too_many
+
+    def rows():
+        for entry in qs.iterator():
+            yield [
+                entry.business_date.isoformat(),
+                text(entry.status),
+                money(entry.gross_sales_food),
+                money(entry.gross_sales_drinks),
+                money(entry.net_sales),
+                money(entry.gross_profit),
+                money(entry.net_profit),
+            ]
+
+    filename = export_filename(
+        "daily-pnl",
+        {"status": status, "from": date_from, "to": date_to},
+    )
+    return stream_csv(
+        filename,
+        ["Business date", "Status", "Food sales", "Drinks sales", "Net sales", "Gross profit", "Net profit"],
+        rows(),
     )
 
 

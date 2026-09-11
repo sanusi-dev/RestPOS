@@ -7,6 +7,7 @@
       <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight">GL Entries</h1>
       <p class="text-sm text-gray-500">Read-only posting ledger. Reversals mark originals cancelled and post negated rows.</p>
     </div>
+    <a href="?export=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-all">Download CSV</a>
   </div>
   <form method="get" class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6 flex flex-wrap items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
     <div class="flex flex-col gap-1.5 min-w-40">

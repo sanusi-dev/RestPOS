@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.users.decorators import backoffice_required, manager_required
+from apps.utils.csv_export import export_filename, money, over_row_cap, stream_csv, text
 
 from . import services
 from .forms import POSOrderCancelForm
@@ -98,6 +99,8 @@ def order_list(request: HttpRequest) -> HttpResponse:
     if order_type_filter:
         orders = orders.filter(order_type=order_type_filter)
     orders = orders.order_by("-updated_at")
+    if request.GET.get("export") == "csv":
+        return _order_list_csv(request, orders, search, status_filter, order_type_filter)
     page_obj = Paginator(orders, 50).get_page(request.GET.get("page") or 1)
 
     return render(
@@ -112,6 +115,54 @@ def order_list(request: HttpRequest) -> HttpResponse:
             "status_choices": STATUS_CHOICES,
             "order_type_choices": ORDER_TYPE_CHOICES,
         },
+    )
+
+
+def _order_list_csv(request, orders, search, status_filter, order_type_filter):
+    """Download the filtered order register as CSV — same rows and order as the page."""
+    too_many = over_row_cap(orders)
+    if too_many is not None:
+        return too_many
+
+    def rows():
+        for order in orders.iterator():
+            cashier = order.cashier.get_display_name() if order.cashier_id else ""
+            yield [
+                text(order.invoice_number),
+                text(order.order_number),
+                order.posting_date.isoformat(),
+                order.posting_time.strftime("%H:%M"),
+                cashier,
+                order.get_order_type_display(),
+                text(order.customer_name),
+                order.get_status_display(),
+                money(order.net_total),
+                money(order.grand_total),
+                money(order.paid_amount),
+                money(order.change_amount),
+            ]
+
+    filename = export_filename(
+        "orders",
+        {"search": search, "status": status_filter, "order-type": order_type_filter},
+    )
+    return stream_csv(
+        filename,
+        [
+            "Invoice",
+            "Order no",
+            "Date",
+            "Time",
+            "Cashier",
+            "Type",
+            "Customer",
+            "Status",
+            "Net",
+            "Grand",
+            "Paid",
+            "Change",
+        ],
+        rows(),
     )
 
 

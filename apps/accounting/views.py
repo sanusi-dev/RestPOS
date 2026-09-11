@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.users.decorators import manager_required
+from apps.utils.csv_export import export_filename, money, over_row_cap, stream_csv, text
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from .forms import (
@@ -255,6 +256,8 @@ def gl_entry_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(voucher_type=voucher_type)
     if not include_cancelled:
         qs = qs.filter(is_cancelled=False)
+    if request.GET.get("export") == "csv":
+        return _gl_entry_list_csv(qs, account_id, voucher_type, include_cancelled)
     return render(
         request,
         "backoffice/accounting/gl_entry_list.html",
@@ -266,6 +269,51 @@ def gl_entry_list(request: HttpRequest) -> HttpResponse:
             "voucher_type": voucher_type,
             "include_cancelled": include_cancelled,
         },
+    )
+
+
+def _gl_entry_list_csv(qs, account_id, voucher_type, include_cancelled):
+    """Download the filtered GL register as CSV — same rows and order as the page."""
+    too_many = over_row_cap(qs)
+    if too_many is not None:
+        return too_many
+
+    def rows():
+        for entry in qs.iterator():
+            yield [
+                entry.posting_date.isoformat(),
+                entry.account.name,
+                money(entry.debit),
+                money(entry.credit),
+                text(entry.against),
+                text(entry.voucher_type),
+                text(entry.voucher_no),
+                entry.fiscal_year.name,
+                "Yes" if entry.is_cancelled else "No",
+            ]
+
+    filename = export_filename(
+        "gl-entries",
+        {
+            "account": account_id,
+            "voucher-type": voucher_type,
+            "include-cancelled": "1" if include_cancelled else "",
+        },
+    )
+    return stream_csv(
+        filename,
+        [
+            "Posting date",
+            "Account",
+            "Debit",
+            "Credit",
+            "Against",
+            "Voucher type",
+            "Voucher no",
+            "Fiscal year",
+            "Cancelled",
+        ],
+        rows(),
     )
 
 

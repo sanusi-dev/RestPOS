@@ -42,7 +42,10 @@
         <h2 class="text-base font-bold text-gray-900">Order history</h2>
         <p class="text-xs text-gray-400 mt-1">Showing up to 50 matching orders.</p>
       </div>
-      {% if search or status_filter or order_type_filter %}<a href="{% url 'orders:order_list' %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Clear filters</a>{% endif %}
+      <div class="flex items-center gap-4">
+        <a href="?export=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Download CSV</a>
+        {% if search or status_filter or order_type_filter %}<a href="{% url 'orders:order_list' %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Clear filters</a>{% endif %}
+      </div>
     </div>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">

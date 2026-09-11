@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.users.decorators import backoffice_required
+from apps.utils.csv_export import export_filename, money, over_row_cap, stream_csv, text
 from apps.utils.forms import add_formset_row, remove_formset_row
 
 from . import services
@@ -853,6 +854,8 @@ def stock_ledger_list(request: HttpRequest) -> HttpResponse:
         entries = entries.filter(posting_date__lte=date_to)
     items = Item.objects.all().order_by("item_name")
     warehouses = Warehouse.objects.all().order_by("name")
+    if request.GET.get("export") == "csv":
+        return _stock_ledger_list_csv(entries, item_id, warehouse_id, date_from, date_to)
     return render(
         request,
         "backoffice/inventory/stock_ledger_list.html",
@@ -865,6 +868,49 @@ def stock_ledger_list(request: HttpRequest) -> HttpResponse:
             "date_from": date_from or "",
             "date_to": date_to or "",
         },
+    )
+
+
+def _stock_ledger_list_csv(entries, item_id, warehouse_id, date_from, date_to):
+    """Download the filtered stock ledger as CSV — same rows and order as the page."""
+    too_many = over_row_cap(entries)
+    if too_many is not None:
+        return too_many
+
+    def rows():
+        for entry in entries.iterator():
+            yield [
+                entry.posting_date.isoformat(),
+                entry.item.item_name,
+                entry.warehouse.name,
+                text(entry.voucher_type),
+                text(entry.voucher_no),
+                money(entry.quantity),
+                money(entry.unit_rate),
+                money(entry.stock_value_change),
+                text(entry.get_variance_type_display() if entry.variance_type else ""),
+                money(entry.variance_amount) if entry.variance_type else "",
+            ]
+
+    filename = export_filename(
+        "stock-ledger",
+        {"item": item_id, "warehouse": warehouse_id, "from": date_from, "to": date_to},
+    )
+    return stream_csv(
+        filename,
+        [
+            "Posting date",
+            "Item",
+            "Warehouse",
+            "Voucher type",
+            "Voucher no",
+            "Qty",
+            "Unit rate",
+            "Value change",
+            "Variance type",
+            "Variance amount",
+        ],
+        rows(),
     )
 
 

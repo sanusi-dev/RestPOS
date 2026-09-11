@@ -56,6 +56,8 @@ Restaurant and ProductionUnit changes are manager/admin-only at view level. Rest
 
 `apps.reports` owns the Daily P&L document (Phase 7). Sales reports, trial balance, and the formal GL P&L remain Phase 8.
 
+Four registers offer a `?export=csv` download on the same URL with the same gates and filters (stdlib csv, UTF-8 with BOM, raw two-decimal money, 50,000-row cap): the orders register (`orders:order_list`), GL entries (`accounting:gl_entry_list`), the stock ledger (`inventory:stock_ledger_list`), and the Daily P&L list (`reports:daily_pnl_list`). Filenames carry the register, date, and active filters.
+
 Current aggregates elsewhere:
 
 - order dashboard: today count, paid count, cancelled count, revenue, recent orders, pending tickets;
