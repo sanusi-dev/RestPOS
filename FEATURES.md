@@ -154,6 +154,7 @@ Implementation status lives in `PLAN.md`.
 | 54 | PostgreSQL | The only supported database. |
 | 55 | Exact money | All monetary values use DecimalField. |
 | 56 | Printers | Three thermal printers — cashier (USB), kitchen (LAN), bar (LAN) — driven by a local print agent (Planned). |
+| 56b | Backups | Nightly database + media snapshots with a tested restore (`make backup` / `make restore`, 14-day retention, weekly off-machine copy). |
 
 ## E. Planned (not yet implemented)
 

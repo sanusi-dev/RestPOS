@@ -68,6 +68,10 @@ These pages answer: "When I perform this action, what happens next?" Each one na
 - [Troubleshooting](debugging/troubleshooting.md): symptom-to-code tracing guide.
 - [Glossary](glossary.md): project domain terms and their actual model meanings.
 
+## Operations
+
+- [Backup and restore](ops/backup-restore.md): nightly database + media snapshots, cron schedule, off-machine copies, and the restore drill.
+
 ## Plans
 
 - [PWAC plan](pwac-plan.md): FIFO→PWAC costing decisions.

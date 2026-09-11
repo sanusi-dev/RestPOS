@@ -44,6 +44,12 @@ shell: ## Get a Django shell
 dbshell: ## Get a Database shell
 	@docker compose exec db psql -U postgres restpos
 
+backup: ## Snapshot the database + media into backups/
+	@./scripts/backup_db.sh
+
+restore: ## Restore a snapshot: make restore ARGS='backups/restpos-<ts>.sql.gz [--yes]'
+	@./scripts/restore_db.sh $(ARGS)
+
 drop-test-db:  ## Drop the test database (use when stuck from --keepdb)
 	@docker compose exec db psql -U postgres -c "DROP DATABASE IF EXISTS test_restpos WITH (FORCE)"
 

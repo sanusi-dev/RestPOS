@@ -48,3 +48,5 @@ scripts/inspect_db.py
 
 # opencode session data
 .opencode/
+
+/backups/
