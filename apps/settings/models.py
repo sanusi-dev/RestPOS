@@ -178,6 +178,15 @@ class Restaurant(BaseModel):
         verbose_name="Temporary opening account",
         help_text="The equity account credited when opening stock is first seeded into a fresh warehouse.",
     )
+    petty_cash_expense_account = models.ForeignKey(
+        "accounting.LedgerAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Petty cash expense account",
+        help_text="The expense account used for mid-shift cash-outs (transport, ice, petty repairs).",
+    )
 
     class Meta:
         ordering = ["company"]

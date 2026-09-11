@@ -11,6 +11,13 @@ urlpatterns = [
     path("history/<int:pk>/print/", view=views_pos.pos_order_history_print, name="pos_order_history_print"),
     path("open-shift/", view=views_pos.pos_open_shift, name="pos_open_shift"),
     path("close-shift/", view=views_pos.pos_close_shift, name="pos_close_shift"),
+    path("cash-out/dialog/", view=views_pos.pos_cash_out_dialog, name="pos_cash_out_dialog"),
+    path("cash-out/record/", view=views_pos.pos_cash_out_record, name="pos_cash_out_record"),
+    path(
+        "cash-out/<int:pk>/cancel/",
+        view=views_pos.pos_cash_out_cancel,
+        name="pos_cash_out_cancel",
+    ),
     path("order/new/", view=views_pos.pos_order_new, name="pos_order_new"),
     path("order/<int:pk>/", view=views_pos.pos_order_screen, name="pos_order_screen"),
     path("order/<int:pk>/meta/", view=views_pos.pos_order_update_meta, name="pos_order_update_meta"),

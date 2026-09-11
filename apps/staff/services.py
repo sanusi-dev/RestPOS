@@ -10,7 +10,7 @@ from django.utils import timezone
 from apps.orders.models import SUBMITTED, Order, OrderItem, OrderPayment
 from apps.payments.models import ModeOfPayment
 
-from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
+from .models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry, ShiftCashOut
 
 
 def collect_submitted_payment_totals(submitted_orders, payment_rows):
@@ -51,7 +51,7 @@ def collect_submitted_payment_totals(submitted_orders, payment_rows):
 
 
 def expected_closing_amounts(open_shift, period_start, period_end):
-    """Compute expected drawer amounts: opening float + collected payments (net of cash change) - refunds."""
+    """Compute expected drawer amounts: opening float + collected (net of change) - refunds - cash-outs."""
     submitted_orders = Order.objects.submitted_in_shift(open_shift, period_start, period_end)
     opening_payments = list(open_shift.opening_payments.select_related("mode_of_payment").all())
     collected_by_mode = collect_submitted_payment_totals(submitted_orders, opening_payments)
@@ -67,15 +67,23 @@ def expected_closing_amounts(open_shift, period_start, period_end):
         row["mode_of_payment_id"]: abs(row["total"] or Decimal("0"))
         for row in refund_rows.values("mode_of_payment_id").annotate(total=Sum("amount")).order_by()
     }
+    cash_out_by_mode = {
+        row["mode_of_payment_id"]: row["total"] or Decimal("0")
+        for row in ShiftCashOut.objects.filter(opening_entry=open_shift, status=ShiftCashOut.SUBMITTED)
+        .values("mode_of_payment_id")
+        .annotate(total=Sum("amount"))
+        .order_by()
+    }
     rows = []
     for opening_payment in opening_payments:
         collected = collected_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
         refunded = refund_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
+        cash_out = cash_out_by_mode.get(opening_payment.mode_of_payment_id, Decimal("0"))
         rows.append(
             {
                 "mode": opening_payment.mode_of_payment,
                 "opening_amount": opening_payment.opening_amount,
-                "expected_amount": opening_payment.opening_amount + collected - refunded,
+                "expected_amount": opening_payment.opening_amount + collected - refunded - cash_out,
             }
         )
     return rows
@@ -241,3 +249,53 @@ def submit_closing_entry(closing, actor=None):
             locked.variance_journal_entry = journal
             locked.save(update_fields=["variance_journal_entry", "updated_at"])
     closing.refresh_from_db()
+
+
+@transaction.atomic
+def record_cash_out(opening, *, mode, amount, reason, note="", actor=None):
+    """Record a submitted cash-out voucher and post its GL legs."""
+    from apps.accounting.services import post_shift_cash_out_gl
+
+    locked = POSOpeningEntry.objects.select_for_update().get(pk=opening.pk)
+    row = ShiftCashOut(
+        opening_entry=locked,
+        mode_of_payment=mode,
+        amount=amount,
+        reason=reason,
+        note=(note or "").strip(),
+        status=ShiftCashOut.SUBMITTED,
+        recorded_by=actor,
+    )
+    row.full_clean()
+    row.save()
+    post_shift_cash_out_gl(row)
+    return row
+
+
+@transaction.atomic
+def cancel_cash_out(row, *, actor=None):
+    """Cancel a cash-out voucher with a mirrored GL reversal. Manager/admin only."""
+    is_manager = actor is not None and (actor.is_manager or actor.is_admin or actor.is_superuser)
+    if not is_manager:
+        raise ValidationError("Only a manager or admin can cancel a cash-out.")
+    locked = ShiftCashOut.objects.select_for_update().select_related("opening_entry").get(pk=row.pk)
+    if locked.status == ShiftCashOut.CANCELLED:
+        raise ValidationError("This cash-out has already been cancelled.")
+    if not locked.opening_entry.is_open:
+        raise ValidationError("Cash-outs can only be cancelled while the shift is open.")
+    locked.status = ShiftCashOut.CANCELLED
+    locked.cancelled_by = actor
+    locked.cancelled_at = timezone.now()
+    locked.full_clean()
+    locked.save(update_fields=["status", "cancelled_by", "cancelled_at", "updated_at"])
+
+    from apps.accounting.services import _reverse_gl
+
+    _reverse_gl(
+        "Shift Cash-Out",
+        str(locked.pk),
+        remarks=f"Cancelled shift cash-out #{locked.pk}",
+        posting_date=timezone.localdate(),
+    )
+    row.refresh_from_db()
+    return row

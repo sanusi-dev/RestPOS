@@ -272,6 +272,15 @@ class Command(BaseCommand):
                 "report_type": LedgerAccount.BALANCE_SHEET,
             },
         )[0]
+        petty_cash_expense_account = LedgerAccount.objects.get_or_create(
+            name="Petty Cash Expenses",
+            defaults={
+                "parent": expenses,
+                "is_group": False,
+                "account_type": LedgerAccount.EXPENSE,
+                "report_type": LedgerAccount.PROFIT_AND_LOSS,
+            },
+        )[0]
 
         restaurant = Restaurant.load()
         if restaurant is not None:
@@ -291,6 +300,7 @@ class Command(BaseCommand):
                 ("inventory_price_variance_account", variance_account),
                 ("stock_adjustment_account", stock_adjustment_account),
                 ("temporary_opening_account", temporary_opening_account),
+                ("petty_cash_expense_account", petty_cash_expense_account),
             ]:
                 if getattr(restaurant, f"{field}_id") is None:
                     setattr(restaurant, field, value)

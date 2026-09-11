@@ -1,0 +1,61 @@
+<div id="cash-out-dialog" x-data="posModalDialog({ removeOnClose: true })" @close-cash-out.window="close()" @keydown.escape.window="close()" @keydown.tab="trapFocus($event)" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cash-out-dialog-title">
+  <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="close()"></div>
+  <div class="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-slate-200/80" x-ref="panel" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+    <header class="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+      <div class="min-w-0">
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">Shift drawer</p>
+        <h2 id="cash-out-dialog-title" class="mt-1 break-words text-xl font-extrabold tracking-tight text-slate-900">Record cash-out</h2>
+        <p class="mt-1 text-sm text-slate-500">Cash leaves the drawer now and posts to the books.</p>
+      </div>
+      <button type="button" @click="close()" x-ref="closeButton" class="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300" aria-label="Close cash-out dialog">{% hgi_stroke name="cancel-01" size="18" color="currentColor" stroke_width="2" %}</button>
+    </header>
+    <form method="post" action="{% url 'pos:pos_cash_out_record' %}" hx-post="{% url 'pos:pos_cash_out_record' %}" hx-target="#cash-out-section" hx-swap="outerHTML" data-confirm-title="Record this cash-out?" data-confirm-body="Cash leaves the drawer now and posts to the books." data-confirm-button="Record cash-out" class="flex min-h-0 flex-1 flex-col" x-data="{ amount: '', modeId: '{{ cash_modes.0.mode.pk|default:'' }}', expected: { {% for entry in cash_modes %}'{{ entry.mode.pk }}': Number('{{ entry.expected }}'){% if not forloop.last %}, {% endif %}{% endfor %} }, money(value) { return '₦' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }, after() { return Number(this.expected[this.modeId] || 0) - (Number(this.amount) || 0); } }">
+      {% csrf_token %}
+      <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+        {% if error %}<p class="rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 ring-1 ring-rose-200/60">{{ error }}</p>{% endif %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="cash-out-amount" class="mb-2 block text-sm font-bold text-slate-900">Amount</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">₦</span>
+              <input id="cash-out-amount" type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" required x-model="amount" placeholder="0.00" class="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-7 pr-3 text-right font-mono text-sm font-bold tabular-nums text-slate-900 transition-colors focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+            </div>
+          </div>
+          <div>
+            <label for="cash-out-mode" class="mb-2 block text-sm font-bold text-slate-900">Cash mode</label>
+            <select id="cash-out-mode" name="mode_of_payment" x-model="modeId" class="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+              {% for entry in cash_modes %}
+                <option value="{{ entry.mode.pk }}">{{ entry.mode.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label for="cash-out-reason" class="mb-2 block text-sm font-bold text-slate-900">Reason</label>
+          <select id="cash-out-reason" name="reason" class="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+            {% for value, label in cash_out_reasons %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="cash-out-note" class="mb-2 block text-sm font-bold text-slate-900">
+            Note
+            <span class="font-normal text-slate-400">(required for Other)</span>
+          </label>
+          <input id="cash-out-note" type="text" name="note" maxlength="200" placeholder="e.g. ice blocks from Musa" class="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-teal-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+        </div>
+        <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
+          Expected cash after this:
+          <span class="font-mono font-extrabold tabular-nums text-slate-900" x-text="money(after())"></span>
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 p-4 sm:flex-row sm:justify-between sm:p-5">
+        <button type="button" @click="close()" class="inline-flex min-h-11 items-center justify-center rounded-xl px-5 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60">Cancel</button>
+        <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-700 px-7 text-sm font-bold text-white shadow-md shadow-teal-900/10 transition-all duration-150 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 active:scale-[0.98]">
+          <span>Record cash-out</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

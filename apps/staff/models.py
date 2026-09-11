@@ -288,3 +288,78 @@ class ClosingPayment(BaseModel):
             )
             if self.mode_of_payment_id not in valid_modes:
                 raise ValidationError({"mode_of_payment": (f"{self.mode_of_payment} was not declared at shift open.")})
+
+
+class ShiftCashOut(BaseModel):
+    """Cash leaving the drawer mid-shift for non-stock reasons. No draft state."""
+
+    SUBMITTED = "SUBMITTED"
+    CANCELLED = "CANCELLED"
+    STATUS_CHOICES = [
+        (SUBMITTED, "Submitted"),
+        (CANCELLED, "Cancelled"),
+    ]
+
+    TRANSPORT = "TRANSPORT"
+    ICE = "ICE"
+    PETTY_REPAIRS = "PETTY_REPAIRS"
+    OTHER = "OTHER"
+    REASON_CHOICES = [
+        (TRANSPORT, "Transport"),
+        (ICE, "Ice"),
+        (PETTY_REPAIRS, "Petty repairs"),
+        (OTHER, "Other"),
+    ]
+
+    opening_entry = models.ForeignKey(
+        POSOpeningEntry,
+        on_delete=models.CASCADE,
+        related_name="cash_outs",
+    )
+    mode_of_payment = models.ForeignKey(
+        ModeOfPayment,
+        on_delete=models.PROTECT,
+        related_name="shift_cash_outs",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, default=OTHER)
+    note = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=SUBMITTED)
+    recorded_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.PROTECT,
+        related_name="recorded_cash_outs",
+    )
+    cancelled_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_cash_outs",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Cash-out #{self.pk} — {self.amount}"
+
+    def clean(self):
+        super().clean()
+        if self.amount is None or self.amount <= 0:
+            raise ValidationError({"amount": "The cash-out amount must be greater than zero."})
+        if self.reason == self.OTHER and not (self.note or "").strip():
+            raise ValidationError({"note": "A note is required when the reason is Other."})
+        if self.mode_of_payment_id:
+            mode = self.mode_of_payment
+            if not mode.enabled:
+                raise ValidationError({"mode_of_payment": f"{mode} is disabled."})
+            if mode.type != ModeOfPayment.TYPE_CASH:
+                raise ValidationError({"mode_of_payment": f"{mode} is not a cash payment mode."})
+        if self.opening_entry_id and self.mode_of_payment_id:
+            valid_modes = set(self.opening_entry.opening_payments.values_list("mode_of_payment_id", flat=True))
+            if self.mode_of_payment_id not in valid_modes:
+                raise ValidationError({"mode_of_payment": (f"{self.mode_of_payment} was not declared at shift open.")})
+        if self.opening_entry_id and not self.opening_entry.is_open:
+            raise ValidationError("Cash-outs can only be recorded while the shift is open.")

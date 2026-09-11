@@ -92,6 +92,56 @@
     {% endif %}
   </dl>
 </div>
+<div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden mb-8">
+  <div class="px-6 py-5 border-b border-gray-100 bg-white">
+    <h3 class="text-base font-bold text-gray-900">Shift cash-outs</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-100">
+      <thead class="bg-gray-50/50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Time</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Recorder</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Reason</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Mode</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+          <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+          <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for co in closing.opening_entry.cash_outs.all %}
+          <tr>
+            <td class="px-6 py-4 text-sm font-mono text-gray-500">{{ co.created_at|date:"H:i" }}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">{{ co.recorded_by.get_display_name }}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">{{ co.get_reason_display }}{% if co.note %} · <span class="text-gray-400">{{ co.note }}</span>{% endif %}</td>
+            <td class="px-6 py-4 text-sm text-gray-700">{{ co.mode_of_payment.name }}</td>
+            <td class="px-6 py-4 text-right text-sm font-mono text-gray-700">{{ co.amount }}</td>
+            <td class="px-6 py-4">
+              {% if co.status == "SUBMITTED" %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10">Submitted</span>
+              {% else %}<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+            </td>
+            <td class="px-6 py-4 text-right">
+              {% if co.status == "SUBMITTED" and closing.opening_entry.is_open %}
+                {% if request.user.is_manager or request.user.is_admin or request.user.is_superuser %}
+                  <form method="post" action="{% url 'pos:pos_cash_out_cancel' co.pk %}" class="inline" data-confirm-title="Cancel this cash-out?" data-confirm-body="The drawer expected amount is restored." data-confirm-button="Yes, cancel" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'staff:closing_entry_detail' closing.pk %}">
+                    <button type="submit" class="text-sm font-semibold text-red-500 hover:text-red-700 transition-colors">Cancel</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No cash-outs recorded this shift.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] overflow-hidden">
   <div class="px-6 py-5 border-b border-gray-100 bg-white flex items-center gap-3">
     <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center shadow-sm">
@@ -102,7 +152,7 @@
   <div class="px-6 py-3 bg-amber-50/40 border-b border-amber-100 text-xs text-amber-800 leading-relaxed">
     <strong>How to read this table:</strong>
     <span class="font-mono font-semibold">Opening</span> = float at shift start.
-    <span class="font-mono font-semibold">Expected</span> = opening + collected sales − refunds, net of cash change given.
+    <span class="font-mono font-semibold">Expected</span> = opening + collected sales − refunds − cash-outs, net of cash change given.
     <span class="font-mono font-semibold">Closing</span> = counted.
     <span class="font-mono font-semibold">Difference</span> = closing − expected. Negative = short, positive = excess.
   </div>

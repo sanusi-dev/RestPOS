@@ -39,7 +39,7 @@ Backoffice `closing_entry_create()` locks the open shift to prevent duplicate cl
 3. Blocks any open draft orders.
 4. Aggregates submitted non-return orders in the period.
 5. Stores the frozen shift sales: bill count, item qty, net total, grand total, plus refunded total (abs sum of submitted returns in the same period).
-6. Computes expected per-mode amounts as opening float plus order payments, less cash change and less submitted-return refunds per mode.
+6. Computes expected per-mode amounts as opening float plus order payments, less cash change, less submitted-return refunds, and less submitted cash-outs per mode.
 7. Stores closing differences as `closing_amount - expected_amount`.
 8. Applies the variance approval gate: when the absolute `total_short_excess` exceeds `Restaurant.variance_approval_threshold`, a non-empty `variance_note` and a Manager/Admin actor are required.
 9. Submits the closing and links it to the opening.
@@ -48,6 +48,15 @@ Backoffice `closing_entry_create()` locks the open shift to prevent duplicate cl
 Returns are excluded from drawer totals. Cancelled orders are excluded through `submitted_in_shift()`.
 
 The closing detail page shows the five stored sales figures (Bills, Item qty, Net total, Grand total, Refunded total); the list shows Net sales (`grand_total`). Cancelling a close does not touch the stored sales fields; a re-submit recomputes them.
+
+## Shift cash-outs
+
+`ShiftCashOut` records cash leaving the drawer mid-shift for non-stock reasons (transport, ice, petty repairs). There is no draft state: recording creates a SUBMITTED voucher immediately, because the shift close itself is the review point. Cancellation is manager/admin only and is refused once the shift is closed.
+
+- Validation: cash modes only, enabled, and declared in the shift's `opening_payments`; amount `> 0`; reason OTHER requires a note; the shift must be open.
+- Expected drawer: submitted cash-outs subtract per mode alongside collected-minus-refunded maths, so `submit_closing_entry` picks them up automatically with no stored-field change. Cancelling the close leaves vouchers intact; re-submit recomputes.
+- GL (`voucher_type="Shift Cash-Out"`, `voucher_no` = row pk): Dr `Restaurant.petty_cash_expense_account` (falling back to `default_expense_account`; fails closed when neither is set) / Cr the cash mode's GL mapping. Cancel posts mirrored negated legs via the standard reversal helper.
+- POS: record dialog plus per-row cancel on the shift screens; the backoffice closing detail lists the shift's vouchers read-only with cancel-while-open. Daily P&L does not read cash-outs.
 
 ## Closing Cancellation
 

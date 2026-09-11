@@ -493,6 +493,33 @@ def post_cash_variance_gl(closing):
     return journal
 
 
+@transaction.atomic
+def post_shift_cash_out_gl(cash_out):
+    """Post a shift cash-out: Dr petty-cash/default expense, Cr cash-mode account. Idempotent."""
+    from apps.staff.models import ShiftCashOut
+
+    if cash_out.status != ShiftCashOut.SUBMITTED or not cash_out.amount:
+        return None
+    if GLEntry.objects.filter(voucher_type="Shift Cash-Out", voucher_no=str(cash_out.pk), is_cancelled=False).exists():
+        return None
+    settings = Restaurant.load()
+    expense = None
+    if settings is not None:
+        expense = settings.petty_cash_expense_account or settings.default_expense_account
+    expense = _resolve_required_account(expense, label="The petty cash expense account")
+    cash_account = _resolve_payment_account(cash_out.mode_of_payment)
+    GLEntry.post(
+        posting_date=timezone.localdate(),
+        rows=[
+            {"account": expense, "debit": cash_out.amount, "against": cash_account.name},
+            {"account": cash_account, "credit": cash_out.amount, "against": expense.name},
+        ],
+        voucher_type="Shift Cash-Out",
+        voucher_no=str(cash_out.pk),
+        remarks=f"Shift cash-out #{cash_out.pk} ({cash_out.get_reason_display()})",
+    )
+
+
 def _payable_account_for(supplier, settings, label="The default payable account"):
     """Resolve the payable account: per-supplier override → Restaurant default."""
     account = supplier.payable_account if supplier.payable_account_id else None

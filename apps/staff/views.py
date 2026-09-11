@@ -262,7 +262,9 @@ def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
       redirect back to this page (PRG pattern).
     """
     closing = get_object_or_404(
-        POSClosingEntry.objects.select_related("cashier", "opening_entry"),
+        POSClosingEntry.objects.select_related("cashier", "opening_entry").prefetch_related(
+            "opening_entry__cash_outs__mode_of_payment", "opening_entry__cash_outs__recorded_by"
+        ),
         pk=pk,
     )
     closing_payments = list(closing.closing_payments.select_related("mode_of_payment"))

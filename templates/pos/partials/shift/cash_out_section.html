@@ -1,0 +1,37 @@
+<section id="cash-out-section" aria-label="Shift cash-outs" class="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+  <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
+    <div>
+      <h2 class="text-sm font-extrabold tracking-tight text-slate-900">Shift cash-outs</h2>
+      <p class="mt-0.5 text-xs text-slate-500">Cash leaving the drawer mid-shift</p>
+    </div>
+    {% if cash_modes and shift.is_open %}
+      <button type="button" hx-get="{% url 'pos:pos_cash_out_dialog' %}" hx-target="#cash-out-dialog-container" hx-swap="innerHTML" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-teal-700 shadow-sm ring-1 ring-slate-200 transition-all duration-150 hover:bg-teal-50 hover:ring-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-600/30 active:scale-[0.97]">
+        <span class="flex size-4 items-center justify-center">{% hgi_stroke name="add-01" size="16" color="currentColor" stroke_width="2.2" %}</span>
+        <span>Record cash-out</span>
+      </button>
+    {% endif %}
+  </div>
+  {% if cash_outs %}
+    <ul class="divide-y divide-slate-100">
+      {% for co in cash_outs %}
+        <li class="flex items-center gap-3 px-4 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-bold text-slate-900">
+              {{ co.get_reason_display }}{% if co.note %}<span class="font-semibold text-slate-500"> · {{ co.note }}</span>{% endif %}
+            </p>
+            <p class="mt-0.5 text-xs text-slate-400">{{ co.created_at|date:"H:i" }} · {{ co.recorded_by.get_display_name }} · {{ co.mode_of_payment.name }}</p>
+          </div>
+          {% if co.status == "CANCELLED" %}
+            <span class="shrink-0 rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Cancelled</span>
+          {% endif %}
+          <span class="shrink-0 font-mono text-sm font-extrabold tabular-nums text-slate-900">₦{{ co.amount|floatformat:2 }}</span>
+          {% if co.status == "SUBMITTED" and shift.is_open and can_cancel_cash_out %}
+            <button type="button" hx-post="{% url 'pos:pos_cash_out_cancel' co.pk %}" hx-target="#cash-out-section" hx-swap="outerHTML" data-confirm-message="Cancel this cash-out? The drawer expected amount is restored." data-confirm-btn="Yes, cancel" class="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl px-3 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-300/60">Cancel</button>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="px-4 py-6 text-center text-sm text-slate-400">No cash-outs recorded this shift.</p>
+  {% endif %}
+</section>

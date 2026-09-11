@@ -32,8 +32,15 @@ from apps.orders.models import (
 from apps.payments.models import ModeOfPayment
 from apps.settings.models import Restaurant
 from apps.staff.forms import ClosingPaymentForm, OpeningFloatForm
-from apps.staff.models import ClosingPayment, POSClosingEntry, POSOpeningEntry
-from apps.staff.services import ensure_closing_draft, expected_closing_amounts, open_shift, submit_closing_entry
+from apps.staff.models import ClosingPayment, POSClosingEntry, POSOpeningEntry, ShiftCashOut
+from apps.staff.services import (
+    cancel_cash_out,
+    ensure_closing_draft,
+    expected_closing_amounts,
+    open_shift,
+    record_cash_out,
+    submit_closing_entry,
+)
 from apps.users.decorators import staff_required
 
 from . import printing, services
@@ -282,21 +289,23 @@ def pos_home(request: HttpRequest) -> HttpResponse:
     draft_orders = services.open_draft_orders(shift, order_filter, order_search)
     draft_count = Order.objects.open_drafts(shift).count()
     max_open_drafts = settings.max_open_drafts
+    context = {
+        "shift": shift,
+        "draft_orders": draft_orders,
+        "draft_count": draft_count,
+        "max_open_drafts": max_open_drafts,
+        "drafts_remaining": max(max_open_drafts - draft_count, 0),
+        "draft_cap_reached": draft_count >= max_open_drafts,
+        "order_filter": order_filter,
+        "order_search": order_search,
+        "show_order_tabs": True,
+        "pos_nav": "open",
+    }
+    context.update(_cash_out_context(request, shift))
     return _render_pos_surface(
         request,
         "pos/draft_orders.html",
-        {
-            "shift": shift,
-            "draft_orders": draft_orders,
-            "draft_count": draft_count,
-            "max_open_drafts": max_open_drafts,
-            "drafts_remaining": max(max_open_drafts - draft_count, 0),
-            "draft_cap_reached": draft_count >= max_open_drafts,
-            "order_filter": order_filter,
-            "order_search": order_search,
-            "show_order_tabs": True,
-            "pos_nav": "open",
-        },
+        context,
     )
 
 
@@ -454,6 +463,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
             # Invalid forms — fall through to re-render with bound forms.
             display_closing = closing
             display_payments = [payment for payment, _form in form_data]
+        cash_out_ctx = _cash_out_context(request, open_shift)
         return _render_pos_surface(
             request,
             "pos/close_shift.html",
@@ -465,6 +475,7 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
                 "shift": open_shift,
                 "show_order_tabs": _is_htmx(request),
                 "pos_nav": "close",
+                **cash_out_ctx,
             },
         )
 
@@ -522,8 +533,117 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
             "shift": open_shift,
             "show_order_tabs": _is_htmx(request),
             "pos_nav": "close",
+            **_cash_out_context(request, open_shift),
         },
     )
+
+
+def _cash_out_context(request, open_shift):
+    """Build the cash-out section context for the open shift."""
+    expected_by_mode = {
+        row["mode"].pk: row["expected_amount"]
+        for row in expected_closing_amounts(open_shift, open_shift.period_start_date, timezone.now())
+    }
+    opening_modes = list(
+        open_shift.opening_payments.select_related("mode_of_payment")
+        .filter(mode_of_payment__type=ModeOfPayment.TYPE_CASH, mode_of_payment__enabled=True)
+        .order_by("mode_of_payment__name")
+    )
+    cash_outs = list(open_shift.cash_outs.select_related("mode_of_payment", "recorded_by").order_by("-created_at"))
+    user = request.user
+    return {
+        "shift": open_shift,
+        "cash_modes": [
+            {"mode": op.mode_of_payment, "expected": expected_by_mode.get(op.mode_of_payment_id, Decimal("0"))}
+            for op in opening_modes
+        ],
+        "cash_outs": cash_outs,
+        "can_cancel_cash_out": user.is_manager or user.is_admin or user.is_superuser,
+        "cash_out_reasons": ShiftCashOut.REASON_CHOICES,
+    }
+
+
+@staff_required
+def pos_cash_out_dialog(request: HttpRequest) -> HttpResponse:
+    """Render the record-cash-out dialog fragment for the open shift."""
+    open_shift = _get_open_shift()
+    if open_shift is None:
+        messages.warning(request, "There is no open shift.")
+        return _home_or_redirect(request)
+    return render(request, "pos/partials/shift/cash_out_dialog.html", _cash_out_context(request, open_shift))
+
+
+@staff_required
+@require_POST
+def pos_cash_out_record(request: HttpRequest) -> HttpResponse:
+    """Record a cash-out voucher from the POS dialog."""
+    open_shift = _get_open_shift()
+    if open_shift is None:
+        messages.warning(request, "There is no open shift.")
+        return _home_or_redirect(request)
+    try:
+        mode = ModeOfPayment.objects.get(pk=request.POST.get("mode_of_payment"), enabled=True)
+        amount = Decimal(str(request.POST.get("amount", "0")))
+        reason = str(request.POST.get("reason", "") or "").strip() or ShiftCashOut.OTHER
+        record_cash_out(
+            open_shift,
+            mode=mode,
+            amount=amount,
+            reason=reason,
+            note=str(request.POST.get("note", "") or ""),
+            actor=request.user,
+        )
+    except ModeOfPayment.DoesNotExist, InvalidOperation, ValueError, TypeError:
+        messages.error(request, "Enter a valid cash mode and amount.")
+        if _is_htmx(request):
+            return render(
+                request,
+                "pos/partials/shift/cash_out_dialog.html",
+                {**_cash_out_context(request, open_shift), "error": "Enter a valid cash mode and amount."},
+            )
+        return redirect("pos:pos_home")
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0] if exc.messages else "Cannot record the cash-out.")
+        if _is_htmx(request):
+            return render(
+                request,
+                "pos/partials/shift/cash_out_dialog.html",
+                {
+                    **_cash_out_context(request, open_shift),
+                    "error": exc.messages[0] if exc.messages else "Cannot record the cash-out.",
+                },
+            )
+        return redirect("pos:pos_home")
+    messages.success(request, "Cash-out recorded.")
+    if _is_htmx(request):
+        response = render(request, "pos/partials/shift/cash_out_section.html", _cash_out_context(request, open_shift))
+        response["HX-Trigger"] = "close-cash-out"
+        return response
+    return redirect("pos:pos_home")
+
+
+@staff_required
+@require_POST
+def pos_cash_out_cancel(request: HttpRequest, pk: int) -> HttpResponse:
+    """Cancel a cash-out voucher. Managers only."""
+    user = request.user
+    if not (user.is_manager or user.is_admin or user.is_superuser):
+        return HttpResponse(status=403)
+    open_shift = _get_open_shift()
+    if open_shift is None:
+        messages.warning(request, "There is no open shift.")
+        return _home_or_redirect(request)
+    row = get_object_or_404(ShiftCashOut, pk=pk, opening_entry=open_shift)
+    try:
+        cancel_cash_out(row, actor=user)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0] if exc.messages else "Cannot cancel the cash-out.")
+    else:
+        messages.success(request, "Cash-out cancelled.")
+    if _is_htmx(request):
+        return render(request, "pos/partials/shift/cash_out_section.html", _cash_out_context(request, open_shift))
+    redirect_to = str(request.POST.get("next", "") or "").strip() or reverse("pos:pos_home")
+    return redirect(redirect_to)
 
 
 @staff_required
