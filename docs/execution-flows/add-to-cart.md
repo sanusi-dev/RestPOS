@@ -26,6 +26,10 @@ The view first resolves an enabled sales Item. `add_order_line()` snapshots item
 
 Items with configured add-ons GET `pos_order_add_on_dialog`, which resolves active-menu prices and filters invalid add-ons. The dialog submits the same add-item endpoint with `add_on_ids`. `apply_add_on_line()` validates all IDs and runs parent plus add-on line creation in one atomic block; a failure rolls back the whole group.
 
+## Variant Item
+
+Tapping a grouped dish GETs `pos_order_variant_dialog`, which lists the sellable on-menu sizes ordered by rate with per-size stock state. Submitting posts the parent `item_id` plus the chosen `variant_item_id`; the price resolves server-side from the variant's menu line and the audit row carries both IDs. When the chosen size itself has add-ons, the submit returns the add-on dialog for that size (preserving qty/comments) instead of adding the line — a two-step variant → add-ons → cart chain.
+
 ## Stock Effects
 
 DRINKS reservation changes are performed before creating/updating the line and use locked Bin rows. FOOD bypasses stock. Missing/disabled warehouse or insufficient unreserved stock returns a validation error in the cart without creating the line.

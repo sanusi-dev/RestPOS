@@ -43,7 +43,7 @@ Implementation status lives in `PLAN.md`.
 | 6 | Special dishes | Items flagged special appear under a dedicated filter on the POS for fast access to featured dishes. |
 | 7 | Item disable | A disabled menu item disappears from the POS immediately but keeps its pricing in the database. |
 | 8 | Item images | Each menu item can carry an image; the POS shows it on the menu card and falls back to an initials placeholder. |
-| 9 | Item variants | A template item (e.g. "Chicken") can have variant items (Quarter, Half, Full), each with its own price. Variants are managed in the back office; POS variant selection is not yet implemented. |
+| 9 | Item variants | A template item (e.g. "Chicken") can have variant items (Quarter, Half, Full), each with its own price. Tapping the grouped dish on the POS opens a single-choice size picker; the chosen size joins the cart as its own line at its own price. |
 | 10 | Item add-ons | Optional extras on a menu item (e.g. "Extra Cheese"). Selected add-ons join the cart as separate lines at their own prices. |
 
 ### A3. Inventory & Stock

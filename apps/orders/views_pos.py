@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django_htmx.middleware import HtmxDetails
 
 from apps.inventory.models import Item
-from apps.menu.models import MenuItem
+from apps.menu.models import ItemVariant, MenuItem
 from apps.orders.models import (
     CANCELLED,
     DINE_IN,
@@ -185,6 +185,80 @@ def _render_cart(request, order, **extra_context):
     return render(request, "pos/index.html#cart", context)
 
 
+def _parent_card_match(parent_item, variants, catalog_group, catalog_specials, catalog_query):
+    """Return whether a variant parent card passes the catalog filters."""
+    if (
+        catalog_group
+        and parent_item.item_group.name != catalog_group
+        and all(mi.item.item_group.name != catalog_group for mi in variants)
+    ):
+        return False
+    if catalog_specials and not any(mi.special_dish for mi in variants):
+        return False
+    if catalog_query:
+        query = catalog_query.casefold()
+        if query in parent_item.item_name.casefold() or query in parent_item.item_code.casefold():
+            return True
+        return any(
+            query in mi.item_name.casefold()
+            or query in mi.item.item_name.casefold()
+            or query in mi.item.item_code.casefold()
+            for mi in variants
+        )
+    return True
+
+
+def _build_catalog_cards(all_menu_items, menu_items, catalog_group, catalog_specials, catalog_query):
+    """Group variant lines under one parent card; ungrouped lines stay flat."""
+    parents = {}
+    for mi in all_menu_items:
+        for link in mi.item.pos_variant_of.all():
+            entry = parents.setdefault(link.parent_item_id, {"parent": link.parent_item, "variants": []})
+            if mi not in entry["variants"]:
+                entry["variants"].append(mi)
+    for entry in parents.values():
+        entry["variants"].sort(key=lambda mi: (mi.rate, mi.item_name))
+    grouped_item_ids = {mi.item_id for entry in parents.values() for mi in entry["variants"]}
+    parent_of = {}
+    for parent_id, entry in parents.items():
+        for mi in entry["variants"]:
+            parent_of.setdefault(mi.item_id, []).append(parent_id)
+
+    flat_ids = {mi.item_id for mi in menu_items}
+    cards = []
+    emitted_parents = set()
+    for mi in all_menu_items:
+        if mi.item_id in grouped_item_ids:
+            for parent_id in parent_of.get(mi.item_id, []):
+                if parent_id in emitted_parents:
+                    continue
+                entry = parents[parent_id]
+                if _parent_card_match(
+                    entry["parent"], entry["variants"], catalog_group, catalog_specials, catalog_query
+                ):
+                    cards.append(_parent_card(entry))
+                    emitted_parents.add(parent_id)
+        elif mi.item_id in flat_ids:
+            cards.append({"kind": "single", "menu_item": mi})
+    return cards
+
+
+def _parent_card(entry):
+    """Build a parent card dict from grouped variant lines."""
+    variants = entry["variants"]
+    rates = [mi.rate for mi in variants]
+    messages = sorted({mi.stock_message for mi in variants if mi.stock_message})
+    return {
+        "kind": "parent",
+        "parent_item": entry["parent"],
+        "variants": variants,
+        "min_rate": min(rates),
+        "max_rate": max(rates),
+        "stock_unavailable": bool(variants) and all(mi.stock_unavailable for mi in variants),
+        "stock_message": "; ".join(messages),
+    }
+
+
 def _build_order_context(request, order):
     """Build the context dict for the order screen."""
     user = request.user
@@ -201,7 +275,11 @@ def _build_order_context(request, order):
     all_menu_items = (
         list(
             active_menu.items.select_related("item", "item__item_group")
-            .prefetch_related("item__add_ons__add_on_item__menu_items", "item__add_on_for")
+            .prefetch_related(
+                "item__add_ons__add_on_item__menu_items",
+                "item__add_on_for",
+                "item__pos_variant_of__parent_item__item_group",
+            )
             .filter(disabled=False)
         )
         if active_menu
@@ -226,6 +304,7 @@ def _build_order_context(request, order):
     # POS availability is unreserved stock, not physical stock: another open
     # draft must not make the same drink appear sellable a second time.
     services.drink_stock_available(all_menu_items, settings)
+    catalog_cards = _build_catalog_cards(all_menu_items, menu_items, catalog_group, catalog_specials, catalog_query)
     tickets = list(order.kots.select_related("production_unit").filter(status=SUBMITTED))
     tickets_by_type = {}
     for ticket in tickets:
@@ -238,6 +317,7 @@ def _build_order_context(request, order):
         "order": order,
         "shift": order.opening_entry,
         "menu_items": menu_items,
+        "catalog_cards": catalog_cards,
         "catalog_item_count": len(all_menu_items),
         "item_groups": _group_menu_items(all_menu_items),
         "special_item_count": sum(1 for item in all_menu_items if item.special_dish),
@@ -705,6 +785,75 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
     )
 
 
+def _variant_add_ons(item, active_menu):
+    """Return the item's add-ons that are sellable on the active menu."""
+    add_ons = []
+    for add_on in item.add_ons.select_related("add_on_item").all():
+        if add_on.add_on_item.disabled or not add_on.add_on_item.is_sales_item:
+            continue
+        resolved = cast(_AddOnWithMenuItem, add_on)
+        resolved.menu_item = next(
+            (
+                candidate
+                for candidate in add_on.add_on_item.menu_items.all()
+                if candidate.menu_id == active_menu.pk and not candidate.disabled
+            ),
+            None,
+        )
+        if resolved.menu_item is not None:
+            add_ons.append(resolved)
+    return add_ons
+
+
+@staff_required
+def pos_order_variant_dialog(request: HttpRequest, pk: int, parent_item_id: int) -> HttpResponse:
+    """Render the single-choice variant dialog for a grouped dish."""
+    shift = _get_open_shift()
+    if shift is None:
+        return redirect("pos:pos_home")
+    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
+    if order.kots.exists():
+        return HttpResponse("This order was sent to the kitchen or bar.", status=404)
+    settings = Restaurant.load()
+    active_menu = settings.active_menu if settings and settings.active_menu and settings.active_menu.enabled else None
+    if active_menu is None:
+        return HttpResponse("Active menu is not configured.", status=404)
+    parent_item = get_object_or_404(Item, pk=parent_item_id)
+    options = []
+    links = (
+        ItemVariant.objects.filter(parent_item=parent_item)
+        .select_related("variant_item")
+        .prefetch_related("variant_item__menu_items", "variant_item__add_ons__add_on_item__menu_items")
+    )
+    for link in links:
+        variant = link.variant_item
+        if variant.disabled or not variant.is_sales_item:
+            continue
+        menu_item = next(
+            (
+                candidate
+                for candidate in variant.menu_items.all()
+                if candidate.menu_id == active_menu.pk and not candidate.disabled
+            ),
+            None,
+        )
+        if menu_item is None:
+            continue
+        options.append({"item": variant, "menu_item": menu_item})
+    if not options:
+        return HttpResponse("No sizes are available for this dish.", status=404)
+    options.sort(key=lambda option: (option["menu_item"].rate, option["item"].item_name))
+    services.drink_stock_available([option["menu_item"] for option in options], settings)
+    first_available = next((option for option in options if not option["menu_item"].stock_unavailable), None)
+    if first_available is not None:
+        first_available["preselected"] = True
+    return render(
+        request,
+        "pos/partials/catalog/variant_dialog.html",
+        {"order": order, "parent_item": parent_item, "options": options},
+    )
+
+
 @staff_required
 @require_POST
 def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
@@ -763,8 +912,10 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
             error = "This order was sent to the kitchen or bar. Cancel it before making changes."
         else:
             item_id = 0
+            variant_item_id = 0
             try:
                 item_id = int(request.POST.get("item_id", 0))
+                variant_item_id = int(request.POST.get("variant_item_id", 0) or 0)
                 qty = Decimal(str(request.POST.get("qty", "1")))
             except ValueError, TypeError, InvalidOperation:
                 error = "Invalid item quantity."
@@ -773,9 +924,26 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
             if not error and qty <= 0:
                 error = "Quantity must be greater than zero."
 
-            item = Item.objects.filter(pk=item_id, is_sales_item=True, disabled=False).first() if not error else None
+            item = Item.objects.filter(pk=item_id, disabled=False).first() if not error else None
             if not error and item is None:
                 error = "That menu item is no longer available."
+            if not error and item.has_variants and not variant_item_id:
+                error = "Choose a size."
+
+            variant = None
+            if not error and variant_item_id:
+                link = (
+                    ItemVariant.objects.select_related("variant_item")
+                    .filter(parent_item_id=item.pk, variant_item_id=variant_item_id)
+                    .first()
+                )
+                if link is None:
+                    error = "Choose a valid size."
+                else:
+                    variant = link.variant_item
+                    if variant.disabled or not variant.is_sales_item:
+                        error = "That size is no longer available."
+                        variant = None
 
             comments = str(request.POST.get("comments", "") or "").strip()
             if len(comments) > 200:
@@ -789,14 +957,53 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
                     error = "Choose valid add-ons."
                     break
 
+            if not error and variant is not None:
+                settings = Restaurant.load()
+                active_menu = (
+                    settings.active_menu if settings and settings.active_menu and settings.active_menu.enabled else None
+                )
+                variant_menu_item = (
+                    MenuItem.objects.filter(item=variant, menu=active_menu, disabled=False).first()
+                    if active_menu is not None
+                    else None
+                )
+                variant_add_ons = _variant_add_ons(variant, active_menu) if variant_menu_item is not None else []
+                if variant_menu_item is None:
+                    error = "That size is not on the active menu."
+                elif variant_add_ons and not selected_add_on_ids and not request.POST.get("variant_confirmed"):
+                    response = render(
+                        request,
+                        "pos/partials/catalog/add_on_dialog.html",
+                        {
+                            "order": order,
+                            "menu_item": variant_menu_item,
+                            "add_ons": variant_add_ons,
+                            "preset_qty": qty,
+                            "preset_comments": comments,
+                            "variant_confirmed": True,
+                        },
+                    )
+                    response["HX-Retarget"] = "#add-on-dialog-container"
+                    response["HX-Reswap"] = "innerHTML"
+                    response["HX-Trigger"] = "close-variant-dialog"
+                    return response
+
             if not error and item is not None:
                 try:
                     active_card = _get_active_card(request, order)
-                    services.apply_add_on_line(order, item, selected_add_on_ids, qty, active_card, comments=comments)
+                    line_item = variant if variant is not None else item
+                    services.apply_add_on_line(
+                        order, line_item, selected_add_on_ids, qty, active_card, comments=comments
+                    )
                     order.audit(
                         "ITEM_ADDED",
                         actor=request.user,
-                        metadata={"item_id": item.pk, "quantity": str(qty), "customer_index": active_card},
+                        metadata={
+                            "item_id": line_item.pk,
+                            "quantity": str(qty),
+                            "customer_index": active_card,
+                            **({"parent_item_id": item.pk} if variant is not None else {}),
+                        },
                     )
                 except ValidationError as e:
                     error = e.messages[0] if e.messages else "Unable to add that item."

@@ -26,11 +26,11 @@ The home surface lists `Order.objects.open_drafts(shift)`, enriched by `services
 
 ## Catalog
 
-`_build_order_context()` resolves `Restaurant.active_menu`, filters enabled `MenuItem` rows, groups them by `ItemGroup`, and applies search/group/special filters. DRINKS receive availability annotations from `drink_stock_available()`; FOOD is not stock-gated. Search and filter controls request `pos_order_screen` and replace `#catalog-workspace`.
+`_build_order_context()` resolves `Restaurant.active_menu`, filters enabled `MenuItem` rows, groups them by `ItemGroup`, and applies search/group/special filters. Menu lines that are size variants (`menu.ItemVariant`) collapse into one parent card showing the parent name and the `₦min – ₦max` range; lines without a variant row stay flat. DRINKS receive availability annotations from `drink_stock_available()`; FOOD is not stock-gated. A parent card is unavailable only when all its variants are; search matches parent names, variant names, and item codes. Search and filter controls request `pos_order_screen` and replace `#catalog-workspace`.
 
 ## Cart
 
-Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dialog. Cart quantity controls POST to `pos_order_update_item`; guest/order-type controls POST to `pos_order_update_meta`. The server locks order edits after a KOT is created, even if a stale browser sends a request. Cart responses replace `#cart-panel`, and successful mutations can refresh `#catalog-grid` out of band.
+Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dialog; parent variant cards GET the variant dialog (`pos_order_variant_dialog`), which submits the chosen size to the same add-item endpoint with `variant_item_id` and chains into the add-on dialog when the size has add-ons. Cart quantity controls POST to `pos_order_update_item`; guest/order-type controls POST to `pos_order_update_meta`. The server locks order edits after a KOT is created, even if a stale browser sends a request. Cart responses replace `#cart-panel`, and successful mutations can refresh `#catalog-grid` out of band.
 
 ## Send, Pay, Cancel, Discard
 

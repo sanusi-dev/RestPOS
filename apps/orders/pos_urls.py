@@ -28,6 +28,11 @@ urlpatterns = [
         name="pos_order_add_on_dialog",
     ),
     path(
+        "order/<int:pk>/variant-dialog/<int:parent_item_id>/",
+        view=views_pos.pos_order_variant_dialog,
+        name="pos_order_variant_dialog",
+    ),
+    path(
         "order/<int:pk>/update-item/<int:item_pk>/", view=views_pos.pos_order_update_item, name="pos_order_update_item"
     ),
     path(
