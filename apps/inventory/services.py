@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from .models import (
     Bin,
@@ -635,7 +636,7 @@ def cancel_stock_entry(entry):
 
 
 @transaction.atomic
-def submit_stock_reconciliation(reconciliation):
+def submit_stock_reconciliation(reconciliation, actor=None):
     """Post adjustment SLEs and GL legs for the four active reconciliation reasons."""
     from apps.settings.models import ProductionUnit
 
@@ -812,13 +813,15 @@ def submit_stock_reconciliation(reconciliation):
             voucher_no=voucher_no,
             remarks=f"Stock Reconciliation {voucher_no} {locked.reason}",
         )
+    locked.submitted_by = actor
+    locked.submitted_at = timezone.now()
     locked.status = "SUBMITTED"
-    locked.save(update_fields=["status", "updated_at"])
+    locked.save(update_fields=["status", "submitted_by", "submitted_at", "updated_at"])
     reconciliation.status = locked.status
 
 
 @transaction.atomic
-def cancel_stock_reconciliation(reconciliation):
+def cancel_stock_reconciliation(reconciliation, actor=None):
     """Reverse every SLE created by this reconciliation and mark cancelled."""
     locked = StockReconciliation.objects.select_for_update().get(pk=reconciliation.pk)
     if locked.status != "SUBMITTED":
@@ -880,8 +883,10 @@ def cancel_stock_reconciliation(reconciliation):
                 voucher_no=voucher_no,
                 remarks="Reversal",
             )
+    locked.cancelled_by = actor
+    locked.cancelled_at = timezone.now()
     locked.status = "CANCELLED"
-    locked.save(update_fields=["status", "updated_at"])
+    locked.save(update_fields=["status", "cancelled_by", "cancelled_at", "updated_at"])
     reconciliation.status = locked.status
 
 

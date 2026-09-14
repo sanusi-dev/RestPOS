@@ -64,6 +64,22 @@
         </dd>
       </div>
       {% if reconciliation.remarks %}<div class="sm:col-span-3"><dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Remarks</dt><dd class="mt-1.5 text-sm leading-6 text-gray-700">{{ reconciliation.remarks }}</dd></div>{% endif %}
+      {% if reconciliation.submitted_by %}
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Submitted by</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">
+            {{ reconciliation.submitted_by.get_display_name }} · <span class="font-normal tabular-nums text-gray-500">{{ reconciliation.submitted_at|date:"M j, Y H:i" }}</span>
+          </dd>
+        </div>
+      {% endif %}
+      {% if reconciliation.cancelled_by %}
+        <div>
+          <dt class="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Cancelled by</dt>
+          <dd class="mt-1.5 text-sm font-bold text-gray-900">
+            {{ reconciliation.cancelled_by.get_display_name }} · <span class="font-normal tabular-nums text-gray-500">{{ reconciliation.cancelled_at|date:"M j, Y H:i" }}</span>
+          </dd>
+        </div>
+      {% endif %}
     </dl>
   </section>
   <section class="mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_24px_rgb(0,0,0,0.04)]">

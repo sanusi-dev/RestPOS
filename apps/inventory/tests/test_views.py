@@ -316,6 +316,21 @@ class TestReconciliationViews(InventoryViewTestBase):
             2,
         )
 
+    def test_reconciliation_submit_and_cancel_record_actors(self):
+        from apps.inventory.models import StockReconciliation, StockReconciliationItem
+
+        rec = StockReconciliation.objects.create(warehouse=self.warehouse, reason="ADJUSTMENT")
+        StockReconciliationItem.objects.create(
+            reconciliation=rec, item=self.item, qty=Decimal("4"), valuation_rate=Decimal("100")
+        )
+        self.client.post(reverse("inventory:reconciliation_submit", kwargs={"pk": rec.pk}))
+        rec.refresh_from_db()
+        self.assertEqual(rec.submitted_by, self.user)
+
+        self.client.post(reverse("inventory:reconciliation_cancel", kwargs={"pk": rec.pk}))
+        rec.refresh_from_db()
+        self.assertEqual(rec.cancelled_by, self.user)
+
 
 class TestRecipeViews(InventoryViewTestBase):
     def _dish_and_ingredient(self):
@@ -401,12 +416,8 @@ class TestRecipeViews(InventoryViewTestBase):
         self.assertEqual(self.client.get(reverse("inventory:recipe_create")).status_code, 200)
         recipe = Recipe.objects.create(item=dish, output_qty=Decimal("1"))
         RecipeItem.objects.create(recipe=recipe, ingredient=ingredient, qty=Decimal("0.2"))
-        self.assertEqual(
-            self.client.get(reverse("inventory:recipe_detail", kwargs={"pk": recipe.pk})).status_code, 200
-        )
-        self.assertEqual(
-            self.client.get(reverse("inventory:recipe_update", kwargs={"pk": recipe.pk})).status_code, 200
-        )
+        self.assertEqual(self.client.get(reverse("inventory:recipe_detail", kwargs={"pk": recipe.pk})).status_code, 200)
+        self.assertEqual(self.client.get(reverse("inventory:recipe_update", kwargs={"pk": recipe.pk})).status_code, 200)
 
     def test_food_usage_page_200(self):
         response = self.client.get(reverse("inventory:food_usage"))

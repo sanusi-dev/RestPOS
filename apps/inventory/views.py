@@ -640,7 +640,7 @@ def reconciliation_submit(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "DRAFT":
         try:
-            services.submit_stock_reconciliation(reconciliation)
+            services.submit_stock_reconciliation(reconciliation, actor=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
         else:
@@ -654,7 +654,7 @@ def reconciliation_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     reconciliation = get_object_or_404(StockReconciliation, pk=pk)
     if reconciliation.status == "SUBMITTED":
         try:
-            services.cancel_stock_reconciliation(reconciliation)
+            services.cancel_stock_reconciliation(reconciliation, actor=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
         else:

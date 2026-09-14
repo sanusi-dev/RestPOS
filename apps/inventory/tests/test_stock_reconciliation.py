@@ -17,6 +17,7 @@ from apps.inventory.models import (
 )
 from apps.inventory.services import cancel_stock_reconciliation, submit_stock_reconciliation
 from apps.settings.models import ProductionUnit, Restaurant
+from apps.users.models import CustomUser
 
 
 class StockReconciliationStandardizationTest(TestCase):
@@ -317,3 +318,37 @@ class StockReconciliationStandardizationTest(TestCase):
         StockReconciliationItem.objects.create(reconciliation=rec, item=self.coke, qty=Decimal("20"))
         submit_stock_reconciliation(rec)
         self.assertEqual(Bin.objects.get(item=self.coke, warehouse=self.bar).actual_qty, Decimal("20"))
+
+    # Attribution
+
+    def test_write_off_notes_remain_optional(self):
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "A4", unit_rate=Decimal("100"))
+        for reason, qty in (("ADJUSTMENT", Decimal("9")), ("WASTE_DAMAGE", Decimal("1"))):
+            with self.subTest(reason=reason):
+                rec = self.make_rec(reason, warehouse=self.store)
+                StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=qty)
+                submit_stock_reconciliation(rec)
+                rec.refresh_from_db()
+                self.assertEqual(rec.status, "SUBMITTED")
+                self.assertEqual(rec.remarks, "")
+
+    def test_submit_records_actor(self):
+        user = CustomUser.objects.create_user(username="inv@test.com", password="testpass123")
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "A5", unit_rate=Decimal("100"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("9"))
+        submit_stock_reconciliation(rec, actor=user)
+        rec.refresh_from_db()
+        self.assertEqual(rec.submitted_by, user)
+        self.assertIsNotNone(rec.submitted_at)
+
+    def test_cancel_records_actor(self):
+        user = CustomUser.objects.create_user(username="inv2@test.com", password="testpass123")
+        StockLedgerEntry.create_entry(self.rice, self.store, Decimal("10"), "Receipt", "A6", unit_rate=Decimal("100"))
+        rec = self.make_rec("ADJUSTMENT", warehouse=self.store)
+        StockReconciliationItem.objects.create(reconciliation=rec, item=self.rice, qty=Decimal("9"))
+        submit_stock_reconciliation(rec, actor=user)
+        cancel_stock_reconciliation(rec, actor=user)
+        rec.refresh_from_db()
+        self.assertEqual(rec.cancelled_by, user)
+        self.assertIsNotNone(rec.cancelled_at)
