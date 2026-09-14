@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -103,6 +104,30 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
 
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
+
+    def test_other_cashier_cannot_close_shift(self):
+        other = CustomUser.objects.create_user(username="other@test.com", password="testpass123")
+
+        with self.assertRaisesMessage(ValidationError, "Only the cashier who opened this shift"):
+            submit_closing_entry(self.closing, actor=other)
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
+
+    def test_opener_can_close_own_shift(self):
+        submit_closing_entry(self.closing, actor=self.user)
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.SUBMITTED)
+
+    def test_manager_can_close_another_cashiers_shift(self):
+        manager = CustomUser.objects.create_user(username="manager@test.com", password="testpass123")
+        manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        manager.groups.add(manager_group)
+
+        submit_closing_entry(self.closing, actor=manager)
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.SUBMITTED)
 
     def test_submit_raises_if_mode_not_in_opening(self):
         other_mode = ModeOfPayment.objects.create(name="Stranger", type="GENERAL")

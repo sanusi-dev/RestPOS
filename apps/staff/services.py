@@ -155,6 +155,8 @@ def submit_closing_entry(closing, actor=None):
     opening = POSOpeningEntry.objects.select_for_update().get(pk=locked.opening_entry_id)
     if not opening.is_open:
         raise ValidationError("The opening shift is no longer open.")
+    if actor is not None and not opening.can_be_closed_by(actor):
+        raise ValidationError("Only the cashier who opened this shift, or a manager, can close it.")
     # Cut off at submit time so orders settled after the draft was opened are included.
     locked.period_end_date = timezone.now()
     opening_payments = list(opening.opening_payments.select_related("mode_of_payment").all())

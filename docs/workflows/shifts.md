@@ -21,14 +21,14 @@
 ## Open Shift Rules
 
 - Exactly one global open shift is intended, not one per cashier.
-- Any staff-role user can use the active shift; there is no post-opening cashier ownership check.
+- Any staff-role user can use the active shift for orders. Closing is restricted to the cashier who opened it, or any Manager/Admin; the POS hides the Close Shift action from other cashiers, and both the view and `submit_closing_entry()` enforce the rule through `POSOpeningEntry.can_be_closed_by()`.
 - New orders, settlement, and close all validate `status=SUBMITTED` and `closing_entry IS NULL`.
 - Opening cancellation is blocked once any order row exists, including cancelled or discarded rows.
 - A closed opening cannot be cancelled; cancel the closing entry instead.
 
 ## Closing
 
-POS GET `/pos/close-shift/` computes expected values without creating database rows. If open drafts exist, it renders a blocking page. POS POST locks the opening row, rechecks drafts, creates/reuses a closing draft, saves counted amounts, updates period end, and calls `submit_closing_entry()`.
+POS GET `/pos/close-shift/` computes expected values without creating database rows. The view first checks that the requester opened the shift or is a Manager/Admin, so other cashiers are sent back to POS home with an error. If open drafts exist, it renders a blocking page. POS POST locks the opening row, rechecks drafts, creates/reuses a closing draft, saves counted amounts, updates period end, and calls `submit_closing_entry()`, which re-checks the same ownership rule against the actor.
 
 Backoffice `closing_entry_create()` locks the open shift to prevent duplicate closing drafts. The detail page edits draft counted amounts. Both POS and backoffice ultimately call the same closing service.
 

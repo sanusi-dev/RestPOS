@@ -79,6 +79,12 @@ class POSOpeningEntry(BaseModel):
     def is_closed(self):
         return self.status == self.SUBMITTED and self.closing_entry_id is not None
 
+    def can_be_closed_by(self, user) -> bool:
+        """Return True if the user may close this shift: its opener or a manager/admin."""
+        if user.is_manager or user.is_admin:
+            return True
+        return self.cashier_id == user.pk
+
     def submit(self):
         """Transition from DRAFT to SUBMITTED; re-checks "one Open shift" under row locks to close the submit race."""
         if self.status != self.DRAFT:

@@ -240,6 +240,29 @@ class POSShiftCloseTest(POSViewTestBase):
         self.assertEqual(POSClosingEntry.objects.count(), before_entries)
         self.assertEqual(ClosingPayment.objects.count(), before_payments)
 
+    def test_other_cashier_cannot_close_shift(self):
+        other = CustomUser.objects.create_user(username="other-cashier", password="testpass123")
+        cashier_group = Group.objects.get(name="RestPOS Cashier")
+        other.groups.add(cashier_group)
+        self.client.force_login(other)
+
+        response = self.client.get(reverse("pos:pos_close_shift"), follow=True)
+
+        self.assertContains(response, "Only the cashier who opened this shift")
+        self.opening.refresh_from_db()
+        self.assertIsNone(self.opening.closing_entry_id)
+
+    def test_manager_can_open_close_screen_for_another_cashiers_shift(self):
+        manager = CustomUser.objects.create_user(username="closing-manager", password="testpass123")
+        manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        manager.groups.add(manager_group)
+        self.client.force_login(manager)
+
+        response = self.client.get(reverse("pos:pos_close_shift"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Count the drawer")
+
 
 class POSOrderHistoryTest(POSViewTestBase):
     def setUp(self):

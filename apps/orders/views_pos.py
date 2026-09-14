@@ -475,6 +475,9 @@ def pos_close_shift(request: HttpRequest) -> HttpResponse:
     if open_shift is None:
         messages.warning(request, "There is no open shift to close.")
         return _home_or_redirect(request)
+    if not open_shift.can_be_closed_by(user):
+        messages.error(request, "Only the cashier who opened this shift, or a manager, can close it.")
+        return _home_or_redirect(request)
 
     draft_count = Order.objects.open_drafts(open_shift).count()
     if draft_count and request.method == "GET":
