@@ -623,6 +623,29 @@ class OrderPaymentValidationTest(OrderTestBase):
         )
         self.assertEqual(return_order.payments.get().amount, Decimal("-3000"))
 
+    def test_missing_reference_rejected_on_normal_order_when_required(self):
+        order = self._create_order()
+        bank = ModeOfPayment.objects.create(name="Bank", type="BANK")
+        Restaurant.objects.update(require_payment_reference=True)
+
+        with self.assertRaisesMessage(ValidationError, "A reference is required for Bank payments."):
+            OrderPayment.objects.create(order=order, mode_of_payment=bank, amount=Decimal("3000"), reference_no="")
+
+    def test_missing_reference_allowed_on_return_draft_when_required(self):
+        source = self._create_order()
+        return_order = Order.objects.create(opening_entry=self.opening, is_return=True, return_against=source)
+        bank = ModeOfPayment.objects.create(name="Bank", type="BANK")
+        Restaurant.objects.update(require_payment_reference=True)
+
+        payment = OrderPayment.objects.create(
+            order=return_order,
+            mode_of_payment=bank,
+            amount=Decimal("-3000"),
+            reference_no="",
+        )
+
+        self.assertEqual(payment.reference_no, "")
+
 
 class OrderRecalculateTest(OrderTestBase):
     def test_recalculate_updates_grand_total(self):

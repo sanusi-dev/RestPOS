@@ -30,7 +30,7 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it does |
 |---|---|---|
-| 1 | Restaurant settings | The singleton configuration record. Holds company name, invoice prefix, address, active menu, the default (bar/POS) warehouse, the central store warehouse, the maximum number of open draft orders, and whether cashiers can browse full order history. Every other area of the system references it. |
+| 1 | Restaurant settings | The singleton configuration record. Holds company name, invoice prefix, address, active menu, the default (bar/POS) warehouse, the central store warehouse, the maximum number of open draft orders, whether cashiers can browse full order history, and whether electronic payments must carry a reference. Every other area of the system references it. |
 | 2 | Production units | One production unit per department: the Kitchen (FOOD) and the Bar (DRINKS). Each unit owns its department's warehouse, printer configuration (IP address, paper width, cut mode), and a flag to suppress ticket printing for takeaway orders. |
 | 3 | Staff roles | Three roles: Admin (everything, including Django admin), Manager (back office + POS), Cashier (POS only). Only admins assign roles. Admins create logins and toggle active status from the User-roles page. |
 
@@ -85,7 +85,7 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 27 | Order document | The central sale record: invoice number, continuous sequential order number, order type (Dine-In / Take-Away), free-text customer name (default "Walk-in Customer"), guest count, and totals with whole-naira rounding. Statuses: Draft, Submitted, Cancelled, Discarded. |
 | 28 | Order lines | Each line stores item, quantity, rate, amount, per-line comments, the customer card index, and department + stock-tracked snapshots. |
-| 29 | Order payments | Split payment across modes in one order. Cash overpayment produces change. Electronic payment references must be unique. Payment rows are immutable once the order is settled. |
+| 29 | Order payments | Split payment across modes in one order. Cash overpayment produces change. Electronic payment references must be unique, and the restaurant can require them at settlement. Payment rows are immutable once the order is settled. |
 | 30 | Order lifecycle | One exit per stage: unsent drafts are deleted; sent drafts are cancelled with cancellation tickets; paid orders are refunded through a return order. A configurable cap limits open drafts per shift. |
 | 31 | Kitchen & bar tickets | On send, the system creates one ticket per department: FOOD to the kitchen unit, DRINKS to the bar unit. Tickets are snapshots (New Order or Cancelled), numbered KOT-/BOT- (CNCL- for cancellations), with per-ticket print status and retry. Takeaway suppression is per production unit. |
 | 32 | Settlement ticket guarantee | Settling an order that never generated tickets creates them automatically, so no paid order escapes the kitchen. |

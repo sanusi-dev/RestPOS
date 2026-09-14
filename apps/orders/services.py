@@ -874,8 +874,11 @@ def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")
 
 def _validate_payment_data(order, payments_data, opening_entry):
     """Resolve and validate payment rows before changing the order."""
+    from apps.settings.models import Restaurant
+
     if not isinstance(payments_data, (list, tuple)) or not payments_data:
         raise ValidationError("At least one payment is required.")
+    require_reference = Restaurant.requires_payment_reference()
 
     opening_mode_ids = set(opening_entry.opening_payments.values_list("mode_of_payment_id", flat=True))
     payment_rows = []
@@ -924,6 +927,8 @@ def _validate_payment_data(order, payments_data, opening_entry):
         reference_no = str(entry.get("reference_no", "") or "").strip()
         if len(reference_no) > 100:
             raise ValidationError(f"Payment row {row_number} has a reference that is too long.")
+        if require_reference and mode.type != ModeOfPayment.TYPE_CASH and not reference_no:
+            raise ValidationError(f"Payment row {row_number} requires a reference for {mode.name}.")
 
         payment_rows.append(
             {

@@ -27,9 +27,10 @@ The POS dialog is GET `/pos/order/<pk>/settle/`; POST extracts `payment_<mode_pk
 - mode declared at shift opening;
 - existing non-empty GL mapping;
 - reference length <= 100;
+- a non-empty reference for every non-cash row when `Restaurant.require_payment_reference` is enabled;
 - full coverage of rounded order total.
 
-Electronic reference numbers are unique per payment mode when non-empty. Cash references are not duplicate-checked.
+Electronic reference numbers are unique per payment mode when non-empty. Cash references are not duplicate-checked. The requirement is enforced in `OrderPayment.save()` as well, so a non-cash row cannot be created without a reference outside the settlement flow.
 
 Cash may exceed the total and produces `Order.change_amount`. Any overpayment containing a non-cash row is rejected. Underpayment is rejected. Payments are created inside the settlement transaction, and pre-existing payment rows cause manager review validation.
 
@@ -42,4 +43,4 @@ Cash may exceed the total and produces `Order.change_amount`. Any overpayment co
 - No partial payment or outstanding balance: settlement requires full payment.
 - No discounts or write-offs: order totals are line sum plus whole-unit rounding.
 - No refund/void service: paid returns cannot be submitted.
-- No payment provider integration: all electronic modes are manual records with optional references.
+- No payment provider integration: all electronic modes are manual records. References are optional unless `Restaurant.require_payment_reference` is enabled.

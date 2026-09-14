@@ -543,17 +543,23 @@ class OrderPayment(BaseModel):
                 if hasattr(self, "mode_of_payment")
                 else ModeOfPayment.objects.get(pk=self.mode_of_payment_id)
             )
-            if mode.type != ModeOfPayment.TYPE_CASH and self.reference_no:
-                duplicate = (
-                    OrderPayment.objects.filter(
-                        mode_of_payment_id=self.mode_of_payment_id,
-                        reference_no=self.reference_no,
+            if mode.type != ModeOfPayment.TYPE_CASH:
+                if not self.reference_no and not order.is_return:
+                    from apps.settings.models import Restaurant
+
+                    if Restaurant.requires_payment_reference():
+                        raise ValidationError(f"A reference is required for {mode.name} payments.")
+                if self.reference_no:
+                    duplicate = (
+                        OrderPayment.objects.filter(
+                            mode_of_payment_id=self.mode_of_payment_id,
+                            reference_no=self.reference_no,
+                        )
+                        .exclude(pk=self.pk)
+                        .exists()
                     )
-                    .exclude(pk=self.pk)
-                    .exists()
-                )
-                if duplicate:
-                    raise ValidationError("This electronic payment reference has already been used.")
+                    if duplicate:
+                        raise ValidationError("This electronic payment reference has already been used.")
         order = self.order if self.order_id else None
         if not order or not getattr(order, "_settling", False):
             # Outside the settlement flow, payments are immutable once the

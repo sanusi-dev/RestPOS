@@ -35,7 +35,7 @@ Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dial
 ## Send, Pay, Cancel, Discard
 
 - Send to kitchen creates department-specific immutable KOT/BOT snapshots and dispatches each ticket independently.
-- Pay loads a dialog, then settlement validates full payment, shift ownership, payment modes, current item availability, and stock before submitting the order.
+- Pay loads a dialog, then settlement validates full payment, shift ownership, payment modes, required electronic references, current item availability, and stock before submitting the order.
 - Cancel is available for sent/printed unpaid drafts; it preserves the order and sends cancellation tickets.
 - Discard is only for an empty untouched draft.
 - Receipt printing claims the order as printed before calling the print interface, which intentionally locks further draft edits.

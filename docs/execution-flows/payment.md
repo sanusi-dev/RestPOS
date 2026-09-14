@@ -16,9 +16,9 @@ The GET does not settle or mutate data. It lists enabled modes with a non-null m
 
 ## POST
 
-The dialog sends fields named `payment_<mode_id>` and optional `reference_<mode_id>`. The view drops blank values and passes a list of dictionaries to `settle_order()`.
+The dialog sends fields named `payment_<mode_id>` and `reference_<mode_id>`. Non-cash modes render a reference input; it is required by the browser only when a positive amount is entered and `Restaurant.require_payment_reference` is enabled. The view drops blank amounts and passes a list of dictionaries to `settle_order()`.
 
-`_validate_payment_data()` resolves each mode, checks enabled/opening declaration/GL mapping, normalizes references, enforces two-decimal finite amounts, and discards zero rows. At least one positive row is required.
+`_validate_payment_data()` resolves each mode, checks enabled/opening declaration/GL mapping, normalizes references, enforces two-decimal finite amounts, rejects a blank reference on non-cash rows when `Restaurant.require_payment_reference` is enabled, and discards zero rows. At least one positive row is required.
 
 `settle_order()` locks the order, recalculates the rounded total, validates active shift/stock, creates `OrderPayment` rows, sets `paid_amount`, `change_amount`, `is_paid`, `status=SUBMITTED`, `submitted_at`, and `invoice_printed*` (the receipt event), then converts drink reservations to actual stock issues. The view prints the receipt after settlement, non-blockingly.
 

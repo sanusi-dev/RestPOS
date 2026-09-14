@@ -44,6 +44,11 @@ class Restaurant(BaseModel):
         default=False,
         help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
     )
+    require_payment_reference = models.BooleanField(
+        default=False,
+        verbose_name="Require payment reference",
+        help_text="When enabled, electronic (non-cash) payments must include a reference number at settlement.",
+    )
 
     default_income_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -198,6 +203,13 @@ class Restaurant(BaseModel):
     def load(cls):
         """Return the singleton settings record with its direct relations loaded, or None."""
         return cls.objects.select_related("active_menu", "default_warehouse", "store_warehouse").order_by("pk").first()
+
+    @classmethod
+    def requires_payment_reference(cls) -> bool:
+        """Return whether non-cash payments must carry a reference."""
+        return bool(
+            cls.objects.only("require_payment_reference").values_list("require_payment_reference", flat=True).first()
+        )
 
     def clean(self):
         super().clean()

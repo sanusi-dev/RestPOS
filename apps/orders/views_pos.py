@@ -1174,6 +1174,7 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "order": order,
             "payment_modes": list(_get_settle_payment_modes()),
+            "require_payment_reference": Restaurant.requires_payment_reference(),
             "show_payment": True,
         },
     )

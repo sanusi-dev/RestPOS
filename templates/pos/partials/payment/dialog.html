@@ -29,16 +29,21 @@
           <section aria-labelledby="payment-methods-title" class="pt-7">
             <div class="mb-4">
               <h3 id="payment-methods-title" class="text-sm font-bold text-slate-900">Payment Methods</h3>
-              <p class="mt-1 text-xs text-slate-500">Enter one amount or split the payment.</p>
+              <p class="mt-1 text-xs text-slate-500">Enter one amount or split the payment.{% if require_payment_reference %} Electronic modes require a transaction reference.{% endif %}</p>
             </div>
             <div class="space-y-3">
               {% for mode in payment_modes %}
-                <div class="grid grid-cols-[minmax(6rem,0.75fr)_minmax(0,1.25fr)] items-center gap-3">
+                <div class="grid grid-cols-[minmax(6rem,0.75fr)_minmax(0,1.25fr)] items-center gap-x-3 gap-y-2" x-data="{ amount: '' }">
                   <label for="payment-{{ mode.pk }}" class="truncate text-sm font-semibold text-slate-700">{{ mode.name }}</label>
                   <div class="relative">
                     <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">₦</span>
-                    <input id="payment-{{ mode.pk }}" type="number" min="0" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00" class="min-h-12 w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-8 pr-4 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20" @focus="if (!$el.value) { const others = Array.from($el.form.querySelectorAll('input[name^=payment_]')).filter((input) => input !== $el).reduce((sum, input) => sum + (Number(input.value) || 0), 0); $el.value = Math.max(total - others, 0).toFixed(2); $el.dispatchEvent(new Event('input', { bubbles: true })); }">
+                    <input id="payment-{{ mode.pk }}" type="number" min="0" step="0.01" name="payment_{{ mode.pk }}" placeholder="0.00" x-model="amount" class="min-h-12 w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-8 pr-4 text-right font-mono text-sm font-bold tabular-nums text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20" @focus="if (!$el.value) { const others = Array.from($el.form.querySelectorAll('input[name^=payment_]')).filter((input) => input !== $el).reduce((sum, input) => sum + (Number(input.value) || 0), 0); $el.value = Math.max(total - others, 0).toFixed(2); $el.dispatchEvent(new Event('input', { bubbles: true })); }">
                   </div>
+                  {% if mode.type != "CASH" %}
+                    <div class="col-start-2">
+                      <input id="reference-{{ mode.pk }}" type="text" name="reference_{{ mode.pk }}" maxlength="100" placeholder="Reference" aria-label="{{ mode.name }} transaction reference"{% if require_payment_reference %} :required="Number(amount) > 0"{% endif %} class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20">
+                    </div>
+                  {% endif %}
                 </div>
               {% empty %}
                 <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 ring-1 ring-amber-200">No payment methods are available for this shift.</p>

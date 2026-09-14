@@ -795,6 +795,63 @@ class POSSettleTest(POSViewTestBase):
         self.assertEqual(self.order.status, "SUBMITTED")
         self.assertEqual(self.order.payments.get().reference_no, "")
 
+    def test_settle_requires_reference_for_electronic_payment_when_enabled(self):
+        bank = self._add_bank_mode()
+        Restaurant.objects.update(require_payment_reference=True)
+
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}),
+            {f"payment_{bank.pk}": "3000"},
+            follow=True,
+        )
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "DRAFT")
+        self.assertFalse(self.order.payments.exists())
+        self.assertContains(response, "requires a reference")
+
+    def test_settle_accepts_reference_for_electronic_payment_when_enabled(self):
+        bank = self._add_bank_mode()
+        Restaurant.objects.update(require_payment_reference=True)
+
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}),
+            {f"payment_{bank.pk}": "3000", f"reference_{bank.pk}": "TRF-001"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+        self.assertEqual(self.order.payments.get().reference_no, "TRF-001")
+
+    def test_settle_cash_needs_no_reference_when_enabled(self):
+        Restaurant.objects.update(require_payment_reference=True)
+
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "3000"}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+
+    def test_settle_dialog_shows_reference_for_electronic_modes_only(self):
+        bank = self._add_bank_mode()
+
+        response = self.client.get(reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}))
+
+        self.assertContains(response, f'name="reference_{bank.pk}"')
+        self.assertNotContains(response, f'name="reference_{self.cash.pk}"')
+
+    def test_settle_dialog_marks_electronic_reference_required_when_enabled(self):
+        bank = self._add_bank_mode()
+        Restaurant.objects.update(require_payment_reference=True)
+
+        response = self.client.get(reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}))
+
+        self.assertContains(response, f'name="reference_{bank.pk}"')
+        self.assertContains(response, "Electronic modes require a transaction reference.")
+
     def test_settle_takeaway_no_print_needed(self):
         order = Order.objects.create(
             order_type="TAKE_AWAY",
