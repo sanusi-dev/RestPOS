@@ -69,6 +69,13 @@ class OrderQuerySet(models.QuerySet):
         """Draft orders belonging to a shift."""
         return self.filter(status=DRAFT, is_return=False, opening_entry=shift)
 
+    def open_drafts_for(self, shift, user):
+        """Draft orders on the shift the user may work on: own drafts, or all for managers."""
+        drafts = self.open_drafts(shift)
+        if user.is_manager or user.is_admin:
+            return drafts
+        return drafts.filter(Q(created_by=user) | Q(created_by__isnull=True))
+
     def submitted_in_shift(self, shift, period_start, period_end):
         """Submitted non-return orders settled within the period."""
         return self.filter(
@@ -102,6 +109,14 @@ class Order(BaseModel):
     guest_count = models.PositiveIntegerField(default=1)
     cashier = models.ForeignKey(
         "users.CustomUser", on_delete=models.SET_NULL, null=True, blank=True, related_name="settled_orders"
+    )
+    created_by = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="created_orders",
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     is_paid = models.BooleanField(default=False)
@@ -318,6 +333,12 @@ class Order(BaseModel):
             raise ValidationError("Cannot modify a submitted or cancelled order.")
         if self.pk and self.kots.exists():
             raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
+
+    def can_be_accessed_by(self, user) -> bool:
+        """Return True if the user may open or change this draft order."""
+        if user.is_manager or user.is_admin:
+            return True
+        return self.created_by_id is None or self.created_by_id == user.pk
 
     def _validate_pos_item(self, item):
         if item.disabled or not item.is_sales_item:

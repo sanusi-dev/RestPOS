@@ -366,16 +366,17 @@ def pos_home(request: HttpRequest) -> HttpResponse:
 
     order_filter = request.GET.get("filter", "all").strip()
     order_search = request.GET.get("q", "").strip()
-    draft_orders = services.open_draft_orders(shift, order_filter, order_search)
-    draft_count = Order.objects.open_drafts(shift).count()
+    draft_orders = services.open_draft_orders(shift, request.user, order_filter, order_search)
+    visible_draft_count = Order.objects.open_drafts_for(shift, request.user).count()
+    total_draft_count = Order.objects.open_drafts(shift).count()
     max_open_drafts = settings.max_open_drafts
     context = {
         "shift": shift,
         "draft_orders": draft_orders,
-        "draft_count": draft_count,
+        "draft_count": visible_draft_count,
         "max_open_drafts": max_open_drafts,
-        "drafts_remaining": max(max_open_drafts - draft_count, 0),
-        "draft_cap_reached": draft_count >= max_open_drafts,
+        "drafts_remaining": max(max_open_drafts - total_draft_count, 0),
+        "draft_cap_reached": total_draft_count >= max_open_drafts,
         "order_filter": order_filter,
         "order_search": order_search,
         "show_order_tabs": True,
@@ -736,11 +737,8 @@ def pos_order_screen(request: HttpRequest, pk: int) -> HttpResponse:
     if shift is None:
         return _home_or_redirect(request)
     order = get_object_or_404(
-        Order.objects.prefetch_related("items__item"),
+        Order.objects.open_drafts_for(shift, request.user).prefetch_related("items__item"),
         pk=pk,
-        status=DRAFT,
-        is_return=False,
-        opening_entry=shift,
     )
     request.session[SESSION_ORDER_KEY] = order.pk
     context = _build_order_context(request, order)
@@ -755,7 +753,7 @@ def pos_order_add_on_dialog(request: HttpRequest, pk: int, item_id: int) -> Http
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
+    order = get_object_or_404(Order.objects.open_drafts_for(shift, request.user), pk=pk)
     settings = Restaurant.load()
     active_menu = settings.active_menu if settings and settings.active_menu and settings.active_menu.enabled else None
     if active_menu is None:
@@ -814,7 +812,7 @@ def pos_order_variant_dialog(request: HttpRequest, pk: int, parent_item_id: int)
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
+    order = get_object_or_404(Order.objects.open_drafts_for(shift, request.user), pk=pk)
     if order.kots.exists():
         return HttpResponse("This order was sent to the kitchen or bar.", status=404)
     settings = Restaurant.load()
@@ -870,11 +868,8 @@ def pos_order_update_meta(request: HttpRequest, pk: int) -> HttpResponse:
     if shift is None:
         return redirect("pos:pos_home")
     order = get_object_or_404(
-        Order.objects.select_for_update(),
+        Order.objects.select_for_update().open_drafts_for(shift, request.user),
         pk=pk,
-        status=DRAFT,
-        is_return=False,
-        opening_entry=shift,
     )
     try:
         guest_count = services.update_order_meta(
@@ -905,11 +900,8 @@ def pos_order_add_item(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("pos:pos_home")
     with transaction.atomic():
         order = get_object_or_404(
-            Order.objects.select_for_update(),
+            Order.objects.select_for_update().open_drafts_for(shift, request.user),
             pk=pk,
-            status=DRAFT,
-            is_return=False,
-            opening_entry=shift,
         )
         if order.kots.exists():
             error = "This order was sent to the kitchen or bar. Cancel it before making changes."
@@ -1025,11 +1017,8 @@ def pos_order_update_item(request: HttpRequest, pk: int, item_pk: int) -> HttpRe
     if shift is None:
         return redirect("pos:pos_home")
     order = get_object_or_404(
-        Order.objects.select_for_update(),
+        Order.objects.select_for_update().open_drafts_for(shift, request.user),
         pk=pk,
-        status=DRAFT,
-        is_return=False,
-        opening_entry=shift,
     )
     try:
         services.update_order_item(
@@ -1051,7 +1040,7 @@ def pos_customer_card_activate(request: HttpRequest, pk: int, idx: int) -> HttpR
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
+    order = get_object_or_404(Order.objects.open_drafts_for(shift, request.user), pk=pk)
     if 1 <= idx <= order.guest_count:
         cards = request.session.get(SESSION_CARD_KEY, {})
         if not isinstance(cards, dict):
@@ -1071,15 +1060,12 @@ def pos_order_sync(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         with transaction.atomic():
             order = get_object_or_404(
-                Order.objects.select_for_update(),
+                Order.objects.select_for_update().open_drafts_for(shift, request.user),
                 pk=pk,
-                status=DRAFT,
-                is_return=False,
-                opening_entry=shift,
             )
             kots = services.create_tickets(order, created_by=request.user)
     except ValidationError as e:
-        order = get_object_or_404(Order.objects.open_drafts(shift), pk=pk)
+        order = get_object_or_404(Order.objects.open_drafts_for(shift, request.user), pk=pk)
         return _render_cart(
             request,
             order,
@@ -1113,11 +1099,8 @@ def pos_order_clear(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("pos:pos_home")
     with transaction.atomic():
         order = get_object_or_404(
-            Order.objects.select_for_update(),
+            Order.objects.select_for_update().open_drafts_for(shift, request.user),
             pk=pk,
-            status=DRAFT,
-            is_return=False,
-            opening_entry=shift,
         )
         if order.kots.exists():
             error = "This order was sent to the kitchen or bar. Use Cancel Order instead of Clear."
@@ -1136,7 +1119,7 @@ def pos_order_settle(request: HttpRequest, pk: int) -> HttpResponse:
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
-    order = get_object_or_404(Order, pk=pk, status=DRAFT, is_return=False, opening_entry=shift)
+    order = get_object_or_404(Order.objects.open_drafts_for(shift, request.user), pk=pk)
 
     if request.method == "POST":
         payments_data = []
@@ -1198,11 +1181,8 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         with transaction.atomic():
             order = get_object_or_404(
-                Order.objects.select_for_update(),
+                Order.objects.select_for_update().open_drafts_for(shift, request.user),
                 pk=pk,
-                status=DRAFT,
-                is_return=False,
-                opening_entry=shift,
             )
             cancellation_kots = services.cancel_sent_order(
                 order,
@@ -1243,11 +1223,8 @@ def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
     try:
         with transaction.atomic():
             order = get_object_or_404(
-                Order.objects.select_for_update(),
+                Order.objects.select_for_update().open_drafts_for(shift, request.user),
                 pk=pk,
-                status=DRAFT,
-                is_return=False,
-                opening_entry=shift,
             )
             order.delete()
     except ValidationError as e:
@@ -1285,6 +1262,8 @@ def pos_order_ticket_print(request: HttpRequest, pk: int, ticket_type: str, acti
             is_return=False,
             opening_entry=shift,
         )
+        if order.status == DRAFT and not order.can_be_accessed_by(user):
+            return HttpResponse(status=404)
         # Cancellation tickets remain SUBMITTED with print_status PENDING after a failed print.
         ticket = (
             order.kots.select_for_update()
@@ -1373,7 +1352,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
             "date_filter": date_filter,
             "allow_full_history": allow_full_history,
             "shift": open_shift,
-            "draft_count": (Order.objects.open_drafts(open_shift).count() if open_shift else 0),
+            "draft_count": (Order.objects.open_drafts_for(open_shift, request.user).count() if open_shift else 0),
             "show_order_tabs": True,
             "pos_nav": "history",
         },
@@ -1393,7 +1372,7 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     open_shift = _get_open_shift()
     context = {
         "order": order,
-        "draft_count": (Order.objects.open_drafts(open_shift).count() if open_shift else 0),
+        "draft_count": (Order.objects.open_drafts_for(open_shift, request.user).count() if open_shift else 0),
         "show_order_tabs": _is_htmx(request),
         "pos_nav": "history",
         "kitchen_status": _get_kitchen_status(order),

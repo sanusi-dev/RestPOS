@@ -10,7 +10,7 @@ New order button
   -> orders.services.create_draft_order()
   -> lock Restaurant and active shift
   -> enforce Restaurant.max_open_drafts
-  -> Order.objects.create()
+  -> Order.objects.create() with created_by=user
   -> Order.save(): arrived_time and invoice_number
   -> Order.assign_order_number(): lock OrderSequence
   -> Order.audit("CREATED")
@@ -18,7 +18,7 @@ New order button
   -> HX-Push-Url order screen or HTTP redirect
 ```
 
-The created row starts `DRAFT`, belongs to the active `POSOpeningEntry`, and has one guest by default. Direct `Order.objects.create()` does not itself validate an active shift; the production POS path relies on `create_draft_order()`.
+The created row starts `DRAFT`, belongs to the active `POSOpeningEntry`, is stamped with its creator (`created_by`), and has one guest by default. Direct `Order.objects.create()` does not itself validate an active shift; the production POS path relies on `create_draft_order()`.
 
 ## Concurrency
 

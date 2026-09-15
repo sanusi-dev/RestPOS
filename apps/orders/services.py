@@ -60,7 +60,12 @@ def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
     draft_count = Order.objects.open_drafts(locked_shift).count()
     if draft_count >= settings.max_open_drafts:
         raise ValidationError(f"The active shift already has {settings.max_open_drafts} open drafts.")
-    order = Order.objects.create(order_type=order_type, guest_count=guest_count, opening_entry=locked_shift)
+    order = Order.objects.create(
+        order_type=order_type,
+        guest_count=guest_count,
+        opening_entry=locked_shift,
+        created_by=user,
+    )
     order.assign_order_number()
     order.audit("CREATED", actor=user, metadata={"order_type": order_type})
     return order
@@ -157,6 +162,8 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
         raise ValidationError("Order is already settled or cancelled.")
     if locked.is_return:
         raise ValidationError("Return orders must use the deferred refund flow.")
+    if cashier is not None and not locked.can_be_accessed_by(cashier):
+        raise ValidationError("Only the cashier who created this order, or a manager, can settle it.")
     if not locked.items.exists():
         raise ValidationError("Cannot settle an order with no items.")
     locked._validate_current_lines()
@@ -249,6 +256,8 @@ def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
         raise ValidationError("Paid orders cannot be cancelled; use the refund flow.")
     if not locked.kots.exists():
         raise ValidationError("This order was never sent — delete it instead of cancelling.")
+    if cancelled_by is not None and not locked.can_be_accessed_by(cancelled_by):
+        raise ValidationError("Only the cashier who created this order, or a manager, can cancel it.")
     if not reason or not reason.strip():
         raise ValidationError("A cancel reason is required.")
     reason = reason.strip()
@@ -783,10 +792,10 @@ class _DraftOrder(Protocol):
     minutes_ago: int
 
 
-def open_draft_orders(shift, order_filter="all", order_search=""):
-    """Return draft orders for the POS home screen, with item previews attached."""
+def open_draft_orders(shift, user, order_filter="all", order_search=""):
+    """Return the user's visible draft orders for the POS home screen, with item previews attached."""
     draft_orders_queryset = (
-        Order.objects.open_drafts(shift)
+        Order.objects.open_drafts_for(shift, user)
         .prefetch_related("items")
         .annotate(has_sent_ticket=Exists(KOT.objects.filter(order_id=OuterRef("pk"), status=SUBMITTED)))
         .order_by("-updated_at")

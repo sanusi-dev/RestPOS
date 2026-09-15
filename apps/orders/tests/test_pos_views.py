@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -17,7 +18,7 @@ from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
 from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
-from ..services import add_order_line, create_tickets, settle_order
+from ..services import add_order_line, cancel_sent_order, create_tickets, settle_order
 from .accounting_setup import OrderAccountingMixin
 
 CustomUser = get_user_model()
@@ -1228,3 +1229,90 @@ class POSSplitViewTest(POSViewTestBase):
         self.assertEqual(self.order.order_type, TAKE_AWAY)
         self.assertContains(response, 'aria-pressed="true"')
         self.assertContains(response, "Take Away")
+
+
+class POSDraftOwnershipTest(POSViewTestBase):
+    def setUp(self):
+        super().setUp()
+        self.opening = self._open_shift()
+        self.client.post(reverse("pos:pos_order_new"), {"order_type": "DINE_IN", "guest_count": "1"})
+        self.order = Order.objects.get()
+        self.other = CustomUser.objects.create_user(username="other-cashier", password="testpass123")
+        self.other.groups.add(Group.objects.get(name="RestPOS Cashier"))
+        self.manager = CustomUser.objects.create_user(username="draft-manager", password="testpass123")
+        manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        self.manager.groups.add(manager_group)
+        self.detail_url = reverse("pos:pos_order_screen", kwargs={"pk": self.order.pk})
+
+    def test_draft_stamps_creator(self):
+        self.assertEqual(self.order.created_by, self.user)
+
+    def test_other_cashier_cannot_open_draft(self):
+        self.client.force_login(self.other)
+        response = self.client.get(self.detail_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_other_cashier_cannot_mutate_draft(self):
+        self.client.force_login(self.other)
+        posts = [
+            (
+                reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}),
+                {"item_id": self.food_item.pk, "qty": "1"},
+            ),
+            (reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}), {f"payment_{self.cash.pk}": "1500"}),
+            (reverse("pos:pos_order_cancel", kwargs={"pk": self.order.pk}), {"cancel_reason": "wrong_order"}),
+            (reverse("pos:pos_order_delete", kwargs={"pk": self.order.pk}), {}),
+        ]
+        for url, data in posts:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.post(url, data).status_code, 404)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "DRAFT")
+        self.assertFalse(self.order.items.exists())
+
+    def test_other_cashier_does_not_see_draft_on_home(self):
+        self.client.force_login(self.other)
+        response = self.client.get(reverse("pos:pos_home"))
+        self.assertNotContains(response, self.detail_url)
+
+    def test_owner_and_manager_see_draft_on_home(self):
+        response = self.client.get(reverse("pos:pos_home"))
+        self.assertContains(response, self.detail_url)
+
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("pos:pos_home"))
+        self.assertContains(response, self.detail_url)
+
+    def test_manager_can_edit_and_settle_another_cashiers_draft(self):
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.get(self.detail_url).status_code, 200)
+
+        response = self.client.post(
+            reverse("pos:pos_order_add_item", kwargs={"pk": self.order.pk}),
+            {"item_id": self.food_item.pk, "qty": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("pos:pos_order_settle", kwargs={"pk": self.order.pk}),
+            {f"payment_{self.cash.pk}": "1500"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "SUBMITTED")
+
+    def test_settle_service_rejects_other_cashier(self):
+        add_order_line(self.order, self.food_item, qty=1, rate=Decimal("1500"))
+        with self.assertRaisesMessage(ValidationError, "who created this order"):
+            settle_order(
+                self.order,
+                [{"mode_of_payment": self.cash.pk, "amount": "1500"}],
+                cashier=self.other,
+                opening_entry=self.opening,
+            )
+
+    def test_cancel_service_rejects_other_cashier(self):
+        add_order_line(self.order, self.food_item, qty=1, rate=Decimal("1500"))
+        create_tickets(self.order, created_by=self.user)
+        with self.assertRaisesMessage(ValidationError, "who created this order"):
+            cancel_sent_order(self.order, "wrong_order", cancelled_by=self.other)

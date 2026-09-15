@@ -22,7 +22,7 @@ flowchart LR
 
 ## Draft Orders
 
-The home surface lists `Order.objects.open_drafts(shift)`, enriched by `services.open_draft_orders()` with ticket status, item preview, and age. `Restaurant.max_open_drafts` is enforced under a Restaurant and shift row lock when `create_draft_order()` runs. The session stores the current order primary key and per-order active customer card.
+The home surface lists `Order.objects.open_drafts_for(shift, user)`, enriched by `services.open_draft_orders()` with ticket status, item preview, and age: a cashier sees only their own drafts (plus legacy rows with no creator), while Manager/Admin see every draft on the shift. Every POS draft screen and mutation view uses the same filter, so a non-owner gets a 404 even with a direct URL. `Restaurant.max_open_drafts` is enforced against all shift drafts under a Restaurant and shift row lock when `create_draft_order()` runs, so the cap cannot be dodged by ownership. The session stores the current order primary key and per-order active customer card.
 
 ## Catalog
 

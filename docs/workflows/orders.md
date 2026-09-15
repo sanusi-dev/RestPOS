@@ -6,7 +6,7 @@
 
 ## Creation and Editing
 
-`create_draft_order()` checks Restaurant settings, locks the active shift, enforces `max_open_drafts`, creates a draft, assigns a human order number, and records `CREATED`. `Order.save()` assigns `arrived_time` and an invoice number such as `REST-42` on insert.
+`create_draft_order()` checks Restaurant settings, locks the active shift, enforces `max_open_drafts`, creates a draft stamped with its creator (`created_by`), assigns a human order number, and records `CREATED`. Draft access is owner-scoped: a cashier can only open, edit, send, settle, cancel, or delete their own drafts; Manager/Admin can access any draft. `Order.save()` assigns `arrived_time` and an invoice number such as `REST-42` on insert.
 
 Line addition uses menu pricing and snapshots item data. Identical item/customer/comment lines merge. Add-ons become separate order lines. `recalculate_totals()` sums line amounts, sets net and grand totals, and calculates whole-unit half-up rounding.
 
