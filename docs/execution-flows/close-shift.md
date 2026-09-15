@@ -44,4 +44,4 @@ The POST transaction rolls back model changes from the current request if an exc
 
 ## Backoffice Variant
 
-`staff.views.closing_entry_create()` locks the open shift and creates/reuses a draft. `closing_entry_detail()` edits counted values. `closing_entry_submit()` calls `full_clean()` and the same closing service. `POSClosingEntry.cancel()` only cancels the close; it does not reopen the shift.
+All `staff.views` shift pages are `@backoffice_required` (Manager/Admin only); cashiers use the POS route. `staff.views.closing_entry_create()` locks the open shift and creates/reuses a draft. `closing_entry_detail()` edits counted values. `closing_entry_submit()` calls `full_clean()` and the same closing service. `POSClosingEntry.cancel()` only cancels the close; it does not reopen the shift.

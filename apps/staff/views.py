@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.orders.models import Order
-from apps.users.decorators import staff_required
+from apps.users.decorators import backoffice_required
 
 from . import services
 from .forms import (
@@ -20,7 +20,7 @@ from .models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 logger = logging.getLogger(__name__)
 
 
-@staff_required
+@backoffice_required
 def staff_dashboard(request: HttpRequest) -> HttpResponse:
     """Current shift state and recent closes."""
     open_entry = (
@@ -40,13 +40,13 @@ def staff_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-@staff_required
+@backoffice_required
 def opening_entry_list(request: HttpRequest) -> HttpResponse:
     entries = POSOpeningEntry.objects.select_related("cashier", "closing_entry").order_by("-period_start_date")
     return render(request, "backoffice/staff/opening_entry_list.html", {"entries": entries})
 
 
-@staff_required
+@backoffice_required
 def opening_entry_create(request: HttpRequest) -> HttpResponse:
     # Explicit request.method test: an empty QueryDict is falsy, so `request.POST or None` would miss a field-less POST.
     user = request.user
@@ -63,7 +63,7 @@ def opening_entry_create(request: HttpRequest) -> HttpResponse:
     )
 
 
-@staff_required
+@backoffice_required
 def opening_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Opening-entry detail page; POST saves inline-edited draft amounts."""
     entry = get_object_or_404(
@@ -155,7 +155,7 @@ def _save_opening_entry(form: OpeningFloatForm, cashier, instance: POSOpeningEnt
         return entry
 
 
-@staff_required
+@backoffice_required
 @require_POST
 def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(POSOpeningEntry, pk=pk)
@@ -177,7 +177,7 @@ def opening_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("staff:opening_entry_detail", pk=entry.pk)
 
 
-@staff_required
+@backoffice_required
 @require_POST
 def opening_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     entry = get_object_or_404(POSOpeningEntry, pk=pk)
@@ -200,13 +200,13 @@ def opening_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("staff:opening_entry_list")
 
 
-@staff_required
+@backoffice_required
 def closing_entry_list(request: HttpRequest) -> HttpResponse:
     entries = POSClosingEntry.objects.select_related("cashier", "opening_entry").order_by("-period_end_date")
     return render(request, "backoffice/staff/closing_entry_list.html", {"entries": entries})
 
 
-@staff_required
+@backoffice_required
 def closing_entry_create(request: HttpRequest) -> HttpResponse:
     """Auto-create (or reuse) the DRAFT closing entry for the single Open shift."""
     user = request.user
@@ -251,7 +251,7 @@ def closing_entry_create(request: HttpRequest) -> HttpResponse:
     return redirect("staff:closing_entry_detail", pk=closing.pk)
 
 
-@staff_required
+@backoffice_required
 def closing_entry_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Closing-entry detail page — also handles inline save for DRAFT rows.
 
@@ -324,7 +324,7 @@ def _validate_closing_payment_forms(request, closing_payments):
     return form_data, all_valid
 
 
-@staff_required
+@backoffice_required
 @require_POST
 def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     closing = get_object_or_404(POSClosingEntry, pk=pk)
@@ -349,7 +349,7 @@ def closing_entry_submit(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("staff:closing_entry_detail", pk=closing.pk)
 
 
-@staff_required
+@backoffice_required
 @require_POST
 def closing_entry_cancel(request: HttpRequest, pk: int) -> HttpResponse:
     closing = get_object_or_404(POSClosingEntry, pk=pk)

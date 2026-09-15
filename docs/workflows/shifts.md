@@ -14,6 +14,8 @@
 
 ### Backoffice path
 
+All backoffice shift pages (`apps/staff/views.py`) are `@backoffice_required`: only superusers, RestPOS Admins, and RestPOS Managers pass; cashiers get 403. The POS open/close routes remain the cashier-facing path.
+
 `staff.views.opening_entry_create()` and `_save_opening_entry()` create a draft and bulk-create `OpeningPayment` rows. `opening_entry_detail()` lets a draft be edited by replacing its child rows. `opening_entry_submit()` calls `full_clean()` and then `entry.submit()`.
 
 ⚠️ Requires verification: the backoffice create path does not call `staff.services.open_shift()` and can therefore bypass that service's explicit "Restaurant settings exist" check. The model submit path still enforces the one-open-shift rule.
@@ -30,7 +32,7 @@
 
 POS GET `/pos/close-shift/` computes expected values without creating database rows. The view first checks that the requester opened the shift or is a Manager/Admin, so other cashiers are sent back to POS home with an error. If open drafts exist, it renders a blocking page. POS POST locks the opening row, rechecks drafts, creates/reuses a closing draft, saves counted amounts, updates period end, and calls `submit_closing_entry()`, which re-checks the same ownership rule against the actor.
 
-Backoffice `closing_entry_create()` locks the open shift to prevent duplicate closing drafts. The detail page edits draft counted amounts. Both POS and backoffice ultimately call the same closing service.
+Backoffice `closing_entry_create()` locks the open shift to prevent duplicate closing drafts. The detail page edits draft counted amounts. Both POS and backoffice ultimately call the same closing service; the backoffice pages are manager/admin-only.
 
 `submit_closing_entry()`:
 

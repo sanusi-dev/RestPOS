@@ -6,7 +6,7 @@ Every backoffice view declares its own role requirement with a decorator from `a
 
 | Decorator | Who passes | Backoffice surfaces |
 |---|---|---|
-| `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register |
+| `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register, shifts (opening/closing documents) |
 | `@manager_required` | superuser, RestPOS Admin, or RestPOS Manager | Accounting, reports/Daily P&L, payments writes, order cancel/return/delete, restaurant settings, production unit writes |
 | `@admin_required` | superuser or RestPOS Admin | Staff role assignment/removal |
 

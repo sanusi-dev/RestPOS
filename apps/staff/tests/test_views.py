@@ -51,6 +51,37 @@ class TestLoginRequired(TestCase):
         self.assertEqual(response.status_code, 302)
 
 
+class TestShiftPagesRequireBackofficeAccess(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.cashier = CustomUser.objects.create_user(
+            username="cashier@test.com", password="testpass123", email="cashier@test.com"
+        )
+        cashier_group, _ = Group.objects.get_or_create(name="RestPOS Cashier")
+        cls.cashier.groups.add(cashier_group)
+
+    def setUp(self):
+        self.client.login(username="cashier@test.com", password="testpass123")
+
+    def test_cashier_gets_403_on_shift_pages(self):
+        urls = [
+            reverse("staff:dashboard"),
+            reverse("staff:opening_entry_list"),
+            reverse("staff:opening_entry_create"),
+            reverse("staff:closing_entry_list"),
+            reverse("staff:closing_entry_create"),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_cashier_gets_403_on_shift_mutations(self):
+        self.assertEqual(self.client.post(reverse("staff:opening_entry_submit", kwargs={"pk": 1})).status_code, 403)
+        self.assertEqual(self.client.post(reverse("staff:opening_entry_cancel", kwargs={"pk": 1})).status_code, 403)
+        self.assertEqual(self.client.post(reverse("staff:closing_entry_submit", kwargs={"pk": 1})).status_code, 403)
+        self.assertEqual(self.client.post(reverse("staff:closing_entry_cancel", kwargs={"pk": 1})).status_code, 403)
+
+
 class TestPOSOpeningEntryViews(StaffViewTestBase):
     def test_create_post_captures_all_methods(self):
         """Both cash and electronic mode opening balances are persisted."""
