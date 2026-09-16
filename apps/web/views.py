@@ -82,13 +82,17 @@ def dashboard(request):
                 },
                 {
                     "title": "Reports",
-                    "description": "Daily performance snapshots",
+                    "description": "Daily snapshots, sales, and ledger reports",
                     "icon": "analytics-01",
                     "icon_bg": "bg-violet-50",
                     "icon_color": "text-violet-600",
                     "url": "reports:daily_pnl_list",
                     "links": [
                         {"label": "Daily P&L", "url": "reports:daily_pnl_list"},
+                        {"label": "Today's sales", "url": "reports:sales_today"},
+                        {"label": "POS register", "url": "reports:pos_register"},
+                        {"label": "Trial balance", "url": "reports:trial_balance"},
+                        {"label": "Profit & loss", "url": "reports:simple_pnl"},
                         {"label": "P&L settings", "url": "reports:pnl_settings"},
                     ],
                 },

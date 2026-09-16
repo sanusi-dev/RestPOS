@@ -1,0 +1,54 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/reports/_report_header.html" %}
+  {% if not fiscal_year %}
+    <p class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">No enabled fiscal year covers this date. Create one under Accounting before running a trial balance.</p>
+  {% else %}
+    <div class="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-100">
+          <thead class="bg-gray-50/50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+              <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Balance</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            {% for group in groups %}
+              <tr class="bg-gray-50">
+                <th class="px-6 py-2 text-left text-xs font-bold uppercase tracking-wider text-gray-500" colspan="4">{{ group.label }}</th>
+              </tr>
+              {% for row in group.rows %}
+                <tr class="hover:bg-orange-50/30">
+                  <td class="px-6 py-3 text-sm font-semibold text-gray-900">{{ row.account_name }}</td>
+                  <td class="px-6 py-3 text-right font-mono text-sm">{{ row.debit|floatformat:2|intcomma }}</td>
+                  <td class="px-6 py-3 text-right font-mono text-sm">{{ row.credit|floatformat:2|intcomma }}</td>
+                  <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ row.balance|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            {% empty %}
+              <tr>
+                <td colspan="4" class="px-6 py-10 text-center text-sm text-gray-500">No non-zero account balances as of this date.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          {% if groups %}
+            <tfoot class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+                <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.debit|floatformat:2|intcomma }}</td>
+                <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.credit|floatformat:2|intcomma }}</td>
+                <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.balance|floatformat:2|intcomma }}</td>
+              </tr>
+            </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

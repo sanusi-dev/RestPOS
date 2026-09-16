@@ -1,0 +1,53 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/reports/_report_header.html" %}
+  <div class="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Invoice</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Cashier</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Type</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Reason</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in rows %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4">
+                <a href="{% url 'orders:order_detail' row.pk %}" class="text-sm font-bold text-orange-500 hover:text-orange-600">{{ row.invoice_number }}</a>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-700">{{ row.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">{{ row.cashier_name }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">{{ row.order_type }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.total|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">
+                {{ row.reason }}
+                {% if row.note %}<span class="mt-0.5 block text-xs text-gray-400">{{ row.note }}</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="px-6 py-10 text-center text-sm text-gray-500">No cancelled invoices in this period.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+          <tfoot class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500" colspan="4">{{ totals.bills }} bill{{ totals.bills|pluralize }}</th>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.lost_sales|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Lost sales</td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

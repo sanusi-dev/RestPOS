@@ -39,6 +39,9 @@
 | Audit Event | Append-only `OrderAuditEvent` describing an order mutation or lifecycle event. |
 | POS History | `services.order_history_rows()` query and its cashier-facing filtered display. |
 | Daily P&L | Submitted management snapshot for one business day (`reports.DailyPnL`). Not a GL report and not a GL posting. |
+| Query reports | Filter + table reports in `apps.reports` over submitted orders, submitted shift closes, and `GLEntry`. Calendar posting date; no stored aggregates. |
+| Trial balance | Leaf-account debit/credit/balance to an as-of date within a fiscal year, including opening entries. Zero-balance accounts omitted. |
+| Simple P&L | Income minus expense from `GLEntry` rows with `report_type=PROFIT_AND_LOSS`. Distinct from the Daily P&L snapshot. |
 | Recipe | Ingredient card (`inventory.Recipe`) for one sellable FOOD item; one active card per dish, qtys in ingredient `stock_uom`. |
 | Theoretical usage | Recipe × submitted FOOD sales for the day (returns netted); memo beside actual food cost. |
 | Actual usage | Kitchen `CONSUMPTION` + `WASTE_DAMAGE` SLEs on the business date; FOOD COGS on the P&L. |

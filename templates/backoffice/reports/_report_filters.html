@@ -1,0 +1,93 @@
+<form method="get" class="mb-6 flex flex-wrap items-end gap-3" {% if show_fiscal_year %}x-data{% endif %}>
+  {% if show_fiscal_year %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="fiscal-year">Fiscal year</label>
+      <select id="fiscal-year" name="fiscal_year" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm" x-on:change="const opt = $el.selectedOptions[0]; const from = document.getElementById('date-from'); const to = document.getElementById('date-to'); if (opt && opt.dataset.start && from) { from.value = opt.dataset.start; } if (opt && opt.dataset.end && to) { to.value = opt.dataset.end; }">
+        <option value="">Select year…</option>
+        {% for year in fiscal_years %}
+          <option value="{{ year.pk }}" data-start="{{ year.year_start_date|date:'Y-m-d' }}" data-end="{{ year.year_end_date|date:'Y-m-d' }}" {% if fiscal_year and fiscal_year.pk == year.pk %}selected{% endif %}>{{ year.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  {% if as_of %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="date-to">As of</label>
+      <input id="date-to" type="date" name="to" value="{{ date_to }}" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+    </div>
+  {% else %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="date-from">From</label>
+      <input id="date-from" type="date" name="from" value="{{ date_from }}" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="date-to">To</label>
+      <input id="date-to" type="date" name="to" value="{{ date_to }}" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+    </div>
+  {% endif %}
+  {% if show_department %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="department">Department</label>
+      <select id="department" name="department" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="">All</option>
+        {% for value, label in departments %}
+          <option value="{{ value }}" {% if department == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  {% if show_item_group %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="item-group">Item group</label>
+      <select id="item-group" name="item_group" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="">All</option>
+        {% for group in item_groups %}
+          <option value="{{ group.pk }}" {% if item_group_id == group.pk|stringformat:"s" %}selected{% endif %}>{{ group.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  {% if show_reason %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="reason">Reason</label>
+      <select id="reason" name="reason" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="">All</option>
+        {% for value, label in cancel_reasons %}
+          <option value="{{ value }}" {% if reason == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  {% if show_grouping %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="grouping">Group by</label>
+      <select id="grouping" name="grouping" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="day" {% if grouping == "day" %}selected{% endif %}>Day</option>
+        <option value="month" {% if grouping == "month" %}selected{% endif %}>Month</option>
+      </select>
+    </div>
+  {% endif %}
+  {% if show_cashier %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="cashier">Cashier</label>
+      <select id="cashier" name="cashier" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="">All</option>
+        {% for person in cashiers %}
+          <option value="{{ person.pk }}" {% if cashier_id == person.pk|stringformat:"s" %}selected{% endif %}>{{ person.get_display_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  {% if show_account %}
+    <div>
+      <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-400" for="account">Account</label>
+      <select id="account" name="account" class="rounded-xl border border-gray-300 bg-white/50 px-3 py-2 text-sm">
+        <option value="">All</option>
+        {% for account in accounts %}
+          <option value="{{ account.pk }}" {% if account_id == account.pk|stringformat:"s" %}selected{% endif %}>{{ account.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+  <button type="submit" class="backend-submit rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white">Filter</button>
+</form>

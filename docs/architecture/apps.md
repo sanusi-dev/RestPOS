@@ -12,7 +12,7 @@
 | `apps.staff` | opening/closing shift documents and drawer reconciliation | `models.py`, `services.py`, `views.py` | users, payments, orders, settings, accounting (variance JE) |
 | `apps.orders` | orders, order lines/payments, KOT/BOT snapshots, POS orchestration | `models.py`, `services.py`, `views_pos.py`, `views.py` | inventory, menu, payments, settings, staff, users, accounting (order GL) |
 | `apps.accounting` | chart of accounts, GL entries, journal entries, fiscal years, supplier payables | `models.py`, `services.py`, `views.py` | orders, payments, settings, inventory (read-side) |
-| `apps.reports` | Daily P&L snapshot and P&L settings | `models.py`, `services.py`, `views.py` | orders, inventory, staff, accounting (fiscal year), settings |
+| `apps.reports` | Daily P&L snapshot, P&L settings, sales reports, POS register, GL/trial balance/simple P&L | `models.py`, `services.py`, `views.py`, `sales_reports.py`, `sales_breakdown_reports.py`, `accounting_reports.py` | orders, inventory, staff, accounting (fiscal year), settings |
 | `apps.web` | landing, role redirect, shared middleware/context/template tags | `views.py`, `middleware.py`, `context_processors.py` | users, inventory navigation |
 | `apps.utils` | timestamp base model and styled forms | `models.py`, `forms.py` | Django only |
 
@@ -91,11 +91,11 @@
 
 ### `apps.reports`
 
-- URLs: `reports/urls.py` exposes the Daily P&L register, draft/detail/submit/cancel/amend, HTMX preview and formset row endpoints, and P&L settings under `/backoffice/reports/`, all behind the manager gate.
-- Models/forms: `PnLConfiguration` singleton, `PnLMaterial`, `PnLRecurringExpense` in `reports/models.py`; `DailyPnL` and snapshot/input children in `reports/pnl_models.py`.
-- Services: `reports/services.py` builds the three-column statement (`compute_daily_pnl`) and freezes it on submit (`submit_daily_pnl`). Submit does not post GL. Source queries live in `reports/sources.py`.
-- Templates/frontend: `templates/backoffice/reports/*`; the statement partial is shared by draft preview and submitted detail.
-- Side effects: none on other apps. Recurring rates are snapshotted onto the submitted document so later settings edits do not rewrite history.
+- URLs: `reports/urls.py` exposes the Daily P&L register, draft/detail/submit/cancel/amend, HTMX preview and formset row endpoints, P&L settings, and query reports (sales, POS register, GL, trial balance, simple P&L) under `/backoffice/reports/`, all behind the manager gate.
+- Models/forms: `PnLConfiguration` singleton, `PnLMaterial`, `PnLRecurringExpense` in `reports/models.py`; `DailyPnL` and snapshot/input children in `reports/pnl_models.py`. Query reports have no models.
+- Services: `reports/services.py` builds the three-column Daily P&L statement (`compute_daily_pnl`) and freezes it on submit (`submit_daily_pnl`). Submit does not post GL. Daily P&L source queries live in `reports/sources.py`. Sales aggregations live in `reports/sales_reports.py` (period, average bill, cancelled) and `reports/sales_breakdown_reports.py` (item, employee, service, time); GL/trial balance/simple P&L in `reports/accounting_reports.py`; POS register in `reports/register_reports.py`. Views are `views.py` (Daily P&L) and `report_views.py` (query reports).
+- Templates/frontend: `templates/backoffice/reports/*`; the Daily P&L statement partial is shared by draft preview and submitted detail. Query reports are GET filter forms plus tables.
+- Side effects: none on other apps. Recurring rates are snapshotted onto the submitted Daily P&L so later settings edits do not rewrite history.
 
 ### `apps.web`
 
@@ -159,7 +159,7 @@ The normal pattern is function-based views plus ModelForms. Inventory document c
 
 ## Missing or Distributed Domains
 
-- Sales reporting is distributed across order dashboard aggregates, POS history queries, stock reports, and shift totals. There is no report service/app.
+- Sales reporting for operations lives in `apps.reports` query reports. The order dashboard, POS history, stock reports, and shift totals remain as their own surfaces.
 - Receipts are represented by order fields and a print interface. There is no receipt model or renderer.
 - Customers are represented by `customer_name` and customer indices. There is no customer master.
 - Printing configuration is in `ProductionUnit`, while print calls are in `apps/orders/printing.py`.

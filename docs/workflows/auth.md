@@ -23,7 +23,7 @@ Every `/backoffice/*` and `/pos/*` view declares its role requirement through `a
 | Decorator | Test | Surface |
 |---|---|---|
 | `@backoffice_required` | `has_backoffice_access` (admin/manager/superuser) | Inventory, menu, payments reads, settings reads, orders backoffice, web dashboard |
-| `@manager_required` | superuser/admin/manager | Accounting, reports/Daily P&L, payments writes (modes, GL mappings), order cancel/return/delete, restaurant settings, production unit writes |
+| `@manager_required` | superuser/admin/manager | Accounting, reports (Daily P&L and query reports), payments writes (modes, GL mappings), order cancel/return/delete, restaurant settings, production unit writes |
 | `@staff_required` | `has_staff_role` (any RestPOS role) | POS (`views_pos`), shifts/opening/closing entries, `web:pos_index` |
 | `@admin_required` | superuser/admin | Staff role assignment/removal only |
 

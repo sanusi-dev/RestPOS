@@ -65,4 +65,4 @@ flowchart TD
 
 ## Actual Scope Boundaries
 
-The current code intentionally has no `apps/customers`, `apps/receipts`, or `apps/printing`. `apps/reports` owns the Daily P&L document; sales reports and the formal GL P&L are still planned. Customer grouping means `Order.guest_count` and `OrderItem.customer_index`, not a customer master. Receipt/KOT printing is an orders abstraction, not a separate integration.
+The current code intentionally has no `apps/customers`, `apps/receipts`, or `apps/printing`. `apps/reports` owns the Daily P&L document and the query-based sales, POS register, general ledger, trial balance, and simple P&L reports. Customer grouping means `Order.guest_count` and `OrderItem.customer_index`, not a customer master. Receipt/KOT printing is an orders abstraction, not a separate integration.

@@ -23,7 +23,7 @@ conventions are in `AGENTS.md`.
 | `staff` | POS opening/closing entries, shift reconciliation | A5 | built |
 | `orders` | Orders, order items, payments, KOT/BOT tickets, returns, audit events, POS workbench | A6, A7, B | built |
 | `accounting` | Chart of accounts, GL entries, journal entries, fiscal years, supplier payables | A8, A9 | built |
-| `reports` | Daily P&L, sales reports, trial balance | A10, E #63 | built (Daily P&L with food AvT/COGS); sales reports planned |
+| `reports` | Daily P&L, sales reports, trial balance, simple P&L | A10 | built |
 | `printing` | Print agent client, ESC/POS formats, printer routing | E #64 | planned |
 | `customers` | Customer master, groups, credit limits | F #65 | deferred |
 | `coupons` | Coupon codes, pricing rules, cashier discount | F #66 | deferred |
@@ -48,7 +48,7 @@ after the core phases complete. Each phase completes before the next starts.
 | 5 | orders | A6, A7, B, C | POS workbench, order lifecycle with stage exits and returns, KOT/BOT tickets with print status, group ordering, audit events, orders control room | — | n/a | Completed |
 | 6 | accounting | A8 | GL core + order posting, refunds completion, opening balances, cash variance posting | — | n/a | Completed |
 | 7 | reports | A10 | Daily P&L document with amendments and departmental split, food AvT/COGS | — | n/a | Completed |
-| 8 | reports | E #63 | — | Sales reports, trial balance, simple P&L | §4.7 | Planned |
+| 8 | reports | A10 | Sales reports (today/daywise/monthwise/item/employee/service/time), cancelled invoices, average bill, POS register, GL report, trial balance, simple P&L | — | n/a | Completed |
 | 9 | printing | E #64 | Print stub (always succeeds); printer config lives on production units | Print agent, ESC/POS receipt + ticket formats, routing and status | §4.8 | Planned |
 | 10 | inventory | A3 | Reconciliation standardization: Adjustment reason, waste delta-entry, consumption ceiling, opening gate, GL for every reason | — | n/a | Completed |
 | 11 | inventory, reports | A3, A10 | Food recipes, actual-vs-theoretical usage, food COGS on Daily P&L | — | n/a | Completed |
@@ -570,7 +570,7 @@ rejected; cancel reverses the variance JE; closing-cancel guard still applies.
 **Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Scope:** a submitted Daily P&L document for one restaurant business day. It is a management
-snapshot, not the formal accounting P&L (that is Phase 8, a query over `GLEntry`). Submitting
+snapshot, not the formal accounting P&L (a query over `GLEntry` — see §4.7). Submitting
 a Daily P&L **does not post GL**.
 
 **App:** `apps.reports`. Manager/Admin only. Sidebar group **Reports** with Daily P&L and P&L
@@ -597,18 +597,29 @@ override. Electricity optional (blank = ₦0).
 
 ### 4.7 Reports (Phase 8)
 
-**Status:** planned (scope only; detailed decisions to be locked when Phase 8 starts).
+**Status:** complete — implemented and retired; current product facts are in `FEATURES.md`, `docs/`, and the code.
 
 **Decisions:**
 
-- Sales reports: today's, daywise, month-wise, item-wise, employee-wise, service-wise,
-  time-wise.
-- Cancelled invoices, average bill value, POS register.
-- Read-only GL report, Trial Balance, and a simple Profit & Loss report over `GLEntry`,
-  grouped by account, fiscal year, and posting date, with drill-down to the
-  source voucher. Cancelled entries and their reversals are handled consistently.
-- No balance sheet and no formal statements.
-- Query-based; no persistent aggregates unless needed.
+- No new models. Query-based; no persistent aggregates. Manager/Admin only, same gate as Daily P&L. `apps/reports` owns all queries, views, and templates.
+- Sales period is calendar `posting_date`. Today is `posting_date = today`. The Daily P&L business-day window does not apply; late-night sales may land on different days in the two surfaces.
+- Sales source is `Order status=SUBMITTED` only. `DRAFT`, `CANCELLED`, and `DISCARDED` never count as sales. Returns (`is_return=True`) net off sales on the return's own `posting_date` as negative `grand_total` and negative `OrderItem.amount`; sales tables show a refunded-total column.
+- Every sales table carries FOOD / DRINKS / TOTAL from `OrderItem.department`. Net = gross + `rounding_adjustment`.
+- Today/daywise: filters `from`, `to`. One row per `posting_date`: bills, gross food, gross drinks, refunded total, net, rounding.
+- Monthwise: filters fiscal year or `from`/`to`. One row per calendar month with the daywise columns. Custom dates win over the year select; choosing a year replaces stale dates with that year's bounds.
+- Item-wise: filters `from`, `to`, department, item group. One row per item: qty, gross, refunded, net. Grouped by `item_id`; renamed `item_name` snapshots do not split rows.
+- Employee-wise: filters `from`, `to`. One row per `cashier` (blank when unset): bills, net sales.
+- Service-wise: filters `from`, `to`. One row each for `DINE_IN` and `TAKE_AWAY`: bills, net sales by department.
+- Time-wise: filters `from`, `to`. 24 rows from `posting_time` hour 00–23: bills, net sales.
+- Cancelled invoices: filters `from`, `to`, reason. One row per `CANCELLED` order: invoice, date, cashier, type, total, reason + note; totals count bills and lost sales. Returns never appear here.
+- Average bill value: filters `from`, `to`, grouping day/month. Net sales / bill count per bucket plus overall; returns netted in numerator and counted in denominator.
+- POS register: filters `from`, `to`, cashier. One row per `SUBMITTED POSClosingEntry`: shift, cashier, per-mode expected/counted/difference, `total_short_excess`; detail expands to `ClosingPayment` rows. Refund and change netting already on the close is displayed, not recomputed.
+- GL report over `GLEntry`: filters fiscal year, `from`/`to`, account. Chronological rows with debit, credit, running balance, voucher link (`voucher_type` + `voucher_no`), and the `is_cancelled` flag. Running balance appears only with an account selected and is seeded by a brought-forward row from earlier entries in the same fiscal year. Selected-year dates are clamped into the year; out-of-range dates reset to the year bounds. Cancelled originals and their reversal rows both display and net to zero.
+- Trial balance: filters fiscal year, `to` date. Cumulative `posting_date <= to` within the year, opening entries included. One row per leaf account with debit, credit, balance; non-zero-balance accounts only; grouped by `account_type`. Debit total equals credit total.
+- Simple P&L over `GLEntry`: filters fiscal year, `from`/`to`. Sums `report_type=PROFIT_AND_LOSS` entries by account; Food Sales vs Drinks Sales split resolves production-unit income accounts and falls back to the restaurant default income account when exactly one department has no unit account. Gross profit and net profit totals. Cancelled + reversals netted. No typed costs and no memos.
+- No balance sheet and no other formal statements.
+- Frontend: `Reports` sidebar gains Sales and Accounting sections. Each report is a GET filter form + table + totals row. Period, average-bill, and service rows link to the order register with status/date filters; cancelled invoice rows link to order detail; GL rows link to the source voucher; register rows to closing detail. No charts.
+- Tests: `test_sales_reports.py` (calendar grouping, department split, return netting on return date, draft/cancelled/discarded excluded, one row per item despite name snapshots, hourly buckets, employee/service splits, avg-bill math, cancelled-only contents); `test_pos_register.py` (per-shift rows with displayed netting, filters); `test_accounting_reports.py` (per-account GL running balance with brought-forward and cancelled + reversal netting to zero, balanced non-zero-only trial balance, simple P&L income-minus-expense with default-account fallback); `test_report_filters.py` (monthwise custom-dates vs fiscal year, GL/P&L date clamping).
 
 ### 4.8 Printing (Phase 9)
 

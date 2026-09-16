@@ -1,0 +1,69 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/reports/_report_header.html" %}
+  <div class="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          <tr class="bg-gray-50">
+            <th class="px-6 py-2 text-left text-xs font-bold uppercase tracking-wider text-gray-500" colspan="2">Income</th>
+          </tr>
+          <tr>
+            <td class="px-6 py-3 text-sm text-gray-600">Food sales</td>
+            <td class="px-6 py-3 text-right font-mono text-sm">{{ statement.food_sales|floatformat:2|intcomma }}</td>
+          </tr>
+          <tr>
+            <td class="px-6 py-3 text-sm text-gray-600">Drinks sales</td>
+            <td class="px-6 py-3 text-right font-mono text-sm">{{ statement.drinks_sales|floatformat:2|intcomma }}</td>
+          </tr>
+          {% for row in statement.income_rows %}
+            {% if not row.department %}
+              <tr class="hover:bg-orange-50/30">
+                <td class="px-6 py-3 text-sm font-semibold text-gray-900">{{ row.account_name }}</td>
+                <td class="px-6 py-3 text-right font-mono text-sm">{{ row.amount|floatformat:2|intcomma }}</td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+          <tr>
+            <td class="px-6 py-3 text-sm font-bold text-gray-900">Total income</td>
+            <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ statement.total_income|floatformat:2|intcomma }}</td>
+          </tr>
+          <tr class="bg-orange-50/40">
+            <td class="px-6 py-3 text-sm font-bold text-gray-900">Gross profit</td>
+            <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ statement.gross_profit|floatformat:2|intcomma }}</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <th class="px-6 py-2 text-left text-xs font-bold uppercase tracking-wider text-gray-500" colspan="2">Expenses</th>
+          </tr>
+          {% for row in statement.expense_rows %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-3 text-sm font-semibold text-gray-900">{{ row.account_name }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm">{{ row.amount|floatformat:2|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td class="px-6 py-3 text-sm text-gray-400" colspan="2">No expense postings in this period.</td>
+            </tr>
+          {% endfor %}
+          <tr>
+            <td class="px-6 py-3 text-sm font-bold text-gray-900">Total expenses</td>
+            <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ statement.total_expenses|floatformat:2|intcomma }}</td>
+          </tr>
+          <tr class="bg-gray-900 text-white">
+            <td class="px-6 py-3 text-sm font-bold">Net profit</td>
+            <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ statement.net_profit|floatformat:2|intcomma }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

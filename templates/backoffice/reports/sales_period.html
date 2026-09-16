@@ -1,0 +1,60 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/reports/_report_header.html" %}
+  <div class="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">{% if period_kind == "month" %}Month{% else %}Date{% endif %}</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Bills</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Food</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Drinks</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Refunded</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Rounding</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Net</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in rows %}
+            <tr class="hover:bg-orange-50/30">
+              <td class="px-6 py-4 text-sm font-semibold text-gray-900">
+                {% if period_kind == "month" %}
+                  <a href="{% url 'orders:order_list' %}?status=SUBMITTED&amp;from={{ row.period|date:'Y-m-d' }}&amp;to={{ row.period_end|date:'Y-m-d' }}" class="text-orange-500 hover:text-orange-600">{{ row.period|date:"F Y" }}</a>
+                {% else %}
+                  <a href="{% url 'orders:order_list' %}?status=SUBMITTED&amp;from={{ row.posting_date|date:'Y-m-d' }}&amp;to={{ row.posting_date|date:'Y-m-d' }}" class="text-orange-500 hover:text-orange-600">{{ row.posting_date|date:"M j, Y" }}</a>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.bills }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.gross_food|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.gross_drinks|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.refunded|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{{ row.rounding|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm font-semibold">{{ row.net|floatformat:2|intcomma }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">No submitted sales in this period.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+          <tfoot class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Total</th>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.bills }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.gross_food|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.gross_drinks|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.refunded|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.rounding|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.net|floatformat:2|intcomma }}</td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

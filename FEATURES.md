@@ -116,11 +116,12 @@ Implementation status lives in `PLAN.md`.
 |---|---|---|
 | 61 | Supplier payables | Supplier master, supplier invoices, supplier payments fully allocated to outstanding invoices, and accounts-payable balances per supplier. Invoice creation is receipt-first: the form takes header fields (supplier, dates, bill no., linked purchase receipt, remarks) plus optional expense lines (description + amount). Stock lines are not typed in — on submit they are generated from the linked receipt (qty/rate copied, read-only, rate-locked). Expense-only invoices need no receipt. Stock invoices post Dr GRNI / Cr payable at the receipt rate; expense lines post Dr `Restaurant.default_supplier_expense_account` / Cr payable (missing config is a hard error). Purchase receipts post Dr SIH / Cr GRNI; market purchases via Stock Entry post Dr SIH / Cr the GL account mapped to the selected payment mode (no GRNI, no invoice). Payments post Dr payable / Cr cash-bank; cancellation reverses. Receipt cancel is blocked while a submitted invoice or allocated payment exists. |
 
-### A10. Daily P&L
+### A10. Reports
 
 | # | Feature | What it does |
 |---|---|---|
 | 62 | Daily P&L | A daily profit & loss document (management snapshot, no GL posting): gross sales → COGS (FOOD = actual kitchen usage, DRINKS = drinks at current WAC) → theoretical food cost and food cost variance (memos) → direct expenses (electricity, materials, ad-hoc) → gross profit → indirect expenses (rent, salaries, depreciation, cash variance) → net profit. Sale-return variance posts to COGS (current WAC vs original). Prime cost (food actual + drink COGS + labor) is a highlight. Three columns FOOD / DRINKS / TOTAL, amendments, configurable business-day start hour, CSV export on the list. |
+| 63 | Sales and accounting reports | Query-based sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, and POS register; plus a general ledger report, trial balance, and simple P&L over `GLEntry`. Calendar `posting_date` (not the Daily P&L business-day window). Period, average-bill, and service rows drill into the order register with status/date filters; cancelled invoices link to order detail. Manager/Admin only. No charts, no balance sheet. |
 
 ## B. POS Frontend
 
@@ -160,7 +161,6 @@ Implementation status lives in `PLAN.md`.
 
 | # | Feature | What it will do |
 |---|---|---|
-| 63 | Reports | Sales reports (today, daywise, monthwise, item, employee, service, time), cancelled invoices, average bill value, POS register, trial balance, and a simple P&L. |
 | 64 | Printing | The local print agent (localhost HTTP → ESC/POS → printer), receipt and ticket formats, print job routing and status. Printer identity and paper configuration already live on production units. |
 
 ## F. Deferred

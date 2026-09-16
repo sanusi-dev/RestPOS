@@ -69,7 +69,7 @@ The Daily P&L is the document that answers those questions for **one day**, in a
 
 | It is not | What RestPOS does instead |
 |---|---|
-| The formal accounting P&L | That is Phase 8: a query over `GLEntry`. Not built yet. |
+| The formal accounting P&L | A query over `GLEntry` — see [Query reports](query-reports.md). |
 | Something that posts journals | `submit_daily_pnl()` writes snapshot rows only. Tests assert `GLEntry` count does not change. |
 | Automatic at midnight | A manager creates a draft, fills inputs, previews, and submits. |
 | A live dashboard | Drafts recompute from live data; submitted documents are frozen history. |
@@ -615,7 +615,7 @@ Prefix: `/backoffice/reports/` (`restpos/urls.py`). App namespace `reports`.
 
 ---
 
-## 19. How this relates to accounting (and to Phase 8)
+## 19. How this relates to accounting
 
 ```text
 Order settlement
@@ -626,8 +626,8 @@ Shift close ─► GL cash variance (if configured)       Daily P&L reads
 Kitchen consumption rec ─► stock SLE                  these later
 P&L settings / meter / materials                      ↗
 
-Phase 8 (planned): Profit & Loss report = query over GLEntry
-Daily P&L (this phase): snapshot document, restaurant-shaped, no posting
+Simple P&L report: query over GLEntry (see query-reports.md)
+Daily P&L: snapshot document, restaurant-shaped, no posting
 ```
 
 They can disagree, and that is allowed:
@@ -636,7 +636,7 @@ They can disagree, and that is allowed:
 - Daily P&L kitchen consumption is a memo; GL may have warehouse/wastage postings from the reconciliation.
 - Daily P&L drink COGS is rebuilt from SLEs of that day's orders; GL COGS is posted at settle/return time.
 
-Use Daily P&L to run the restaurant. Use the GL (and the future Phase 8 report) to run the books.
+Use Daily P&L to run the restaurant. Use the GL and the simple P&L report to run the books.
 
 ---
 

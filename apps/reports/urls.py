@@ -2,13 +2,26 @@
 
 from django.urls import path
 
-from . import views
+from . import report_views, views
 
 app_name = "reports"
 
 urlpatterns = [
     path("", view=views.daily_pnl_list, name="daily_pnl_list"),
     path("settings/", view=views.pnl_settings, name="pnl_settings"),
+    path("sales/today/", view=report_views.sales_today, name="sales_today"),
+    path("sales/daywise/", view=report_views.sales_daywise, name="sales_daywise"),
+    path("sales/monthwise/", view=report_views.sales_monthwise, name="sales_monthwise"),
+    path("sales/items/", view=report_views.sales_itemwise, name="sales_itemwise"),
+    path("sales/employees/", view=report_views.sales_employeewise, name="sales_employeewise"),
+    path("sales/service/", view=report_views.sales_servicewise, name="sales_servicewise"),
+    path("sales/time/", view=report_views.sales_timewise, name="sales_timewise"),
+    path("sales/cancelled/", view=report_views.sales_cancelled, name="sales_cancelled"),
+    path("sales/average-bill/", view=report_views.sales_average_bill, name="sales_average_bill"),
+    path("sales/register/", view=report_views.pos_register, name="pos_register"),
+    path("accounting/gl/", view=report_views.gl_report, name="gl_report"),
+    path("accounting/trial-balance/", view=report_views.trial_balance, name="trial_balance"),
+    path("accounting/profit-and-loss/", view=report_views.simple_pnl, name="simple_pnl"),
     path("daily-pnl/create/", view=views.daily_pnl_create, name="daily_pnl_create"),
     path("daily-pnl/<int:pk>/", view=views.daily_pnl_detail, name="daily_pnl_detail"),
     path("daily-pnl/<int:pk>/edit/", view=views.daily_pnl_update, name="daily_pnl_update"),

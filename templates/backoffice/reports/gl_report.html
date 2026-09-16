@@ -1,0 +1,58 @@
+{% extends "web/app/app_base.html" %}
+{% load humanize %}
+{% block app %}
+<div class="w-full">
+  {% include "backoffice/reports/_report_header.html" %}
+  <div class="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.05)]">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead class="bg-gray-50/50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Date</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Account</th>
+            <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Voucher</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Debit</th>
+            <th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Credit</th>
+            {% if show_running_balance %}<th class="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Balance</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in rows %}
+            <tr class="hover:bg-orange-50/30 {% if row.is_cancelled %}text-gray-400{% endif %}">
+              <td class="px-6 py-4 text-sm">{{ row.posting_date|date:"M j, Y" }}</td>
+              <td class="px-6 py-4 text-sm font-semibold">{{ row.account_name }}</td>
+              <td class="px-6 py-4 text-sm">
+                {% if row.is_brought_forward %}
+                  Brought forward
+                {% elif row.voucher_url %}
+                  <a href="{{ row.voucher_url }}" class="font-bold text-orange-500 hover:text-orange-600">{{ row.voucher_type }} {{ row.voucher_no }}</a>
+                {% else %}
+                  {{ row.voucher_type }} {{ row.voucher_no }}
+                {% endif %}
+                {% if row.is_cancelled %}<span class="ml-2 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 ring-1 ring-red-600/10">Cancelled</span>{% endif %}
+              </td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{% if row.debit %}{{ row.debit|floatformat:2|intcomma }}{% endif %}</td>
+              <td class="px-6 py-4 text-right font-mono text-sm">{% if row.credit %}{{ row.credit|floatformat:2|intcomma }}{% endif %}</td>
+              {% if show_running_balance %}<td class="px-6 py-4 text-right font-mono text-sm font-semibold">{{ row.running_balance|floatformat:2|intcomma }}</td>{% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{% if show_running_balance %}6{% else %}5{% endif %}" class="px-6 py-10 text-center text-sm text-gray-500">No general ledger entries in this period.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+          <tfoot class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500" colspan="3">Total</th>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.debit|floatformat:2|intcomma }}</td>
+              <td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.credit|floatformat:2|intcomma }}</td>
+              {% if show_running_balance %}<td class="px-6 py-3 text-right font-mono text-sm font-semibold">{{ totals.running_balance|floatformat:2|intcomma }}</td>{% endif %}
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

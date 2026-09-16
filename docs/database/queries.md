@@ -26,6 +26,10 @@
 - Staff list prefetches only RestPOS groups, paginates 20 users, and derives roles from the cached group set.
 - Menu list annotates item count; inventory item list supports flags, variants, active status, and name/code search.
 
+## Query reports
+
+Sales reports aggregate `Order` (`status=SUBMITTED`) by `posting_date` and join `OrderItem` for FOOD/DRINKS amounts so order-level rounding is not multiplied by line count. Item-wise, employee-wise, service-wise, and time-wise reports use `values()` + `Sum`/`Count` with `ExtractHour` / `ExtractMonth`. Cancelled invoices read `Order.status=CANCELLED` and `is_return=False`. POS register filters `POSClosingEntry.status=SUBMITTED` and prefetches `closing_payments`. GL/trial balance/simple P&L query `GLEntry` (cancelled originals included so reversals net to zero); trial balance groups leaf accounts with `Sum(debit)` / `Sum(credit)` and drops zero balances.
+
 ## Query Tracing
 
 When a displayed value is wrong, begin with the view queryset and annotations, then check the template relation access. `select_related` and `prefetch_related` reduce N+1 queries but do not alter business values. For totals, follow the service aggregate rather than trusting a template calculation.

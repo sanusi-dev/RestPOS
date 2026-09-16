@@ -13,6 +13,7 @@ This directory is the living technical map of the current RestPOS source tree. I
 | Follow status transitions | [State machines](architecture/state-machines.md) |
 | Understand the cashier POS | [POS workflow](workflows/pos.md) |
 | Understand Daily P&L | [Daily P&L](workflows/daily-pnl.md) |
+| Understand sales and ledger reports | [Query reports](workflows/query-reports.md) |
 | Trace an action end to end | [Execution flows](#execution-flows) |
 | Debug an unexpected result | [Troubleshooting](debugging/troubleshooting.md) |
 | Plan the receipt-first supplier invoice UX | [Supplier invoice receipt-first UX](supplier-invoice-receipt-first-ux.md) |
@@ -36,6 +37,7 @@ This directory is the living technical map of the current RestPOS source tree. I
 - [Payments](workflows/payments.md): payment master data, GL mappings, order payment rows, settlement validation, and cash change.
 - [Backoffice](workflows/backoffice.md): manager/owner pages and their create, submit, cancel, and filtering workflows.
 - [Daily P&L](workflows/daily-pnl.md): the management snapshot for one business day — idea, statement, sources, workflow, and compute pipeline.
+- [Query reports](workflows/query-reports.md): sales, POS register, general ledger, trial balance, and simple P&L.
 - [Authentication and access](workflows/auth.md): allauth, roles, middleware gates, and view-level permission checks.
 - [Receipts and printing](workflows/receipts-and-printing.md): settlement receipt print, KOT/BOT dispatch, retry behavior, and the current printer stub.
 

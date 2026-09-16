@@ -7,7 +7,7 @@ Every backoffice view declares its own role requirement with a decorator from `a
 | Decorator | Who passes | Backoffice surfaces |
 |---|---|---|
 | `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register |
-| `@manager_required` | superuser, RestPOS Admin, or RestPOS Manager | Accounting, reports/Daily P&L, payments writes, order cancel/return/delete, restaurant settings, production unit writes |
+| `@manager_required` | superuser, RestPOS Admin, or RestPOS Manager | Accounting, reports (Daily P&L and query reports), payments writes, order cancel/return/delete, restaurant settings, production unit writes |
 | `@admin_required` | superuser or RestPOS Admin | Staff role assignment/removal |
 
 Anonymous users redirect to login; authenticated users who fail the role test get `403`. See [Authentication and Authorization](auth.md) for the full table including POS surfaces.
@@ -24,7 +24,7 @@ Anonymous users redirect to login; authenticated users who fail the role test ge
 | Staff | `apps.staff.urls` | opening/closing documents |
 | Orders | `apps.orders.urls` | order register, KOT register, cancel, return |
 | Accounting | `apps.accounting.urls` | chart of accounts, journal entries, GL entries, fiscal years, supplier payables |
-| Reports | `apps.reports.urls` | Daily P&L register, draft/submit/cancel/amend, P&L settings |
+| Reports | `apps.reports.urls` | Daily P&L register, draft/submit/cancel/amend, P&L settings, sales reports, POS register, GL, trial balance, simple P&L |
 
 ## Accounting Operations
 
@@ -54,7 +54,7 @@ Restaurant and ProductionUnit changes are manager/admin-only at view level. Rest
 
 ## Reporting Surfaces
 
-`apps.reports` owns the Daily P&L document (Phase 7). Sales reports, trial balance, and the formal GL P&L remain Phase 8.
+`apps.reports` owns the Daily P&L document and the query-based sales, POS register, general ledger, trial balance, and simple P&L reports. See [Query reports](query-reports.md).
 
 Four registers offer a `?export=csv` download on the same URL with the same gates and filters (stdlib csv, UTF-8 with BOM, raw two-decimal money, 50,000-row cap): the orders register (`orders:order_list`), GL entries (`accounting:gl_entry_list`), the stock ledger (`inventory:stock_ledger_list`), and the Daily P&L list (`reports:daily_pnl_list`). Filenames carry the register, date, and active filters.
 
