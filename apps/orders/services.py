@@ -1,5 +1,3 @@
-"""Order workflow services — multi-entity operations shared by the POS and backoffice."""
-
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
@@ -55,9 +53,11 @@ def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
         .filter(pk=shift.pk, status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
         .first()
     )
+
     if locked_shift is None:
         raise ValidationError("Open a shift before taking orders.")
     draft_count = Order.objects.open_drafts(locked_shift).count()
+
     if draft_count >= settings.max_open_drafts:
         raise ValidationError(f"The active shift already has {settings.max_open_drafts} open drafts.")
     order = Order.objects.create(

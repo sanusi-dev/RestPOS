@@ -217,8 +217,6 @@ class Order(BaseModel):
             allow_submit = getattr(self, "_allow_submit", False)
             allow_discard = getattr(self, "_allow_discard", False)
 
-            # Keep lifecycle transitions inside the domain workflows; these
-            # private flags prevent a direct save() from bypassing immutability.
             if previous.status in {SUBMITTED, CANCELLED, DISCARDED} and not allow_cancellation:
                 raise ValidationError("Submitted, cancelled or discarded orders cannot be modified.")
             if previous.status == DRAFT and self.status == SUBMITTED and not allow_submit:
@@ -227,9 +225,9 @@ class Order(BaseModel):
                 raise ValidationError("Use the order cancellation flow to cancel an order.")
             if previous.status == DRAFT and self.status == DISCARDED and not allow_discard:
                 raise ValidationError("Use the order discard flow to discard an order.")
-            if (self.is_return, self.return_against_id) != (previous.is_return, previous.return_against_id):
+            if (self.is_return, self.return_against_id) != (previous.is_return, previous.return_against_id):  # type: ignore
                 raise ValidationError("An order's return status and source cannot be changed.")
-            if previous.stock_warehouse_id and self.stock_warehouse_id != previous.stock_warehouse_id:
+            if previous.stock_warehouse_id and self.stock_warehouse_id != previous.stock_warehouse_id:  # type: ignore
                 raise ValidationError("The stock warehouse snapshot cannot be changed.")
             if previous.invoice_printed and not self.invoice_printed:
                 raise ValidationError("A printed receipt cannot be marked as unprinted.")
@@ -237,7 +235,7 @@ class Order(BaseModel):
                 draft_fields = ("order_type", "customer_name", "guest_count")
                 if (
                     any(getattr(self, field) != getattr(previous, field) for field in draft_fields)
-                    and self.kots.exists()
+                    and KOT.objects.filter(order=self).exists()
                 ):
                     raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
         is_new = self._state.adding
@@ -313,7 +311,7 @@ class Order(BaseModel):
         persisted = type(self).objects.only("status").get(pk=self.pk) if self.pk else self
         if persisted.status != DRAFT:
             raise ValidationError("Cannot modify a submitted or cancelled order.")
-        if self.pk and self.kots.exists():
+        if self.pk and KOT.objects.filter(order=self).exists():
             raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
 
     def can_be_accessed_by(self, user) -> bool:
@@ -568,7 +566,7 @@ class OrderPayment(BaseModel):
             order = Order.objects.only("status", "is_return").get(pk=self.order_id)
             if order.status != DRAFT:
                 raise ValidationError("Payments on submitted or cancelled orders cannot be modified.")
-            if order.kots.exists():
+            if KOT.objects.filter(order=order).exists():
                 raise ValidationError("Payments cannot be edited after a KOT has been created.")
         try:
             super().save(*args, **kwargs)
@@ -576,10 +574,10 @@ class OrderPayment(BaseModel):
             raise ValidationError("This electronic payment reference has already been used.") from exc
 
     def delete(self, *args, **kwargs):
-        order = Order.objects.only("status").get(pk=self.order_id)
+        order = Order.objects.only("status").get(pk=self.order_id)  # type: ignore
         if order.status != DRAFT:
             raise ValidationError("Payments on submitted or cancelled orders cannot be deleted.")
-        if order.kots.exists():
+        if KOT.objects.filter(order=order).exists():
             raise ValidationError("Payments cannot be deleted after a KOT has been created.")
         return super().delete(*args, **kwargs)
 
