@@ -597,18 +597,29 @@ override. Electricity optional (blank = ₦0).
 
 ### 4.7 Reports (Phase 8)
 
-**Status:** planned (scope only; detailed decisions to be locked when Phase 8 starts).
+**Status:** planned (detailed plan agreed 11 Sep 2026; ready to implement).
 
 **Decisions:**
 
-- Sales reports: today's, daywise, month-wise, item-wise, employee-wise, service-wise,
-  time-wise.
-- Cancelled invoices, average bill value, POS register.
-- Read-only GL report, Trial Balance, and a simple Profit & Loss report over `GLEntry`,
-  grouped by account, fiscal year, and posting date, with drill-down to the
-  source voucher. Cancelled entries and their reversals are handled consistently.
-- No balance sheet and no formal statements.
-- Query-based; no persistent aggregates unless needed.
+- No new models. Query-based; no persistent aggregates. Manager/Admin only, same gate as Daily P&L. `apps/reports` owns all queries, views, and templates.
+- Sales period is calendar `posting_date`. Today is `posting_date = today`. The Daily P&L business-day window does not apply; late-night sales may land on different days in the two surfaces.
+- Sales source is `Order status=SUBMITTED` only. `DRAFT`, `CANCELLED`, and `DISCARDED` never count as sales. Returns (`is_return=True`) net off sales on the return's own `posting_date` as negative `grand_total` and negative `OrderItem.amount`; sales tables show a refunded-total column.
+- Every sales table carries FOOD / DRINKS / TOTAL from `OrderItem.department`. Net = gross + `rounding_adjustment`.
+- Today/daywise: filters `from`, `to`. One row per `posting_date`: bills, gross food, gross drinks, refunded total, net, rounding.
+- Monthwise: filters fiscal year or `from`/`to`. One row per calendar month with the daywise columns.
+- Item-wise: filters `from`, `to`, department, item group. One row per item: qty, gross, refunded, net.
+- Employee-wise: filters `from`, `to`. One row per `cashier` (blank when unset): bills, net sales.
+- Service-wise: filters `from`, `to`. One row each for `DINE_IN` and `TAKE_AWAY`: bills, net sales by department.
+- Time-wise: filters `from`, `to`. 24 rows from `posting_time` hour 00–23: bills, net sales.
+- Cancelled invoices: filters `from`, `to`, reason. One row per `CANCELLED` order: invoice, date, cashier, type, total, reason + note; totals count bills and lost sales. Returns never appear here.
+- Average bill value: filters `from`, `to`, grouping day/month. Net sales / bill count per bucket plus overall; returns netted in numerator and counted in denominator.
+- POS register: filters `from`, `to`, cashier. One row per `SUBMITTED POSClosingEntry`: shift, cashier, per-mode expected/counted/difference, `total_short_excess`; detail expands to `ClosingPayment` rows. Refund and change netting already on the close is displayed, not recomputed.
+- GL report over `GLEntry`: filters fiscal year, `from`/`to`, account. Chronological rows with debit, credit, running balance, voucher link (`voucher_type` + `voucher_no`), and the `is_cancelled` flag. Cancelled originals and their reversal rows both display and net to zero.
+- Trial balance: filters fiscal year, `to` date. Cumulative `posting_date <= to` within the year, opening entries included. One row per leaf account with debit, credit, balance; non-zero-balance accounts only; grouped by `root_type`. Debit total equals credit total.
+- Simple P&L over `GLEntry`: filters fiscal year, `from`/`to`. Sums `report_type=PROFIT_AND_LOSS` entries by account (Food Sales vs Drinks Sales split food/drinks); gross profit and net profit totals. Cancelled + reversals netted. No typed costs and no memos.
+- No balance sheet and no other formal statements.
+- Frontend: `Reports` sidebar gains Sales and Accounting sections. Each report is a GET filter form + table + totals row. Sales rows link to order detail, GL rows to the source voucher, register rows to closing detail. No charts.
+- Tests: `test_sales_reports.py` (calendar grouping, department split, return netting on return date, draft/cancelled/discarded excluded, hourly buckets, employee/service splits, avg-bill math, cancelled-only contents); `test_pos_register.py` (per-shift rows with displayed netting, filters); `test_accounting_reports.py` (GL running balance with cancelled + reversal netting to zero, balanced non-zero-only trial balance, simple P&L income-minus-expense).
 
 ### 4.8 Printing (Phase 9)
 
