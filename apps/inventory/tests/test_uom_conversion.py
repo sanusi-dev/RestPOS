@@ -257,9 +257,7 @@ class PurchaseReceiptConversionTest(UOMConversionTestBase):
 
     def test_stock_entry_market_receipt_converts_uom(self):
         self._conversion()
-        mode, _ = ModeOfPayment.objects.get_or_create(
-            name="Cash UOM", defaults={"type": "CASH", "enabled": True}
-        )
+        mode, _ = ModeOfPayment.objects.get_or_create(name="Cash UOM", defaults={"type": "CASH", "enabled": True})
         PaymentGLMapping.objects.get_or_create(
             mode_of_payment=mode, defaults={"default_account": self.accounts["cash"]}
         )
@@ -285,9 +283,7 @@ class PurchaseReceiptConversionTest(UOMConversionTestBase):
 
     def test_stock_entry_market_receipt_cancel_uses_original_amount(self):
         self._conversion()
-        mode, _ = ModeOfPayment.objects.get_or_create(
-            name="Cash UOM2", defaults={"type": "CASH", "enabled": True}
-        )
+        mode, _ = ModeOfPayment.objects.get_or_create(name="Cash UOM2", defaults={"type": "CASH", "enabled": True})
         PaymentGLMapping.objects.get_or_create(
             mode_of_payment=mode, defaults={"default_account": self.accounts["cash"]}
         )
