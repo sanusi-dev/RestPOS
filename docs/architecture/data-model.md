@@ -46,7 +46,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Settings and Routing
 
-- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them). Since Phase 10 it also carries `stock_adjustment_account` (Expense) and `temporary_opening_account` (Equity, balance-sheet only).
+- `Restaurant`: singleton enforced by `singleton_key` and `clean()`. `load()` returns the first row with active menu and warehouse relations loaded. Since Phase 6 it also carries accounting FKs: `default_income_account`, `default_expense_account`, `round_off_account`, `account_for_change_amount`, `wastage_account`, `cash_shortage_account`, `cash_over_short_account`, and `variance_approval_threshold` (all nullable except where settlement enforces them). Since Phase 10 it also carries `stock_adjustment_account` (Expense) and `temporary_opening_account` (Equity, balance-sheet only). `require_payment_reference` (Boolean, default off) makes a reference mandatory on non-cash settlement rows; `requires_payment_reference()` reads it without loading the full singleton.
 - `ProductionUnit`: one row per department via a unique constraint. Stores station warehouse, takeaway-ticket suppression, printer metadata, `income_account` (the departmental income hook — first stop in income account resolution before the Restaurant default), and `expense_account` (the departmental COGS hook — Kitchen consumption and Bar settle-time COGS resolve here first, then the Restaurant default).
 - `ItemGroup`: flat category.
 - `Warehouse`: flat stock location; since Phase 6 it carries an optional `account` FK credited with the stock value of settle-time drink deductions.
@@ -68,13 +68,13 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 - `Bin`: current actual quantity, reserved quantity, valuation rate, and stock value for one item/warehouse pair.
 - `StockLedgerEntry`: signed PWAC movement (`quantity`, `unit_rate`, `stock_value_change`). The voucher type/number/detail fields link it back to source documents.
 - `StockEntry` and `StockEntryDetail`: receipt or Store-to-Kitchen/Bar transfer. Receipt lines record the `uom` bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`; submit posts `qty × factor` and blends WAC on the as-bought `amount`, mirroring `PurchaseReceiptItem`. Transfer lines stay in the stock unit. `StockEntry.mode_of_payment` records the funding account ("Paid from") for market receipts.
-- `StockReconciliation` and `StockReconciliationItem`: adjustment with `reason` (`OPENING_STOCK` first seeding of a fresh warehouse only, `ADJUSTMENT` counted quantity up or down, `CONSUMPTION` end-of-day kitchen count that cannot exceed the bin, `WASTE_DAMAGE` quantity wasted as a positive delta). Opening posts Dr warehouse / Cr temporary opening; Adjustment Dr stock adjustment / Cr warehouse (inbound reverses); Consumption Dr Kitchen unit expense (else default expense) / Cr kitchen; Waste Dr wastage / Cr warehouse.
+- `StockReconciliation` and `StockReconciliationItem`: adjustment with `reason` (`OPENING_STOCK` first seeding of a fresh warehouse only, `ADJUSTMENT` counted quantity up or down, `CONSUMPTION` end-of-day kitchen count that cannot exceed the bin, `WASTE_DAMAGE` quantity wasted as a positive delta). Opening posts Dr warehouse / Cr temporary opening; Adjustment Dr stock adjustment / Cr warehouse (inbound reverses); Consumption Dr Kitchen unit expense (else default expense) / Cr kitchen; Waste Dr wastage / Cr warehouse. `remarks` is optional; submit/cancel stamp `submitted_by`/`submitted_at` and `cancelled_by`/`cancelled_at`.
 - `Recipe` and `RecipeItem`: ingredient card per sellable FOOD item (one active card, unique constraint); lines carry per-output qty in ingredient `stock_uom` (`unique (recipe, ingredient)`).
 - `PurchaseReceipt` and `PurchaseReceiptItem`: supplier goods into the central Store. Each line records the `uom` it was bought in (stock unit or a conversion row) and a snapshotted `conversion_factor`. On submit the ledger quantity is `received_qty × factor` and inbound value is the as-bought `amount`; WAC blends on that amount. `last_purchase_rate` is per stock UOM (`amount ÷ stock_qty`).
 
 ## Order Entities
 
-- `Order`: one operational sale/return document. It owns totals, status, shift, cashier, receipt-printed state, warehouse snapshot, return linkage, and audit history.
+- `Order`: one operational sale/return document. It owns totals, status, shift, cashier (the settling user), creator (`created_by`, stamped at draft creation and used for POS draft ownership), receipt-printed state, warehouse snapshot, return linkage, and audit history. `can_be_accessed_by(user)` allows the creator or Manager/Admin; `open_drafts_for(shift, user)` applies the same rule to querysets.
 - `OrderItem`: line snapshot with item name, rate, amount, department, stock flag, menu line, comments, customer index, optional return source, and `not_restockable` (return drafts only — when set, the returned stock is not restored and posts wastage).
 - `OrderPayment`: payment line inside an order. Positive on sales; negative refund rows only on return orders. It is protected from edits after the order is submitted or ticketed.
 - `KOT`/`KOTItem`: immutable order-to-station snapshots; KOT print status is mutable for dispatch/retry.
@@ -83,7 +83,7 @@ Most project domain models extend `apps.utils.models.BaseModel`, adding `created
 
 ## Shift and Payment Entities
 
-- `POSOpeningEntry`: global shift parent. Open means `SUBMITTED` with no closing link; closed means `SUBMITTED` with a closing link.
+- `POSOpeningEntry`: global shift parent. Open means `SUBMITTED` with no closing link; closed means `SUBMITTED` with a closing link. `can_be_closed_by(user)` returns True for the opening cashier or a Manager/Admin.
 - `OpeningPayment`: mode-specific opening balance.
 - `POSClosingEntry`: one-to-one reconciliation document linked to the opening. Stores shift sales at submit (`bill_count`, `total_quantity`, `net_total`, `grand_total`, `refunded_total` — frozen, never recomputed live). Carries `variance_note` (required beyond the approval threshold) and `variance_journal_entry` (linked JE when the close posts a variance).
 - `ClosingPayment`: counted, expected, and difference values per opening mode.

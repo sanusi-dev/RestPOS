@@ -75,7 +75,7 @@ An order line snapshots the item department and stock flag. Only DRINKS lines ca
 
 ### Order to GL
 
-`settle_order` calls `accounting.services.post_order_gl` inside its atomic block after the order flips SUBMITTED and drink deductions are written. Income resolves ProductionUnit (by line department) → Restaurant default; COGS uses the FIFO outgoing value of the settle-time drink SLEs against the warehouse account, expensed to the Restaurant default expense account. Change fails closed unless `Restaurant.account_for_change_amount` is set. Returns post refund GL via `post_refund_gl` rebuilt from the returned lines; non-restockable drink lines post wastage at the settle-time outgoing rate. The variance JE on shift close flows through `staff.services.submit_closing_entry` → `accounting.services.post_cash_variance_gl`.
+`settle_order` calls `accounting.services.post_order_gl` inside its atomic block after the order flips SUBMITTED and drink deductions are written. Income resolves ProductionUnit (by line department) → Restaurant default; COGS uses the FIFO outgoing value of the settle-time drink SLEs against the warehouse account, expensed to the Restaurant default expense account. Change fails closed unless `Restaurant.account_for_change_amount` is set. Posting fails closed if any account lands on both the debit and credit side of the voucher (e.g. a payment mode mapped to an income account) — such legs would otherwise net to zero and vanish. Returns post refund GL via `post_refund_gl` rebuilt from the returned lines; non-restockable drink lines post wastage at the settle-time outgoing rate. The variance JE on shift close flows through `staff.services.submit_closing_entry` → `accounting.services.post_cash_variance_gl`.
 
 ### Settings to stock routing
 

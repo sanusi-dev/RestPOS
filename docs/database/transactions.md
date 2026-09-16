@@ -2,7 +2,7 @@
 
 ## Atomic Service Boundaries
 
-The following order functions are atomic: draft creation, metadata update, cart item update, settlement, cancellation, return creation, return submission, delete, line add/update/remove/clear, and ticket creation. Inventory document submit/cancel services, staff open/close services, and setup seed commands are also atomic.
+The following order functions are atomic: draft creation, metadata update, cart item update, settlement, cancellation, return creation, return submission, unsent-draft delete (tombstone), line add/update/remove/clear, and ticket creation. Inventory document submit/cancel services, staff open/close services, and setup seed commands are also atomic.
 
 ## Locking Map
 

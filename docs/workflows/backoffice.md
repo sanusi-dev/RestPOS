@@ -6,7 +6,7 @@ Every backoffice view declares its own role requirement with a decorator from `a
 
 | Decorator | Who passes | Backoffice surfaces |
 |---|---|---|
-| `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register |
+| `@backoffice_required` | superuser, RestPOS Admin, or RestPOS Manager | Dashboard, settings reads, staff list, inventory, menu, payments reads, orders register/detail, KOT register, shifts (opening/closing documents) |
 | `@manager_required` | superuser, RestPOS Admin, or RestPOS Manager | Accounting, reports (Daily P&L and query reports), payments writes, order cancel/return/delete, restaurant settings, production unit writes |
 | `@admin_required` | superuser or RestPOS Admin | Staff role assignment/removal |
 
@@ -46,7 +46,7 @@ Menu and item forms save directly after validation. Model `clean()` enforces cro
 
 ## Order Operations
 
-The order register filters by invoice/customer/order number, status, order type, and posting-date range (`from`/`to`); the same filters apply to its CSV export. Detail prefetches lines, payments, and tickets. Backoffice cancellation requires manager/admin/superuser and calls `cancel_sent_order()` (sent drafts only; unsent drafts are deleted via `order_delete`). Return creation requires the same roles and calls `make_return()`; the negative draft can be edited (qty, drop line, wastage) then submitted through `order_return_submit` → `submit_return()`, which restores drink stock and writes proportional refund rows.
+The order register filters by invoice/customer/order number, status, order type, and posting-date range (`from`/`to`); the same filters apply to its CSV export. Detail prefetches lines, payments, and tickets. Backoffice cancellation requires manager/admin/superuser and calls `cancel_sent_order()` (sent drafts only; unsent drafts are deleted via `order_delete`, which tombstones them as `DISCARDED`). Return creation requires the same roles and calls `make_return()`; the negative draft can be edited (qty, drop line, wastage) then submitted through `order_return_submit` → `submit_return()`, which restores drink stock and writes proportional refund rows.
 
 ## Settings and Staff
 

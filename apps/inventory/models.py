@@ -203,9 +203,7 @@ class Item(BaseModel):
                 raise ValidationError({"is_stock_item": "Cannot turn off stock tracking while UOM conversions exist."})
             if not self.is_purchase_item:
                 raise ValidationError({"is_purchase_item": "Cannot turn off purchasable while UOM conversions exist."})
-        if self.pk and (
-            self.recipes.exists() or RecipeItem.objects.filter(ingredient_id=self.pk).exists()
-        ):
+        if self.pk and (self.recipes.exists() or RecipeItem.objects.filter(ingredient_id=self.pk).exists()):
             previous = type(self).objects.only("stock_uom_id").get(pk=self.pk)
             if self.stock_uom_id != previous.stock_uom_id:
                 raise ValidationError({"stock_uom": "Cannot change the stock unit while recipes use this item."})
@@ -214,9 +212,7 @@ class Item(BaseModel):
             and RecipeItem.objects.filter(ingredient_id=self.pk).exists()
             and (self.is_sales_item or not self.is_stock_item)
         ):
-            raise ValidationError(
-                "This item is a recipe ingredient and must stay stock-tracked and non-sellable."
-            )
+            raise ValidationError("This item is a recipe ingredient and must stay stock-tracked and non-sellable.")
 
 
 class ItemUOMConversion(BaseModel):
@@ -702,6 +698,24 @@ class StockReconciliation(BaseModel):
         default="DRAFT",
     )
     remarks = models.TextField(blank=True)
+    submitted_by = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="submitted_reconciliations",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True, editable=False)
+    cancelled_by = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="cancelled_reconciliations",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-posting_date", "-created_at"]

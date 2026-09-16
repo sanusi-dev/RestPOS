@@ -44,6 +44,11 @@ class Restaurant(BaseModel):
         default=False,
         help_text="When enabled, cashiers can use All/Returns/Cancelled history filters. Managers always can.",
     )
+    require_payment_reference = models.BooleanField(
+        default=False,
+        verbose_name="Require payment reference",
+        help_text="When enabled, electronic (non-cash) payments must include a reference number at settlement.",
+    )
 
     default_income_account = models.ForeignKey(
         "accounting.LedgerAccount",
@@ -199,10 +204,27 @@ class Restaurant(BaseModel):
         """Return the singleton settings record with its direct relations loaded, or None."""
         return cls.objects.select_related("active_menu", "default_warehouse", "store_warehouse").order_by("pk").first()
 
+    @classmethod
+    def requires_payment_reference(cls) -> bool:
+        """Return whether non-cash payments must carry a reference."""
+        return bool(
+            cls.objects.only("require_payment_reference").values_list("require_payment_reference", flat=True).first()
+        )
+
     def clean(self):
         super().clean()
         if not self.pk and Restaurant.objects.exists():
             raise ValidationError("Restaurant settings already exist — edit the existing record.")
+        if self.default_income_account_id:
+            from apps.payments.models import PaymentGLMapping
+
+            if PaymentGLMapping.objects.filter(default_account_id=self.default_income_account_id).exists():
+                raise ValidationError(
+                    {
+                        "default_income_account": "This account is mapped to a payment mode "
+                        "and cannot record sales income.",
+                    }
+                )
         if self.max_open_drafts < 1:
             raise ValidationError({"max_open_drafts": "The open-draft limit must be at least 1."})
         if self.default_warehouse_id and self.default_warehouse.disabled:
@@ -314,6 +336,13 @@ class ProductionUnit(BaseModel):
         super().clean()
         if self.warehouse_id and self.warehouse.disabled:
             raise ValidationError({"warehouse": "The production unit warehouse must be enabled."})
+        if self.income_account_id:
+            from apps.payments.models import PaymentGLMapping
+
+            if PaymentGLMapping.objects.filter(default_account_id=self.income_account_id).exists():
+                raise ValidationError(
+                    {"income_account": "This account is mapped to a payment mode and cannot record sales income."}
+                )
 
         restaurant = Restaurant.load()
         if not restaurant or not self.warehouse_id:

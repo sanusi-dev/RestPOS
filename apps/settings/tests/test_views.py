@@ -62,6 +62,13 @@ class TestDashboardView(SettingsViewTestBase):
         self.assertEqual(restaurant.company, "Updated Co")
         self.assertEqual(Restaurant.objects.count(), 1)
 
+    def test_post_sets_payment_reference_requirement(self):
+        response = self.client.post(
+            reverse("settings:restaurant_settings"), self._post_data(require_payment_reference="on")
+        )
+        self.assertRedirects(response, reverse("settings:restaurant_settings"))
+        self.assertTrue(Restaurant.objects.get().require_payment_reference)
+
     def test_post_sets_default_warehouse(self):
         warehouse = Warehouse.objects.create(name="Kitchen")
         response = self.client.post(

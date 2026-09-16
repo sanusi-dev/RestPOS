@@ -3,11 +3,12 @@
 ## POS GET Preview
 
 ```text
-Close shift navigation
+Close shift navigation (rendered only for the shift opener or a Manager/Admin)
   -> templates/pos/base.html
   -> GET pos:pos_close_shift (/pos/close-shift/)
   -> views_pos.pos_close_shift()
   -> _get_open_shift()
+  -> POSOpeningEntry.can_be_closed_by()
   -> Order.objects.open_drafts()
   -> staff.services.expected_closing_amounts()
   -> templates/pos/close_shift.html#surface
@@ -24,12 +25,14 @@ Counted amount form
   -> atomic block and lock POSOpeningEntry
   -> recheck open drafts
   -> staff.services.ensure_closing_draft()
-  -> ClosingPaymentForm per opening mode
+  -> ClosingPaymentForm per opening mode (server-side: counted >= 0)
   -> save counted values and closing period
   -> staff.services.submit_closing_entry()
   -> lock POSClosingEntry and POSOpeningEntry
+  -> re-check can_be_closed_by(actor)
   -> aggregate orders/payments
-  -> calculate differences
+  -> recompute expected and calculate differences
+  -> reject non-cash counted above expected
   -> submit closing and link opening
   -> HX home surface or redirect
 ```
@@ -42,4 +45,4 @@ The POST transaction rolls back model changes from the current request if an exc
 
 ## Backoffice Variant
 
-`staff.views.closing_entry_create()` locks the open shift and creates/reuses a draft. `closing_entry_detail()` edits counted values. `closing_entry_submit()` calls `full_clean()` and the same closing service. `POSClosingEntry.cancel()` only cancels the close; it does not reopen the shift.
+All `staff.views` shift pages are `@backoffice_required` (Manager/Admin only); cashiers use the POS route. `staff.views.closing_entry_create()` locks the open shift and creates/reuses a draft. `closing_entry_detail()` edits counted values. `closing_entry_submit()` calls `full_clean()` and the same closing service. `POSClosingEntry.cancel()` only cancels the close; it does not reopen the shift.

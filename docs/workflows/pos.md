@@ -22,7 +22,7 @@ flowchart LR
 
 ## Draft Orders
 
-The home surface lists `Order.objects.open_drafts(shift)`, enriched by `services.open_draft_orders()` with ticket status, item preview, and age. `Restaurant.max_open_drafts` is enforced under a Restaurant and shift row lock when `create_draft_order()` runs. The session stores the current order primary key and per-order active customer card.
+The home surface lists `Order.objects.open_drafts_for(shift, user)`, enriched by `services.open_draft_orders()` with ticket status, item preview, and age: a cashier sees only their own drafts (plus legacy rows with no creator), while Manager/Admin see every draft on the shift. Every POS draft screen and mutation view uses the same filter, so a non-owner gets a 404 even with a direct URL. `Restaurant.max_open_drafts` is enforced against all shift drafts under a Restaurant and shift row lock when `create_draft_order()` runs, so the cap cannot be dodged by ownership. The session stores the current order primary key and per-order active customer card.
 
 ## Catalog
 
@@ -35,14 +35,14 @@ Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dial
 ## Send, Pay, Cancel, Discard
 
 - Send to kitchen creates department-specific immutable KOT/BOT snapshots and dispatches each ticket independently.
-- Pay loads a dialog, then settlement validates full payment, shift ownership, payment modes, current item availability, and stock before submitting the order.
+- Pay loads a dialog, then settlement validates full payment, shift ownership, payment modes, required electronic references, current item availability, and stock before submitting the order.
 - Cancel is available for sent/printed unpaid drafts; it preserves the order and sends cancellation tickets.
 - Discard is only for an empty untouched draft.
 - Receipt printing claims the order as printed before calling the print interface, which intentionally locks further draft edits.
 
 ## History
 
-`pos_order_history()` defaults to current-date submitted paid non-return sales. Manager/admin/superuser users, or any user when `Restaurant.pos_allow_full_history=True`, can request all/returns/cancelled/discarded filters. Rows load `pos_order_history_detail()` into `#order-details-drawer`; Alpine controls focus and animation, not business state.
+`pos_order_history()` defaults to current-date submitted paid non-return sales. Manager/admin/superuser users, or any user when `Restaurant.pos_allow_full_history=True`, can request all/returns/cancelled/discarded filters. Rows load `pos_order_history_detail()` into `#order-details-drawer`; Alpine controls focus and animation, not business state. Detail and receipt reprint enforce the same visibility: without full history, only submitted paid non-return orders resolve (others 404); with full history, cancelled and discarded orders are viewable and any submitted receipt is reprintable.
 
 ## Important Current Gaps
 

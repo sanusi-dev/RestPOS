@@ -97,7 +97,11 @@ class OrderCancelTest(BackofficeViewTestBase):
         add_order_line(order, self.food_item, qty=1, rate=Decimal("1500"))
         response = self.client.post(reverse("orders:order_delete", kwargs={"pk": order.pk}))
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
+        order.refresh_from_db()
+        self.assertEqual(order.status, "DISCARDED")
+        self.assertEqual(order.discarded_by, self.user)
+        self.assertTrue(order.items.exists())
+        self.assertTrue(order.audit_events.filter(event_type="ORDER_DELETED").exists())
 
 
 class OrderReturnTest(BackofficeViewTestBase):

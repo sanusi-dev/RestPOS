@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -10,6 +11,8 @@ from apps.settings.models import Restaurant
 from apps.staff.models import ClosingPayment, OpeningPayment, POSClosingEntry, POSOpeningEntry
 from apps.staff.services import submit_closing_entry
 from apps.users.models import CustomUser
+
+from ..forms import ClosingPaymentForm
 
 
 class POSClosingEntryTestBase(TestCase):
@@ -104,6 +107,58 @@ class POSClosingEntryModelTest(POSClosingEntryTestBase):
         self.closing.refresh_from_db()
         self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
 
+    def test_submit_rejects_non_cash_counted_above_expected(self):
+        # Netting attack: 9500 pocketed from cash, fake bank surplus nets the shortage to zero.
+        cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
+        cash_closing.closing_amount = Decimal("40500")
+        cash_closing.save()
+        bank_closing = self.closing.closing_payments.get(mode_of_payment=self.bank_mode)
+        bank_closing.closing_amount = Decimal("9500")
+        bank_closing.save()
+
+        with self.assertRaisesMessage(ValidationError, "Counted Test Bank amount is above the expected"):
+            submit_closing_entry(self.closing)
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
+        self.opening.refresh_from_db()
+        self.assertTrue(self.opening.is_open)
+
+    def test_submit_allows_cash_counted_above_expected(self):
+        cash_closing = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
+        cash_closing.closing_amount = Decimal("50100")
+        cash_closing.save()
+
+        submit_closing_entry(self.closing)
+
+        cash_closing.refresh_from_db()
+        self.assertEqual(cash_closing.difference, Decimal("100"))
+        self.assertEqual(self.closing.status, POSClosingEntry.SUBMITTED)
+
+    def test_other_cashier_cannot_close_shift(self):
+        other = CustomUser.objects.create_user(username="other@test.com", password="testpass123")
+
+        with self.assertRaisesMessage(ValidationError, "Only the cashier who opened this shift"):
+            submit_closing_entry(self.closing, actor=other)
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.DRAFT)
+
+    def test_opener_can_close_own_shift(self):
+        submit_closing_entry(self.closing, actor=self.user)
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.SUBMITTED)
+
+    def test_manager_can_close_another_cashiers_shift(self):
+        manager = CustomUser.objects.create_user(username="manager@test.com", password="testpass123")
+        manager_group, _ = Group.objects.get_or_create(name="RestPOS Manager")
+        manager.groups.add(manager_group)
+
+        submit_closing_entry(self.closing, actor=manager)
+
+        self.closing.refresh_from_db()
+        self.assertEqual(self.closing.status, POSClosingEntry.SUBMITTED)
+
     def test_submit_raises_if_mode_not_in_opening(self):
         other_mode = ModeOfPayment.objects.create(name="Stranger", type="GENERAL")
         ClosingPayment.objects.create(
@@ -167,3 +222,29 @@ class ClosingPaymentModelTest(POSClosingEntryTestBase):
         )
         with self.assertRaises(ValidationError):
             cp.full_clean()
+
+    def test_clean_rejects_negative_closing_amount(self):
+        cp = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
+        cp.closing_amount = Decimal("-5000")
+
+        with self.assertRaises(ValidationError) as ctx:
+            cp.full_clean()
+
+        self.assertIn("closing_amount", ctx.exception.message_dict)
+
+
+class ClosingPaymentFormTest(POSClosingEntryTestBase):
+    def test_form_rejects_negative_closing_amount(self):
+        cp = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
+
+        form = ClosingPaymentForm({"closing_amount": "-5000"}, instance=cp)
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["closing_amount"], ["Counted amounts can't be negative."])
+
+    def test_form_accepts_zero_closing_amount(self):
+        cp = self.closing.closing_payments.get(mode_of_payment=self.cash_mode)
+
+        form = ClosingPaymentForm({"closing_amount": "0"}, instance=cp)
+
+        self.assertTrue(form.is_valid())

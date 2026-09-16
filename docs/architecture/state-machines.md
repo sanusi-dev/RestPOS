@@ -5,7 +5,7 @@
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT: create_draft_order
-    DRAFT --> [*]: delete (unsent draft)
+    DRAFT --> DISCARDED: delete_unsent_draft (tombstone)
     DRAFT --> SUBMITTED: settle_order
     DRAFT --> CANCELLED: cancel_sent_order if KOT sent
     DRAFT --> DISCARDED: discard_order (legacy/seed only)
@@ -18,8 +18,9 @@ stateDiagram-v2
 
 - `Order.save()` blocks direct lifecycle changes and the services use `_transition()` flags for the intended transition.
 - Paid submitted orders cannot be cancelled; `make_return()` creates a separate negative return draft and `submit_return()` submits it.
-- An unsent draft (no KOT) has exactly one exit: delete. `Order.delete()` removes the draft with its items and audit events.
-- Discard requires an empty, unprinted, unsent, unpaid draft and only survives for legacy seed data.
+- An unsent draft (no KOT) has exactly one exit: delete (abandon). `delete_unsent_draft()` marks the draft `DISCARDED` with a `discarded_by`/`discarded_at` stamp and an `ORDER_DELETED` audit event carrying the actor and an item snapshot; the order row, items, and full audit trail survive as a tombstone.
+- `Order.delete()` refuses hard deletion outright, so no code path can purge audit events.
+- `discard_order()` requires an empty, unprinted, unsent, unpaid draft and only survives for legacy seed data; the tombstone fields are shared with the delete path.
 - `DRAFT` editing stops only when a KOT exists; `invoice_printed` is no longer a draft lock.
 
 ## KOT and BOT
@@ -77,5 +78,5 @@ stateDiagram-v2
 
 - `settle_order()` rejects cancelled, submitted, empty, return, or no-active-shift orders.
 - `cancel_sent_order()` rejects discarded orders, paid orders, and unsent drafts (delete instead). Submitted orders are never cancelled — they leave the lifecycle only through the return flow (`make_return()` → `submit_return()`).
-- `Order.delete()` rejects non-drafts, printed drafts (legacy guard), and sent drafts; its audit-event purge is deliberate.
+- `Order.delete()` refuses hard deletion for every status; unsent drafts leave `DRAFT` only through `delete_unsent_draft()`, which tombstones them as `DISCARDED`.
 - Inventory model saves can permit direct draft status flips without posting; use service paths when tracing actual ledger behavior.

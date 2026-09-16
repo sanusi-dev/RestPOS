@@ -155,6 +155,8 @@ def submit_closing_entry(closing, actor=None):
     opening = POSOpeningEntry.objects.select_for_update().get(pk=locked.opening_entry_id)
     if not opening.is_open:
         raise ValidationError("The opening shift is no longer open.")
+    if actor is not None and not opening.can_be_closed_by(actor):
+        raise ValidationError("Only the cashier who opened this shift, or a manager, can close it.")
     # Cut off at submit time so orders settled after the draft was opened are included.
     locked.period_end_date = timezone.now()
     opening_payments = list(opening.opening_payments.select_related("mode_of_payment").all())
@@ -202,6 +204,11 @@ def submit_closing_entry(closing, actor=None):
         expected = expected_by_mode[cp.mode_of_payment_id]
         cp.opening_amount = expected["opening_amount"]
         cp.expected_amount = expected["expected_amount"]
+        if cp.mode_of_payment.type != ModeOfPayment.TYPE_CASH and cp.closing_amount > cp.expected_amount:
+            raise ValidationError(
+                f"Counted {cp.mode_of_payment.name} amount is above the expected {cp.expected_amount}. "
+                "A non-cash total can't exceed what was processed. Reconcile it before closing."
+            )
         cp.difference = cp.closing_amount - cp.expected_amount
         cp.save(
             update_fields=[

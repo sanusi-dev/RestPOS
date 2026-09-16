@@ -191,6 +191,23 @@ def _merge_rows(rows):
     return result
 
 
+def _ensure_disjoint_sides(rows):
+    """Reject rows where one account sits on both the debit and credit side."""
+    debits = {}
+    credits = {}
+    for row in rows:
+        if row.get("debit"):
+            debits[row["account"].pk] = row["account"].name
+        if row.get("credit"):
+            credits[row["account"].pk] = row["account"].name
+    clash = sorted(debits[pk] for pk in debits.keys() & credits.keys())
+    if clash:
+        raise ValidationError(
+            f"Account {'/'.join(clash)} appears on both sides of the posting — "
+            "check that no payment mode is mapped to a sales income account."
+        )
+
+
 @transaction.atomic
 def post_order_gl(order):
     """Post GL entries for a settled order; fails closed when the account chain is unconfigured."""
@@ -210,6 +227,7 @@ def post_order_gl(order):
     legs.extend(_payment_legs(order, settings))
     legs.extend(_rounding_leg(order, settings))
     legs.extend(_cogs_legs(order, rows, settings))
+    _ensure_disjoint_sides(legs)
 
     against = ", ".join(row["account"].name for row in legs if row.get("credit"))
     for row in legs:
@@ -403,6 +421,8 @@ def post_refund_gl(return_order):
                 }
             )
 
+    # Wastage passthrough rows carry explicit against and legitimately touch one account on both sides.
+    _ensure_disjoint_sides([row for row in rows if not row.get("against")])
     rows = _plug_round_off(_merge_rows(rows), settings)
     if not rows:
         return

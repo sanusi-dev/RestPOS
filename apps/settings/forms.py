@@ -66,6 +66,7 @@ class RestaurantForm(SettingsModelForm):
             "default_warehouse",
             "max_open_drafts",
             "pos_allow_full_history",
+            "require_payment_reference",
             "default_income_account",
             "default_expense_account",
             "round_off_account",

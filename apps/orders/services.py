@@ -1,5 +1,3 @@
-"""Order workflow services — multi-entity operations shared by the POS and backoffice."""
-
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
@@ -55,12 +53,19 @@ def create_draft_order(shift, user, *, order_type=DINE_IN, guest_count=1):
         .filter(pk=shift.pk, status=POSOpeningEntry.SUBMITTED, closing_entry__isnull=True)
         .first()
     )
+
     if locked_shift is None:
         raise ValidationError("Open a shift before taking orders.")
     draft_count = Order.objects.open_drafts(locked_shift).count()
+
     if draft_count >= settings.max_open_drafts:
         raise ValidationError(f"The active shift already has {settings.max_open_drafts} open drafts.")
-    order = Order.objects.create(order_type=order_type, guest_count=guest_count, opening_entry=locked_shift)
+    order = Order.objects.create(
+        order_type=order_type,
+        guest_count=guest_count,
+        opening_entry=locked_shift,
+        created_by=user,
+    )
     order.assign_order_number()
     order.audit("CREATED", actor=user, metadata={"order_type": order_type})
     return order
@@ -157,6 +162,8 @@ def settle_order(order, payments_data, cashier=None, opening_entry=None):
         raise ValidationError("Order is already settled or cancelled.")
     if locked.is_return:
         raise ValidationError("Return orders must use the deferred refund flow.")
+    if cashier is not None and not locked.can_be_accessed_by(cashier):
+        raise ValidationError("Only the cashier who created this order, or a manager, can settle it.")
     if not locked.items.exists():
         raise ValidationError("Cannot settle an order with no items.")
     locked._validate_current_lines()
@@ -249,6 +256,8 @@ def cancel_sent_order(order, reason, reason_note="", cancelled_by=None):
         raise ValidationError("Paid orders cannot be cancelled; use the refund flow.")
     if not locked.kots.exists():
         raise ValidationError("This order was never sent — delete it instead of cancelling.")
+    if cancelled_by is not None and not locked.can_be_accessed_by(cancelled_by):
+        raise ValidationError("Only the cashier who created this order, or a manager, can cancel it.")
     if not reason or not reason.strip():
         raise ValidationError("A cancel reason is required.")
     reason = reason.strip()
@@ -301,6 +310,26 @@ def discard_order(order, discarded_by=None):
     with _transition(locked, flag="_allow_discard"):
         locked.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
     locked.audit("DISCARDED", actor=discarded_by)
+    order.refresh_from_db()
+
+
+@transaction.atomic
+def delete_unsent_draft(order, deleted_by=None):
+    """Abandon an unsent draft as a tombstone: DISCARDED status with items and audit trail kept."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be deleted.")
+    if locked.invoice_printed or locked.kots.exists() or locked.is_paid:
+        raise ValidationError("Printed, sent or paid orders cannot be deleted; cancel the order instead.")
+    release_drink_reservations(locked)
+    snapshot = [
+        {"item": line.item_name, "qty": str(line.qty), "amount": str(line.amount)} for line in locked.items.all()
+    ]
+    locked.discarded_by = deleted_by
+    locked.discarded_at = timezone.now()
+    with _transition(locked, flag="_allow_discard"):
+        locked.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
+    locked.audit("ORDER_DELETED", actor=deleted_by, metadata={"items": snapshot})
     order.refresh_from_db()
 
 
@@ -783,10 +812,10 @@ class _DraftOrder(Protocol):
     minutes_ago: int
 
 
-def open_draft_orders(shift, order_filter="all", order_search=""):
-    """Return draft orders for the POS home screen, with item previews attached."""
+def open_draft_orders(shift, user, order_filter="all", order_search=""):
+    """Return the user's visible draft orders for the POS home screen, with item previews attached."""
     draft_orders_queryset = (
-        Order.objects.open_drafts(shift)
+        Order.objects.open_drafts_for(shift, user)
         .prefetch_related("items")
         .annotate(has_sent_ticket=Exists(KOT.objects.filter(order_id=OuterRef("pk"), status=SUBMITTED)))
         .order_by("-updated_at")
@@ -874,8 +903,11 @@ def apply_add_on_line(order, item, add_on_ids, qty, customer_index, comments="")
 
 def _validate_payment_data(order, payments_data, opening_entry):
     """Resolve and validate payment rows before changing the order."""
+    from apps.settings.models import Restaurant
+
     if not isinstance(payments_data, (list, tuple)) or not payments_data:
         raise ValidationError("At least one payment is required.")
+    require_reference = Restaurant.requires_payment_reference()
 
     opening_mode_ids = set(opening_entry.opening_payments.values_list("mode_of_payment_id", flat=True))
     payment_rows = []
@@ -924,6 +956,8 @@ def _validate_payment_data(order, payments_data, opening_entry):
         reference_no = str(entry.get("reference_no", "") or "").strip()
         if len(reference_no) > 100:
             raise ValidationError(f"Payment row {row_number} has a reference that is too long.")
+        if require_reference and mode.type != ModeOfPayment.TYPE_CASH and not reference_no:
+            raise ValidationError(f"Payment row {row_number} requires a reference for {mode.name}.")
 
         payment_rows.append(
             {

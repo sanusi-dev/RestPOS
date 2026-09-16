@@ -19,9 +19,9 @@
 ## Model Save/Delete Effects
 
 - `Order.save()` fills `arrived_time` on insert, then creates `invoice_number` using `Restaurant.invoice_series_prefix`. It rejects bypassed lifecycle and historical edits.
-- `Order.delete()` locks the persisted row, checks draft/unprinted/unsent state, calls `release_drink_reservations()`, deletes child items and (via the queryset, bypassing the instance guard) its audit events, then deletes the model row.
+- `delete_unsent_draft()` locks the persisted row, checks draft/unprinted/unsent state, releases drink reservations, keeps the order row and item lines, stamps `discarded_by`/`discarded_at`, and appends an `ORDER_DELETED` audit event with the actor and an item snapshot. `Order.delete()` refuses hard deletion, so audit events can never be purged.
 - `OrderItem.save()` snapshots name, department, and stock flag and calculates `amount = qty * rate`.
-- `OrderPayment.save()` normalizes references, checks amount precision, allows negative amounts only on return orders, rejects duplicate non-cash references, and enforces draft/KOT editability.
+- `OrderPayment.save()` normalizes references, checks amount precision, allows negative amounts only on return orders, rejects duplicate non-cash references, rejects blank non-cash references when `Restaurant.require_payment_reference` is enabled, and enforces draft/KOT editability.
 - `KOT.save()` and `KOTItem.save/delete()` protect ticket snapshots while allowing print/status updates through the service path.
 - `Item.save()` generates `ITEM-####` codes under a lock, converts variant templates to non-sellable/non-stock, and deletes add-on relationships when an item becomes non-sales.
 - `StockLedgerEntry._create_entry_locked()` both inserts the movement and updates the matching `Bin` snapshot (actual qty and WAC). Purchase-receipt submit may pass an explicit inbound value so WAC blends on as-bought money rather than `qty × unit_rate`.

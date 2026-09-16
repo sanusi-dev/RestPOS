@@ -69,6 +69,13 @@ class OrderQuerySet(models.QuerySet):
         """Draft orders belonging to a shift."""
         return self.filter(status=DRAFT, is_return=False, opening_entry=shift)
 
+    def open_drafts_for(self, shift, user):
+        """Draft orders on the shift the user may work on: own drafts, or all for managers."""
+        drafts = self.open_drafts(shift)
+        if user.is_manager or user.is_admin:
+            return drafts
+        return drafts.filter(Q(created_by=user) | Q(created_by__isnull=True))
+
     def submitted_in_shift(self, shift, period_start, period_end):
         """Submitted non-return orders settled within the period."""
         return self.filter(
@@ -102,6 +109,14 @@ class Order(BaseModel):
     guest_count = models.PositiveIntegerField(default=1)
     cashier = models.ForeignKey(
         "users.CustomUser", on_delete=models.SET_NULL, null=True, blank=True, related_name="settled_orders"
+    )
+    created_by = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="created_orders",
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
     is_paid = models.BooleanField(default=False)
@@ -202,8 +217,6 @@ class Order(BaseModel):
             allow_submit = getattr(self, "_allow_submit", False)
             allow_discard = getattr(self, "_allow_discard", False)
 
-            # Keep lifecycle transitions inside the domain workflows; these
-            # private flags prevent a direct save() from bypassing immutability.
             if previous.status in {SUBMITTED, CANCELLED, DISCARDED} and not allow_cancellation:
                 raise ValidationError("Submitted, cancelled or discarded orders cannot be modified.")
             if previous.status == DRAFT and self.status == SUBMITTED and not allow_submit:
@@ -212,9 +225,9 @@ class Order(BaseModel):
                 raise ValidationError("Use the order cancellation flow to cancel an order.")
             if previous.status == DRAFT and self.status == DISCARDED and not allow_discard:
                 raise ValidationError("Use the order discard flow to discard an order.")
-            if (self.is_return, self.return_against_id) != (previous.is_return, previous.return_against_id):
+            if (self.is_return, self.return_against_id) != (previous.is_return, previous.return_against_id):  # type: ignore
                 raise ValidationError("An order's return status and source cannot be changed.")
-            if previous.stock_warehouse_id and self.stock_warehouse_id != previous.stock_warehouse_id:
+            if previous.stock_warehouse_id and self.stock_warehouse_id != previous.stock_warehouse_id:  # type: ignore
                 raise ValidationError("The stock warehouse snapshot cannot be changed.")
             if previous.invoice_printed and not self.invoice_printed:
                 raise ValidationError("A printed receipt cannot be marked as unprinted.")
@@ -222,7 +235,7 @@ class Order(BaseModel):
                 draft_fields = ("order_type", "customer_name", "guest_count")
                 if (
                     any(getattr(self, field) != getattr(previous, field) for field in draft_fields)
-                    and self.kots.exists()
+                    and KOT.objects.filter(order=self).exists()
                 ):
                     raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
         is_new = self._state.adding
@@ -249,26 +262,8 @@ class Order(BaseModel):
             if self.return_against.status != SUBMITTED:
                 raise ValidationError({"return_against": "A return must reference a submitted order."})
 
-    @transaction.atomic
     def delete(self, *args, **kwargs):
-        if self.pk:
-            persisted = type(self).objects.select_for_update().get(pk=self.pk)
-            if persisted.status != DRAFT:
-                raise ValidationError("Submitted or cancelled orders cannot be deleted.")
-            if persisted.invoice_printed:
-                raise ValidationError("Printed orders cannot be deleted; cancel the order instead.")
-        else:
-            persisted = self
-        if persisted.kots.exists():
-            raise ValidationError("Sent orders cannot be deleted; cancel the order instead.")
-        from apps.orders import services
-
-        services.release_drink_reservations(persisted)
-        persisted.items.all().delete()
-        # Purge audit events via the queryset — the instance guard is deliberate
-        # for live orders, but a deleted draft has no audit value.
-        OrderAuditEvent.objects.filter(order=persisted).delete()
-        return models.Model.delete(persisted, *args, **kwargs)
+        raise ValidationError("Orders cannot be hard-deleted; unsent drafts are abandoned as tombstones instead.")
 
     def assign_order_number(self):
         """Assign the next sequential order number atomically."""
@@ -316,8 +311,14 @@ class Order(BaseModel):
         persisted = type(self).objects.only("status").get(pk=self.pk) if self.pk else self
         if persisted.status != DRAFT:
             raise ValidationError("Cannot modify a submitted or cancelled order.")
-        if self.pk and self.kots.exists():
+        if self.pk and KOT.objects.filter(order=self).exists():
             raise ValidationError("This order was sent to the kitchen or bar. Cancel it before making changes.")
+
+    def can_be_accessed_by(self, user) -> bool:
+        """Return True if the user may open or change this draft order."""
+        if user.is_manager or user.is_admin:
+            return True
+        return self.created_by_id is None or self.created_by_id == user.pk
 
     def _validate_pos_item(self, item):
         if item.disabled or not item.is_sales_item:
@@ -325,11 +326,10 @@ class Order(BaseModel):
         if item.department == "DRINKS":
             if not (item.is_stock_item and item.is_sales_item and item.is_purchase_item):
                 raise ValidationError(f"{item.item_name} must be a stock-tracked, sellable, purchasable drink.")
-        elif item.department == "FOOD" and item.is_sales_item:
-            if item.is_stock_item or item.is_purchase_item:
-                raise ValidationError(
-                    f"{item.item_name} is a sellable food item and must not be stock-tracked or purchasable."
-                )
+        elif item.department == "FOOD" and item.is_sales_item and (item.is_stock_item or item.is_purchase_item):
+            raise ValidationError(
+                f"{item.item_name} is a sellable food item and must not be stock-tracked or purchasable."
+            )
 
     def _validate_order_line_availability(self, line):
         """Reject lines whose Item or MenuItem is no longer sellable."""
@@ -339,11 +339,10 @@ class Order(BaseModel):
         if item.department == "DRINKS":
             if not (item.is_stock_item and item.is_sales_item and item.is_purchase_item):
                 raise ValidationError(f"{line.item_name} must be a stock-tracked, sellable, purchasable drink.")
-        elif item.department == "FOOD" and item.is_sales_item:
-            if item.is_stock_item or item.is_purchase_item:
-                raise ValidationError(
-                    f"{line.item_name} is a sellable food item and must not be stock-tracked or purchasable."
-                )
+        elif item.department == "FOOD" and item.is_sales_item and (item.is_stock_item or item.is_purchase_item):
+            raise ValidationError(
+                f"{line.item_name} is a sellable food item and must not be stock-tracked or purchasable."
+            )
         menu_item = line.menu_item
         if menu_item is not None and menu_item.disabled:
             raise ValidationError(f"{line.item_name} is no longer available on the active menu.")
@@ -543,17 +542,23 @@ class OrderPayment(BaseModel):
                 if hasattr(self, "mode_of_payment")
                 else ModeOfPayment.objects.get(pk=self.mode_of_payment_id)
             )
-            if mode.type != ModeOfPayment.TYPE_CASH and self.reference_no:
-                duplicate = (
-                    OrderPayment.objects.filter(
-                        mode_of_payment_id=self.mode_of_payment_id,
-                        reference_no=self.reference_no,
+            if mode.type != ModeOfPayment.TYPE_CASH:
+                if not self.reference_no and not order.is_return:
+                    from apps.settings.models import Restaurant
+
+                    if Restaurant.requires_payment_reference():
+                        raise ValidationError(f"A reference is required for {mode.name} payments.")
+                if self.reference_no:
+                    duplicate = (
+                        OrderPayment.objects.filter(
+                            mode_of_payment_id=self.mode_of_payment_id,
+                            reference_no=self.reference_no,
+                        )
+                        .exclude(pk=self.pk)
+                        .exists()
                     )
-                    .exclude(pk=self.pk)
-                    .exists()
-                )
-                if duplicate:
-                    raise ValidationError("This electronic payment reference has already been used.")
+                    if duplicate:
+                        raise ValidationError("This electronic payment reference has already been used.")
         order = self.order if self.order_id else None
         if not order or not getattr(order, "_settling", False):
             # Outside the settlement flow, payments are immutable once the
@@ -561,7 +566,7 @@ class OrderPayment(BaseModel):
             order = Order.objects.only("status", "is_return").get(pk=self.order_id)
             if order.status != DRAFT:
                 raise ValidationError("Payments on submitted or cancelled orders cannot be modified.")
-            if order.kots.exists():
+            if KOT.objects.filter(order=order).exists():
                 raise ValidationError("Payments cannot be edited after a KOT has been created.")
         try:
             super().save(*args, **kwargs)
@@ -569,10 +574,10 @@ class OrderPayment(BaseModel):
             raise ValidationError("This electronic payment reference has already been used.") from exc
 
     def delete(self, *args, **kwargs):
-        order = Order.objects.only("status").get(pk=self.order_id)
+        order = Order.objects.only("status").get(pk=self.order_id)  # type: ignore
         if order.status != DRAFT:
             raise ValidationError("Payments on submitted or cancelled orders cannot be deleted.")
-        if order.kots.exists():
+        if KOT.objects.filter(order=order).exists():
             raise ValidationError("Payments cannot be deleted after a KOT has been created.")
         return super().delete(*args, **kwargs)
 

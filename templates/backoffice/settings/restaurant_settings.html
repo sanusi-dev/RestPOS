@@ -34,13 +34,13 @@
       <div class="mb-5 flex items-start gap-3 border-b border-gray-100 pb-4">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">{% hgi_stroke name="package" size="19" color="currentColor" stroke_width="2" %}</span>
         <div>
-          <h2 class="text-sm font-extrabold text-gray-900">Menu &amp; stock</h2>
-          <p class="mt-1 text-xs text-gray-500">Choose the active menu, warehouse defaults, and draft order limits.</p>
+          <h2 class="text-sm font-extrabold text-gray-900">Menu, stock &amp; POS</h2>
+          <p class="mt-1 text-xs text-gray-500">Choose the active menu, warehouse defaults, draft order limits, and POS controls.</p>
         </div>
       </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
-          {% if field.name == "active_menu" or field.name == "store_warehouse" or field.name == "default_warehouse" or field.name == "max_open_drafts" or field.name == "pos_allow_full_history" %}
+          {% if field.name == "active_menu" or field.name == "store_warehouse" or field.name == "default_warehouse" or field.name == "max_open_drafts" or field.name == "pos_allow_full_history" or field.name == "require_payment_reference" %}
             {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
@@ -56,7 +56,7 @@
       </div>
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         {% for field in form %}
-          {% if field.name != "company" and field.name != "invoice_series_prefix" and field.name != "address" and field.name != "active_menu" and field.name != "store_warehouse" and field.name != "default_warehouse" and field.name != "max_open_drafts" and field.name != "pos_allow_full_history" %}
+          {% if field.name != "company" and field.name != "invoice_series_prefix" and field.name != "address" and field.name != "active_menu" and field.name != "store_warehouse" and field.name != "default_warehouse" and field.name != "max_open_drafts" and field.name != "pos_allow_full_history" and field.name != "require_payment_reference" %}
             {% include "backoffice/components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}

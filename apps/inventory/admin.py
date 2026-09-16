@@ -207,11 +207,12 @@ class RecipeAdmin(admin.ModelAdmin):
 
 @admin.register(StockReconciliation)
 class StockReconciliationAdmin(SubmittedDocumentAdminMixin, admin.ModelAdmin):
-    list_display = ("id", "reason", "posting_date", "warehouse", "status")
+    list_display = ("id", "reason", "posting_date", "warehouse", "status", "submitted_by")
     list_filter = ("reason", "status", "posting_date")
-    list_select_related = ("warehouse",)
+    list_select_related = ("warehouse", "submitted_by")
     search_fields = ("remarks", "warehouse__name")
     ordering = ("-posting_date", "-created_at")
+    readonly_fields = ("submitted_by", "submitted_at", "cancelled_by", "cancelled_at")
     inlines = [StockReconciliationItemInline]
 
 

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -78,6 +79,12 @@ class POSOpeningEntry(BaseModel):
     @property
     def is_closed(self):
         return self.status == self.SUBMITTED and self.closing_entry_id is not None
+
+    def can_be_closed_by(self, user) -> bool:
+        """Return True if the user may close this shift: its opener or a manager/admin."""
+        if user.is_manager or user.is_admin:
+            return True
+        return self.cashier_id == user.pk
 
     def submit(self):
         """Transition from DRAFT to SUBMITTED; re-checks "one Open shift" under row locks to close the submit race."""
@@ -270,7 +277,9 @@ class ClosingPayment(BaseModel):
     )
     opening_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
     expected_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
-    closing_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    closing_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0"), validators=[MinValueValidator(Decimal("0"))]
+    )
     difference = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"), editable=False)
 
     class Meta:

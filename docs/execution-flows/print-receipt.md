@@ -17,7 +17,7 @@ Settlement *is* the receipt event: `settle_order()` marks the order printed on i
 
 ## Reprint from History
 
-`pos_order_history_print()` accepts any `SUBMITTED` order, calls the same print interface, and does not change `invoice_printed` metadata. It can run without an active shift. The drawer is re-rendered by HTMX.
+`pos_order_history_print()` accepts submitted orders visible under the caller's history rules: without full history, submitted paid non-return orders only; managers and `Restaurant.pos_allow_full_history` users can reprint any submitted receipt. It calls the same print interface, does not change `invoice_printed` metadata, and can run without an active shift. The drawer is re-rendered by HTMX.
 
 ## Current Device Behavior
 

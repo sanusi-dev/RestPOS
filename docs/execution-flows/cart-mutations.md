@@ -28,4 +28,4 @@ The Alpine/SweetAlert clear control triggers a hidden HTMX button. `pos_order_cl
 
 ## Server Authority
 
-Templates hide controls after KOT/receipt state, but all service/model paths repeat `_ensure_editable()` and current line validation. A stale or hand-built request cannot bypass the lock through the normal service API.
+Every mutation view loads its draft through `Order.objects.open_drafts_for(shift, request.user)`, so a non-owner cashier gets a 404 while Manager/Admin can act on any draft. Templates hide controls after KOT/receipt state, but all service/model paths repeat `_ensure_editable()` and current line validation. A stale or hand-built request cannot bypass the lock through the normal service API.

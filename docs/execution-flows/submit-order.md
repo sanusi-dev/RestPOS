@@ -27,7 +27,7 @@ Pay button
 
 ## Validation Order
 
-The service rejects non-draft/return/empty orders, revalidates current Item/MenuItem availability, confirms the linked shift is active, snapshots/validates the configured stock warehouse, rechecks locked drink bins, then validates payment rows. Existing payment rows are rejected.
+The service rejects non-draft/return/empty orders, rejects a settlement actor who neither created the draft nor is a Manager/Admin, revalidates current Item/MenuItem availability, confirms the linked shift is active, snapshots/validates the configured stock warehouse, rechecks locked drink bins, then validates payment rows. Existing payment rows are rejected.
 
 ## Totals and Payments
 

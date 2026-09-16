@@ -29,7 +29,7 @@ Cancel form
   -> redirect order detail with pending-print warnings
 ```
 
-Only sent draft orders are cancellable — cancel releases drink reservations and creates cancellation KOTs. Submitted orders are never cancelled; they leave the lifecycle only through the return flow (`make_return()` → `submit_return()`), and an unsent draft is never cancelled; the backoffice deletes it instead (`orders.views.order_delete`, manager-only).
+Only sent draft orders are cancellable — cancel releases drink reservations and creates cancellation KOTs. Submitted orders are never cancelled; they leave the lifecycle only through the return flow (`make_return()` → `submit_return()`), and an unsent draft is never cancelled; the backoffice deletes it instead (`orders.views.order_delete`, manager-only), which abandons it as a `DISCARDED` tombstone with an `ORDER_DELETED` audit event rather than purging it.
 
 ## Return Creation and Submission
 

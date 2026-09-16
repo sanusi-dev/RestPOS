@@ -30,6 +30,13 @@ class ClosingPaymentForm(StaffModelForm):
             )
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Widget "min" is browser-only; the server rejects negatives itself.
+        field = self.fields["closing_amount"]
+        field.min_value = Decimal("0")
+        field.error_messages["min_value"] = "Counted amounts can't be negative."
+
 
 class OpeningFloatForm(forms.Form):
     """Opening-shift form with one amount field per active payment mode, defaulting to 0."""

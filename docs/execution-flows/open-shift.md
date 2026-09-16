@@ -33,4 +33,4 @@ The shift is globally shared. The opening cashier is recorded, but later POS ope
 
 ## Backoffice Variant
 
-`staff.views.opening_entry_create()` directly creates a draft and child rows through `_save_opening_entry()`. The detail page can edit draft rows. `opening_entry_submit()` calls `full_clean()` then `entry.submit()`. This is a separate path from `open_shift()` and does not share its explicit Restaurant-exists check.
+All `staff.views` shift pages are `@backoffice_required` (Manager/Admin only); cashiers use the POS route. `staff.views.opening_entry_create()` directly creates a draft and child rows through `_save_opening_entry()`. The detail page can edit draft rows. `opening_entry_submit()` calls `full_clean()` then `entry.submit()`. This is a separate path from `open_shift()` and does not share its explicit Restaurant-exists check.
