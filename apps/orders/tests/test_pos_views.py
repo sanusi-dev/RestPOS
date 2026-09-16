@@ -231,6 +231,20 @@ class POSShiftCloseTest(POSViewTestBase):
         self.assertEqual(closing.status, closing.SUBMITTED)
         self.assertEqual(self.opening.closing_entry_id, closing.pk)
 
+    def test_close_shift_rejects_negative_counted_amount(self):
+        response = self.client.get(reverse("pos:pos_close_shift"))
+        form_data = response.context["form_data"]
+        post_data = {form["closing_amount"].html_name: "-5000" for _payment, form in form_data}
+        post_data["remarks"] = "Hidden shortage"
+
+        response = self.client.post(reverse("pos:pos_close_shift"), post_data)
+
+        self.assertEqual(response.status_code, 200)
+        for _payment, form in response.context["form_data"]:
+            self.assertEqual(form.errors["closing_amount"], ["Counted amounts can't be negative."])
+        self.opening.refresh_from_db()
+        self.assertIsNone(self.opening.closing_entry_id)
+
     def test_close_shift_get_does_not_create_closing_rows(self):
         from apps.staff.models import ClosingPayment
 

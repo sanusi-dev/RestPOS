@@ -204,6 +204,11 @@ def submit_closing_entry(closing, actor=None):
         expected = expected_by_mode[cp.mode_of_payment_id]
         cp.opening_amount = expected["opening_amount"]
         cp.expected_amount = expected["expected_amount"]
+        if cp.mode_of_payment.type != ModeOfPayment.TYPE_CASH and cp.closing_amount > cp.expected_amount:
+            raise ValidationError(
+                f"Counted {cp.mode_of_payment.name} amount is above the expected {cp.expected_amount}. "
+                "A non-cash total can't exceed what was processed. Reconcile it before closing."
+            )
         cp.difference = cp.closing_amount - cp.expected_amount
         cp.save(
             update_fields=[

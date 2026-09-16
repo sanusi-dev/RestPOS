@@ -42,10 +42,11 @@ Backoffice `closing_entry_create()` locks the open shift to prevent duplicate cl
 4. Aggregates submitted non-return orders in the period.
 5. Stores the frozen shift sales: bill count, item qty, net total, grand total, plus refunded total (abs sum of submitted returns in the same period).
 6. Computes expected per-mode amounts as opening float plus order payments, less cash change, less submitted-return refunds, and less submitted cash-outs per mode.
-7. Stores closing differences as `closing_amount - expected_amount`.
-8. Applies the variance approval gate: when the absolute `total_short_excess` exceeds `Restaurant.variance_approval_threshold`, a non-empty `variance_note` and a Manager/Admin actor are required.
-9. Submits the closing and links it to the opening.
-10. Posts the cash variance: when `total_short_excess != 0` and the account matching the variance sign (`cash_shortage_account` or `cash_over_short_account`) is configured, `accounting.services.post_cash_variance_gl` creates and submits a balanced JournalEntry (shortage → Dr shortage / Cr cash; excess → Dr cash / Cr over-short) linked via `POSClosingEntry.variance_journal_entry`. Unconfigured accounts skip posting but the variance stays visible.
+7. Validates counted amounts: each must be non-negative, and a non-cash mode's counted amount may not exceed its expected amount (an electronic total above what was processed is a bad count, not drawer money). Cash surpluses are allowed and flow into the variance gate.
+8. Stores closing differences as `closing_amount - expected_amount`.
+9. Applies the variance approval gate: when the absolute `total_short_excess` exceeds `Restaurant.variance_approval_threshold`, a non-empty `variance_note` and a Manager/Admin actor are required.
+10. Submits the closing and links it to the opening.
+11. Posts the cash variance: when `total_short_excess != 0` and the account matching the variance sign (`cash_shortage_account` or `cash_over_short_account`) is configured, `accounting.services.post_cash_variance_gl` creates and submits a balanced JournalEntry (shortage → Dr shortage / Cr cash; excess → Dr cash / Cr over-short) linked via `POSClosingEntry.variance_journal_entry`. Unconfigured accounts skip posting but the variance stays visible.
 
 Returns are excluded from drawer totals. Cancelled orders are excluded through `submitted_in_shift()`.
 
@@ -67,6 +68,5 @@ The closing detail page shows the five stored sales figures (Bills, Item qty, Ne
 ## Failure Cases and Risks
 
 - POST close can create and commit a draft closing entry before invalid form data is rendered.
-- `ClosingPaymentForm` has client-side `min=0`, but no server-side non-negative validator; negative counted amounts are not rejected by the model.
 - The service validates that closing modes were declared at opening but does not require exactly one closing row for every opening row.
 - Closing is serialized by opening/closing row locks, but model-level cancel methods do not explicitly lock before their checks.

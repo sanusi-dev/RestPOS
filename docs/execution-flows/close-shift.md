@@ -25,13 +25,14 @@ Counted amount form
   -> atomic block and lock POSOpeningEntry
   -> recheck open drafts
   -> staff.services.ensure_closing_draft()
-  -> ClosingPaymentForm per opening mode
+  -> ClosingPaymentForm per opening mode (server-side: counted >= 0)
   -> save counted values and closing period
   -> staff.services.submit_closing_entry()
   -> lock POSClosingEntry and POSOpeningEntry
   -> re-check can_be_closed_by(actor)
   -> aggregate orders/payments
-  -> calculate differences
+  -> recompute expected and calculate differences
+  -> reject non-cash counted above expected
   -> submit closing and link opening
   -> HX home surface or redirect
 ```
