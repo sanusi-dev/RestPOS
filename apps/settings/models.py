@@ -215,6 +215,16 @@ class Restaurant(BaseModel):
         super().clean()
         if not self.pk and Restaurant.objects.exists():
             raise ValidationError("Restaurant settings already exist — edit the existing record.")
+        if self.default_income_account_id:
+            from apps.payments.models import PaymentGLMapping
+
+            if PaymentGLMapping.objects.filter(default_account_id=self.default_income_account_id).exists():
+                raise ValidationError(
+                    {
+                        "default_income_account": "This account is mapped to a payment mode "
+                        "and cannot record sales income.",
+                    }
+                )
         if self.max_open_drafts < 1:
             raise ValidationError({"max_open_drafts": "The open-draft limit must be at least 1."})
         if self.default_warehouse_id and self.default_warehouse.disabled:
@@ -326,6 +336,13 @@ class ProductionUnit(BaseModel):
         super().clean()
         if self.warehouse_id and self.warehouse.disabled:
             raise ValidationError({"warehouse": "The production unit warehouse must be enabled."})
+        if self.income_account_id:
+            from apps.payments.models import PaymentGLMapping
+
+            if PaymentGLMapping.objects.filter(default_account_id=self.income_account_id).exists():
+                raise ValidationError(
+                    {"income_account": "This account is mapped to a payment mode and cannot record sales income."}
+                )
 
         restaurant = Restaurant.load()
         if not restaurant or not self.warehouse_id:

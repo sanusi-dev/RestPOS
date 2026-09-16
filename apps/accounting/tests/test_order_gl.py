@@ -305,6 +305,27 @@ class RefundGLTest(OrderGLTestBase):
             submit_return(ret2, actor=self.user)
 
 
+class SameAccountCollisionTest(OrderGLTestBase):
+    def test_settle_raises_when_payment_maps_to_income_account(self):
+        PaymentGLMapping.objects.filter(mode_of_payment=self.cash).update(default_account=self.accounts["food_sales"])
+        order = self._create_order()
+        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
+        with self.assertRaisesMessage(ValidationError, "both sides"):
+            self._settle(order)
+        self.assertFalse(self._order_gl(order).exists())
+
+    def test_refund_raises_when_payment_maps_to_income_account(self):
+        order = self._create_order()
+        add_order_line(order, self.food, qty=1, rate=Decimal("1500"), menu_item=self.food_mi)
+        self._settle(order)
+        ret = make_return(order)
+        ret.recalculate_totals()
+        PaymentGLMapping.objects.filter(mode_of_payment=self.cash).update(default_account=self.accounts["food_sales"])
+        with self.assertRaisesMessage(ValidationError, "both sides"):
+            submit_return(ret, actor=self.user)
+        self.assertFalse(self._order_gl(ret).exists())
+
+
 class NotRestockableConstraintTest(OrderGLTestBase):
     def test_non_return_line_cannot_be_marked_not_restockable(self):
         from django.db import IntegrityError, transaction
