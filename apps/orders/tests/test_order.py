@@ -15,12 +15,13 @@ from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSOpeningEntry
 
-from ..models import Order, OrderAuditEvent, OrderItem, OrderPayment, OrderSequence
+from ..models import DISCARDED, Order, OrderPayment, OrderSequence
 from ..services import (
     add_order_line,
     cancel_sent_order,
     clear_order_lines,
     create_tickets,
+    delete_unsent_draft,
     discard_order,
     make_return,
     remove_order_line,
@@ -201,7 +202,7 @@ class OrderItemTest(OrderTestBase):
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
 
         add_order_line(order, self.item2, qty=3, rate=Decimal("500"))
-        order.delete()
+        delete_unsent_draft(order, deleted_by=self.user)
         self.assertEqual(Bin.objects.get(item=self.item2, warehouse=self.warehouse).reserved_qty, Decimal("0"))
 
     def test_release_reservation_from_bypassed_disabled_snapshot(self):
@@ -226,14 +227,27 @@ class OrderItemTest(OrderTestBase):
         with self.assertRaisesMessage(ValidationError, "snapshot is disabled"):
             update_order_line_quantity(order, order.items.get().pk, Decimal("2"))
 
-    def test_delete_unsent_draft_purges_items_and_audit_events(self):
+    def test_hard_delete_refused(self):
+        order = self._create_order()
+
+        with self.assertRaisesMessage(ValidationError, "cannot be hard-deleted"):
+            order.delete()
+
+    def test_delete_unsent_draft_keeps_tombstone_and_audit_trail(self):
         order = self._create_order()
         add_order_line(order, self.item, qty=1, rate=Decimal("1500"))
-        order.audit("CREATED", actor=self.user)
-        order.delete()
-        self.assertFalse(Order.objects.filter(pk=order.pk).exists())
-        self.assertFalse(OrderItem.objects.filter(order_id=order.pk).exists())
-        self.assertFalse(OrderAuditEvent.objects.filter(order_id=order.pk).exists())
+
+        delete_unsent_draft(order, deleted_by=self.user)
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, DISCARDED)
+        self.assertEqual(order.discarded_by, self.user)
+        self.assertIsNotNone(order.discarded_at)
+        self.assertEqual(order.items.count(), 1)
+        self.assertTrue(order.audit_events.filter(event_type="CREATED").exists())
+        tombstone = order.audit_events.get(event_type="ORDER_DELETED")
+        self.assertEqual(tombstone.actor, self.user)
+        self.assertEqual(tombstone.metadata["items"][0]["item"], self.item.item_name)
 
 
 class OrderSettleTest(OrderTestBase):

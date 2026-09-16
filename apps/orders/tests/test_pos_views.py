@@ -16,7 +16,7 @@ from apps.payments.models import ModeOfPayment, PaymentGLMapping
 from apps.settings.models import ProductionUnit, Restaurant
 from apps.staff.models import OpeningPayment, POSClosingEntry, POSOpeningEntry
 
-from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, SUBMITTED, TAKE_AWAY, Order
+from ..models import CANCEL_REASON_WRONG_ORDER, CANCELLED, DINE_IN, DISCARDED, SUBMITTED, TAKE_AWAY, Order
 from ..printing import PrintResult
 from ..services import add_order_line, cancel_sent_order, create_tickets, settle_order
 from .accounting_setup import OrderAccountingMixin
@@ -1125,7 +1125,7 @@ class POSCancelTest(POSViewTestBase):
         empty.refresh_from_db()
         self.assertEqual(empty.status, "DRAFT")
 
-    def test_delete_unsent_draft(self):
+    def test_delete_unsent_draft_keeps_tombstone(self):
         self.client.post(reverse("pos:pos_order_new"), {"order_type": "DINE_IN", "guest_count": "1"})
         empty = Order.objects.filter(status="DRAFT").exclude(pk=self.order.pk).first()
         self.assertIsNotNone(empty)
@@ -1134,10 +1134,13 @@ class POSCancelTest(POSViewTestBase):
             {"item_id": self.food_item.pk, "qty": "1"},
         )
         response = self.client.post(reverse("pos:pos_order_delete", kwargs={"pk": empty.pk}))
-        self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse("pos:pos_home"))
-        self.assertFalse(Order.objects.filter(pk=empty.pk).exists())
-        self.assertTrue(Order.objects.filter(pk=self.order.pk).exists())
+        empty.refresh_from_db()
+        self.assertEqual(empty.status, DISCARDED)
+        self.assertEqual(empty.discarded_by, self.user)
+        self.assertEqual(empty.items.count(), 1)
+        self.assertTrue(empty.audit_events.filter(event_type="ORDER_DELETED").exists())
+        self.assertTrue(Order.objects.filter(pk=self.order.pk, status="DRAFT").exists())
 
     def test_delete_sent_draft_blocked(self):
         response = self.client.post(reverse("pos:pos_order_delete", kwargs={"pk": self.order.pk}))

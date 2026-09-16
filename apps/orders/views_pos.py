@@ -1224,7 +1224,7 @@ def pos_order_cancel(request: HttpRequest, pk: int) -> HttpResponse:
 @staff_required
 @require_POST
 def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete an unsent draft order entirely, purging items and audit events."""
+    """Abandon an unsent draft order, keeping its audit trail as a tombstone."""
     shift = _get_open_shift()
     if shift is None:
         return redirect("pos:pos_home")
@@ -1234,7 +1234,7 @@ def pos_order_delete(request: HttpRequest, pk: int) -> HttpResponse:
                 Order.objects.select_for_update().open_drafts_for(shift, request.user),
                 pk=pk,
             )
-            order.delete()
+            services.delete_unsent_draft(order, deleted_by=request.user)
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Delete failed.")
         return redirect("pos:pos_order_screen", pk=pk)

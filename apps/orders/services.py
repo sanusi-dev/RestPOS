@@ -313,6 +313,26 @@ def discard_order(order, discarded_by=None):
     order.refresh_from_db()
 
 
+@transaction.atomic
+def delete_unsent_draft(order, deleted_by=None):
+    """Abandon an unsent draft as a tombstone: DISCARDED status with items and audit trail kept."""
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.status != DRAFT:
+        raise ValidationError("Only draft orders can be deleted.")
+    if locked.invoice_printed or locked.kots.exists() or locked.is_paid:
+        raise ValidationError("Printed, sent or paid orders cannot be deleted; cancel the order instead.")
+    release_drink_reservations(locked)
+    snapshot = [
+        {"item": line.item_name, "qty": str(line.qty), "amount": str(line.amount)} for line in locked.items.all()
+    ]
+    locked.discarded_by = deleted_by
+    locked.discarded_at = timezone.now()
+    with _transition(locked, flag="_allow_discard"):
+        locked.save(update_fields=["status", "discarded_by", "discarded_at", "updated_at"])
+    locked.audit("ORDER_DELETED", actor=deleted_by, metadata={"items": snapshot})
+    order.refresh_from_db()
+
+
 @contextmanager
 def _transition(order, *, flag):
     """Allow one guarded lifecycle transition, restoring the guard on exit.

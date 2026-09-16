@@ -326,10 +326,10 @@ def order_return_line_update(request: HttpRequest, pk: int, line_pk: int) -> Htt
 @manager_required
 @require_POST
 def order_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete a draft order that was never sent. Manager only."""
+    """Abandon an unsent draft order, keeping its audit trail as a tombstone."""
     order = get_object_or_404(Order, pk=pk)
     try:
-        order.delete()
+        services.delete_unsent_draft(order, deleted_by=request.user)
     except ValidationError as e:
         messages.error(request, str(e.messages[0]) if e.messages else "Delete failed.")
         return redirect("orders:order_detail", pk=order.pk)

@@ -46,7 +46,7 @@ Menu and item forms save directly after validation. Model `clean()` enforces cro
 
 ## Order Operations
 
-The order register filters by invoice/customer/order number, status, and order type. Detail prefetches lines, payments, and tickets. Backoffice cancellation requires manager/admin/superuser and calls `cancel_sent_order()` (sent drafts only; unsent drafts are deleted via `order_delete`). Return creation requires the same roles and calls `make_return()`; the negative draft can be edited (qty, drop line, wastage) then submitted through `order_return_submit` → `submit_return()`, which restores drink stock and writes proportional refund rows.
+The order register filters by invoice/customer/order number, status, and order type. Detail prefetches lines, payments, and tickets. Backoffice cancellation requires manager/admin/superuser and calls `cancel_sent_order()` (sent drafts only; unsent drafts are deleted via `order_delete`, which tombstones them as `DISCARDED`). Return creation requires the same roles and calls `make_return()`; the negative draft can be edited (qty, drop line, wastage) then submitted through `order_return_submit` → `submit_return()`, which restores drink stock and writes proportional refund rows.
 
 ## Settings and Staff
 

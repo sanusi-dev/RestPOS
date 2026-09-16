@@ -264,26 +264,8 @@ class Order(BaseModel):
             if self.return_against.status != SUBMITTED:
                 raise ValidationError({"return_against": "A return must reference a submitted order."})
 
-    @transaction.atomic
     def delete(self, *args, **kwargs):
-        if self.pk:
-            persisted = type(self).objects.select_for_update().get(pk=self.pk)
-            if persisted.status != DRAFT:
-                raise ValidationError("Submitted or cancelled orders cannot be deleted.")
-            if persisted.invoice_printed:
-                raise ValidationError("Printed orders cannot be deleted; cancel the order instead.")
-        else:
-            persisted = self
-        if persisted.kots.exists():
-            raise ValidationError("Sent orders cannot be deleted; cancel the order instead.")
-        from apps.orders import services
-
-        services.release_drink_reservations(persisted)
-        persisted.items.all().delete()
-        # Purge audit events via the queryset — the instance guard is deliberate
-        # for live orders, but a deleted draft has no audit value.
-        OrderAuditEvent.objects.filter(order=persisted).delete()
-        return models.Model.delete(persisted, *args, **kwargs)
+        raise ValidationError("Orders cannot be hard-deleted; unsent drafts are abandoned as tombstones instead.")
 
     def assign_order_number(self):
         """Assign the next sequential order number atomically."""
