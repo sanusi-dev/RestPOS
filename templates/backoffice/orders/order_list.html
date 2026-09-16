@@ -14,7 +14,7 @@
     </a>
   </div>
   <div class="bg-white border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.05)] rounded-[1.5rem] p-4 mb-6">
-    <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(14rem,1fr)_auto_auto_auto] items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-[minmax(14rem,1fr)_auto_auto_auto_auto_auto] items-end gap-3" hx-indicator="button[type='submit']" hx-disabled-elt="button[type='submit']">
       <div class="flex flex-col gap-1">
         <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-search">Search</label>
         <input id="order-search" type="search" name="search" value="{{ search }}" placeholder="Invoice, customer, order #" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
@@ -33,6 +33,14 @@
           {% for value, label in order_type_choices %}<option value="{{ value }}" {% if order_type_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
       </div>
+      <div class="flex flex-col gap-1 min-w-[9rem]">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-from">From</label>
+        <input id="order-from" type="date" name="from" value="{{ date_from }}" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+      </div>
+      <div class="flex flex-col gap-1 min-w-[9rem]">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider" for="order-to">To</label>
+        <input id="order-to" type="date" name="to" value="{{ date_to }}" class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/25 bg-white">
+      </div>
       <button type="submit" class="backend-submit h-[2.75rem] px-5 rounded-xl bg-gray-900 text-white text-sm font-semibold shadow-lg hover:bg-orange-500 transition-all">Apply filters</button>
     </form>
   </div>
@@ -44,7 +52,7 @@
       </div>
       <div class="flex items-center gap-4">
         <a href="?export=csv{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Download CSV</a>
-        {% if search or status_filter or order_type_filter %}<a href="{% url 'orders:order_list' %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Clear filters</a>{% endif %}
+        {% if search or status_filter or order_type_filter or date_from or date_to %}<a href="{% url 'orders:order_list' %}" class="text-xs font-bold text-gray-500 hover:text-orange-600">Clear filters</a>{% endif %}
       </div>
     </div>
     <div class="overflow-x-auto">
@@ -113,10 +121,10 @@
     </p>
     <div class="flex items-center gap-2">
       {% if page_obj.has_previous %}
-        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.previous_page_number }}" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Previous</a>
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}{% if date_from %}&amp;from={{ date_from }}{% endif %}{% if date_to %}&amp;to={{ date_to }}{% endif %}&amp;page={{ page_obj.previous_page_number }}" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Previous</a>
       {% endif %}
       {% if page_obj.has_next %}
-        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}&amp;page={{ page_obj.next_page_number }}" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Next</a>
+        <a href="?search={{ search|urlencode }}&amp;status={{ status_filter }}&amp;order_type={{ order_type_filter }}{% if date_from %}&amp;from={{ date_from }}{% endif %}{% if date_to %}&amp;to={{ date_to }}{% endif %}&amp;page={{ page_obj.next_page_number }}" class="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-600 hover:border-orange-300 hover:text-orange-700">Next</a>
       {% endif %}
     </div>
   </nav>

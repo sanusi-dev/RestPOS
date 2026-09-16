@@ -1,9 +1,11 @@
 import csv
 import io
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.orders.services import add_order_line, settle_order
 
@@ -69,6 +71,21 @@ class OrderRegisterExportTest(BackofficeViewTestBase):
         response = self.client.get(reverse("orders:order_list"), {"status": "CANCELLED", "export": "csv"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(read_csv(response)), 1)
+
+    def test_date_range_filters_page_and_export(self):
+        today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
+        older = self._create_order(posting_date=yesterday)
+        add_order_line(older, self.food_item, qty=1, rate=Decimal("1500"))
+        settle_order(older, [{"mode_of_payment": self.cash.pk, "amount": "1500"}])
+        fresh = self._settled(qty=1)
+        url = reverse("orders:order_list")
+        response = self.client.get(url, {"from": today.isoformat(), "to": today.isoformat()})
+        self.assertEqual({order.invoice_number for order in response.context["orders"]}, {fresh.invoice_number})
+        csv_response = self.client.get(url, {"from": today.isoformat(), "to": today.isoformat(), "export": "csv"})
+        rows = parse_csv(b"".join(csv_response.streaming_content))
+        self.assertEqual({row[0] for row in rows[1:]}, {fresh.invoice_number})
+        self.assertIn(f"from-{today.isoformat()}", csv_response["Content-Disposition"])
 
     def test_row_cap(self):
         self._settled()

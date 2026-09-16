@@ -7,6 +7,7 @@ Backoffice order navigation
   -> apps/orders/urls.py
   -> orders.views.order_list()
   -> search/filter Order queryset with annotations
+     (search, status, order type, posting-date from/to; same filters for ?export=csv)
   -> Paginator 50
   -> templates/backoffice/orders/order_list.html
 ```

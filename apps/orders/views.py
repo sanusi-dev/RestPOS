@@ -10,6 +10,7 @@ from django.db.models import Count, Prefetch, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from apps.users.decorators import backoffice_required, manager_required
@@ -76,6 +77,8 @@ def order_list(request: HttpRequest) -> HttpResponse:
     search = request.GET.get("search", "").strip()
     status_filter = request.GET.get("status", "").strip()
     order_type_filter = request.GET.get("order_type", "").strip()
+    date_from = parse_date(request.GET.get("from") or "")
+    date_to = parse_date(request.GET.get("to") or "")
 
     orders = Order.objects.select_related("cashier").annotate(
         item_count=Count("items", distinct=True),
@@ -98,9 +101,13 @@ def order_list(request: HttpRequest) -> HttpResponse:
         orders = orders.filter(status=status_filter)
     if order_type_filter:
         orders = orders.filter(order_type=order_type_filter)
+    if date_from:
+        orders = orders.filter(posting_date__gte=date_from)
+    if date_to:
+        orders = orders.filter(posting_date__lte=date_to)
     orders = orders.order_by("-updated_at")
     if request.GET.get("export") == "csv":
-        return _order_list_csv(request, orders, search, status_filter, order_type_filter)
+        return _order_list_csv(request, orders, search, status_filter, order_type_filter, date_from, date_to)
     page_obj = Paginator(orders, 50).get_page(request.GET.get("page") or 1)
 
     return render(
@@ -112,13 +119,15 @@ def order_list(request: HttpRequest) -> HttpResponse:
             "search": search,
             "status_filter": status_filter,
             "order_type_filter": order_type_filter,
+            "date_from": date_from.isoformat() if date_from else "",
+            "date_to": date_to.isoformat() if date_to else "",
             "status_choices": STATUS_CHOICES,
             "order_type_choices": ORDER_TYPE_CHOICES,
         },
     )
 
 
-def _order_list_csv(request, orders, search, status_filter, order_type_filter):
+def _order_list_csv(request, orders, search, status_filter, order_type_filter, date_from, date_to):
     """Download the filtered order register as CSV — same rows and order as the page."""
     too_many = over_row_cap(orders)
     if too_many is not None:
@@ -144,7 +153,13 @@ def _order_list_csv(request, orders, search, status_filter, order_type_filter):
 
     filename = export_filename(
         "orders",
-        {"search": search, "status": status_filter, "order-type": order_type_filter},
+        {
+            "search": search,
+            "status": status_filter,
+            "order-type": order_type_filter,
+            "from": date_from.isoformat() if date_from else "",
+            "to": date_to.isoformat() if date_to else "",
+        },
     )
     return stream_csv(
         filename,
