@@ -22,7 +22,7 @@ Grouping is presentation-only. `guest_count` lives on the order; `customer_index
 
 ## Submission
 
-`settle_order()` is the only normal path from draft to submitted. It locks the order and shift, revalidates current lines and stock, creates payment rows, applies rounded total/payment/change values, converts drink reservations into stock issues, marks the order paid/submitted, sets `invoice_printed`/`invoice_printed_at`/`invoice_printed_by` (settlement *is* the receipt event), and adds `SUBMITTED` audit data. The view calls `printing.print_receipt(order)` after settlement; a printer failure shows a warning but never rolls back the sale. Receipts are reprinted from order history (`pos_order_history_print`, submitted orders only).
+`settle_order()` is the only normal path from draft to submitted. It locks the order and shift, revalidates current lines and stock, creates payment rows, applies rounded total/payment/change values, converts drink reservations into stock issues, marks the order paid/submitted, sets `invoice_printed`/`invoice_printed_at`/`invoice_printed_by` (settlement *is* the receipt event), and adds `SUBMITTED` audit data. The view calls `printing.print_receipt(order)` after settlement; a printer failure shows a warning but never rolls back the sale. Receipts are reprinted from order history (`pos_order_history_print`, scoped to the caller's history visibility rules).
 
 ## Stage Exits — Delete, Cancel, Return
 

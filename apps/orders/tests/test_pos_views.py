@@ -424,6 +424,51 @@ class POSOrderHistoryTest(POSViewTestBase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_history_detail_scopes_cashier_to_paid_sales(self):
+        unpaid = Order.objects.create(
+            opening_entry=self.opening,
+            status=SUBMITTED,
+            is_paid=False,
+            order_number=104,
+            invoice_number="INV-104",
+        )
+
+        for order in (self.return_order, self.cancelled, unpaid):
+            response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": order.pk}))
+            self.assertEqual(response.status_code, 404)
+
+    def test_history_print_scopes_cashier_to_paid_sales(self):
+        response = self.client.post(reverse("pos:pos_order_history_print", kwargs={"pk": self.return_order.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_full_history_setting_allows_any_detail_and_reprint(self):
+        self.restaurant.pos_allow_full_history = True
+        self.restaurant.save(update_fields=["pos_allow_full_history"])
+
+        response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": self.cancelled.pk}))
+        self.assertContains(response, f"#{self.cancelled.order_number}")
+
+        with patch(
+            "apps.orders.views_pos.printing.print_receipt",
+            return_value=PrintResult(success=True, ticket_type="receipt"),
+        ):
+            response = self.client.post(reverse("pos:pos_order_history_print", kwargs={"pk": self.return_order.pk}))
+        self.assertRedirects(response, reverse("pos:pos_order_history_detail", kwargs={"pk": self.return_order.pk}))
+
+    def test_managers_open_any_detail_and_reprint_without_setting(self):
+        self.user.groups.add(Group.objects.get(name="RestPOS Manager"))
+
+        response = self.client.get(reverse("pos:pos_order_history_detail", kwargs={"pk": self.cancelled.pk}))
+        self.assertContains(response, f"#{self.cancelled.order_number}")
+
+        with patch(
+            "apps.orders.views_pos.printing.print_receipt",
+            return_value=PrintResult(success=True, ticket_type="receipt"),
+        ):
+            response = self.client.post(reverse("pos:pos_order_history_print", kwargs={"pk": self.return_order.pk}))
+        self.assertRedirects(response, reverse("pos:pos_order_history_detail", kwargs={"pk": self.return_order.pk}))
+
 
 class POSOrderStartTest(POSViewTestBase):
     def test_order_start_requires_shift(self):

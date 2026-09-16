@@ -42,7 +42,7 @@ Menu buttons either POST directly to `pos_order_add_item` or GET the add-on dial
 
 ## History
 
-`pos_order_history()` defaults to current-date submitted paid non-return sales. Manager/admin/superuser users, or any user when `Restaurant.pos_allow_full_history=True`, can request all/returns/cancelled/discarded filters. Rows load `pos_order_history_detail()` into `#order-details-drawer`; Alpine controls focus and animation, not business state.
+`pos_order_history()` defaults to current-date submitted paid non-return sales. Manager/admin/superuser users, or any user when `Restaurant.pos_allow_full_history=True`, can request all/returns/cancelled/discarded filters. Rows load `pos_order_history_detail()` into `#order-details-drawer`; Alpine controls focus and animation, not business state. Detail and receipt reprint enforce the same visibility: without full history, only submitted paid non-return orders resolve (others 404); with full history, cancelled and discarded orders are viewable and any submitted receipt is reprintable.
 
 ## Important Current Gaps
 

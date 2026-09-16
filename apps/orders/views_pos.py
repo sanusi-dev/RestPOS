@@ -127,6 +127,14 @@ def _is_order_details_drawer_request(request):
     return _is_htmx(request) and request.headers.get("HX-Target") in ORDER_DETAILS_DRAWER_TARGETS
 
 
+def _full_history_allowed(user) -> bool:
+    """Return whether the user may open any historical order (managers or the setting)."""
+    if user.is_manager or user.is_admin or user.is_superuser:
+        return True
+    restaurant = Restaurant.load()
+    return bool(restaurant and restaurant.pos_allow_full_history)
+
+
 def _get_kitchen_status(order):
     """Summarize the order's kitchen and bar ticket state."""
     tickets = list(order.kots.all())
@@ -1318,9 +1326,7 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
         else:
             parsed_date = None
 
-    restaurant = Restaurant.load()
-    is_manager = user.is_manager or user.is_admin or user.is_superuser
-    allow_full_history = bool(restaurant and restaurant.pos_allow_full_history) or is_manager
+    allow_full_history = _full_history_allowed(user)
     manager_only_filters = {"all", "returns", "cancelled", "discarded"}
     if status_filter in manager_only_filters and not allow_full_history:
         status_filter = "sales"
@@ -1362,13 +1368,15 @@ def pos_order_history(request: HttpRequest) -> HttpResponse:
 @staff_required
 def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Show a read-only cashier view of a historical order."""
-    order = get_object_or_404(
-        Order.objects.select_related("cashier", "opening_entry", "stock_warehouse").prefetch_related(
-            "items__item", "payments__mode_of_payment", "kots__production_unit"
-        ),
-        pk=pk,
-        status__in=[SUBMITTED, CANCELLED, DISCARDED],
+    orders = Order.objects.select_related("cashier", "opening_entry", "stock_warehouse").prefetch_related(
+        "items__item", "payments__mode_of_payment", "kots__production_unit"
     )
+    if _full_history_allowed(request.user):
+        orders = orders.filter(status__in=[SUBMITTED, CANCELLED, DISCARDED])
+    else:
+        # Same visibility as the cashier's history list: paid sales only.
+        orders = orders.filter(status=SUBMITTED, is_paid=True, is_return=False)
+    order = get_object_or_404(orders, pk=pk)
     open_shift = _get_open_shift()
     context = {
         "order": order,
@@ -1388,7 +1396,11 @@ def pos_order_history_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @require_POST
 def pos_order_history_print(request: HttpRequest, pk: int) -> HttpResponse:
     """Reprint a submitted historical receipt without editing it."""
-    order = get_object_or_404(Order, pk=pk, status=SUBMITTED)
+    orders = Order.objects.filter(status=SUBMITTED)
+    if not _full_history_allowed(request.user):
+        # Same visibility as the cashier's history list: paid sales only.
+        orders = orders.filter(is_paid=True, is_return=False)
+    order = get_object_or_404(orders, pk=pk)
     result = printing.print_receipt(order)
     if result.success:
         messages.success(request, "Receipt reprinted successfully.")
